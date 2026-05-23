@@ -1,0 +1,1 @@
+# lingostickers-mobile
