@@ -2,12 +2,16 @@
   "expo": {
     "name": "lingostickers-mobile",
     "slug": "lingostickers-mobile",
+    "scheme": "lingostickers",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSCameraUsageDescription": "LingoStickers uses your camera to scan objects and create vocabulary stickers."
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -20,6 +24,15 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "LingoStickers uses your camera to scan objects and create vocabulary stickers."
+        }
+      ]
+    ]
   }
 }
