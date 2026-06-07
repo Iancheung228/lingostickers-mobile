@@ -1,8 +1,16 @@
 import { useEffect, useState } from 'react';
 import { Modal, View, Text, Image, TouchableOpacity, StyleSheet, SafeAreaView, ActivityIndicator, Alert } from 'react-native';
-import { X, Trash2 } from 'lucide-react-native';
+import { X, Trash2, Share2 } from 'lucide-react-native';
+import { File, Directory, Paths } from 'expo-file-system';
+import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
+import * as MediaLibrary from 'expo-media-library';
+import * as Sharing from 'expo-sharing';
 import { Sticker } from '@/lib/types';
 import { supabase } from '@/lib/supabase';
+
+// WeChat custom-sticker uploads look best as small square PNGs with a
+// transparent background — see "Custom Stickers" in WeChat's gallery settings.
+const WECHAT_STICKER_SIZE = 240;
 
 interface StickerDetailViewProps {
   sticker: Sticker | null;
@@ -13,6 +21,7 @@ interface StickerDetailViewProps {
 export default function StickerDetailView({ sticker, onClose, onDelete }: StickerDetailViewProps) {
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
     if (!sticker?.image_path) return;
@@ -44,6 +53,79 @@ export default function StickerDetailView({ sticker, onClose, onDelete }: Sticke
     );
   };
 
+  // Downloads the sticker and resizes it to a chat-friendly square PNG,
+  // returning a local file:// URI both export actions can reuse.
+  const prepareExportFile = async (): Promise<string> => {
+    if (!imageUrl) throw new Error('Image not loaded yet');
+    const stickersDir = new Directory(Paths.cache, 'sticker-exports');
+    if (!stickersDir.exists) stickersDir.create({ intermediates: true });
+
+    const downloaded = await File.downloadFileAsync(imageUrl, stickersDir, { idempotent: true });
+    // Only constrain one dimension so the other scales proportionally —
+    // passing both width and height stretches/squishes the image.
+    const resized = await manipulateAsync(
+      downloaded.uri,
+      [{ resize: { width: WECHAT_STICKER_SIZE } }],
+      { format: SaveFormat.PNG, compress: 1 }
+    );
+    return resized.uri;
+  };
+
+  const handleSaveToPhotos = async () => {
+    if (!sticker || exporting) return;
+    setExporting(true);
+    try {
+      const { status } = await MediaLibrary.requestPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Photo access needed', 'Allow photo library access to save the sticker.');
+        return;
+      }
+      const fileUri = await prepareExportFile();
+      await MediaLibrary.saveToLibraryAsync(fileUri);
+      Alert.alert(
+        'Saved to Photos',
+        'To use it in WeChat: open WeChat → Me → Sticker Gallery → ⚙️ → Custom Stickers → ➕, then pick this image from your album.'
+      );
+    } catch (err: any) {
+      Alert.alert('Couldn\'t save', err?.message ?? 'Something went wrong while saving the sticker.');
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const handleShare = async () => {
+    if (!sticker || exporting) return;
+    setExporting(true);
+    try {
+      const fileUri = await prepareExportFile();
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(fileUri, {
+          mimeType: 'image/png',
+          dialogTitle: `Share "${sticker.name}" sticker`,
+        });
+      } else {
+        Alert.alert('Sharing unavailable', 'Sharing isn\'t available on this device.');
+      }
+    } catch (err: any) {
+      Alert.alert('Couldn\'t share', err?.message ?? 'Something went wrong while sharing the sticker.');
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const handleExportPress = () => {
+    if (!sticker || !imageUrl || exporting) return;
+    Alert.alert(
+      'Export sticker',
+      'Save it to your photos so you can add it as a custom sticker in WeChat or iMessage, or share it directly to a chat.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Save to Photos', onPress: handleSaveToPhotos },
+        { text: 'Share to a chat…', onPress: handleShare },
+      ]
+    );
+  };
+
   if (!sticker) return null;
 
   return (
@@ -54,11 +136,19 @@ export default function StickerDetailView({ sticker, onClose, onDelete }: Sticke
             <X size={24} color="#1A1A2E" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Vocabulary</Text>
-          <TouchableOpacity onPress={handleDelete} style={styles.deleteButton} disabled={deleting}>
-            {deleting
-              ? <ActivityIndicator size="small" color="#EF4444" />
-              : <Trash2 size={20} color="#EF4444" />}
-          </TouchableOpacity>
+          <View style={styles.headerActions}>
+            <TouchableOpacity onPress={handleExportPress} style={styles.exportButton} disabled={exporting || !imageUrl}>
+              {exporting
+                ? <ActivityIndicator size="small" color="#1A1A2E" />
+                : <Share2 size={16} color="#1A1A2E" />}
+              <Text style={styles.exportButtonText}>Export</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={handleDelete} style={styles.deleteButton} disabled={deleting}>
+              {deleting
+                ? <ActivityIndicator size="small" color="#EF4444" />
+                : <Trash2 size={20} color="#EF4444" />}
+            </TouchableOpacity>
+          </View>
         </View>
 
         <View style={styles.body}>
@@ -100,6 +190,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  exportButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    height: 40,
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    backgroundColor: '#fff',
+  },
+  exportButtonText: { fontSize: 14, fontWeight: '700', color: '#1A1A2E' },
   deleteButton: {
     width: 40,
     height: 40,

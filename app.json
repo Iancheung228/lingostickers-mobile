@@ -32,6 +32,12 @@
         {
           "cameraPermission": "LingoStickers uses your camera to scan objects and create vocabulary stickers."
         }
+      ],
+      [
+        "expo-media-library",
+        {
+          "savePhotosPermission": "LingoStickers saves your stickers to your photo library so you can share them as chat stickers."
+        }
       ]
     ]
   }
