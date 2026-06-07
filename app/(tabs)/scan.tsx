@@ -63,6 +63,10 @@ export default function ScanScreen() {
       if (data.error) throw new Error(data.error);
       console.log('[scan] edge fn debug:', data._debug_bgStatus);
 
+      if (data.bgIssue) {
+        Alert.alert('Heads up', data.bgIssue.message);
+      }
+
       setDraft({
         name: String(data.name ?? ''),
         translation: String(data.translation ?? ''),

@@ -52,6 +52,8 @@ Deno.serve(async (req) => {
       fileExtension = 'jpg';
     }
 
+    const bgIssue = bgResult.data ? null : classifyBgIssue(bgResult.status);
+
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
@@ -71,6 +73,7 @@ Deno.serve(async (req) => {
         pronunciation: vocabResult.pronunciation,
         category: vocabResult.category,
         imagePath,
+        bgIssue,
         _debug_bgStatus: bgResult.status,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -85,14 +88,12 @@ Deno.serve(async (req) => {
 });
 
 // ---------------------------------------------------------------------------
-// Background removal — HuggingFace RMBG-1.4
+// Background removal — remove.bg API
 //
-// HF segmentation API returns JSON: [{ label, score, mask }]
-// where `mask` is a base64-encoded grayscale PNG (white=foreground, black=bg).
-// We decode that mask and apply it as the alpha channel to the original JPEG.
-//
-// Fallback (commented out): Clipdrop remove-background API (100 one-time credits)
-// To re-enable: uncomment the clipdropFallback call below and set CLIPDROP_API_KEY secret.
+// POSTs the JPEG to api.remove.bg and gets back a cut-out PNG (transparent bg).
+// Free tier is 50 images/month — see the "Background Removal" section in
+// README.md for the scaling research and the planned migration to on-device
+// segmentation (iOS Vision + Android ML Kit) / self-hosted rembg.
 // ---------------------------------------------------------------------------
 async function removeBackground(imageBytes: Uint8Array): Promise<{ data: Uint8Array | null; status: string }> {
   const apiKey = Deno.env.get('REMOVEBG_API_KEY');
@@ -123,17 +124,135 @@ async function removeBackground(imageBytes: Uint8Array): Promise<{ data: Uint8Ar
 }
 
 // ---------------------------------------------------------------------------
-// White sticker border — pure JS, no native deps
+// Turn a raw bg-removal failure status into a friendly, user-facing notice —
+// so the app can tell the user *why* they got their full photo back instead
+// of a clean cutout (rate limit vs. transient outage vs. misconfiguration),
+// rather than silently degrading.
+// ---------------------------------------------------------------------------
+function classifyBgIssue(status: string): { kind: string; message: string } | null {
+  if (status.startsWith('remove.bg ok')) return null;
+
+  const code = Number(status.match(/remove\.bg (\d{3})/)?.[1] ?? NaN);
+
+  if (code === 429) {
+    return {
+      kind: 'limit',
+      message: "Background removal hit its usage limit, so we used your original photo. Try again later for a clean cutout.",
+    };
+  }
+  if (code === 401 || code === 403) {
+    return {
+      kind: 'config',
+      message: "Background removal is temporarily unavailable, so we used your original photo instead.",
+    };
+  }
+  if (code >= 500) {
+    return {
+      kind: 'temporary',
+      message: "The background removal service is having issues right now, so we used your original photo. Try scanning again in a few minutes for a clean cutout.",
+    };
+  }
+  return {
+    kind: 'unknown',
+    message: "We couldn't cleanly cut out your photo this time, so we used the original. Try scanning again.",
+  };
+}
+
+// ---------------------------------------------------------------------------
+// rgb <-> hsl helpers for picking a border colour that suits the subject
+// ---------------------------------------------------------------------------
+function rgbToHsl(r: number, g: number, b: number): [number, number, number] {
+  r /= 255; g /= 255; b /= 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b);
+  const l = (max + min) / 2;
+  const d = max - min;
+  if (d === 0) return [0, 0, l];
+  const s = d / (1 - Math.abs(2 * l - 1));
+  let h: number;
+  if (max === r) h = ((g - b) / d) % 6;
+  else if (max === g) h = (b - r) / d + 2;
+  else h = (r - g) / d + 4;
+  h *= 60;
+  if (h < 0) h += 360;
+  return [h, s, l];
+}
+
+function hslToRgb(h: number, s: number, l: number): [number, number, number] {
+  const c = (1 - Math.abs(2 * l - 1)) * s;
+  const x = c * (1 - Math.abs((h / 60) % 2 - 1));
+  const m = l - c / 2;
+  let r = 0, g = 0, b = 0;
+  if (h < 60) [r, g, b] = [c, x, 0];
+  else if (h < 120) [r, g, b] = [x, c, 0];
+  else if (h < 180) [r, g, b] = [0, c, x];
+  else if (h < 240) [r, g, b] = [0, x, c];
+  else if (h < 300) [r, g, b] = [x, 0, c];
+  else [r, g, b] = [c, 0, x];
+  return [
+    Math.round((r + m) * 255),
+    Math.round((g + m) * 255),
+    Math.round((b + m) * 255),
+  ];
+}
+
+// ---------------------------------------------------------------------------
+// Pick a border colour that suits the traced-out subject.
+//
+// Defaults to white. Only deviates when the subject has a clear, saturated
+// hue — in which case we use a soft pastel of the *complementary* hue, which
+// reads as an intentional, coordinated colour rather than a clashing outline.
+// Washed-out, very light, or very dark subjects keep the white default since
+// a tinted border would look muddy against them.
+// ---------------------------------------------------------------------------
+function pickBorderColor(src: Uint8Array, sw: number, sh: number): [number, number, number] {
+  const WHITE: [number, number, number] = [255, 255, 255];
+
+  let sumSin = 0, sumCos = 0, sumSat = 0, sumLight = 0, count = 0;
+  for (let i = 0; i < sw * sh; i++) {
+    const idx = i * 4;
+    if (src[idx + 3] > 64) {
+      const [h, s, l] = rgbToHsl(src[idx], src[idx + 1], src[idx + 2]);
+      const rad = (h * Math.PI) / 180;
+      // weight hue by saturation so vivid pixels dominate the average
+      sumSin += Math.sin(rad) * s;
+      sumCos += Math.cos(rad) * s;
+      sumSat += s;
+      sumLight += l;
+      count++;
+    }
+  }
+  if (count === 0) return WHITE;
+
+  const avgSat = sumSat / count;
+  const avgLight = sumLight / count;
+
+  // Low-saturation (greyscale-ish), near-white, or near-black subjects:
+  // a tinted border would look muddy — keep the clean white default.
+  if (avgSat < 0.18 || avgLight > 0.85 || avgLight < 0.15) return WHITE;
+
+  const avgHue = (Math.atan2(sumSin, sumCos) * 180) / Math.PI;
+  const hue = avgHue < 0 ? avgHue + 360 : avgHue;
+  const complementHue = (hue + 180) % 360;
+
+  // Soft pastel of the complementary hue — coordinated, not clashing.
+  return hslToRgb(complementHue, 0.45, 0.82);
+}
+
+// ---------------------------------------------------------------------------
+// Sticker border — pure JS, no native deps
 //
 // Uses a fast O(n) separable dilation: expands the opaque region by
 // `borderWidth` pixels in all 4 axis directions, then paints those
-// expanded-but-not-original pixels solid white.
+// expanded-but-not-original pixels with a colour chosen to complement the
+// subject (see pickBorderColor — defaults to white).
 // ---------------------------------------------------------------------------
 function addStickerBorder(pngBytes: Uint8Array, borderWidth = 14): Uint8Array {
   const img = UPNG.decode(pngBytes.buffer as ArrayBuffer);
   const src = new Uint8Array(UPNG.toRGBA8(img)[0]);
   const sw = img.width;
   const sh = img.height;
+
+  const [borderR, borderG, borderB] = pickBorderColor(src, sw, sh);
 
   const pad = borderWidth;
   const dw = sw + pad * 2;
@@ -189,9 +308,9 @@ function addStickerBorder(pngBytes: Uint8Array, borderWidth = 14): Uint8Array {
         out[dIdx + 2] = src[sIdx + 2];
         out[dIdx + 3] = src[sIdx + 3];
       } else if (borderMask[mIdx]) {
-        out[dIdx]     = 167; // #A7D7C5 mint green — matches app accent colour
-        out[dIdx + 1] = 215;
-        out[dIdx + 2] = 197;
+        out[dIdx]     = borderR;
+        out[dIdx + 1] = borderG;
+        out[dIdx + 2] = borderB;
         out[dIdx + 3] = 255;
       }
     }
@@ -199,31 +318,6 @@ function addStickerBorder(pngBytes: Uint8Array, borderWidth = 14): Uint8Array {
 
   return new Uint8Array(UPNG.encode([out.buffer as ArrayBuffer], dw, dh, 0));
 }
-
-// ---------------------------------------------------------------------------
-// Clipdrop fallback (disabled — uncomment + set CLIPDROP_API_KEY to re-enable)
-// ---------------------------------------------------------------------------
-// async function clipdropFallback(imageBytes: Uint8Array): Promise<{ data: Uint8Array | null; status: string }> {
-//   const apiKey = Deno.env.get('CLIPDROP_API_KEY');
-//   if (!apiKey) return { data: null, status: 'no CLIPDROP_API_KEY' };
-//   try {
-//     const form = new FormData();
-//     form.append('image_file', new Blob([imageBytes], { type: 'image/jpeg' }), 'image.jpg');
-//     const response = await fetch('https://clipdrop-api.co/remove-background/v1', {
-//       method: 'POST',
-//       headers: { 'x-api-key': apiKey },
-//       body: form,
-//     });
-//     if (!response.ok) {
-//       const body = await response.text();
-//       return { data: null, status: `clipdrop ${response.status}: ${body.slice(0, 120)}` };
-//     }
-//     const buf = await response.arrayBuffer();
-//     return { data: new Uint8Array(buf), status: `clipdrop ok (${buf.byteLength} bytes)` };
-//   } catch (err: any) {
-//     return { data: null, status: `clipdrop threw: ${err?.message}` };
-//   }
-// }
 
 // ---------------------------------------------------------------------------
 // Groq vision — object identification → French vocabulary
