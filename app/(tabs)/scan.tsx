@@ -24,6 +24,7 @@ export default function ScanScreen() {
   const [processing, setProcessing] = useState(false);
   const [draft, setDraft] = useState<StickerDraft | null>(null);
   const [saving, setSaving] = useState(false);
+  const [retranslating, setRetranslating] = useState(false);
   const [zoom, setZoom] = useState(0);
   const [importedAsset, setImportedAsset] = useState<{ uri: string; width: number; height: number } | null>(null);
   // While set, the ghost-cutout reveal is shown instead of DiscoveryReveal —
@@ -179,6 +180,35 @@ export default function ScanScreen() {
     setDraft(null);
   };
 
+  // User wasn't happy with the detected English word — re-derive the French
+  // name/pronunciation/category for their corrected word via the LLM, keeping
+  // the same image. Throws so DiscoveryReveal can revert its local edit state
+  // on failure.
+  const handleEditWord = useCallback(async (newWord: string) => {
+    setRetranslating(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('translate-word', {
+        body: { englishWord: newWord },
+      });
+
+      if (error) {
+        const body = await (error as any).context?.json?.().catch(() => null);
+        throw new Error(body?.error ?? error.message);
+      }
+      if (data.error) throw new Error(data.error);
+
+      setDraft((prev) => prev ? {
+        ...prev,
+        name: String(data.name ?? prev.name),
+        translation: String(data.translation ?? newWord),
+        pronunciation: String(data.pronunciation ?? prev.pronunciation),
+        category: data.category ?? prev.category,
+      } : prev);
+    } finally {
+      setRetranslating(false);
+    }
+  }, []);
+
   if (!permission) return <View style={styles.container} />;
 
   if (!permission.granted) {
@@ -262,7 +292,9 @@ export default function ScanScreen() {
         draft={revealCrop ? null : draft}
         onAdd={handleAdd}
         onDiscard={handleDiscard}
+        onEditWord={handleEditWord}
         saving={saving}
+        retranslating={retranslating}
       />
     </SafeAreaView>
   );
