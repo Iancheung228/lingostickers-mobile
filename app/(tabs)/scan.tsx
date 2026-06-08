@@ -6,13 +6,17 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
+import * as ImagePicker from 'expo-image-picker';
 import { GestureDetector, Gesture } from 'react-native-gesture-handler';
 import { useSharedValue, runOnJS } from 'react-native-reanimated';
-import { Camera as CameraIcon, Zap } from 'lucide-react-native';
+import { Camera as CameraIcon, ImagePlus, Zap } from 'lucide-react-native';
+import * as Haptics from 'expo-haptics';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
 import { StickerDraft } from '@/lib/types';
 import DiscoveryReveal from '@/components/DiscoveryReveal';
+import PhotoExtractor from '@/components/PhotoExtractor';
+import GhostCutoutReveal from '@/components/GhostCutoutReveal';
 
 export default function ScanScreen() {
   const { user } = useAuth();
@@ -21,6 +25,11 @@ export default function ScanScreen() {
   const [draft, setDraft] = useState<StickerDraft | null>(null);
   const [saving, setSaving] = useState(false);
   const [zoom, setZoom] = useState(0);
+  const [importedAsset, setImportedAsset] = useState<{ uri: string; width: number; height: number } | null>(null);
+  // While set, the ghost-cutout reveal is shown instead of DiscoveryReveal —
+  // it crossfades from this cropped photo into the finished cutout, then
+  // hands off. Only used for the photo-import/extraction flow.
+  const [revealCrop, setRevealCrop] = useState<string | null>(null);
   const cameraRef = useRef<CameraView>(null);
 
   // Square camera viewport sized to the screen width (with off-white margin),
@@ -42,8 +51,40 @@ export default function ScanScreen() {
       runOnJS(setZoom)(next);
     }), []);
 
+  // Sends a processed JPEG to the create-sticker edge function and stores the
+  // result as a draft for DiscoveryReveal. Shared by both the live-capture and
+  // photo-import flows — throws on failure so each caller can report it in its
+  // own voice ("Scan failed" vs "Extraction failed").
+  const submitImageForSticker = useCallback(async (base64: string) => {
+    if (!user) throw new Error('Not signed in');
+
+    const { data, error } = await supabase.functions.invoke('create-sticker', {
+      body: { image: `data:image/jpeg;base64,${base64}`, userId: user.id },
+    });
+
+    if (error) {
+      const body = await (error as any).context?.json?.().catch(() => null);
+      throw new Error(body?.error ?? error.message);
+    }
+    if (data.error) throw new Error(data.error);
+    console.log('[scan] edge fn debug:', data._debug_bgStatus);
+
+    if (data.bgIssue) {
+      Alert.alert('Heads up', data.bgIssue.message);
+    }
+
+    setDraft({
+      name: String(data.name ?? ''),
+      translation: String(data.translation ?? ''),
+      pronunciation: String(data.pronunciation ?? ''),
+      category: data.category ?? 'Other',
+      imagePath: String(data.imagePath ?? ''),
+    });
+  }, [user]);
+
   const handleCapture = useCallback(async () => {
     if (!cameraRef.current || processing || !user) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setProcessing(true);
 
     try {
@@ -70,34 +111,46 @@ export default function ScanScreen() {
 
       if (!processed.base64) throw new Error('Failed to process image');
 
-      const { data, error } = await supabase.functions.invoke('create-sticker', {
-        body: { image: `data:image/jpeg;base64,${processed.base64}`, userId: user.id },
-      });
-
-      if (error) {
-        const body = await (error as any).context?.json?.().catch(() => null);
-        throw new Error(body?.error ?? error.message);
-      }
-      if (data.error) throw new Error(data.error);
-      console.log('[scan] edge fn debug:', data._debug_bgStatus);
-
-      if (data.bgIssue) {
-        Alert.alert('Heads up', data.bgIssue.message);
-      }
-
-      setDraft({
-        name: String(data.name ?? ''),
-        translation: String(data.translation ?? ''),
-        pronunciation: String(data.pronunciation ?? ''),
-        category: data.category ?? 'Other',
-        imagePath: String(data.imagePath ?? ''),
-      });
+      await submitImageForSticker(processed.base64);
     } catch (err: any) {
       Alert.alert('Scan failed', err?.message ?? 'Something went wrong. Please try again.');
     } finally {
       setProcessing(false);
     }
-  }, [processing, user]);
+  }, [processing, user, submitImageForSticker]);
+
+  const handleImportPhoto = useCallback(async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Photos Access Needed', 'LingoStickers needs access to your photo library to import a picture.');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      quality: 1,
+    });
+    const asset = !result.canceled ? result.assets[0] : null;
+    if (asset) {
+      setImportedAsset({ uri: asset.uri, width: asset.width, height: asset.height });
+    }
+  }, []);
+
+  const handleExtractFromPhoto = useCallback(async ({ base64, uri }: { base64: string; uri: string }) => {
+    if (processing) return;
+    setProcessing(true);
+    try {
+      await submitImageForSticker(base64);
+      setImportedAsset(null);
+      // Hold off on DiscoveryReveal — show the ghost-cutout crossfade first,
+      // it hands off to DiscoveryReveal once the animation completes.
+      setRevealCrop(uri);
+    } catch (err: any) {
+      Alert.alert('Extraction failed', err?.message ?? 'Something went wrong. Please try again.');
+    } finally {
+      setProcessing(false);
+    }
+  }, [processing, submitImageForSticker]);
 
   const handleAdd = async () => {
     if (!draft || !user) return;
@@ -111,11 +164,17 @@ export default function ScanScreen() {
       image_path: draft.imagePath,
     });
     setSaving(false);
-    if (error) { Alert.alert('Save failed', error.message); return; }
+    if (error) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert('Save failed', error.message);
+      return;
+    }
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setDraft(null);
   };
 
   const handleDiscard = async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (draft) await supabase.storage.from('sticker-images').remove([draft.imagePath]);
     setDraft(null);
   };
@@ -175,10 +234,32 @@ export default function ScanScreen() {
           </View>
         </TouchableOpacity>
         <Text style={styles.subHint}>Pinch to zoom · Tap to capture</Text>
+
+        <TouchableOpacity style={styles.importButton} onPress={handleImportPhoto}>
+          <ImagePlus size={18} color="#1A1A2E" />
+          <Text style={styles.importButtonText}>Or import from Photos</Text>
+        </TouchableOpacity>
       </View>
 
+      <PhotoExtractor
+        imageUri={importedAsset?.uri ?? null}
+        imageWidth={importedAsset?.width ?? 0}
+        imageHeight={importedAsset?.height ?? 0}
+        onClose={() => setImportedAsset(null)}
+        onExtract={handleExtractFromPhoto}
+        processing={processing}
+      />
+
+      {revealCrop && draft && (
+        <GhostCutoutReveal
+          croppedUri={revealCrop}
+          imagePath={draft.imagePath}
+          onComplete={() => setRevealCrop(null)}
+        />
+      )}
+
       <DiscoveryReveal
-        draft={draft}
+        draft={revealCrop ? null : draft}
         onAdd={handleAdd}
         onDiscard={handleDiscard}
         saving={saving}
@@ -244,6 +325,18 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 }, elevation: 6,
   },
   captureButtonDisabled: { opacity: 0.5 },
+  importButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 18,
+    borderRadius: 20,
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  importButtonText: { color: '#1A1A2E', fontSize: 14, fontWeight: '600' },
   captureButtonInner: {
     width: 68, height: 68, borderRadius: 34,
     borderWidth: 3, borderColor: '#A7D7C5',

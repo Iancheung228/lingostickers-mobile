@@ -38,6 +38,12 @@
         {
           "savePhotosPermission": "LingoStickers saves your stickers to your photo library so you can share them as chat stickers."
         }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "LingoStickers needs access to your photo library so you can pick a picture to turn into a sticker."
+        }
       ]
     ]
   }
