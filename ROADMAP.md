@@ -30,7 +30,7 @@ Where we're going:
   translation: string       // English meaning
   sentence: string          // target-language sentence about THIS scene
   sentence_translation: string
-  audio_path: string        // TTS clip of word (+ later, sentence)
+  // pronunciation: on-device TTS (expo-speech), see Phase 2 — no audio_path/storage needed
   image_path: string        // the cutout sticker (current pipeline)
   memory_photo_path: string // full uncropped original photo (Phase 5)
   memory_video_path?: string// short clip / "live sticker" (Phase 5, stretch)
@@ -94,28 +94,39 @@ behind the gear icon on Collection.
 breaks down for Japanese pitch accent. Audio is non-negotiable for actually
 learning to *say* the word.
 
-- [ ] New Supabase Storage bucket `sticker-audio`.
-- [ ] New column `stickers.audio_path`.
-- [ ] Pick a TTS provider that covers fr + ja well and is cheap at low
-      volume (see open question below). Call it from `create-sticker`
-      (parallel with the Groq + bg-removal calls) and from `translate-word`
-      when the user edits the detected word.
-- [ ] `reading` field becomes a *romanization* (romaji for ja, a clean
-      pronunciation respelling for fr) — useful as a fallback/caption, but
-      audio is now the primary "how do I say this" mechanism.
-- [ ] UI: a play button (speaker icon) next to the word in `DiscoveryReveal`
-      and `StickerDetailView`.
+- [x] Pick a TTS approach: **on-device, via `expo-speech`** (not a cloud
+      provider — see decision below).
+- [x] UI: a play button (speaker icon) next to the word in `DiscoveryReveal`
+      and `StickerDetailView`, plus the sentence on the memory-photo flip
+      side of `StickerDetailView` (covers Phase 3's TTS stretch goal too).
+- [ ] `reading` field could later become a *romanization* (romaji for ja, a
+      clean pronunciation respelling for fr) as a caption fallback — not
+      required now since audio covers the primary "how do I say this" need.
+
+**Status (2026-06-13): Shipped, on-device.** New `lib/speech.ts` wraps
+`expo-speech`'s `Speech.speak(text, { language })`, mapping `Language` →
+BCP-47 locale (`fr` → `fr-FR`, `ja` → `ja-JP`) and calling `Speech.stop()`
+before each new utterance. Speaker icons added next to the word in
+`DiscoveryReveal` (preview pronunciation before saving) and
+`StickerDetailView` (front face), plus next to the sentence in the
+memory-photo caption. No new Supabase storage bucket, column, or provider
+API key — zero marginal cost, works offline, ships in Expo Go.
+
+**Decision: on-device vs. cloud TTS.** Evaluated OpenAI TTS (`tts-1`/
+`gpt-4o-mini-tts`, ~$15/1M chars) and Google Cloud TTS (Neural2/Chirp3,
+$4-16/1M chars with a generous free tier) against `expo-speech`. Chose
+on-device: it directly satisfies "real pronunciation audio" with native
+fr-FR/ja-JP neural voices on both platforms, ships immediately with no new
+infra (no `sticker-audio` bucket, `audio_path` column, or per-word
+caching/dedup), and avoids repeating the remove.bg-style "free tier API
+limit" friction as more people use the app. If voice quality/consistency
+across devices ever becomes a problem, cloud TTS (with the bucket +
+caching design originally sketched here) remains a documented upgrade path.
 
 **Open questions**
-- TTS provider: candidates are OpenAI TTS (`gpt-4o-mini-tts`, cheap, good
-  multilingual coverage), Google Cloud TTS (generous free tier, strong
-  ja/fr neural voices), ElevenLabs (best quality, pricier). Groq does not
-  currently offer fr/ja TTS (their TTS models are English/Arabic only) —
-  don't assume Groq covers this. Needs a quick cost/quality comparison on
-  ~10 words in each language.
-- Cache audio per *word* (not per sticker) — "Le Café" only needs to be
-  synthesized once ever, regardless of how many users/stickers reference it.
-  Could key the storage path by a hash of `(language, word)` to dedupe.
+- None blocking. If we revisit cloud TTS later: cache audio per *word* (not
+  per sticker) — "Le Café" only needs to be synthesized once ever, keyed by
+  a hash of `(language, word)`.
 
 ---
 
@@ -138,9 +149,10 @@ and makes the capsule feel like *theirs*.
       `DiscoveryReveal`, which re-translates it into the target language via
       a new `translate-sentence` edge function (same pattern as
       `handleEditWord` / `translate-word`).
-- [ ] Stretch: TTS the sentence too (Phase 2 infra), `sentence_audio_path`.
+- [x] Stretch: TTS the sentence too — done via Phase 2's on-device
+      `expo-speech` (no `sentence_audio_path` needed).
 
-**Status (2026-06-13): Shipped (minus TTS stretch).** Migration
+**Status (2026-06-13): Shipped, including TTS stretch.** Migration
 `004_sentences.sql` adds `stickers.sentence` / `stickers.sentence_translation`
 (`NOT NULL DEFAULT ''`, so old stickers render fine with no sentence).
 `identifyWithGroq` now sends both the cropped object photo and (when present)
@@ -279,11 +291,13 @@ an LLM-generated romanization is likely to be *wrong*, not just imprecise.
 The eventual idea: instead of the AI being the source of truth, the app
 becomes a tool for **capturing a word from a real object, then recording a
 real person (family) saying it** — building a personal/family audio
-dictionary anchored to objects and memories. This reuses the Phase 2 audio
-infrastructure (storage, playback UI) but flips the source from TTS to a
-voice recording. Don't design for this now — but Phase 2's `audio_path` /
-playback UI should stay provider-agnostic so a "record instead of
-synthesize" path can slot in later without a schema change.
+dictionary anchored to objects and memories. Phase 2 ended up on-device
+(TTS, no storage), so this mode would need its *own* infra: a
+`sticker-audio` bucket + `audio_path` column for the recorded clip, plus
+`expo-audio`'s `useAudioRecorder`/`useAudioPlayer` for record + playback.
+Don't design for this now — but if/when it's built, the `lib/speech.ts`
+play-button UI pattern (speaker icon next to the word) should be reusable,
+just swapping the `speak()` call for fetching/playing the recorded clip.
 
 ---
 

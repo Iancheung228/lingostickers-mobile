@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Modal, View, Text, Image, TouchableOpacity, TextInput, StyleSheet, SafeAreaView, ActivityIndicator, Alert, KeyboardAvoidingView, Platform } from 'react-native';
-import { X, Bookmark, Pencil } from 'lucide-react-native';
+import { X, Bookmark, Pencil, Volume2 } from 'lucide-react-native';
 import { StickerDraft } from '@/lib/types';
 import { supabase } from '@/lib/supabase';
+import { speak, stopSpeaking } from '@/lib/speech';
 
 interface DiscoveryRevealProps {
   draft: StickerDraft | null;
@@ -34,6 +35,9 @@ export default function DiscoveryReveal({ draft, onAdd, onDiscard, onEditWord, o
     setEditingWord(false);
     setEditingSentence(false);
   }, [draft?.imagePath]);
+
+  // Stop any in-flight pronunciation when the discovery changes or the modal closes.
+  useEffect(() => stopSpeaking, [draft?.imagePath]);
 
   if (!draft) return null;
 
@@ -90,7 +94,16 @@ export default function DiscoveryReveal({ draft, onAdd, onDiscard, onEditWord, o
             )}
           </View>
 
-          <Text style={[styles.word, retranslating && styles.fadedWhileTranslating]}>{draft.word}</Text>
+          <View style={styles.wordRow}>
+            <Text style={[styles.word, retranslating && styles.fadedWhileTranslating]}>{draft.word}</Text>
+            <TouchableOpacity
+              onPress={() => speak(draft.word, draft.language)}
+              style={styles.speakButton}
+              hitSlop={10}
+            >
+              <Volume2 size={20} color="#A7D7C5" />
+            </TouchableOpacity>
+          </View>
           <Text style={[styles.reading, retranslating && styles.fadedWhileTranslating]}>{draft.reading}</Text>
 
           {editingWord ? (
@@ -213,7 +226,15 @@ const styles = StyleSheet.create({
     marginBottom: 28,
   },
   image: { width: '100%', height: '100%' },
-  word: { fontSize: 40, fontWeight: '800', color: '#1A1A2E', textAlign: 'center', marginBottom: 6 },
+  wordRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginBottom: 6,
+  },
+  speakButton: { padding: 4 },
+  word: { fontSize: 40, fontWeight: '800', color: '#1A1A2E', textAlign: 'center' },
   reading: { fontSize: 18, color: '#6B7280', fontStyle: 'italic', marginBottom: 10, textAlign: 'center' },
   fadedWhileTranslating: { opacity: 0.35 },
   translationRow: {

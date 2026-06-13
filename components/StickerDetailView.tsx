@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Modal, View, Text, Image, TouchableOpacity, StyleSheet, SafeAreaView, ActivityIndicator, Alert } from 'react-native';
 import Animated, { useSharedValue, useAnimatedStyle, withTiming, interpolate, Easing } from 'react-native-reanimated';
-import { X, Trash2, Share2, RotateCw } from 'lucide-react-native';
+import { X, Trash2, Share2, RotateCw, Volume2 } from 'lucide-react-native';
 import { File, Directory, Paths } from 'expo-file-system';
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import * as MediaLibrary from 'expo-media-library';
@@ -9,6 +9,7 @@ import * as Sharing from 'expo-sharing';
 import * as Haptics from 'expo-haptics';
 import { Sticker } from '@/lib/types';
 import { supabase } from '@/lib/supabase';
+import { speak, stopSpeaking } from '@/lib/speech';
 
 // WeChat custom-sticker uploads look best as small square PNGs with a
 // transparent background — see "Custom Stickers" in WeChat's gallery settings.
@@ -46,6 +47,9 @@ export default function StickerDetailView({ sticker, onClose, onDelete }: Sticke
       .then(({ data }) => { if (!cancelled && data) setMemoryImageUrl(data.signedUrl); });
     return () => { cancelled = true; };
   }, [sticker?.id]);
+
+  // Stop any in-flight pronunciation when the sticker changes or the modal closes.
+  useEffect(() => stopSpeaking, [sticker?.id]);
 
   const frontFaceStyle = useAnimatedStyle(() => ({
     transform: [
@@ -220,7 +224,16 @@ export default function StickerDetailView({ sticker, onClose, onDelete }: Sticke
                 </View>
                 {!!sticker.sentence && (
                   <View style={styles.memoryCaption}>
-                    <Text style={styles.memorySentence}>{sticker.sentence}</Text>
+                    <View style={styles.memorySentenceRow}>
+                      <Text style={styles.memorySentence}>{sticker.sentence}</Text>
+                      <TouchableOpacity
+                        onPress={() => speak(sticker.sentence, sticker.language)}
+                        style={styles.memorySpeakButton}
+                        hitSlop={10}
+                      >
+                        <Volume2 size={14} color="rgba(255,255,255,0.85)" />
+                      </TouchableOpacity>
+                    </View>
                     {!!sticker.sentence_translation && (
                       <Text style={styles.memorySentenceTranslation}>{sticker.sentence_translation}</Text>
                     )}
@@ -237,7 +250,16 @@ export default function StickerDetailView({ sticker, onClose, onDelete }: Sticke
             </View>
           )}
 
-          <Text style={styles.word}>{sticker.word}</Text>
+          <View style={styles.wordRow}>
+            <Text style={styles.word}>{sticker.word}</Text>
+            <TouchableOpacity
+              onPress={() => speak(sticker.word, sticker.language)}
+              style={styles.speakButton}
+              hitSlop={10}
+            >
+              <Volume2 size={22} color="#A7D7C5" />
+            </TouchableOpacity>
+          </View>
           <Text style={styles.reading}>{sticker.reading}</Text>
           <Text style={styles.translation}>{sticker.translation?.toUpperCase() ?? ''}</Text>
 
@@ -326,13 +348,21 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
     backgroundColor: 'rgba(0,0,0,0.55)',
   },
+  memorySentenceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
   memorySentence: {
     color: '#fff',
     fontSize: 13,
     fontWeight: '700',
     textAlign: 'center',
     lineHeight: 18,
+    flexShrink: 1,
   },
+  memorySpeakButton: { padding: 2 },
   memorySentenceTranslation: {
     color: 'rgba(255,255,255,0.7)',
     fontSize: 11,
@@ -347,7 +377,15 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   flipHintText: { fontSize: 12, color: '#9CA3AF', fontWeight: '600' },
-  word: { fontSize: 44, fontWeight: '800', color: '#1A1A2E', textAlign: 'center', marginBottom: 8 },
+  wordRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
+  speakButton: { padding: 4 },
+  word: { fontSize: 44, fontWeight: '800', color: '#1A1A2E', textAlign: 'center' },
   reading: { fontSize: 18, color: '#6B7280', fontStyle: 'italic', marginBottom: 12, textAlign: 'center' },
   translation: {
     fontSize: 14,
