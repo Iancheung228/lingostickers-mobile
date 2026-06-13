@@ -18,6 +18,7 @@ export interface Sticker {
   reading: string;
   category: Category;
   image_path: string;
+  memory_photo_path: string | null;
   discovered_at: string;
 }
 
@@ -28,4 +29,5 @@ export interface StickerDraft {
   reading: string;
   category: Category;
   imagePath: string;
+  memoryPhotoPath: string | null;
 }

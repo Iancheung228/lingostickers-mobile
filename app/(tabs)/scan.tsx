@@ -59,11 +59,16 @@ export default function ScanScreen() {
   // result as a draft for DiscoveryReveal. Shared by both the live-capture and
   // photo-import flows — throws on failure so each caller can report it in its
   // own voice ("Scan failed" vs "Extraction failed").
-  const submitImageForSticker = useCallback(async (base64: string) => {
+  const submitImageForSticker = useCallback(async (base64: string, memoryBase64?: string | null) => {
     if (!user) throw new Error('Not signed in');
 
     const { data, error } = await supabase.functions.invoke('create-sticker', {
-      body: { image: `data:image/jpeg;base64,${base64}`, userId: user.id, language },
+      body: {
+        image: `data:image/jpeg;base64,${base64}`,
+        userId: user.id,
+        language,
+        ...(memoryBase64 ? { memoryImage: `data:image/jpeg;base64,${memoryBase64}` } : {}),
+      },
     });
 
     if (error) {
@@ -84,8 +89,28 @@ export default function ScanScreen() {
       reading: String(data.reading ?? ''),
       category: data.category ?? 'Other',
       imagePath: String(data.imagePath ?? ''),
+      memoryPhotoPath: data.memoryPhotoPath ?? null,
     });
   }, [user, language]);
+
+  // Resizes the full, uncropped photo down to a manageable size (long side
+  // capped at 1280px, never upscaled) so it can be stored alongside the
+  // sticker as the "memory photo" to flip to.
+  const prepareMemoryPhoto = useCallback(async (uri: string, width: number, height: number) => {
+    let context = ImageManipulator.manipulate(uri);
+    const longSide = Math.max(width, height);
+    if (longSide > 1280) {
+      const scale = 1280 / longSide;
+      context = context.resize({ width: Math.round(width * scale) });
+    }
+    const rendered = await context.renderAsync();
+    const result = await rendered.saveAsync({
+      compress: 0.7,
+      format: SaveFormat.JPEG,
+      base64: true,
+    });
+    return result.base64 ?? null;
+  }, []);
 
   const handleCapture = useCallback(async () => {
     if (!cameraRef.current || processing || !user) return;
@@ -116,13 +141,16 @@ export default function ScanScreen() {
 
       if (!processed.base64) throw new Error('Failed to process image');
 
-      await submitImageForSticker(processed.base64);
+      // The full, uncropped frame becomes the "memory photo" to flip to.
+      const memoryBase64 = await prepareMemoryPhoto(photo.uri, photo.width, photo.height);
+
+      await submitImageForSticker(processed.base64, memoryBase64);
     } catch (err: any) {
       Alert.alert('Scan failed', err?.message ?? 'Something went wrong. Please try again.');
     } finally {
       setProcessing(false);
     }
-  }, [processing, user, submitImageForSticker]);
+  }, [processing, user, submitImageForSticker, prepareMemoryPhoto]);
 
   const handleImportPhoto = useCallback(async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -142,10 +170,14 @@ export default function ScanScreen() {
   }, []);
 
   const handleExtractFromPhoto = useCallback(async ({ base64, uri }: { base64: string; uri: string }) => {
-    if (processing) return;
+    if (processing || !importedAsset) return;
     setProcessing(true);
     try {
-      await submitImageForSticker(base64);
+      // The full imported photo (before extraction) becomes the "memory
+      // photo" to flip to.
+      const memoryBase64 = await prepareMemoryPhoto(importedAsset.uri, importedAsset.width, importedAsset.height);
+
+      await submitImageForSticker(base64, memoryBase64);
       setImportedAsset(null);
       // Hold off on DiscoveryReveal — show the ghost-cutout crossfade first,
       // it hands off to DiscoveryReveal once the animation completes.
@@ -155,7 +187,7 @@ export default function ScanScreen() {
     } finally {
       setProcessing(false);
     }
-  }, [processing, submitImageForSticker]);
+  }, [processing, importedAsset, submitImageForSticker, prepareMemoryPhoto]);
 
   const handleAdd = async () => {
     if (!draft || !user) return;
@@ -168,6 +200,7 @@ export default function ScanScreen() {
       reading: draft.reading,
       category: draft.category,
       image_path: draft.imagePath,
+      memory_photo_path: draft.memoryPhotoPath,
     });
     setSaving(false);
     if (error) {
@@ -181,7 +214,11 @@ export default function ScanScreen() {
 
   const handleDiscard = async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    if (draft) await supabase.storage.from('sticker-images').remove([draft.imagePath]);
+    if (draft) {
+      const paths = [draft.imagePath];
+      if (draft.memoryPhotoPath) paths.push(draft.memoryPhotoPath);
+      await supabase.storage.from('sticker-images').remove(paths);
+    }
     setDraft(null);
   };
 

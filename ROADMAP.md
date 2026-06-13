@@ -127,10 +127,16 @@ and makes the capsule feel like *theirs*.
 
 - [ ] Extend the Groq prompt (same vision call as Phase 1) to also return
       `sentence` (target language, describing the object *in the scene
-      just photographed*) and `sentence_translation` (English).
+      just photographed*) and `sentence_translation` (English). With Phase
+      5a shipped, the *memory photo* (full scene) is the better input for
+      this than the cropped cutout — pass it to the vision call instead.
 - [ ] New columns: `stickers.sentence`, `stickers.sentence_translation`.
 - [ ] UI: show the sentence below the word in `DiscoveryReveal` /
       `StickerDetailView` — smaller text, maybe tap-to-reveal translation.
+- [ ] Manual edit: let the user write/edit the English sentence themselves
+      (e.g. on the memory-photo flip side), then re-translate it into the
+      target language via the LLM — same pattern as `handleEditWord` /
+      `translate-word`, but for full sentences and scene-aware.
 - [ ] Stretch: TTS the sentence too (Phase 2 infra), `sentence_audio_path`.
 
 This is a near-zero marginal cost addition once Phase 1's prompt refactor is
@@ -173,14 +179,28 @@ in place — same image, same API call, two more JSON fields.
 moment — the whole photo, not just the cutout.
 
 ### 5a — Store the original photo (low effort, ship first)
-- [ ] Upload the full, uncropped, pre-bg-removal photo alongside the cutout
+- [x] Upload the full, uncropped, pre-bg-removal photo alongside the cutout
       (new `memory_photo_path`, new or shared storage bucket). The capture
       pipeline already has this image in memory — it's currently discarded
       after cropping/bg-removal.
-- [ ] UI: tapping a sticker in `StickerDetailView` reveals the original
-      photo — reuse `GhostCutoutReveal`'s crossfade *in reverse* (sticker →
-      ghosts back into the real photo). Nice continuity with the existing
-      discovery animation.
+- [x] UI: tapping a sticker in `StickerDetailView` reveals the original
+      photo — implemented as a tap-to-flip 3D card (Reanimated `rotateY` +
+      `backfaceVisibility: hidden`), front = sticker, back = memory photo.
+      Stickers without a memory photo (pre-Phase-5a) just don't flip.
+
+**Status (2026-06-13): Shipped.** Migration `003_memory_photo.sql` adds
+`stickers.memory_photo_path` (nullable). `create-sticker` accepts an
+optional `memoryImage` and uploads it to `sticker-images/{userId}/{uuid}-memory.jpg`
+in parallel with vocab lookup + bg removal (non-fatal on failure). `scan.tsx`
+captures the full uncropped frame (camera capture or imported photo),
+downsamples it (long side capped at 1280px, no upscale) via a new
+`prepareMemoryPhoto` helper, and sends it alongside the cropped sticker
+image. `StickerDetailView` fetches a signed URL for the memory photo and
+flips to reveal it; delete cleanup removes both storage objects.
+
+Next up (per user, before Phase 3 proper): use this memory photo as scene
+context for a sentence describing what's happening, with manual edit +
+LLM re-translation — see the new bullet under Phase 3 below.
 
 ### 5b — Live sticker (stretch, needs research)
 - [ ] Investigate Expo SDK 54's `expo-camera` video recording

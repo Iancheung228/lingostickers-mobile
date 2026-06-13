@@ -13,7 +13,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { image, userId, language } = await req.json();
+    const { image, userId, language, memoryImage } = await req.json();
     if (!image || !userId) {
       return new Response(
         JSON.stringify({ error: 'Missing image or userId' }),
@@ -25,10 +25,17 @@ Deno.serve(async (req) => {
     const base64Data = image.includes(',') ? image.split(',')[1] : image;
     const imageBytes = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0));
 
-    // Run vocab identification and background removal in parallel
-    const [vocabResult, bgResult] = await Promise.all([
+    const supabase = createClient(
+      Deno.env.get('SUPABASE_URL')!,
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+    );
+
+    // Run vocab identification, background removal, and the memory-photo
+    // upload in parallel
+    const [vocabResult, bgResult, memoryPhotoPath] = await Promise.all([
       identifyWithGroq(base64Data, lang),
       removeBackground(imageBytes),
+      uploadMemoryPhoto(supabase, memoryImage, userId),
     ]);
 
     console.log(`bg removal: ${bgResult.status}`);
@@ -56,11 +63,6 @@ Deno.serve(async (req) => {
 
     const bgIssue = bgResult.data ? null : classifyBgIssue(bgResult.status);
 
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-    );
-
     const imagePath = `${userId}/${crypto.randomUUID()}.${fileExtension}`;
     const { error: uploadError } = await supabase.storage
       .from('sticker-images')
@@ -76,6 +78,7 @@ Deno.serve(async (req) => {
         reading: vocabResult.reading,
         category: vocabResult.category,
         imagePath,
+        memoryPhotoPath,
         bgIssue,
         _debug_bgStatus: bgResult.status,
       }),
@@ -89,6 +92,40 @@ Deno.serve(async (req) => {
     );
   }
 });
+
+// ---------------------------------------------------------------------------
+// Memory photo — the full, uncropped scene the sticker was found in.
+//
+// Optional: uploads the raw photo so the app can "flip" a sticker to reveal
+// the original moment. Failures here are non-fatal — the sticker is still
+// created without a memory photo to flip to.
+// ---------------------------------------------------------------------------
+async function uploadMemoryPhoto(
+  supabase: ReturnType<typeof createClient>,
+  memoryImage: string | undefined,
+  userId: string
+): Promise<string | null> {
+  if (!memoryImage) return null;
+
+  try {
+    const base64Data = memoryImage.includes(',') ? memoryImage.split(',')[1] : memoryImage;
+    const bytes = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0));
+
+    const path = `${userId}/${crypto.randomUUID()}-memory.jpg`;
+    const { error } = await supabase.storage
+      .from('sticker-images')
+      .upload(path, bytes, { contentType: 'image/jpeg', upsert: false });
+
+    if (error) {
+      console.warn(`memory photo upload failed: ${error.message}`);
+      return null;
+    }
+    return path;
+  } catch (err: any) {
+    console.warn(`memory photo upload threw: ${err?.message}`);
+    return null;
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Background removal — remove.bg API

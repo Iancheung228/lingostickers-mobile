@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
 import { Modal, View, Text, Image, TouchableOpacity, StyleSheet, SafeAreaView, ActivityIndicator, Alert } from 'react-native';
-import { X, Trash2, Share2 } from 'lucide-react-native';
+import Animated, { useSharedValue, useAnimatedStyle, withTiming, interpolate, Easing } from 'react-native-reanimated';
+import { X, Trash2, Share2, RotateCw } from 'lucide-react-native';
 import { File, Directory, Paths } from 'expo-file-system';
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import * as MediaLibrary from 'expo-media-library';
 import * as Sharing from 'expo-sharing';
+import * as Haptics from 'expo-haptics';
 import { Sticker } from '@/lib/types';
 import { supabase } from '@/lib/supabase';
 
@@ -20,8 +22,10 @@ interface StickerDetailViewProps {
 
 export default function StickerDetailView({ sticker, onClose, onDelete }: StickerDetailViewProps) {
   const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [memoryImageUrl, setMemoryImageUrl] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const flipProgress = useSharedValue(0);
 
   useEffect(() => {
     if (!sticker?.image_path) return;
@@ -29,6 +33,42 @@ export default function StickerDetailView({ sticker, onClose, onDelete }: Sticke
       .createSignedUrl(sticker.image_path, 3600)
       .then(({ data }) => { if (data) setImageUrl(data.signedUrl); });
   }, [sticker?.image_path]);
+
+  // Fresh sticker opened — start showing the front face, and resolve the
+  // memory photo (if any) so it's ready by the time the user flips.
+  useEffect(() => {
+    flipProgress.value = 0;
+    setMemoryImageUrl(null);
+    if (!sticker?.memory_photo_path) return;
+    let cancelled = false;
+    supabase.storage.from('sticker-images')
+      .createSignedUrl(sticker.memory_photo_path, 3600)
+      .then(({ data }) => { if (!cancelled && data) setMemoryImageUrl(data.signedUrl); });
+    return () => { cancelled = true; };
+  }, [sticker?.id]);
+
+  const frontFaceStyle = useAnimatedStyle(() => ({
+    transform: [
+      { perspective: 1200 },
+      { rotateY: `${interpolate(flipProgress.value, [0, 1], [0, 180])}deg` },
+    ],
+  }));
+
+  const backFaceStyle = useAnimatedStyle(() => ({
+    transform: [
+      { perspective: 1200 },
+      { rotateY: `${interpolate(flipProgress.value, [0, 1], [180, 360])}deg` },
+    ],
+  }));
+
+  const handleFlip = () => {
+    if (!sticker?.memory_photo_path) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    flipProgress.value = withTiming(flipProgress.value === 0 ? 1 : 0, {
+      duration: 500,
+      easing: Easing.out(Easing.cubic),
+    });
+  };
 
   const handleDelete = () => {
     Alert.alert(
@@ -41,9 +81,11 @@ export default function StickerDetailView({ sticker, onClose, onDelete }: Sticke
           onPress: async () => {
             if (!sticker) return;
             setDeleting(true);
+            const pathsToRemove = [sticker.image_path];
+            if (sticker.memory_photo_path) pathsToRemove.push(sticker.memory_photo_path);
             await Promise.all([
               supabase.from('stickers').delete().eq('id', sticker.id),
-              supabase.storage.from('sticker-images').remove([sticker.image_path]),
+              supabase.storage.from('sticker-images').remove(pathsToRemove),
             ]);
             setDeleting(false);
             onDelete();
@@ -152,13 +194,40 @@ export default function StickerDetailView({ sticker, onClose, onDelete }: Sticke
         </View>
 
         <View style={styles.body}>
-          <View style={styles.stickerFrame}>
-            {imageUrl ? (
-              <Image source={{ uri: imageUrl }} style={styles.image} resizeMode="contain" />
-            ) : (
-              <ActivityIndicator style={styles.image} color="#A7D7C5" />
+          <TouchableOpacity
+            style={styles.stickerFrame}
+            onPress={handleFlip}
+            activeOpacity={sticker.memory_photo_path ? 0.85 : 1}
+            disabled={!sticker.memory_photo_path}
+          >
+            <Animated.View style={[styles.face, frontFaceStyle]}>
+              {imageUrl ? (
+                <Image source={{ uri: imageUrl }} style={styles.image} resizeMode="contain" />
+              ) : (
+                <ActivityIndicator style={styles.image} color="#A7D7C5" />
+              )}
+            </Animated.View>
+
+            {sticker.memory_photo_path && (
+              <Animated.View style={[styles.face, styles.backFace, backFaceStyle]}>
+                {memoryImageUrl ? (
+                  <Image source={{ uri: memoryImageUrl }} style={styles.memoryImage} resizeMode="cover" />
+                ) : (
+                  <ActivityIndicator style={styles.image} color="#A7D7C5" />
+                )}
+                <View style={styles.memoryLabel}>
+                  <Text style={styles.memoryLabelText}>THE MOMENT</Text>
+                </View>
+              </Animated.View>
             )}
-          </View>
+          </TouchableOpacity>
+
+          {sticker.memory_photo_path && (
+            <View style={styles.flipHint}>
+              <RotateCw size={13} color="#9CA3AF" />
+              <Text style={styles.flipHintText}>Tap the sticker to flip</Text>
+            </View>
+          )}
 
           <Text style={styles.word}>{sticker.word}</Text>
           <Text style={styles.reading}>{sticker.reading}</Text>
@@ -214,9 +283,38 @@ const styles = StyleSheet.create({
   stickerFrame: {
     width: 240,
     height: 240,
-    marginBottom: 32,
+    marginBottom: 12,
   },
   image: { width: '100%', height: '100%' },
+  face: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 16,
+    overflow: 'hidden',
+    backfaceVisibility: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  backFace: {
+    backgroundColor: '#1A1A2E',
+  },
+  memoryImage: { width: '100%', height: '100%' },
+  memoryLabel: {
+    position: 'absolute',
+    bottom: 10,
+    left: 10,
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    borderRadius: 12,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+  },
+  memoryLabelText: { color: '#fff', fontSize: 11, fontWeight: '700', letterSpacing: 1 },
+  flipHint: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 20,
+  },
+  flipHintText: { fontSize: 12, color: '#9CA3AF', fontWeight: '600' },
   word: { fontSize: 44, fontWeight: '800', color: '#1A1A2E', textAlign: 'center', marginBottom: 8 },
   reading: { fontSize: 18, color: '#6B7280', fontStyle: 'italic', marginBottom: 12, textAlign: 'center' },
   translation: {
