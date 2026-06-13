@@ -71,8 +71,8 @@ export default function DiscoveryReveal({ draft, onAdd, onDiscard, onEditWord, s
             )}
           </View>
 
-          <Text style={[styles.frenchWord, retranslating && styles.fadedWhileTranslating]}>{draft.name}</Text>
-          <Text style={[styles.pronunciation, retranslating && styles.fadedWhileTranslating]}>{draft.pronunciation}</Text>
+          <Text style={[styles.word, retranslating && styles.fadedWhileTranslating]}>{draft.word}</Text>
+          <Text style={[styles.reading, retranslating && styles.fadedWhileTranslating]}>{draft.reading}</Text>
 
           {editingWord ? (
             <TextInput
@@ -159,8 +159,8 @@ const styles = StyleSheet.create({
     marginBottom: 28,
   },
   image: { width: '100%', height: '100%' },
-  frenchWord: { fontSize: 40, fontWeight: '800', color: '#1A1A2E', textAlign: 'center', marginBottom: 6 },
-  pronunciation: { fontSize: 18, color: '#6B7280', fontStyle: 'italic', marginBottom: 10, textAlign: 'center' },
+  word: { fontSize: 40, fontWeight: '800', color: '#1A1A2E', textAlign: 'center', marginBottom: 6 },
+  reading: { fontSize: 18, color: '#6B7280', fontStyle: 'italic', marginBottom: 10, textAlign: 'center' },
   fadedWhileTranslating: { opacity: 0.35 },
   translationRow: {
     flexDirection: 'row',

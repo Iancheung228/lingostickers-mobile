@@ -12,6 +12,7 @@ import { useSharedValue, runOnJS } from 'react-native-reanimated';
 import { Camera as CameraIcon, ImagePlus, Zap } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useAuth } from '@/hooks/useAuth';
+import { useProfile } from '@/hooks/useProfile';
 import { supabase } from '@/lib/supabase';
 import { StickerDraft } from '@/lib/types';
 import DiscoveryReveal from '@/components/DiscoveryReveal';
@@ -20,6 +21,8 @@ import GhostCutoutReveal from '@/components/GhostCutoutReveal';
 
 export default function ScanScreen() {
   const { user } = useAuth();
+  const { profile } = useProfile(user?.id);
+  const language = profile?.target_language ?? 'fr';
   const [permission, requestPermission] = useCameraPermissions();
   const [processing, setProcessing] = useState(false);
   const [draft, setDraft] = useState<StickerDraft | null>(null);
@@ -60,7 +63,7 @@ export default function ScanScreen() {
     if (!user) throw new Error('Not signed in');
 
     const { data, error } = await supabase.functions.invoke('create-sticker', {
-      body: { image: `data:image/jpeg;base64,${base64}`, userId: user.id },
+      body: { image: `data:image/jpeg;base64,${base64}`, userId: user.id, language },
     });
 
     if (error) {
@@ -75,13 +78,14 @@ export default function ScanScreen() {
     }
 
     setDraft({
-      name: String(data.name ?? ''),
+      language: data.language === 'ja' ? 'ja' : 'fr',
+      word: String(data.word ?? ''),
       translation: String(data.translation ?? ''),
-      pronunciation: String(data.pronunciation ?? ''),
+      reading: String(data.reading ?? ''),
       category: data.category ?? 'Other',
       imagePath: String(data.imagePath ?? ''),
     });
-  }, [user]);
+  }, [user, language]);
 
   const handleCapture = useCallback(async () => {
     if (!cameraRef.current || processing || !user) return;
@@ -158,9 +162,10 @@ export default function ScanScreen() {
     setSaving(true);
     const { error } = await supabase.from('stickers').insert({
       user_id: user.id,
-      name: draft.name,
+      language: draft.language,
+      word: draft.word,
       translation: draft.translation,
-      pronunciation: draft.pronunciation,
+      reading: draft.reading,
       category: draft.category,
       image_path: draft.imagePath,
     });
@@ -180,15 +185,15 @@ export default function ScanScreen() {
     setDraft(null);
   };
 
-  // User wasn't happy with the detected English word — re-derive the French
-  // name/pronunciation/category for their corrected word via the LLM, keeping
-  // the same image. Throws so DiscoveryReveal can revert its local edit state
-  // on failure.
+  // User wasn't happy with the detected English word — re-derive the
+  // word/reading/category for their corrected word via the LLM, keeping
+  // the same image and language. Throws so DiscoveryReveal can revert its
+  // local edit state on failure.
   const handleEditWord = useCallback(async (newWord: string) => {
     setRetranslating(true);
     try {
       const { data, error } = await supabase.functions.invoke('translate-word', {
-        body: { englishWord: newWord },
+        body: { englishWord: newWord, language },
       });
 
       if (error) {
@@ -199,15 +204,15 @@ export default function ScanScreen() {
 
       setDraft((prev) => prev ? {
         ...prev,
-        name: String(data.name ?? prev.name),
+        word: String(data.word ?? prev.word),
         translation: String(data.translation ?? newWord),
-        pronunciation: String(data.pronunciation ?? prev.pronunciation),
+        reading: String(data.reading ?? prev.reading),
         category: data.category ?? prev.category,
       } : prev);
     } finally {
       setRetranslating(false);
     }
-  }, []);
+  }, [language]);
 
   if (!permission) return <View style={styles.container} />;
 

@@ -33,7 +33,7 @@ export default function StickerDetailView({ sticker, onClose, onDelete }: Sticke
   const handleDelete = () => {
     Alert.alert(
       'Delete Sticker',
-      `Remove "${sticker?.name}" from your collection?`,
+      `Remove "${sticker?.word}" from your collection?`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -101,7 +101,7 @@ export default function StickerDetailView({ sticker, onClose, onDelete }: Sticke
       if (await Sharing.isAvailableAsync()) {
         await Sharing.shareAsync(fileUri, {
           mimeType: 'image/png',
-          dialogTitle: `Share "${sticker.name}" sticker`,
+          dialogTitle: `Share "${sticker.word}" sticker`,
         });
       } else {
         Alert.alert('Sharing unavailable', 'Sharing isn\'t available on this device.');
@@ -160,8 +160,8 @@ export default function StickerDetailView({ sticker, onClose, onDelete }: Sticke
             )}
           </View>
 
-          <Text style={styles.frenchWord}>{sticker.name}</Text>
-          <Text style={styles.pronunciation}>{sticker.pronunciation}</Text>
+          <Text style={styles.word}>{sticker.word}</Text>
+          <Text style={styles.reading}>{sticker.reading}</Text>
           <Text style={styles.translation}>{sticker.translation?.toUpperCase() ?? ''}</Text>
 
           <View style={styles.categoryBadge}>
@@ -217,8 +217,8 @@ const styles = StyleSheet.create({
     marginBottom: 32,
   },
   image: { width: '100%', height: '100%' },
-  frenchWord: { fontSize: 44, fontWeight: '800', color: '#1A1A2E', textAlign: 'center', marginBottom: 8 },
-  pronunciation: { fontSize: 18, color: '#6B7280', fontStyle: 'italic', marginBottom: 12, textAlign: 'center' },
+  word: { fontSize: 44, fontWeight: '800', color: '#1A1A2E', textAlign: 'center', marginBottom: 8 },
+  reading: { fontSize: 18, color: '#6B7280', fontStyle: 'italic', marginBottom: 12, textAlign: 'center' },
   translation: {
     fontSize: 14,
     color: '#A7D7C5',

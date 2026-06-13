@@ -4,21 +4,26 @@ import {
   RefreshControl, SafeAreaView, ScrollView, ActivityIndicator,
 } from 'react-native';
 import { useFocusEffect } from 'expo-router';
+import { Settings } from 'lucide-react-native';
 import { useAuth } from '@/hooks/useAuth';
+import { useProfile } from '@/hooks/useProfile';
 import { supabase } from '@/lib/supabase';
 import { Sticker, Category } from '@/lib/types';
 import StickerCard from '@/components/StickerCard';
 import StickerDetailView from '@/components/StickerDetailView';
+import SettingsView from '@/components/SettingsView';
 
 const CATEGORIES: Array<'All' | Category> = ['All', 'Kitchen', 'Animals', 'Study', 'Nature', 'Other'];
 
 export default function CollectionScreen() {
   const { user, signOut } = useAuth();
+  const { profile, setTargetLanguage } = useProfile(user?.id);
   const [stickers, setStickers] = useState<Sticker[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [activeCategory, setActiveCategory] = useState<'All' | Category>('All');
   const [selectedSticker, setSelectedSticker] = useState<Sticker | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const fetchStickers = useCallback(async () => {
     if (!user) return;
@@ -56,9 +61,14 @@ export default function CollectionScreen() {
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>LingoStickers</Text>
-        <TouchableOpacity onPress={signOut}>
-          <Text style={styles.signOut}>Sign out</Text>
-        </TouchableOpacity>
+        <View style={styles.headerActions}>
+          <TouchableOpacity onPress={() => setSettingsOpen(true)} hitSlop={8}>
+            <Settings size={20} color="#1A1A2E" />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={signOut}>
+            <Text style={styles.signOut}>Sign out</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       <View style={styles.stats}>
@@ -115,6 +125,13 @@ export default function CollectionScreen() {
         onClose={() => setSelectedSticker(null)}
         onDelete={() => { setSelectedSticker(null); fetchStickers(); }}
       />
+
+      <SettingsView
+        visible={settingsOpen}
+        profile={profile}
+        onClose={() => setSettingsOpen(false)}
+        onChangeLanguage={setTargetLanguage}
+      />
     </SafeAreaView>
   );
 }
@@ -130,6 +147,7 @@ const styles = StyleSheet.create({
     paddingBottom: 4,
   },
   title: { fontSize: 28, fontWeight: '800', color: '#1A1A2E' },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 16 },
   signOut: { fontSize: 13, color: '#9E9E9E', fontWeight: '600' },
   stats: { paddingHorizontal: 20, paddingVertical: 12 },
   statsLabel: { fontSize: 11, fontWeight: '700', color: '#9E9E9E', letterSpacing: 1.5, marginBottom: 4 },

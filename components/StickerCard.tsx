@@ -26,7 +26,7 @@ export default function StickerCard({ sticker, onPress }: StickerCardProps) {
           <ActivityIndicator style={styles.image} color="#A7D7C5" />
         )}
       </View>
-      <Text style={styles.name} numberOfLines={1}>{sticker.name}</Text>
+      <Text style={styles.word} numberOfLines={1}>{sticker.word}</Text>
       <Text style={styles.translation} numberOfLines={1}>{sticker.translation}</Text>
     </TouchableOpacity>
   );
@@ -50,6 +50,6 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   image: { width: '100%', height: '100%' },
-  name: { fontSize: 14, fontWeight: '700', color: '#1A1A2E', marginBottom: 2 },
+  word: { fontSize: 14, fontWeight: '700', color: '#1A1A2E', marginBottom: 2 },
   translation: { fontSize: 11, color: '#6B7280', fontWeight: '500' },
 });

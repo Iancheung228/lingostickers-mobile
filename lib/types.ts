@@ -1,6 +1,9 @@
+export type Language = 'fr' | 'ja';
+
 export interface Profile {
   id: string;
   username: string | null;
+  target_language: Language;
   created_at: string;
 }
 
@@ -9,18 +12,20 @@ export type Category = 'Kitchen' | 'Animals' | 'Study' | 'Nature' | 'Other';
 export interface Sticker {
   id: string;
   user_id: string;
-  name: string;
+  language: Language;
+  word: string;
   translation: string;
-  pronunciation: string;
+  reading: string;
   category: Category;
   image_path: string;
   discovered_at: string;
 }
 
 export interface StickerDraft {
-  name: string;
+  language: Language;
+  word: string;
   translation: string;
-  pronunciation: string;
+  reading: string;
   category: Category;
   imagePath: string;
 }

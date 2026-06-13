@@ -1,5 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import UPNG from 'https://esm.sh/upng-js@2.1.0';
+import { identifyWithGroq, resolveLanguage } from '../_shared/vocab.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -12,7 +13,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { image, userId } = await req.json();
+    const { image, userId, language } = await req.json();
     if (!image || !userId) {
       return new Response(
         JSON.stringify({ error: 'Missing image or userId' }),
@@ -20,12 +21,13 @@ Deno.serve(async (req) => {
       );
     }
 
+    const lang = resolveLanguage(language);
     const base64Data = image.includes(',') ? image.split(',')[1] : image;
     const imageBytes = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0));
 
     // Run vocab identification and background removal in parallel
     const [vocabResult, bgResult] = await Promise.all([
-      identifyWithGroq(base64Data),
+      identifyWithGroq(base64Data, lang),
       removeBackground(imageBytes),
     ]);
 
@@ -68,9 +70,10 @@ Deno.serve(async (req) => {
 
     return new Response(
       JSON.stringify({
-        name: vocabResult.name,
+        language: lang,
+        word: vocabResult.word,
         translation: vocabResult.translation,
-        pronunciation: vocabResult.pronunciation,
+        reading: vocabResult.reading,
         category: vocabResult.category,
         imagePath,
         bgIssue,
@@ -317,45 +320,4 @@ function addStickerBorder(pngBytes: Uint8Array, borderWidth = 14): Uint8Array {
   }
 
   return new Uint8Array(UPNG.encode([out.buffer as ArrayBuffer], dw, dh, 0));
-}
-
-// ---------------------------------------------------------------------------
-// Groq vision — object identification → French vocabulary
-// ---------------------------------------------------------------------------
-async function identifyWithGroq(base64Data: string) {
-  const apiKey = Deno.env.get('GROQ_API_KEY');
-  if (!apiKey) throw new Error('GROQ_API_KEY not set');
-
-  const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-    method: 'POST',
-    headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model: 'meta-llama/llama-4-scout-17b-16e-instruct',
-      messages: [{
-        role: 'user',
-        content: [
-          { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${base64Data}` } },
-          {
-            type: 'text',
-            text: `Identify the main object in this image. Return ONLY a valid JSON object with these exact fields:
-{
-  "name": "the object name in French with article (e.g. Le Café, La Pomme, Le Chien)",
-  "translation": "English translation (e.g. Coffee, Apple, Dog)",
-  "pronunciation": "phonetic spelling in English (e.g. luh ka-fay, la pum, luh she-en)",
-  "category": "one of exactly: Kitchen, Animals, Study, Nature, Other"
-}
-Return only the JSON, no markdown, no explanation.`,
-          },
-        ],
-      }],
-      temperature: 0.1,
-    }),
-  });
-
-  if (!response.ok) throw new Error(`Groq API error: ${response.status} ${await response.text()}`);
-  const data = await response.json();
-  const text = data.choices?.[0]?.message?.content;
-  if (!text) throw new Error('Empty response from Groq');
-  const cleaned = text.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```\s*$/i, '').trim();
-  return JSON.parse(cleaned);
 }
