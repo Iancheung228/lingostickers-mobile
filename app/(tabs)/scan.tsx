@@ -28,6 +28,7 @@ export default function ScanScreen() {
   const [draft, setDraft] = useState<StickerDraft | null>(null);
   const [saving, setSaving] = useState(false);
   const [retranslating, setRetranslating] = useState(false);
+  const [retranslatingSentence, setRetranslatingSentence] = useState(false);
   const [zoom, setZoom] = useState(0);
   const [importedAsset, setImportedAsset] = useState<{ uri: string; width: number; height: number } | null>(null);
   // While set, the ghost-cutout reveal is shown instead of DiscoveryReveal —
@@ -87,6 +88,8 @@ export default function ScanScreen() {
       word: String(data.word ?? ''),
       translation: String(data.translation ?? ''),
       reading: String(data.reading ?? ''),
+      sentence: String(data.sentence ?? ''),
+      sentenceTranslation: String(data.sentenceTranslation ?? ''),
       category: data.category ?? 'Other',
       imagePath: String(data.imagePath ?? ''),
       memoryPhotoPath: data.memoryPhotoPath ?? null,
@@ -198,6 +201,8 @@ export default function ScanScreen() {
       word: draft.word,
       translation: draft.translation,
       reading: draft.reading,
+      sentence: draft.sentence,
+      sentence_translation: draft.sentenceTranslation,
       category: draft.category,
       image_path: draft.imagePath,
       memory_photo_path: draft.memoryPhotoPath,
@@ -248,6 +253,32 @@ export default function ScanScreen() {
       } : prev);
     } finally {
       setRetranslating(false);
+    }
+  }, [language]);
+
+  // User edited the English sentence describing the scene — translate it
+  // into the target language via the LLM, keeping their English as-is.
+  // Throws so DiscoveryReveal can revert its local edit state on failure.
+  const handleEditSentence = useCallback(async (newSentence: string) => {
+    setRetranslatingSentence(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('translate-sentence', {
+        body: { englishSentence: newSentence, language },
+      });
+
+      if (error) {
+        const body = await (error as any).context?.json?.().catch(() => null);
+        throw new Error(body?.error ?? error.message);
+      }
+      if (data.error) throw new Error(data.error);
+
+      setDraft((prev) => prev ? {
+        ...prev,
+        sentence: String(data.sentence ?? prev.sentence),
+        sentenceTranslation: newSentence,
+      } : prev);
+    } finally {
+      setRetranslatingSentence(false);
     }
   }, [language]);
 
@@ -335,8 +366,10 @@ export default function ScanScreen() {
         onAdd={handleAdd}
         onDiscard={handleDiscard}
         onEditWord={handleEditWord}
+        onEditSentence={handleEditSentence}
         saving={saving}
         retranslating={retranslating}
+        retranslatingSentence={retranslatingSentence}
       />
     </SafeAreaView>
   );

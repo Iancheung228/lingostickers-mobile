@@ -24,6 +24,9 @@ Deno.serve(async (req) => {
     const lang = resolveLanguage(language);
     const base64Data = image.includes(',') ? image.split(',')[1] : image;
     const imageBytes = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0));
+    const memoryBase64Data: string | undefined = memoryImage
+      ? (memoryImage.includes(',') ? memoryImage.split(',')[1] : memoryImage)
+      : undefined;
 
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
@@ -33,7 +36,7 @@ Deno.serve(async (req) => {
     // Run vocab identification, background removal, and the memory-photo
     // upload in parallel
     const [vocabResult, bgResult, memoryPhotoPath] = await Promise.all([
-      identifyWithGroq(base64Data, lang),
+      identifyWithGroq(base64Data, lang, memoryBase64Data),
       removeBackground(imageBytes),
       uploadMemoryPhoto(supabase, memoryImage, userId),
     ]);
@@ -76,6 +79,8 @@ Deno.serve(async (req) => {
         word: vocabResult.word,
         translation: vocabResult.translation,
         reading: vocabResult.reading,
+        sentence: vocabResult.sentence,
+        sentenceTranslation: vocabResult.sentence_translation,
         category: vocabResult.category,
         imagePath,
         memoryPhotoPath,

@@ -125,22 +125,33 @@ learning to *say* the word.
 ("I drink my coffee from this cup every morning") teaches grammar in context
 and makes the capsule feel like *theirs*.
 
-- [ ] Extend the Groq prompt (same vision call as Phase 1) to also return
+- [x] Extend the Groq prompt (same vision call as Phase 1) to also return
       `sentence` (target language, describing the object *in the scene
       just photographed*) and `sentence_translation` (English). With Phase
       5a shipped, the *memory photo* (full scene) is the better input for
-      this than the cropped cutout — pass it to the vision call instead.
-- [ ] New columns: `stickers.sentence`, `stickers.sentence_translation`.
-- [ ] UI: show the sentence below the word in `DiscoveryReveal` /
-      `StickerDetailView` — smaller text, maybe tap-to-reveal translation.
-- [ ] Manual edit: let the user write/edit the English sentence themselves
-      (e.g. on the memory-photo flip side), then re-translate it into the
-      target language via the LLM — same pattern as `handleEditWord` /
-      `translate-word`, but for full sentences and scene-aware.
+      this than the cropped cutout — passed to the vision call as a second
+      image when available.
+- [x] New columns: `stickers.sentence`, `stickers.sentence_translation`.
+- [x] UI: show the sentence below the word in `DiscoveryReveal` — target
+      language sentence plus a tap-to-edit English translation row.
+- [x] Manual edit: the user can edit the English sentence in
+      `DiscoveryReveal`, which re-translates it into the target language via
+      a new `translate-sentence` edge function (same pattern as
+      `handleEditWord` / `translate-word`).
 - [ ] Stretch: TTS the sentence too (Phase 2 infra), `sentence_audio_path`.
 
-This is a near-zero marginal cost addition once Phase 1's prompt refactor is
-in place — same image, same API call, two more JSON fields.
+**Status (2026-06-13): Shipped (minus TTS stretch).** Migration
+`004_sentences.sql` adds `stickers.sentence` / `stickers.sentence_translation`
+(`NOT NULL DEFAULT ''`, so old stickers render fine with no sentence).
+`identifyWithGroq` now sends both the cropped object photo and (when present)
+the full memory photo in one Groq call, with a prompt that uses the second
+image for scene context. New `translate-sentence` edge function +
+`translateSentenceWithGroq` handle the manual-edit path. `StickerDetailView`
+shows the sentence + its English translation as a caption overlay on the
+memory-photo flip side.
+
+This was a near-zero marginal cost addition once Phase 1's prompt refactor
+was in place — same image(s), same API call, two more JSON fields.
 
 ---
 

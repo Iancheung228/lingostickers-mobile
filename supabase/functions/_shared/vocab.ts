@@ -22,6 +22,8 @@ const LANGUAGE_SCHEMAS: Record<Language, LanguageSchema> = {
   "word": "the object name in French with article (e.g. Le Café, La Pomme, Le Chien)",
   "translation": "English translation (e.g. Coffee, Apple, Dog)",
   "reading": "phonetic spelling of the French word in English (e.g. luh ka-fay, la pum, luh she-en)",
+  "sentence": "a short, natural French sentence describing this object in the scene it was photographed in (e.g. 'Le café est posé sur le bureau, prêt pour le matin.')",
+  "sentence_translation": "English translation of the sentence (e.g. 'The coffee is sitting on the desk, ready for the morning.')",
   "category": "one of exactly: Kitchen, Animals, Study, Nature, Other"
 }`,
   },
@@ -31,6 +33,8 @@ const LANGUAGE_SCHEMAS: Record<Language, LanguageSchema> = {
   "word": "the object name in Japanese, written naturally with kanji/katakana/hiragana as appropriate (e.g. コーヒー, りんご, 犬)",
   "translation": "English translation (e.g. Coffee, Apple, Dog)",
   "reading": "romaji reading of the Japanese word, using macrons for long vowels (e.g. kōhī, ringo, inu)",
+  "sentence": "a short, natural Japanese sentence describing this object in the scene it was photographed in (e.g. 'コーヒーがデスクの上に置いてあります。')",
+  "sentence_translation": "English translation of the sentence (e.g. 'The coffee is sitting on the desk.')",
   "category": "one of exactly: Kitchen, Animals, Study, Nature, Other"
 }`,
   },
@@ -65,25 +69,35 @@ async function callGroq(apiKey: string, messages: unknown): Promise<string> {
 }
 
 // Vision: identify the main object in a photo and produce a vocab card in
-// the target language.
-export async function identifyWithGroq(base64Data: string, language: Language) {
+// the target language, including a sentence about the scene. When
+// `memoryBase64Data` (the full, uncropped photo) is available, it's passed
+// alongside the close-up so the sentence can describe the wider scene —
+// not just the isolated object.
+export async function identifyWithGroq(base64Data: string, language: Language, memoryBase64Data?: string) {
   const apiKey = Deno.env.get('GROQ_API_KEY');
   if (!apiKey) throw new Error('GROQ_API_KEY not set');
 
-  const { schemaDescription } = LANGUAGE_SCHEMAS[language];
-  const text = await callGroq(apiKey, [{
-    role: 'user',
-    content: [
-      { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${base64Data}` } },
-      {
-        type: 'text',
-        text: `Identify the main object in this image. Return ONLY a valid JSON object with these exact fields:
+  const { label, schemaDescription } = LANGUAGE_SCHEMAS[language];
+  const content: unknown[] = [
+    { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${base64Data}` } },
+  ];
+
+  let instructions: string;
+  if (memoryBase64Data) {
+    content.push({ type: 'image_url', image_url: { url: `data:image/jpeg;base64,${memoryBase64Data}` } });
+    instructions = `The first image is a close-up of a single object. The second image is the wider scene it was photographed in. Identify the object in the first image, then write a short, natural sentence in ${label} describing that object as it appears in the wider scene (the second image) — what it's near, what's happening, who might be using it.`;
+  } else {
+    instructions = `Identify the main object in this image, then write a short, natural sentence in ${label} describing the object in this scene.`;
+  }
+
+  content.push({
+    type: 'text',
+    text: `${instructions} Return ONLY a valid JSON object with these exact fields:
 ${schemaDescription}
 Return only the JSON, no markdown, no explanation.`,
-      },
-    ],
-  }]);
+  });
 
+  const text = await callGroq(apiKey, [{ role: 'user', content }]);
   return JSON.parse(text);
 }
 
@@ -98,6 +112,26 @@ export async function translateWithGroq(englishWord: string, language: Language)
     role: 'user',
     content: `Translate the English word "${englishWord}" into ${label} for a vocabulary flashcard. Return ONLY a valid JSON object with these exact fields:
 ${schemaDescription}
+Return only the JSON, no markdown, no explanation.`,
+  }]);
+
+  return JSON.parse(text);
+}
+
+// Text: translate a user-written/edited English sentence into the target
+// language — used when the user edits the sentence describing their memory.
+export async function translateSentenceWithGroq(englishSentence: string, language: Language) {
+  const apiKey = Deno.env.get('GROQ_API_KEY');
+  if (!apiKey) throw new Error('GROQ_API_KEY not set');
+
+  const { label } = LANGUAGE_SCHEMAS[language];
+  const text = await callGroq(apiKey, [{
+    role: 'user',
+    content: `Translate the following English sentence into natural, conversational ${label}: "${englishSentence}"
+Return ONLY a valid JSON object with this exact field:
+{
+  "sentence": "the ${label} translation"
+}
 Return only the JSON, no markdown, no explanation.`,
   }]);
 

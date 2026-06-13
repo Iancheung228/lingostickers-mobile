@@ -16,6 +16,8 @@ export interface Sticker {
   word: string;
   translation: string;
   reading: string;
+  sentence: string;
+  sentence_translation: string;
   category: Category;
   image_path: string;
   memory_photo_path: string | null;
@@ -27,6 +29,8 @@ export interface StickerDraft {
   word: string;
   translation: string;
   reading: string;
+  sentence: string;
+  sentenceTranslation: string;
   category: Category;
   imagePath: string;
   memoryPhotoPath: string | null;

@@ -9,14 +9,18 @@ interface DiscoveryRevealProps {
   onAdd: () => void;
   onDiscard: () => void;
   onEditWord: (newWord: string) => Promise<void>;
+  onEditSentence: (newSentence: string) => Promise<void>;
   saving: boolean;
   retranslating: boolean;
+  retranslatingSentence: boolean;
 }
 
-export default function DiscoveryReveal({ draft, onAdd, onDiscard, onEditWord, saving, retranslating }: DiscoveryRevealProps) {
+export default function DiscoveryReveal({ draft, onAdd, onDiscard, onEditWord, onEditSentence, saving, retranslating, retranslatingSentence }: DiscoveryRevealProps) {
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [editingWord, setEditingWord] = useState(false);
   const [wordInput, setWordInput] = useState('');
+  const [editingSentence, setEditingSentence] = useState(false);
+  const [sentenceInput, setSentenceInput] = useState('');
 
   useEffect(() => {
     if (!draft?.imagePath) return;
@@ -28,6 +32,7 @@ export default function DiscoveryReveal({ draft, onAdd, onDiscard, onEditWord, s
   // A fresh discovery — drop any leftover edit state from the previous one.
   useEffect(() => {
     setEditingWord(false);
+    setEditingSentence(false);
   }, [draft?.imagePath]);
 
   if (!draft) return null;
@@ -43,6 +48,20 @@ export default function DiscoveryReveal({ draft, onAdd, onDiscard, onEditWord, s
     if (!trimmed || trimmed.toLowerCase() === draft.translation.toLowerCase()) return;
     onEditWord(trimmed).catch((err: any) => {
       Alert.alert('Translation failed', err?.message ?? 'Could not update the translation. Please try again.');
+    });
+  };
+
+  const beginEditingSentence = () => {
+    setSentenceInput(draft.sentenceTranslation);
+    setEditingSentence(true);
+  };
+
+  const confirmEditingSentence = () => {
+    const trimmed = sentenceInput.trim();
+    setEditingSentence(false);
+    if (!trimmed || trimmed.toLowerCase() === draft.sentenceTranslation.toLowerCase()) return;
+    onEditSentence(trimmed).catch((err: any) => {
+      Alert.alert('Translation failed', err?.message ?? 'Could not update the sentence. Please try again.');
     });
   };
 
@@ -99,6 +118,41 @@ export default function DiscoveryReveal({ draft, onAdd, onDiscard, onEditWord, s
                 <>
                   <Text style={styles.translation}>{draft.translation?.toUpperCase() ?? ''}</Text>
                   <Pencil size={12} color="#A7D7C5" />
+                </>
+              )}
+            </TouchableOpacity>
+          )}
+
+          {!!draft.sentence && (
+            <Text style={[styles.sentence, retranslatingSentence && styles.fadedWhileTranslating]}>
+              {draft.sentence}
+            </Text>
+          )}
+
+          {editingSentence ? (
+            <TextInput
+              style={styles.sentenceInput}
+              value={sentenceInput}
+              onChangeText={setSentenceInput}
+              autoFocus
+              autoCapitalize="sentences"
+              returnKeyType="done"
+              onSubmitEditing={confirmEditingSentence}
+              onBlur={() => setEditingSentence(false)}
+            />
+          ) : (
+            <TouchableOpacity
+              style={styles.sentenceTranslationRow}
+              onPress={beginEditingSentence}
+              disabled={retranslatingSentence}
+              hitSlop={8}
+            >
+              {retranslatingSentence ? (
+                <ActivityIndicator size="small" color="#A7D7C5" />
+              ) : (
+                <>
+                  <Text style={styles.sentenceTranslation}>{draft.sentenceTranslation}</Text>
+                  <Pencil size={11} color="#A7D7C5" />
                 </>
               )}
             </TouchableOpacity>
@@ -176,6 +230,43 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     textAlign: 'center',
     minWidth: 200,
+    paddingVertical: 10,
+    paddingHorizontal: 18,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: '#A7D7C5',
+    backgroundColor: '#fff',
+  },
+  sentence: {
+    fontSize: 15,
+    color: '#1A1A2E',
+    fontWeight: '600',
+    textAlign: 'center',
+    lineHeight: 22,
+    marginTop: 20,
+    paddingHorizontal: 8,
+  },
+  sentenceTranslationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 6,
+    paddingHorizontal: 4,
+    marginTop: 4,
+  },
+  sentenceTranslation: {
+    fontSize: 12,
+    color: '#9CA3AF',
+    fontStyle: 'italic',
+    textAlign: 'center',
+  },
+  sentenceInput: {
+    fontSize: 14,
+    color: '#1A1A2E',
+    fontWeight: '500',
+    textAlign: 'center',
+    minWidth: 240,
+    marginTop: 4,
     paddingVertical: 10,
     paddingHorizontal: 18,
     borderRadius: 14,

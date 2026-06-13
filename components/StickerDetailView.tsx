@@ -218,6 +218,14 @@ export default function StickerDetailView({ sticker, onClose, onDelete }: Sticke
                 <View style={styles.memoryLabel}>
                   <Text style={styles.memoryLabelText}>THE MOMENT</Text>
                 </View>
+                {!!sticker.sentence && (
+                  <View style={styles.memoryCaption}>
+                    <Text style={styles.memorySentence}>{sticker.sentence}</Text>
+                    {!!sticker.sentence_translation && (
+                      <Text style={styles.memorySentenceTranslation}>{sticker.sentence_translation}</Text>
+                    )}
+                  </View>
+                )}
               </Animated.View>
             )}
           </TouchableOpacity>
@@ -300,7 +308,7 @@ const styles = StyleSheet.create({
   memoryImage: { width: '100%', height: '100%' },
   memoryLabel: {
     position: 'absolute',
-    bottom: 10,
+    top: 10,
     left: 10,
     paddingVertical: 4,
     paddingHorizontal: 10,
@@ -308,6 +316,30 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.45)',
   },
   memoryLabelText: { color: '#fff', fontSize: 11, fontWeight: '700', letterSpacing: 1 },
+  memoryCaption: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    paddingHorizontal: 14,
+    paddingTop: 16,
+    paddingBottom: 12,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+  },
+  memorySentence: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '700',
+    textAlign: 'center',
+    lineHeight: 18,
+  },
+  memorySentenceTranslation: {
+    color: 'rgba(255,255,255,0.7)',
+    fontSize: 11,
+    fontStyle: 'italic',
+    textAlign: 'center',
+    marginTop: 4,
+  },
   flipHint: {
     flexDirection: 'row',
     alignItems: 'center',
