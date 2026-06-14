@@ -52,7 +52,8 @@
         {
           "locationWhenInUsePermission": "LingoStickers can tag where this memory happened, turning your collection into a map of your language journey. This is entirely optional."
         }
-      ]
+      ],
+      "expo-audio"
     ]
   }
 }
