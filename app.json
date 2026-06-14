@@ -10,7 +10,8 @@
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
-        "NSCameraUsageDescription": "LingoStickers uses your camera to scan objects and create vocabulary stickers."
+        "NSCameraUsageDescription": "LingoStickers uses your camera to scan objects and create vocabulary stickers.",
+        "NSLocationWhenInUseUsageDescription": "LingoStickers can tag where this memory happened, turning your collection into a map of your language journey. This is entirely optional."
       }
     },
     "android": {
@@ -36,13 +37,20 @@
       [
         "expo-media-library",
         {
-          "savePhotosPermission": "LingoStickers saves your stickers to your photo library so you can share them as chat stickers."
+          "savePhotosPermission": "LingoStickers saves your stickers to your photo library so you can share them as chat stickers.",
+          "isAccessMediaLocationEnabled": true
         }
       ],
       [
         "expo-image-picker",
         {
           "photosPermission": "LingoStickers needs access to your photo library so you can pick a picture to turn into a sticker."
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "LingoStickers can tag where this memory happened, turning your collection into a map of your language journey. This is entirely optional."
         }
       ]
     ]

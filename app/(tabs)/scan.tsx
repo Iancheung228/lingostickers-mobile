@@ -15,6 +15,8 @@ import { useAuth } from '@/hooks/useAuth';
 import { useProfile } from '@/hooks/useProfile';
 import { supabase } from '@/lib/supabase';
 import { StickerDraft } from '@/lib/types';
+import { captureLocation, CapturedLocation } from '@/lib/location';
+import { getImportedPhotoMetadata } from '@/lib/photoMetadata';
 import DiscoveryReveal from '@/components/DiscoveryReveal';
 import PhotoExtractor from '@/components/PhotoExtractor';
 import GhostCutoutReveal from '@/components/GhostCutoutReveal';
@@ -30,12 +32,17 @@ export default function ScanScreen() {
   const [retranslating, setRetranslating] = useState(false);
   const [retranslatingSentence, setRetranslatingSentence] = useState(false);
   const [zoom, setZoom] = useState(0);
-  const [importedAsset, setImportedAsset] = useState<{ uri: string; width: number; height: number } | null>(null);
+  const [importedAsset, setImportedAsset] = useState<{ uri: string; width: number; height: number; assetId?: string } | null>(null);
   // While set, the ghost-cutout reveal is shown instead of DiscoveryReveal —
   // it crossfades from this cropped photo into the finished cutout, then
   // hands off. Only used for the photo-import/extraction flow.
   const [revealCrop, setRevealCrop] = useState<string | null>(null);
   const cameraRef = useRef<CameraView>(null);
+  // Fire-and-forget when/where lookups kicked off at the start of each
+  // capture/import — awaited only after submitImageForSticker resolves, so
+  // they never delay DiscoveryReveal.
+  const locationPromiseRef = useRef<Promise<CapturedLocation | null> | null>(null);
+  const metadataPromiseRef = useRef<ReturnType<typeof getImportedPhotoMetadata> | null>(null);
 
   // Square camera viewport sized to the screen width (with off-white margin),
   // capped so it doesn't dominate on tablets.
@@ -60,7 +67,7 @@ export default function ScanScreen() {
   // result as a draft for DiscoveryReveal. Shared by both the live-capture and
   // photo-import flows — throws on failure so each caller can report it in its
   // own voice ("Scan failed" vs "Extraction failed").
-  const submitImageForSticker = useCallback(async (base64: string, memoryBase64?: string | null) => {
+  const submitImageForSticker = useCallback(async (base64: string, memoryBase64: string | null | undefined, discoveredAt: string) => {
     if (!user) throw new Error('Not signed in');
 
     const { data, error } = await supabase.functions.invoke('create-sticker', {
@@ -93,6 +100,10 @@ export default function ScanScreen() {
       category: data.category ?? 'Other',
       imagePath: String(data.imagePath ?? ''),
       memoryPhotoPath: data.memoryPhotoPath ?? null,
+      discoveredAt,
+      latitude: null,
+      longitude: null,
+      locationLabel: null,
     });
   }, [user, language]);
 
@@ -119,6 +130,11 @@ export default function ScanScreen() {
     if (!cameraRef.current || processing || !user) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setProcessing(true);
+
+    // This photo is "now, here" — capture both immediately. GPS cold-fix can
+    // take several seconds, so kick it off but don't await it yet.
+    const discoveredAt = new Date().toISOString();
+    locationPromiseRef.current = captureLocation();
 
     try {
       const photo = await cameraRef.current.takePictureAsync({ quality: 0.8 });
@@ -147,7 +163,17 @@ export default function ScanScreen() {
       // The full, uncropped frame becomes the "memory photo" to flip to.
       const memoryBase64 = await prepareMemoryPhoto(photo.uri, photo.width, photo.height);
 
-      await submitImageForSticker(processed.base64, memoryBase64);
+      await submitImageForSticker(processed.base64, memoryBase64, discoveredAt);
+
+      const location = await locationPromiseRef.current;
+      if (location) {
+        setDraft((prev) => prev ? {
+          ...prev,
+          latitude: location.latitude,
+          longitude: location.longitude,
+          locationLabel: location.locationLabel,
+        } : prev);
+      }
     } catch (err: any) {
       Alert.alert('Scan failed', err?.message ?? 'Something went wrong. Please try again.');
     } finally {
@@ -168,23 +194,43 @@ export default function ScanScreen() {
     });
     const asset = !result.canceled ? result.assets[0] : null;
     if (asset) {
-      setImportedAsset({ uri: asset.uri, width: asset.width, height: asset.height });
+      setImportedAsset({ uri: asset.uri, width: asset.width, height: asset.height, assetId: asset.assetId ?? undefined });
     }
   }, []);
 
   const handleExtractFromPhoto = useCallback(async ({ base64, uri }: { base64: string; uri: string }) => {
     if (processing || !importedAsset) return;
     setProcessing(true);
+
+    // This is an OLD photo — the memory happened whenever/wherever it was
+    // actually taken, not "now"/"here". Look up its own creation date/GPS
+    // (fire-and-forget; falls back to "now"/no-location if unavailable).
+    const fallbackDiscoveredAt = new Date().toISOString();
+    metadataPromiseRef.current = getImportedPhotoMetadata(importedAsset.assetId);
+
     try {
       // The full imported photo (before extraction) becomes the "memory
       // photo" to flip to.
       const memoryBase64 = await prepareMemoryPhoto(importedAsset.uri, importedAsset.width, importedAsset.height);
 
-      await submitImageForSticker(base64, memoryBase64);
+      await submitImageForSticker(base64, memoryBase64, fallbackDiscoveredAt);
       setImportedAsset(null);
       // Hold off on DiscoveryReveal — show the ghost-cutout crossfade first,
       // it hands off to DiscoveryReveal once the animation completes.
       setRevealCrop(uri);
+
+      const meta = await metadataPromiseRef.current;
+      if (meta?.discoveredAt || meta?.location) {
+        setDraft((prev) => prev ? {
+          ...prev,
+          ...(meta.discoveredAt ? { discoveredAt: meta.discoveredAt } : {}),
+          ...(meta.location ? {
+            latitude: meta.location.latitude,
+            longitude: meta.location.longitude,
+            locationLabel: meta.location.locationLabel,
+          } : {}),
+        } : prev);
+      }
     } catch (err: any) {
       Alert.alert('Extraction failed', err?.message ?? 'Something went wrong. Please try again.');
     } finally {
@@ -206,6 +252,10 @@ export default function ScanScreen() {
       category: draft.category,
       image_path: draft.imagePath,
       memory_photo_path: draft.memoryPhotoPath,
+      discovered_at: draft.discoveredAt,
+      latitude: draft.latitude,
+      longitude: draft.longitude,
+      location_label: draft.locationLabel,
     });
     setSaving(false);
     if (error) {

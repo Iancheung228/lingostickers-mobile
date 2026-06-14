@@ -172,27 +172,50 @@ was in place — same image(s), same API call, two more JSON fields.
 **Why:** this is the heart of "transform a word into a memory." Right now
 `discovered_at` exists but nothing is *done* with it.
 
-- [ ] New columns: `stickers.tags TEXT[]` (default `'{}'`), `latitude`,
-      `longitude`, `location_label`.
-- [ ] Capture flow: after a successful scan, optionally prompt for a tag
-      ("dorm room", "office", "commute") — autocomplete from the user's
-      previously-used tags (`SELECT DISTINCT unnest(tags) ...`). Keep this
-      *fast* — one tap on a suggested chip, or skip entirely.
-- [ ] GPS capture via `expo-location` (with permission prompt) — store
-      raw lat/long silently for a future map view; reverse-geocode to a
-      coarse `location_label` (city/neighborhood) as a bonus, not the
-      primary organizing concept (tags are user-meaningful, GPS is bonus
-      enrichment).
-- [ ] Collection screen: beyond the category filter, add views/filters for
-      **date** (today / this week / by month) and **tags**. A "Timeline"
-      view grouped by day, alongside the existing grid.
+- [x] New columns: `latitude`, `longitude`, `location_label` (nullable, no
+      defaults — `NULL` means "no location captured").
+- [x] GPS capture via `expo-location` (contextual permission prompt,
+      triggered by the first scan) — store raw lat/long and reverse-geocode
+      to a coarse `location_label` (district/city/region).
+- [x] Collection screen: a **"Story" view** — stickers auto-clustered into
+      scrapbook-style "chapters" by when/where they were discovered (e.g.
+      "Shibuya · Jun 10–12", or "Jun 1–7" if no location), alongside the
+      existing category-filtered grid.
+- [ ] Manual tags (`stickers.tags TEXT[]`, tag-chip prompt on capture,
+      tag/date filters) — **not done this round**; auto-clustering shipped
+      instead as the lower-friction "no manual tagging" organizing layer. Tags
+      remain a possible future addition if auto-clustering proves too coarse.
 - [ ] Time-of-day badge (morning/afternoon/evening/night) — derived from
       `discovered_at`, no new column needed.
 
-**Open questions**
-- Location permission is a trust moment — make the ask contextual ("tag
-  where this memory happened?") rather than a cold OS prompt on first
-  launch.
+**Status (2026-06-13): Shipped (auto-clustered chapters).** Migration
+`005_location.sql` adds nullable `latitude`/`longitude`/`location_label`. New
+`lib/chapters.ts` is a pure function (`buildChapters`) that sorts stickers by
+`discovered_at` and starts a new chapter when consecutive stickers are >24h
+apart, or (when both have location data) >5km apart via a haversine check;
+each chapter's title is its most-common `location_label`, or a formatted date
+range if none. Collection screen gained a Grid/Story toggle — Story mode shows
+`ChapterCard`s (cover photo + title/subtitle), tapping one opens
+`ChapterDetailView` (a 2-column grid of that chapter's stickers, reusing
+`StickerCard`/`StickerDetailView`).
+
+**When/where capture is split into two flows** (per explicit product
+decision — an imported old photo's memory happened wherever/whenever the
+*photo* was taken, not wherever the user is reviewing their camera roll):
+- **Live camera capture**: `lib/location.ts`'s `captureLocation()` grabs the
+  device's *current* GPS (foreground permission, 8s timeout, best-effort) +
+  `discovered_at = now`.
+- **Imported photo**: `lib/photoMetadata.ts`'s `getImportedPhotoMetadata()`
+  reads the photo's own `creationTime`/`location` via
+  `expo-media-library`'s `getAssetInfoAsync(assetId)` (requires
+  `isAccessMediaLocationEnabled` on Android) — falls back to "now"/no-location
+  only if that metadata is unavailable, and never falls back to the device's
+  current location.
+
+Both paths are fire-and-forget (kicked off at the start of
+`handleCapture`/`handleExtractFromPhoto`, awaited only after the sticker draft
+is ready) so they never delay `DiscoveryReveal`, and gracefully degrade to
+date-only chapters if permission is denied or metadata is missing.
 
 ---
 

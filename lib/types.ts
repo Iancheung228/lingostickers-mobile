@@ -22,6 +22,9 @@ export interface Sticker {
   image_path: string;
   memory_photo_path: string | null;
   discovered_at: string;
+  latitude: number | null;
+  longitude: number | null;
+  location_label: string | null;
 }
 
 export interface StickerDraft {
@@ -34,4 +37,8 @@ export interface StickerDraft {
   category: Category;
   imagePath: string;
   memoryPhotoPath: string | null;
+  discoveredAt: string;
+  latitude: number | null;
+  longitude: number | null;
+  locationLabel: string | null;
 }

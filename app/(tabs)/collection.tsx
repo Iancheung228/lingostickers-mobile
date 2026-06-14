@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View, Text, FlatList, StyleSheet, TouchableOpacity,
   RefreshControl, SafeAreaView, ScrollView, ActivityIndicator,
@@ -9,9 +9,12 @@ import { useAuth } from '@/hooks/useAuth';
 import { useProfile } from '@/hooks/useProfile';
 import { supabase } from '@/lib/supabase';
 import { Sticker, Category } from '@/lib/types';
+import { buildChapters, Chapter } from '@/lib/chapters';
 import StickerCard from '@/components/StickerCard';
 import StickerDetailView from '@/components/StickerDetailView';
 import SettingsView from '@/components/SettingsView';
+import ChapterCard from '@/components/ChapterCard';
+import ChapterDetailView from '@/components/ChapterDetailView';
 
 const CATEGORIES: Array<'All' | Category> = ['All', 'Kitchen', 'Animals', 'Study', 'Nature', 'Other'];
 
@@ -24,6 +27,8 @@ export default function CollectionScreen() {
   const [activeCategory, setActiveCategory] = useState<'All' | Category>('All');
   const [selectedSticker, setSelectedSticker] = useState<Sticker | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [viewMode, setViewMode] = useState<'grid' | 'story'>('grid');
+  const [openChapter, setOpenChapter] = useState<Chapter | null>(null);
 
   const fetchStickers = useCallback(async () => {
     if (!user) return;
@@ -57,6 +62,8 @@ export default function CollectionScreen() {
     ? stickers
     : stickers.filter(s => s.category === activeCategory);
 
+  const chapters = useMemo(() => buildChapters(stickers), [stickers]);
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
@@ -78,47 +85,91 @@ export default function CollectionScreen() {
         </Text>
       </View>
 
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.categoryScroll}
-        contentContainerStyle={styles.categoryContent}
-      >
-        {CATEGORIES.map(cat => (
-          <TouchableOpacity
-            key={cat}
-            style={[styles.categoryChip, activeCategory === cat && styles.categoryChipActive]}
-            onPress={() => setActiveCategory(cat)}
-          >
-            <Text style={[styles.categoryChipText, activeCategory === cat && styles.categoryChipTextActive]}>
-              {cat}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
+      <View style={styles.viewModeRow}>
+        <TouchableOpacity
+          style={[styles.viewModeChip, viewMode === 'grid' && styles.viewModeChipActive]}
+          onPress={() => setViewMode('grid')}
+        >
+          <Text style={[styles.viewModeChipText, viewMode === 'grid' && styles.viewModeChipTextActive]}>Grid</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.viewModeChip, viewMode === 'story' && styles.viewModeChipActive]}
+          onPress={() => setViewMode('story')}
+        >
+          <Text style={[styles.viewModeChipText, viewMode === 'story' && styles.viewModeChipTextActive]}>Story</Text>
+        </TouchableOpacity>
+      </View>
+
+      {viewMode === 'grid' && (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.categoryScroll}
+          contentContainerStyle={styles.categoryContent}
+        >
+          {CATEGORIES.map(cat => (
+            <TouchableOpacity
+              key={cat}
+              style={[styles.categoryChip, activeCategory === cat && styles.categoryChipActive]}
+              onPress={() => setActiveCategory(cat)}
+            >
+              <Text style={[styles.categoryChipText, activeCategory === cat && styles.categoryChipTextActive]}>
+                {cat}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      )}
 
       {loading ? (
         <ActivityIndicator style={{ marginTop: 48 }} color="#A7D7C5" size="large" />
-      ) : filtered.length === 0 ? (
-        <View style={styles.empty}>
-          <Text style={styles.emptyTitle}>No stickers yet</Text>
-          <Text style={styles.emptySubtitle}>Tap the Scan tab to discover your first word!</Text>
-        </View>
+      ) : viewMode === 'grid' ? (
+        filtered.length === 0 ? (
+          <View style={styles.empty}>
+            <Text style={styles.emptyTitle}>No stickers yet</Text>
+            <Text style={styles.emptySubtitle}>Tap the Scan tab to discover your first word!</Text>
+          </View>
+        ) : (
+          <FlatList
+            key="grid"
+            data={filtered}
+            keyExtractor={s => s.id}
+            numColumns={2}
+            columnWrapperStyle={styles.row}
+            contentContainerStyle={styles.grid}
+            renderItem={({ item }) => (
+              <View style={styles.cardWrapper}>
+                <StickerCard sticker={item} onPress={() => setSelectedSticker(item)} />
+              </View>
+            )}
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#A7D7C5" />}
+          />
+        )
       ) : (
-        <FlatList
-          data={filtered}
-          keyExtractor={s => s.id}
-          numColumns={2}
-          columnWrapperStyle={styles.row}
-          contentContainerStyle={styles.grid}
-          renderItem={({ item }) => (
-            <View style={styles.cardWrapper}>
-              <StickerCard sticker={item} onPress={() => setSelectedSticker(item)} />
-            </View>
-          )}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#A7D7C5" />}
-        />
+        chapters.length === 0 ? (
+          <View style={styles.empty}>
+            <Text style={styles.emptyTitle}>No stickers yet</Text>
+            <Text style={styles.emptySubtitle}>Tap the Scan tab to discover your first word!</Text>
+          </View>
+        ) : (
+          <FlatList
+            key="story"
+            data={chapters}
+            keyExtractor={c => c.key}
+            contentContainerStyle={styles.chapterList}
+            renderItem={({ item }) => (
+              <ChapterCard chapter={item} onPress={() => setOpenChapter(item)} />
+            )}
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#A7D7C5" />}
+          />
+        )
       )}
+
+      <ChapterDetailView
+        chapter={openChapter}
+        onClose={() => setOpenChapter(null)}
+        onSelectSticker={setSelectedSticker}
+      />
 
       <StickerDetailView
         sticker={selectedSticker}
@@ -153,6 +204,19 @@ const styles = StyleSheet.create({
   statsLabel: { fontSize: 11, fontWeight: '700', color: '#9E9E9E', letterSpacing: 1.5, marginBottom: 4 },
   statsCount: { fontSize: 32, fontWeight: '800', color: '#1A1A2E' },
   statsUnit: { fontSize: 16, fontWeight: '400', color: '#9E9E9E' },
+  viewModeRow: { flexDirection: 'row', paddingHorizontal: 20, gap: 8, marginBottom: 8 },
+  viewModeChip: {
+    paddingHorizontal: 20,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  viewModeChipActive: { backgroundColor: '#A7D7C5', borderColor: '#A7D7C5' },
+  viewModeChipText: { fontSize: 13, fontWeight: '600', color: '#6B7280' },
+  viewModeChipTextActive: { color: '#fff' },
+  chapterList: { paddingHorizontal: 16, paddingBottom: 32, gap: 12 },
   categoryScroll: { flexGrow: 0, flexShrink: 0, marginBottom: 8 },
   categoryContent: { paddingHorizontal: 20, paddingVertical: 4, gap: 8, alignItems: 'center' },
   categoryChip: {
