@@ -278,17 +278,18 @@ locations, browsing alone won't cut it.
 
 ## Ongoing / parallel track — remove.bg's 50/month limit
 
-Already documented in detail under "Background Removal — Research & Future
-Work" below in this README. Status unchanged: not urgent yet, but:
+**Resolved (2026-06):** `create-sticker` now calls **Replicate** (`cjwbw/rembg`,
+~$0.004/image) as the primary bg-removal provider, with remove.bg's 50/month
+free tier kept only as a fallback. See "Background Removal — Research &
+Future Work" below for the full writeup.
 
-- Keep an eye on usage as more people (friends) start using the app —
-  50 images/month disappears fast with multiple users.
+- Keep an eye on usage as more people (friends) start using the app — at
+  ~$0.004/image this is cheap but not free, so real per-user volume is worth
+  tracking.
 - If Phase 5b forces a dev-client/prebuild anyway, jump straight to
   **Option A (on-device, iOS Vision + ML Kit)** — it becomes nearly free to
   add once the prebuild tax is already paid, and fully removes the cost
   wall instead of just deferring it.
-- Otherwise, **Option C (cheap pay-per-use API, ~$0.002/img)** remains the
-  zero-effort bridge if the cap becomes annoying before Phase 5b happens.
 
 ---
 
@@ -326,9 +327,10 @@ just swapping the `speak()` call for fetching/playing the recorded clip.
 
 ## Appendix — Background Removal Research & Future Work
 
-> Status (as of 2026-06): **Still using remove.bg.** This section documents
-> research into replacing it so the next person doesn't have to redo it. No
-> migration is in progress — it's a deliberate "later" decision (see Trigger).
+> Status (as of 2026-06): **Migrated to Replicate (`cjwbw/rembg`) as primary,
+> remove.bg as fallback.** This resolves the 50/month remove.bg cap (see "The
+> problem" below) at ~$0.004/image. This section is kept for the option
+> research/comparison and for the on-device (Option A) future direction.
 
 ### Current state
 
@@ -339,17 +341,25 @@ Background removal lives in the `create-sticker` Supabase **Edge Function**
 2. Edge fn runs Groq vocab identification **and** `removeBackground()` in
    parallel, then `addStickerBorder()` (pure-JS dilation via UPNG), then uploads
    the result to Supabase Storage.
-3. `removeBackground()` calls **remove.bg** (`api.remove.bg`). On failure it
-   degrades gracefully: uploads the original JPEG and returns a `bgIssue` notice
-   the app shows to the user.
+3. `removeBackground()` is now a fallback chain:
+   - **Primary: Replicate** (`removeBackgroundReplicate`) — calls the
+     `cjwbw/rembg` model via Replicate's synchronous HTTP API (`Prefer:
+     wait=20`), sending the JPEG as a base64 data URI. Model is configurable
+     via the `REPLICATE_MODEL` secret (defaults to `cjwbw/rembg`) without a
+     code change. Requires the `REPLICATE_API_TOKEN` secret.
+   - **Fallback: remove.bg** (`removeBackgroundRemoveBg`) — used only if
+     Replicate is unconfigured, errors, or doesn't finish within its wait
+     window. Its 50/month free tier should comfortably cover this edge case.
+   - If both fail, uploads the original JPEG and returns a `bgIssue` notice
+     the app shows to the user (`classifyBgIssue`, now generic across
+     providers — matches on HTTP status codes embedded in the status string
+     rather than a provider-specific prefix).
 
-> Note: the comment header in `index.ts` mentions "HuggingFace RMBG-1.4" — that
-> is **stale**. The live code calls remove.bg.
+### The problem (historical — now mitigated)
 
-### The problem
-
-remove.bg free tier = **50 images/month**. Fine for MVP, but not scalable. This
-is a *scaling* cost, so it only bites once there's real usage.
+remove.bg free tier = **50 images/month**. Fine for MVP, but not scalable as a
+*sole* provider. Replicate as primary removes this constraint; remove.bg now
+only needs to absorb the rare case where Replicate is down/misconfigured.
 
 ### Why "run an open-source model inside the edge function" does NOT work
 
@@ -363,8 +373,8 @@ out.
 | Option | Per-image cost | Scales? | Effort | Main catch |
 |---|---|---|---|---|
 | **A. On-device native** (iOS Vision + Android ML Kit) | **$0** | ∞ | Med | Needs Expo prebuild + dev client (no Expo Go); **iOS 17 floor** |
-| **B. Self-host rembg (U2Net)** on Fly.io / Cloud Run | server compute only | high | Med | Run/maintain a server + cold starts. **Prototype already exists** (see below) |
-| **C. Cheaper pay-per-use API** (Replicate / fal.ai / Photoroom) | ~$0.001–0.01 | high | **Low** | Still a per-image cost. Good *bridge* — ~10-line edge-fn change |
+| **B. Self-host rembg (U2Net)** on Fly.io / Cloud Run | server compute only | high | Med | Run/maintain a server + cold starts. **Prototype exists but parked** (see below) |
+| **C. Cheaper pay-per-use API** (Replicate / fal.ai / Photoroom) | ~$0.001–0.01 | high | **Low** | Still a per-image cost. ✅ **Adopted (2026-06)** — Replicate `cjwbw/rembg`, ~$0.004/img |
 | **D. On-device ONNX** (U2Net/RMBG via `onnxruntime-react-native`) | $0 | ∞ | High | +app bundle size; RMBG weights are **non-commercial** |
 
 ### The key finding (Option A)
@@ -389,15 +399,22 @@ the zero-config Expo Go workflow behind (one-time CNG prebuild + EAS dev-client
 build; routine JS edits still fast-refresh normally), and a minority of older
 iPhones (iOS <17) must use a fallback.
 
-### Existing prototype (Option B)
+### Existing prototype (Option B) — parked
 
 There is a **working self-hosted rembg prototype** preserved in
 [`rembg-server/`](./rembg-server/) (FastAPI + rembg `u2netp` model, deployed to Fly.io as
 `lingostickers-rembg`, 1GB shared VM, auto-suspend). It exposes `POST /remove-bg`
 and `GET /health`, and lazy-loads the model in a background thread so uvicorn
-boots fast. To use it, point `removeBackground()` at that endpoint instead of
-remove.bg. Watch out for **cold starts** (auto-suspend → ~90s model load on wake;
-the server returns 503 "still loading" until ready).
+boots fast.
+
+**Decision (2026-06): parked, not wired in.** Live testing confirmed
+`fly.toml`'s `auto_stop_machines = 'suspend'` really does suspend the machine
+on idle — a cold request after idle returns 503 ("still loading") for ~90s
+before succeeding. For sporadic personal/early-user traffic, that cold-start
+UX (and the ongoing maintenance of a Fly app) isn't worth it next to
+Replicate's ~$0.004/image with no server to babysit. The app is left deployed
+but unused as a reference/fallback option if Replicate pricing or quality ever
+becomes a problem.
 
 ### Licenses (matters for a commercial app)
 
@@ -407,18 +424,24 @@ the server returns 503 "still loading" until ready).
 
 ### Recommendation
 
-**On-device native (A) is the destination; don't migrate until there's a real
-trigger.** Until then:
+**On-device native (A) remains the long-term destination; don't migrate until
+there's a real trigger.** Option C (Replicate) is now live as the near-term
+bridge:
 
-1. Keep remove.bg (or swap to a cheap pay-per-use API (C) as a near-zero-effort
-   bridge if the 50/month cap becomes annoying during dev — ~$0.002/img).
+1. ✅ Done: Replicate (`cjwbw/rembg`, ~$0.004/img) primary, remove.bg fallback.
 2. When convenient, run the **quality benchmark** (Phase 0 below) — it's the only
-   genuinely risky unknown.
+   genuinely risky unknown for the eventual on-device move.
 
 **Pull the trigger on the on-device build when EITHER:**
 - bg-removal cost becomes a line item you actually notice (real volume), **or**
 - you're already adding a dev client for some other native feature (CNG tax
   already paid → on-device segmentation becomes nearly free to add).
+
+If Replicate quality/pricing ever becomes a problem before then, fal.ai's
+Bria RMBG-2.0 (~$0.018–0.023/img, BiRefNet-based, likely higher quality) is a
+documented quality-upgrade escape hatch — swap via the `REPLICATE_MODEL`-style
+config pattern (would need its own small adapter, since fal.ai's API shape
+differs from Replicate's).
 
 ### Verification plan (when migrating to Option A)
 

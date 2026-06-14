@@ -133,14 +133,137 @@ async function uploadMemoryPhoto(
 }
 
 // ---------------------------------------------------------------------------
-// Background removal — remove.bg API
+// uint8ToBase64 — chunked to avoid call-stack overflow on larger images
+// ---------------------------------------------------------------------------
+function uint8ToBase64(bytes: Uint8Array): string {
+  let binary = '';
+  const chunkSize = 8192;
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+  }
+  return btoa(binary);
+}
+
+// ---------------------------------------------------------------------------
+// Background removal — Replicate (primary) with remove.bg fallback
 //
-// POSTs the JPEG to api.remove.bg and gets back a cut-out PNG (transparent bg).
-// Free tier is 50 images/month — see the "Background Removal" section in
-// README.md for the scaling research and the planned migration to on-device
-// segmentation (iOS Vision + Android ML Kit) / self-hosted rembg.
+// Replicate runs a rembg-family model for ~$0.004/image (vs remove.bg's
+// $0.20+/image paid tiers / 50-image free cap) — see the "Background Removal"
+// appendix in ROADMAP.md for the cost research behind this chain.
+// remove.bg stays as a fallback for when Replicate is unconfigured, errors,
+// or doesn't finish within its sync wait window — its 50/month free credits
+// should comfortably cover that edge case alone.
 // ---------------------------------------------------------------------------
 async function removeBackground(imageBytes: Uint8Array): Promise<{ data: Uint8Array | null; status: string }> {
+  const replicateResult = await removeBackgroundReplicate(imageBytes);
+  if (replicateResult.data) return replicateResult;
+
+  const removeBgResult = await removeBackgroundRemoveBg(imageBytes);
+  if (removeBgResult.data) {
+    return { data: removeBgResult.data, status: `${removeBgResult.status} (after replicate: ${replicateResult.status})` };
+  }
+
+  return { data: null, status: `replicate: ${replicateResult.status} | remove.bg: ${removeBgResult.status}` };
+}
+
+// Cache of resolved model -> version-id lookups, kept across warm
+// invocations of the same Deno isolate to avoid an extra round-trip on
+// every request.
+const replicateVersionCache = new Map<string, string>();
+
+// Resolves a "owner/name" model to its latest version hash. cjwbw/rembg is a
+// community (non-"official") model, so Replicate's /v1/predictions endpoint
+// requires a version hash rather than just "owner/name".
+async function resolveReplicateVersion(apiKey: string, model: string): Promise<{ versionId: string | null; status?: string }> {
+  const cached = replicateVersionCache.get(model);
+  if (cached) return { versionId: cached };
+
+  const response = await fetch(`https://api.replicate.com/v1/models/${model}`, {
+    headers: { 'Authorization': `Bearer ${apiKey}` },
+  });
+
+  if (!response.ok) {
+    const body = await response.text();
+    return { versionId: null, status: `replicate model lookup ${response.status}: ${body.slice(0, 150)}` };
+  }
+
+  const modelInfo = await response.json();
+  const versionId = modelInfo?.latest_version?.id;
+  if (!versionId) return { versionId: null, status: 'replicate model lookup: no latest_version.id' };
+
+  replicateVersionCache.set(model, versionId);
+  return { versionId };
+}
+
+// ---------------------------------------------------------------------------
+// Background removal — Replicate
+//
+// Runs a rembg-family model via Replicate's synchronous ("Prefer: wait") API,
+// passing the JPEG as a base64 data URI (fine for inputs under ~1MB — our
+// resized photos are well under that). REPLICATE_MODEL lets the model be
+// swapped (e.g. for a higher-quality BiRefNet-based one) without a code
+// change; defaults to cjwbw/rembg. REPLICATE_VERSION can pin an exact
+// version hash, skipping the model-version lookup entirely.
+// ---------------------------------------------------------------------------
+async function removeBackgroundReplicate(imageBytes: Uint8Array): Promise<{ data: Uint8Array | null; status: string }> {
+  const apiKey = Deno.env.get('REPLICATE_API_TOKEN');
+  if (!apiKey) return { data: null, status: 'no REPLICATE_API_TOKEN secret' };
+
+  const model = Deno.env.get('REPLICATE_MODEL') ?? 'cjwbw/rembg';
+  const dataUri = `data:image/jpeg;base64,${uint8ToBase64(imageBytes)}`;
+
+  try {
+    let versionId = Deno.env.get('REPLICATE_VERSION') ?? null;
+    if (!versionId) {
+      const versionResult = await resolveReplicateVersion(apiKey, model);
+      if (!versionResult.versionId) {
+        return { data: null, status: versionResult.status ?? 'replicate: could not resolve model version' };
+      }
+      versionId = versionResult.versionId;
+    }
+
+    const response = await fetch('https://api.replicate.com/v1/predictions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+        'Prefer': 'wait=20',
+      },
+      body: JSON.stringify({ version: versionId, input: { image: dataUri } }),
+    });
+
+    if (!response.ok) {
+      const body = await response.text();
+      return { data: null, status: `replicate ${response.status}: ${body.slice(0, 150)}` };
+    }
+
+    const prediction = await response.json();
+    if (prediction.status !== 'succeeded') {
+      return { data: null, status: `replicate ${prediction.status}: ${prediction.error ?? 'did not complete within 20s'}` };
+    }
+
+    const outputUrl = Array.isArray(prediction.output) ? prediction.output[0] : prediction.output;
+    if (!outputUrl) return { data: null, status: 'replicate succeeded with no output' };
+
+    const imageResponse = await fetch(outputUrl, { headers: { 'Authorization': `Bearer ${apiKey}` } });
+    if (!imageResponse.ok) return { data: null, status: `replicate output fetch ${imageResponse.status}` };
+
+    const buf = await imageResponse.arrayBuffer();
+    return { data: new Uint8Array(buf), status: `replicate ok (${buf.byteLength} bytes)` };
+
+  } catch (err: any) {
+    return { data: null, status: `replicate threw: ${err?.message}` };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Background removal — remove.bg (fallback)
+//
+// POSTs the JPEG to api.remove.bg and gets back a cut-out PNG (transparent
+// bg). 50 free images/month — kept as a fallback for when Replicate is
+// unavailable. See the "Background Removal" appendix in ROADMAP.md.
+// ---------------------------------------------------------------------------
+async function removeBackgroundRemoveBg(imageBytes: Uint8Array): Promise<{ data: Uint8Array | null; status: string }> {
   const apiKey = Deno.env.get('REMOVEBG_API_KEY');
   if (!apiKey) return { data: null, status: 'no REMOVEBG_API_KEY secret' };
 
@@ -175,23 +298,21 @@ async function removeBackground(imageBytes: Uint8Array): Promise<{ data: Uint8Ar
 // rather than silently degrading.
 // ---------------------------------------------------------------------------
 function classifyBgIssue(status: string): { kind: string; message: string } | null {
-  if (status.startsWith('remove.bg ok')) return null;
+  if (status.includes(' ok')) return null;
 
-  const code = Number(status.match(/remove\.bg (\d{3})/)?.[1] ?? NaN);
-
-  if (code === 429) {
+  if (/\b429\b/.test(status)) {
     return {
       kind: 'limit',
       message: "Background removal hit its usage limit, so we used your original photo. Try again later for a clean cutout.",
     };
   }
-  if (code === 401 || code === 403) {
+  if (/\b40[13]\b/.test(status)) {
     return {
       kind: 'config',
       message: "Background removal is temporarily unavailable, so we used your original photo instead.",
     };
   }
-  if (code >= 500) {
+  if (/\b5\d\d\b/.test(status)) {
     return {
       kind: 'temporary',
       message: "The background removal service is having issues right now, so we used your original photo. Try scanning again in a few minutes for a clean cutout.",
