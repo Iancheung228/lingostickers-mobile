@@ -118,6 +118,32 @@ Return only the JSON, no markdown, no explanation.`,
   return JSON.parse(text);
 }
 
+// Text: list a few other natural ways to say/write the same word, so a
+// challenge's answer check isn't pinned to one exact spelling — used once at
+// send-challenge time, not on every guess.
+export async function getAcceptedAnswersWithGroq(word: string, language: Language): Promise<string[]> {
+  const apiKey = Deno.env.get('GROQ_API_KEY');
+  if (!apiKey) return [];
+
+  const { label } = LANGUAGE_SCHEMAS[language];
+  try {
+    const text = await callGroq(apiKey, [{
+      role: 'user',
+      content: `Given the ${label} word/phrase "${word}", list up to 3 other common, natural ways to say or write the exact same thing in ${label} — true synonyms or commonly accepted alternate spellings, NOT the English translation and NOT a related-but-different word. If there are no reasonable alternatives, return an empty list. Return ONLY a valid JSON object with this exact field:
+{
+  "synonyms": ["alternative 1", "alternative 2"]
+}
+Return only the JSON, no markdown, no explanation.`,
+    }]);
+    const parsed = JSON.parse(text);
+    const synonyms = Array.isArray(parsed?.synonyms) ? parsed.synonyms : [];
+    return synonyms.filter((s: unknown): s is string => typeof s === 'string' && s.trim().length > 0);
+  } catch (err) {
+    console.error('getAcceptedAnswersWithGroq failed, continuing without synonyms:', err);
+    return [];
+  }
+}
+
 // Text: translate a user-written/edited English sentence into the target
 // language — used when the user edits the sentence describing their memory.
 export async function translateSentenceWithGroq(englishSentence: string, language: Language) {

@@ -15,6 +15,7 @@ import StickerDetailView from '@/components/StickerDetailView';
 import SettingsView from '@/components/SettingsView';
 import ChapterCard from '@/components/ChapterCard';
 import ChapterDetailView from '@/components/ChapterDetailView';
+import StickerBoard from '@/components/StickerBoard';
 
 const CATEGORIES: Array<'All' | Category> = ['All', 'Kitchen', 'Animals', 'Study', 'Nature', 'Other'];
 
@@ -27,7 +28,7 @@ export default function CollectionScreen() {
   const [activeCategory, setActiveCategory] = useState<'All' | Category>('All');
   const [selectedSticker, setSelectedSticker] = useState<Sticker | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [viewMode, setViewMode] = useState<'grid' | 'story'>('grid');
+  const [viewMode, setViewMode] = useState<'grid' | 'story' | 'board' | 'challenges'>('grid');
   const [openChapter, setOpenChapter] = useState<Chapter | null>(null);
 
   const fetchStickers = useCallback(async () => {
@@ -58,9 +59,11 @@ export default function CollectionScreen() {
     fetchStickers();
   };
 
-  const filtered = activeCategory === 'All'
-    ? stickers
-    : stickers.filter(s => s.category === activeCategory);
+  const filtered = viewMode === 'challenges'
+    ? stickers.filter(s => s.source === 'challenge')
+    : activeCategory === 'All'
+      ? stickers
+      : stickers.filter(s => s.category === activeCategory);
 
   const chapters = useMemo(() => buildChapters(stickers), [stickers]);
 
@@ -98,6 +101,18 @@ export default function CollectionScreen() {
         >
           <Text style={[styles.viewModeChipText, viewMode === 'story' && styles.viewModeChipTextActive]}>Story</Text>
         </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.viewModeChip, viewMode === 'board' && styles.viewModeChipActive]}
+          onPress={() => setViewMode('board')}
+        >
+          <Text style={[styles.viewModeChipText, viewMode === 'board' && styles.viewModeChipTextActive]}>Board</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.viewModeChip, viewMode === 'challenges' && styles.viewModeChipActive]}
+          onPress={() => setViewMode('challenges')}
+        >
+          <Text style={[styles.viewModeChipText, viewMode === 'challenges' && styles.viewModeChipTextActive]}>Challenges</Text>
+        </TouchableOpacity>
       </View>
 
       {viewMode === 'grid' && (
@@ -123,15 +138,21 @@ export default function CollectionScreen() {
 
       {loading ? (
         <ActivityIndicator style={{ marginTop: 48 }} color="#A7D7C5" size="large" />
-      ) : viewMode === 'grid' ? (
+      ) : viewMode === 'grid' || viewMode === 'challenges' ? (
         filtered.length === 0 ? (
           <View style={styles.empty}>
-            <Text style={styles.emptyTitle}>No stickers yet</Text>
-            <Text style={styles.emptySubtitle}>Tap the Scan tab to discover your first word!</Text>
+            <Text style={styles.emptyTitle}>
+              {viewMode === 'challenges' ? 'No challenge wins yet' : 'No stickers yet'}
+            </Text>
+            <Text style={styles.emptySubtitle}>
+              {viewMode === 'challenges'
+                ? 'Stickers you win from friends’ challenges will show up here.'
+                : 'Tap the Scan tab to discover your first word!'}
+            </Text>
           </View>
         ) : (
           <FlatList
-            key="grid"
+            key={viewMode}
             data={filtered}
             keyExtractor={s => s.id}
             numColumns={2}
@@ -145,7 +166,7 @@ export default function CollectionScreen() {
             refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#A7D7C5" />}
           />
         )
-      ) : (
+      ) : viewMode === 'story' ? (
         chapters.length === 0 ? (
           <View style={styles.empty}>
             <Text style={styles.emptyTitle}>No stickers yet</Text>
@@ -163,6 +184,8 @@ export default function CollectionScreen() {
             refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#A7D7C5" />}
           />
         )
+      ) : (
+        <StickerBoard chapters={chapters} onSelectSticker={setSelectedSticker} />
       )}
 
       <ChapterDetailView

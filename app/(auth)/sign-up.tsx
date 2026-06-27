@@ -1,10 +1,21 @@
 import { useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity,
-  StyleSheet, Alert, KeyboardAvoidingView, Platform, ActivityIndicator, ScrollView,
+  StyleSheet, KeyboardAvoidingView, Platform, ActivityIndicator, ScrollView,
 } from 'react-native';
 import { Link, useRouter } from 'expo-router';
 import { useAuth } from '@/hooks/useAuth';
+import { useUsernameAvailability } from '@/hooks/useUsernameAvailability';
+
+function friendlySignUpError(message: string): string {
+  if (message.includes('already registered')) {
+    return 'An account with that email already exists. Try signing in instead.';
+  }
+  if (message.includes('Database error saving new user')) {
+    return 'That username may have just been taken — try a different one.';
+  }
+  return message;
+}
 
 export default function SignUpScreen() {
   const { signUp } = useAuth();
@@ -13,31 +24,32 @@ export default function SignUpScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState<{ type: 'error' | 'success'; text: string } | null>(null);
+  const usernameAvailability = useUsernameAvailability(username);
+
+  const isFormValid =
+    username.trim().length > 0 &&
+    email.trim().length > 0 &&
+    password.length >= 6 &&
+    usernameAvailability !== 'taken';
 
   const handleSignUp = async () => {
-    if (!username || !email || !password) {
-      Alert.alert('Missing fields', 'Please fill in all fields.');
-      return;
-    }
-    if (password.length < 6) {
-      Alert.alert('Weak password', 'Password must be at least 6 characters.');
-      return;
-    }
+    if (!isFormValid) return;
+    setMessage(null);
     setLoading(true);
     const { data, error } = await signUp(email.trim(), password, username.trim());
     setLoading(false);
     if (error) {
-      Alert.alert('Sign up failed', error.message);
+      setMessage({ type: 'error', text: friendlySignUpError(error.message) });
       return;
     }
     // Email confirmation is off — session returned, root layout will redirect automatically
-    if (data?.session) return;
-    // Email confirmation is on — tell the user and send them to sign-in
-    Alert.alert(
-      'Check your email',
-      'We sent a confirmation link to ' + email.trim() + '. Confirm it, then sign in.',
-      [{ text: 'OK', onPress: () => router.replace('/(auth)/sign-in') }]
-    );
+    if (data?.session) {
+      setMessage({ type: 'success', text: 'Account created! Welcome to LingoStickers.' });
+      return;
+    }
+    // Email confirmation is on — send them to the dedicated check-email screen
+    router.replace({ pathname: '/(auth)/check-email', params: { email: email.trim() } });
   };
 
   return (
@@ -57,6 +69,19 @@ export default function SignUpScreen() {
           onChangeText={setUsername}
           autoCapitalize="none"
         />
+        {usernameAvailability !== 'idle' && (
+          <Text
+            style={[
+              styles.usernameHint,
+              usernameAvailability === 'taken' && styles.usernameHintTaken,
+              usernameAvailability === 'available' && styles.usernameHintAvailable,
+            ]}
+          >
+            {usernameAvailability === 'checking' && 'Checking…'}
+            {usernameAvailability === 'available' && 'Username available'}
+            {usernameAvailability === 'taken' && 'Username taken'}
+          </Text>
+        )}
         <TextInput
           style={styles.input}
           placeholder="Email"
@@ -75,7 +100,19 @@ export default function SignUpScreen() {
           secureTextEntry
         />
 
-        <TouchableOpacity style={styles.button} onPress={handleSignUp} disabled={loading}>
+        {message && (
+          <View style={[styles.messageBox, message.type === 'error' ? styles.messageError : styles.messageSuccess]}>
+            <Text style={[styles.messageText, message.type === 'error' ? styles.messageErrorText : styles.messageSuccessText]}>
+              {message.text}
+            </Text>
+          </View>
+        )}
+
+        <TouchableOpacity
+          style={[styles.button, !isFormValid && styles.buttonDisabled]}
+          onPress={handleSignUp}
+          disabled={!isFormValid || loading}
+        >
           {loading ? (
             <ActivityIndicator color="#fff" />
           ) : (
@@ -117,6 +154,22 @@ const styles = StyleSheet.create({
     marginTop: 8,
     marginBottom: 24,
   },
+  buttonDisabled: { backgroundColor: '#C9C9C9' },
+  usernameHint: { fontSize: 12, fontWeight: '600', color: '#9E9E9E', marginTop: -10, marginBottom: 14, marginLeft: 4 },
+  usernameHintAvailable: { color: '#2F855A' },
+  usernameHintTaken: { color: '#EF4444' },
+  messageBox: {
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginBottom: 16,
+    borderWidth: 1,
+  },
+  messageError: { backgroundColor: '#FEE2E2', borderColor: '#FCA5A5' },
+  messageSuccess: { backgroundColor: '#E6F4EA', borderColor: '#A7D7C5' },
+  messageText: { fontSize: 14, fontWeight: '600' },
+  messageErrorText: { color: '#EF4444' },
+  messageSuccessText: { color: '#2F855A' },
   buttonText: { color: '#fff', fontSize: 16, fontWeight: '700' },
   linkButton: { alignItems: 'center' },
   linkText: { color: '#6B7280', fontSize: 14 },

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Modal, View, Text, Image, TouchableOpacity, StyleSheet, SafeAreaView, ActivityIndicator, Alert } from 'react-native';
 import Animated, { useSharedValue, useAnimatedStyle, withTiming, interpolate, Easing } from 'react-native-reanimated';
-import { X, Trash2, Share2, RotateCw, Volume2 } from 'lucide-react-native';
+import { X, Trash2, Share2, RotateCw, Volume2, Send } from 'lucide-react-native';
 import { File, Directory, Paths } from 'expo-file-system';
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import * as MediaLibrary from 'expo-media-library';
@@ -10,6 +10,9 @@ import * as Haptics from 'expo-haptics';
 import { Sticker } from '@/lib/types';
 import { supabase } from '@/lib/supabase';
 import { speak, stopSpeaking } from '@/lib/speech';
+import SendChallengeModal from '@/components/SendChallengeModal';
+import { useFriends } from '@/hooks/useFriends';
+import { useChallenges } from '@/hooks/useChallenges';
 
 // WeChat custom-sticker uploads look best as small square PNGs with a
 // transparent background — see "Custom Stickers" in WeChat's gallery settings.
@@ -26,7 +29,11 @@ export default function StickerDetailView({ sticker, onClose, onDelete }: Sticke
   const [memoryImageUrl, setMemoryImageUrl] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [challengeOpen, setChallengeOpen] = useState(false);
   const flipProgress = useSharedValue(0);
+  const { friends } = useFriends();
+  const { sendChallenge } = useChallenges();
+  const acceptedFriends = friends.filter(f => f.status === 'accepted');
 
   useEffect(() => {
     if (!sticker?.image_path) return;
@@ -183,6 +190,10 @@ export default function StickerDetailView({ sticker, onClose, onDelete }: Sticke
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Vocabulary</Text>
           <View style={styles.headerActions}>
+            <TouchableOpacity onPress={() => setChallengeOpen(true)} style={styles.challengeButton} disabled={!imageUrl}>
+              <Send size={14} color="#1A1A2E" />
+              <Text style={styles.challengeButtonText}>Challenge</Text>
+            </TouchableOpacity>
             <TouchableOpacity onPress={handleExportPress} style={styles.exportButton} disabled={exporting || !imageUrl}>
               {exporting
                 ? <ActivityIndicator size="small" color="#1A1A2E" />
@@ -268,6 +279,15 @@ export default function StickerDetailView({ sticker, onClose, onDelete }: Sticke
           </View>
         </View>
       </SafeAreaView>
+      <SendChallengeModal
+        sticker={challengeOpen ? sticker : null}
+        friends={acceptedFriends}
+        onSend={async (receiverId) => {
+          const { error } = await sendChallenge(sticker.id, receiverId);
+          if (error) Alert.alert('Challenge failed', error.message);
+        }}
+        onClose={() => setChallengeOpen(false)}
+      />
     </Modal>
   );
 }
@@ -290,6 +310,18 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   headerActions: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  challengeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    height: 36,
+    borderRadius: 18,
+    paddingHorizontal: 12,
+    backgroundColor: '#E8F5F0',
+    borderWidth: 1,
+    borderColor: '#A7D7C5',
+  },
+  challengeButtonText: { fontSize: 13, fontWeight: '700', color: '#1A1A2E' },
   exportButton: {
     flexDirection: 'row',
     alignItems: 'center',
