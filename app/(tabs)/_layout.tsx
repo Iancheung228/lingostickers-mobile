@@ -3,8 +3,9 @@ import { Tabs } from 'expo-router';
 import { BookOpen, Camera, Users } from 'lucide-react-native';
 import { useChallenges } from '@/hooks/useChallenges';
 import { useFriends } from '@/hooks/useFriends';
+import { colors, shadows, radii } from '@/constants/theme';
 
-function ChallengeBadge({ count }: { count: number }) {
+function Badge({ count }: { count: number }) {
   if (count === 0) return null;
   return (
     <View style={badge.dot}>
@@ -16,17 +17,19 @@ function ChallengeBadge({ count }: { count: number }) {
 const badge = StyleSheet.create({
   dot: {
     position: 'absolute',
-    top: -4,
-    right: -8,
-    backgroundColor: '#EF4444',
-    borderRadius: 8,
-    minWidth: 16,
-    height: 16,
+    top: -5,
+    right: -9,
+    backgroundColor: colors.error,
+    borderRadius: radii.full,
+    minWidth: 17,
+    height: 17,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 3,
+    borderWidth: 1.5,
+    borderColor: colors.card,
   },
-  text: { color: '#fff', fontSize: 10, fontWeight: '800' },
+  text: { color: colors.card, fontSize: 10, fontWeight: '800' },
 });
 
 export default function TabLayout() {
@@ -39,14 +42,21 @@ export default function TabLayout() {
       screenOptions={{
         headerShown: false,
         tabBarStyle: {
-          backgroundColor: '#F5F0E8',
-          borderTopColor: '#E5E7EB',
-          height: 80,
-          paddingBottom: 20,
+          backgroundColor: colors.card,
+          borderTopColor: colors.borderLight,
+          borderTopWidth: 1,
+          height: 82,
+          paddingBottom: 18,
+          paddingTop: 10,
+          ...shadows.tab,
         },
-        tabBarActiveTintColor: '#A7D7C5',
-        tabBarInactiveTintColor: '#9E9E9E',
-        tabBarLabelStyle: { fontSize: 11, fontWeight: '600' },
+        tabBarActiveTintColor: colors.terra,
+        tabBarInactiveTintColor: colors.inkFaint,
+        tabBarLabelStyle: {
+          fontSize: 11,
+          fontWeight: '700',
+          marginTop: 2,
+        },
       }}
     >
       <Tabs.Screen
@@ -60,7 +70,14 @@ export default function TabLayout() {
         name="scan"
         options={{
           title: 'Scan',
-          tabBarIcon: ({ color, size }) => <Camera size={size} color={color} />,
+          tabBarIcon: ({ color, focused }) => (
+            <View style={[tabIcon.scanWrap, focused && tabIcon.scanWrapActive]}>
+              <Camera size={24} color={focused ? colors.card : colors.inkMid} />
+            </View>
+          ),
+          tabBarLabel: ({ color }) => (
+            <Text style={[tabIcon.scanLabel, { color }]}>Scan</Text>
+          ),
         }}
       />
       <Tabs.Screen
@@ -70,7 +87,7 @@ export default function TabLayout() {
           tabBarIcon: ({ color, size }) => (
             <View>
               <Users size={size} color={color} />
-              <ChallengeBadge count={pendingCount + pendingRequestCount} />
+              <Badge count={pendingCount + pendingRequestCount} />
             </View>
           ),
         }}
@@ -78,3 +95,24 @@ export default function TabLayout() {
     </Tabs>
   );
 }
+
+const tabIcon = StyleSheet.create({
+  scanWrap: {
+    width: 52,
+    height: 52,
+    borderRadius: radii.full,
+    backgroundColor: colors.inkFaint,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: -18,
+    ...shadows.button,
+  },
+  scanWrapActive: {
+    backgroundColor: colors.terra,
+  },
+  scanLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    marginTop: -4,
+  },
+});

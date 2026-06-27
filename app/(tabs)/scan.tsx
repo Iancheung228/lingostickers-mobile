@@ -9,9 +9,10 @@ import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import * as ImagePicker from 'expo-image-picker';
 import { GestureDetector, Gesture } from 'react-native-gesture-handler';
 import { useSharedValue, runOnJS } from 'react-native-reanimated';
-import { Camera as CameraIcon, ImagePlus, Zap } from 'lucide-react-native';
+import { ImagePlus, Zap } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useAuth } from '@/hooks/useAuth';
+import { colors, shadows, radii, spacing } from '@/constants/theme';
 import { useProfile } from '@/hooks/useProfile';
 import { supabase } from '@/lib/supabase';
 import { StickerDraft } from '@/lib/types';
@@ -351,8 +352,8 @@ export default function ScanScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       <View style={styles.header}>
-        <Text style={styles.title}>LingoStickers</Text>
-        <Zap size={22} color="#1A1A2E" />
+        <Text style={styles.prompt}>What did you find?</Text>
+        <Text style={styles.promptSub}>Take a photo to learn!</Text>
       </View>
 
       <View style={styles.cameraArea}>
@@ -376,22 +377,31 @@ export default function ScanScreen() {
       </View>
 
       <View style={styles.controls}>
-        <Text style={styles.hint}>Center the object in the frame</Text>
-        <TouchableOpacity
-          style={[styles.captureButton, processing && styles.captureButtonDisabled]}
-          onPress={handleCapture}
-          disabled={processing}
-        >
-          <View style={styles.captureButtonInner}>
-            <CameraIcon size={32} color="#A7D7C5" />
-          </View>
-        </TouchableOpacity>
-        <Text style={styles.subHint}>Pinch to zoom · Tap to capture</Text>
+        <Text style={styles.hint}>Pinch to zoom · Tap to capture</Text>
+        <View style={styles.captureRow}>
+          {/* Gallery */}
+          <TouchableOpacity style={styles.sideBtn} onPress={handleImportPhoto}>
+            <ImagePlus size={22} color={colors.inkMid} />
+            <Text style={styles.sideBtnLabel}>Gallery</Text>
+          </TouchableOpacity>
 
-        <TouchableOpacity style={styles.importButton} onPress={handleImportPhoto}>
-          <ImagePlus size={18} color="#1A1A2E" />
-          <Text style={styles.importButtonText}>Or import from Photos</Text>
-        </TouchableOpacity>
+          {/* Red shutter */}
+          <TouchableOpacity
+            style={[styles.captureButton, processing && styles.captureButtonDisabled]}
+            onPress={handleCapture}
+            disabled={processing}
+          >
+            <View style={styles.captureRing}>
+              <View style={styles.captureCore} />
+            </View>
+          </TouchableOpacity>
+
+          {/* Flash placeholder (no-op — kept for layout symmetry) */}
+          <View style={styles.sideBtn}>
+            <Zap size={22} color={colors.inkMid} />
+            <Text style={styles.sideBtnLabel}>Flash</Text>
+          </View>
+        </View>
       </View>
 
       <PhotoExtractor
@@ -432,29 +442,38 @@ const FRAME_RADIUS = 28;
 const FRAME_MARGIN = 16;
 
 const styles = StyleSheet.create({
-  // Off-white "frame" that surrounds the square camera viewport
-  container: { flex: 1, backgroundColor: '#F5F0E8' },
+  container: { flex: 1, backgroundColor: colors.sky },
 
   header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 28,
-    paddingVertical: 12,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.sm,
   },
-  title: { color: '#1A1A2E', fontSize: 20, fontWeight: '800' },
+  prompt: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: colors.inkDark,
+    letterSpacing: -0.3,
+    fontStyle: 'italic',
+  },
+  promptSub: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: colors.terra,
+    marginTop: 2,
+  },
 
-  // Centers the square viewport in the remaining space
   cameraArea: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   cameraFrame: {
     borderRadius: FRAME_RADIUS,
     overflow: 'hidden',
     backgroundColor: '#000',
-    shadowColor: '#1A1A2E',
-    shadowOpacity: 0.18,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 8,
+    ...shadows.card,
+    shadowOpacity: 0.22,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 10,
   },
 
   corner: { position: 'absolute', width: CORNER_SIZE, height: CORNER_SIZE, borderColor: 'rgba(255,255,255,0.95)' },
@@ -465,46 +484,89 @@ const styles = StyleSheet.create({
 
   processingOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    backgroundColor: 'rgba(0,0,0,0.62)',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 12,
   },
-  processingText: { color: '#A7D7C5', fontSize: 14, fontWeight: '700' },
+  processingText: { color: colors.skyDeep, fontSize: 14, fontWeight: '700' },
 
-  controls: { alignItems: 'center', paddingTop: 16, paddingBottom: 12, gap: 12 },
-  hint: { color: '#1A1A2E', fontSize: 15, fontWeight: '700' },
-  subHint: { color: '#9CA3AF', fontSize: 13, fontWeight: '500' },
-  captureButton: {
-    width: 80, height: 80, borderRadius: 40,
-    backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center',
-    shadowColor: '#1A1A2E', shadowOpacity: 0.2, shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 }, elevation: 6,
+  controls: {
+    alignItems: 'center',
+    paddingTop: spacing.md,
+    paddingBottom: spacing.lg,
+    gap: spacing.md,
   },
-  captureButtonDisabled: { opacity: 0.5 },
-  importButton: {
+  hint: { color: colors.inkLight, fontSize: 13, fontWeight: '500' },
+
+  captureRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    paddingVertical: 10,
-    paddingHorizontal: 18,
-    borderRadius: 20,
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
+    justifyContent: 'center',
+    gap: spacing.xxl,
   },
-  importButtonText: { color: '#1A1A2E', fontSize: 14, fontWeight: '600' },
-  captureButtonInner: {
-    width: 68, height: 68, borderRadius: 34,
-    borderWidth: 3, borderColor: '#A7D7C5',
-    alignItems: 'center', justifyContent: 'center',
+  sideBtn: {
+    alignItems: 'center',
+    gap: 4,
+    width: 56,
   },
+  sideBtnLabel: { fontSize: 11, fontWeight: '600', color: colors.inkLight },
+
+  captureButton: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...shadows.button,
+  },
+  captureButtonDisabled: { opacity: 0.45 },
+  captureRing: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    borderWidth: 3,
+    borderColor: colors.card,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.error,
+  },
+  captureCore: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: colors.error,
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.25)',
+  },
+
   permissionContainer: {
-    flex: 1, backgroundColor: '#F5F0E8',
-    alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32,
+    flex: 1,
+    backgroundColor: colors.sky,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.xl,
   },
-  permissionTitle: { fontSize: 22, fontWeight: '800', color: '#1A1A2E', marginBottom: 12, textAlign: 'center' },
-  permissionSubtitle: { fontSize: 14, color: '#6B7280', textAlign: 'center', lineHeight: 22, marginBottom: 32 },
-  permissionButton: { backgroundColor: '#A7D7C5', borderRadius: 12, paddingVertical: 14, paddingHorizontal: 32 },
-  permissionButtonText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  permissionTitle: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: colors.inkDark,
+    marginBottom: spacing.sm,
+    textAlign: 'center',
+  },
+  permissionSubtitle: {
+    fontSize: 14,
+    color: colors.inkLight,
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: spacing.xl,
+  },
+  permissionButton: {
+    backgroundColor: colors.terra,
+    borderRadius: radii.lg,
+    paddingVertical: 14,
+    paddingHorizontal: spacing.xl,
+    ...shadows.button,
+  },
+  permissionButtonText: { color: colors.card, fontSize: 16, fontWeight: '700' },
 });

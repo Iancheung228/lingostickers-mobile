@@ -14,6 +14,9 @@ import ChallengeScreen from '@/components/ChallengeScreen';
 import ChallengeSuccess from '@/components/ChallengeSuccess';
 import FriendProfile from '@/components/FriendProfile';
 import { ChallengeWithSender, ChallengeWithReceiver, FriendWithProfile } from '@/lib/types';
+import CozyBackground from '@/components/CozyBackground';
+import OtterMascot from '@/components/illustrations/OtterMascot';
+import { colors, shadows, radii, spacing, typography } from '@/constants/theme';
 
 export default function FriendsScreen() {
   const { user } = useAuth();
@@ -45,12 +48,13 @@ export default function FriendsScreen() {
   ];
 
   return (
-    <SafeAreaView style={styles.container}>
+    <CozyBackground variant="strip">
+      <SafeAreaView style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.title}>Friends</Text>
         <TouchableOpacity onPress={() => setSearchVisible(true)} style={styles.addBtn} hitSlop={8}>
-          <UserPlus size={20} color="#1A1A2E" />
+          <UserPlus size={20} color={colors.inkMid} />
         </TouchableOpacity>
       </View>
 
@@ -78,13 +82,13 @@ export default function FriendsScreen() {
       )}
 
       {challengesLoading ? (
-        <ActivityIndicator style={{ marginTop: 60 }} color="#A7D7C5" size="large" />
+        <ActivityIndicator style={{ marginTop: 60 }} color={colors.terra} size="large" />
       ) : (
         <SectionList
           sections={sections}
           keyExtractor={item => item.id}
           stickySectionHeadersEnabled={false}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor="#A7D7C5" />}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={colors.terra} />}
           renderSectionHeader={({ section: { title, data } }) =>
             data.length > 0 ? (
               <Text style={styles.sectionLabel}>{title.toUpperCase()}</Text>
@@ -121,6 +125,7 @@ export default function FriendsScreen() {
           }}
           ListEmptyComponent={
             <View style={styles.empty}>
+              <OtterMascot size={80} variant="small" />
               <Text style={styles.emptyTitle}>No activity yet</Text>
               <Text style={styles.emptySubtitle}>
                 Add friends and challenge them with your best stickers!
@@ -159,94 +164,116 @@ export default function FriendsScreen() {
         onRemoved={refetchFriends}
       />
     </SafeAreaView>
+    </CozyBackground>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F5F0E8' },
+  container: { flex: 1 },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 8,
-    paddingBottom: 12,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.md,
   },
-  title: { fontSize: 28, fontWeight: '800', color: '#1A1A2E' },
+  title: {
+    fontSize: 28,
+    fontWeight: '800',
+    color: colors.inkDark,
+    letterSpacing: -0.5,
+    fontStyle: 'italic',
+  },
   addBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#fff',
+    width: 38,
+    height: 38,
+    borderRadius: radii.full,
+    backgroundColor: colors.card,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
+    ...shadows.card,
   },
-  requestsWrap: { paddingHorizontal: 16, marginBottom: 4 },
+  requestsWrap: { paddingHorizontal: spacing.md, marginBottom: spacing.xs },
   requestRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
+    backgroundColor: colors.card,
+    borderRadius: radii.md,
+    padding: spacing.sm + 4,
+    marginBottom: spacing.sm,
+    borderWidth: 1.5,
+    borderColor: colors.borderLight,
+    ...shadows.card,
   },
   avatar: {
     width: 36,
     height: 36,
-    borderRadius: 18,
-    backgroundColor: '#A7D7C5',
+    borderRadius: radii.full,
+    backgroundColor: colors.terra,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 10,
+    marginRight: spacing.sm,
   },
-  avatarText: { fontSize: 14, fontWeight: '800', color: '#fff' },
-  requestName: { flex: 1, fontSize: 15, fontWeight: '700', color: '#1A1A2E' },
-  requestActions: { flexDirection: 'row', gap: 8 },
+  avatarText: { fontSize: 14, fontWeight: '800', color: colors.card },
+  requestName: { flex: 1, fontSize: 15, fontWeight: '700', color: colors.inkDark },
+  requestActions: { flexDirection: 'row', gap: spacing.sm },
   friendRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 12,
-    marginHorizontal: 16,
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
+    backgroundColor: colors.card,
+    borderRadius: radii.md,
+    padding: spacing.sm + 4,
+    marginHorizontal: spacing.md,
+    marginBottom: spacing.sm,
+    borderWidth: 1.5,
+    borderColor: colors.borderLight,
+    ...shadows.card,
   },
-  acceptBtn: { backgroundColor: '#A7D7C5', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 6 },
-  acceptText: { color: '#fff', fontWeight: '700', fontSize: 13 },
-  declineBtn: { backgroundColor: '#FEE2E2', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 6 },
-  declineText: { color: '#EF4444', fontWeight: '700', fontSize: 13 },
+  acceptBtn: {
+    backgroundColor: colors.sage,
+    borderRadius: radii.sm,
+    paddingHorizontal: spacing.sm + 4,
+    paddingVertical: 6,
+  },
+  acceptText: { color: colors.card, fontWeight: '700', fontSize: 13 },
+  declineBtn: {
+    backgroundColor: colors.errorLight,
+    borderRadius: radii.sm,
+    paddingHorizontal: spacing.sm + 4,
+    paddingVertical: 6,
+  },
+  declineText: { color: colors.error, fontWeight: '700', fontSize: 13 },
   sectionLabel: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#9E9E9E',
+    color: colors.inkFaint,
     letterSpacing: 1.5,
-    paddingHorizontal: 16,
-    paddingTop: 14,
-    paddingBottom: 8,
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.sm,
   },
   feedItem: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
-    backgroundColor: '#fff',
-    marginHorizontal: 16,
-    marginBottom: 8,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm + 4,
+    backgroundColor: colors.card,
+    marginHorizontal: spacing.md,
+    marginBottom: spacing.sm,
+    borderRadius: radii.md,
+    borderWidth: 1.5,
+    borderColor: colors.borderLight,
+    ...shadows.card,
   },
-  feedText: { fontSize: 14, color: '#6B7280', lineHeight: 20 },
-  feedBold: { fontWeight: '700', color: '#1A1A2E' },
+  feedText: { fontSize: 14, color: colors.inkMid, lineHeight: 20 },
+  feedBold: { fontWeight: '700', color: colors.inkDark },
   feedItalic: { fontStyle: 'italic' },
-  listContent: { paddingBottom: 32 },
-  empty: { flex: 1, alignItems: 'center', paddingTop: 80, paddingHorizontal: 32 },
-  emptyTitle: { fontSize: 20, fontWeight: '700', color: '#1A1A2E', marginBottom: 8 },
-  emptySubtitle: { fontSize: 14, color: '#9E9E9E', textAlign: 'center', lineHeight: 22 },
+  listContent: { paddingBottom: spacing.xxl },
+  empty: {
+    alignItems: 'center',
+    paddingTop: spacing.xxl + spacing.lg,
+    paddingHorizontal: spacing.xl,
+    gap: spacing.md,
+  },
+  emptyTitle: { ...typography.h3, textAlign: 'center' },
+  emptySubtitle: { ...typography.body, color: colors.inkLight, textAlign: 'center' },
 });
