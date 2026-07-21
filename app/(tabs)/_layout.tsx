@@ -1,6 +1,6 @@
 import { View, Text, StyleSheet } from 'react-native';
 import { Tabs } from 'expo-router';
-import { BookOpen, Camera, Users } from 'lucide-react-native';
+import { BookOpen, Calendar, Camera, Sticker as StickerIcon, Users } from 'lucide-react-native';
 import { useChallenges } from '@/hooks/useChallenges';
 import { useFriends } from '@/hooks/useFriends';
 import { colors, shadows, radii } from '@/constants/theme';
@@ -67,6 +67,13 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
+        name="calendar"
+        options={{
+          title: 'Calendar',
+          tabBarIcon: ({ color, size }) => <Calendar size={size} color={color} />,
+        }}
+      />
+      <Tabs.Screen
         name="scan"
         options={{
           title: 'Scan',
@@ -75,9 +82,14 @@ export default function TabLayout() {
               <Camera size={24} color={focused ? colors.card : colors.inkMid} />
             </View>
           ),
-          tabBarLabel: ({ color }) => (
-            <Text style={[tabIcon.scanLabel, { color }]}>Scan</Text>
-          ),
+          tabBarLabel: () => null,
+        }}
+      />
+      <Tabs.Screen
+        name="wall"
+        options={{
+          title: 'Wall',
+          tabBarIcon: ({ color, size }) => <StickerIcon size={size} color={color} />,
         }}
       />
       <Tabs.Screen
@@ -109,10 +121,5 @@ const tabIcon = StyleSheet.create({
   },
   scanWrapActive: {
     backgroundColor: colors.terra,
-  },
-  scanLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    marginTop: -4,
   },
 });

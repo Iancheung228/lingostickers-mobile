@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { TouchableOpacity, Image, Text, View, StyleSheet, ActivityIndicator } from 'react-native';
 import { Chapter } from '@/lib/chapters';
 import { supabase } from '@/lib/supabase';
+import { colors, fonts } from '@/constants/theme';
 
 interface ChapterCardProps {
   chapter: Chapter;
@@ -24,7 +25,7 @@ export default function ChapterCard({ chapter, onPress }: ChapterCardProps) {
         {imageUrl ? (
           <Image source={{ uri: imageUrl }} style={styles.image} resizeMode="cover" />
         ) : (
-          <ActivityIndicator style={styles.image} color="#A7D7C5" />
+          <ActivityIndicator style={styles.image} color={colors.terra} />
         )}
         <View style={styles.caption}>
           <Text style={styles.title} numberOfLines={1}>{chapter.title}</Text>
@@ -37,11 +38,11 @@ export default function ChapterCard({ chapter, onPress }: ChapterCardProps) {
 
 const styles = StyleSheet.create({
   card: {
-    borderRadius: 16,
+    borderRadius: 26,
     overflow: 'hidden',
-    backgroundColor: '#fff',
-    shadowColor: '#A7D7C5',
-    shadowOpacity: 0.4,
+    backgroundColor: colors.card,
+    shadowColor: colors.terra,
+    shadowOpacity: 0.3,
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 2 },
     elevation: 4,
@@ -59,8 +60,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingTop: 16,
     paddingBottom: 12,
-    backgroundColor: 'rgba(0,0,0,0.55)',
+    backgroundColor: 'rgba(28,73,102,0.55)',
   },
-  title: { color: '#fff', fontSize: 16, fontWeight: '800' },
-  subtitle: { color: 'rgba(255,255,255,0.7)', fontSize: 12, fontStyle: 'italic', marginTop: 2 },
+  title: { color: colors.white, fontSize: 16, fontFamily: fonts.cozy },
+  subtitle: { color: 'rgba(255,255,255,0.75)', fontSize: 12, fontStyle: 'italic', marginTop: 2 },
 });

@@ -16,6 +16,7 @@ import { colors, shadows, radii, spacing } from '@/constants/theme';
 import { useProfile } from '@/hooks/useProfile';
 import { supabase } from '@/lib/supabase';
 import { StickerDraft } from '@/lib/types';
+import { Point } from '@/lib/cropGeometry';
 import { captureLocation, CapturedLocation } from '@/lib/location';
 import { getImportedPhotoMetadata } from '@/lib/photoMetadata';
 import DiscoveryReveal from '@/components/DiscoveryReveal';
@@ -68,7 +69,7 @@ export default function ScanScreen() {
   // result as a draft for DiscoveryReveal. Shared by both the live-capture and
   // photo-import flows — throws on failure so each caller can report it in its
   // own voice ("Scan failed" vs "Extraction failed").
-  const submitImageForSticker = useCallback(async (base64: string, memoryBase64: string | null | undefined, discoveredAt: string) => {
+  const submitImageForSticker = useCallback(async (base64: string, memoryBase64: string | null | undefined, discoveredAt: string, lassoPolygon?: Point[]) => {
     if (!user) throw new Error('Not signed in');
 
     const { data, error } = await supabase.functions.invoke('create-sticker', {
@@ -77,6 +78,7 @@ export default function ScanScreen() {
         userId: user.id,
         language,
         ...(memoryBase64 ? { memoryImage: `data:image/jpeg;base64,${memoryBase64}` } : {}),
+        ...(lassoPolygon ? { lassoPolygon } : {}),
       },
     });
 
@@ -92,7 +94,7 @@ export default function ScanScreen() {
     }
 
     setDraft({
-      language: data.language === 'ja' ? 'ja' : 'fr',
+      language: data.language === 'ja' || data.language === 'yue' ? data.language : 'fr',
       word: String(data.word ?? ''),
       translation: String(data.translation ?? ''),
       reading: String(data.reading ?? ''),
@@ -199,7 +201,7 @@ export default function ScanScreen() {
     }
   }, []);
 
-  const handleExtractFromPhoto = useCallback(async ({ base64, uri }: { base64: string; uri: string }) => {
+  const handleExtractFromPhoto = useCallback(async ({ base64, uri, lassoPolygon }: { base64: string; uri: string; lassoPolygon?: Point[] }) => {
     if (processing || !importedAsset) return;
     setProcessing(true);
 
@@ -214,7 +216,7 @@ export default function ScanScreen() {
       // photo" to flip to.
       const memoryBase64 = await prepareMemoryPhoto(importedAsset.uri, importedAsset.width, importedAsset.height);
 
-      await submitImageForSticker(base64, memoryBase64, fallbackDiscoveredAt);
+      await submitImageForSticker(base64, memoryBase64, fallbackDiscoveredAt, lassoPolygon);
       setImportedAsset(null);
       // Hold off on DiscoveryReveal — show the ghost-cutout crossfade first,
       // it hands off to DiscoveryReveal once the animation completes.
@@ -368,7 +370,7 @@ export default function ScanScreen() {
 
             {processing && (
               <View style={styles.processingOverlay}>
-                <ActivityIndicator size="large" color="#A7D7C5" />
+                <ActivityIndicator size="large" color={colors.terra} />
                 <Text style={styles.processingText}>Creating sticker...</Text>
               </View>
             )}
@@ -468,7 +470,7 @@ const styles = StyleSheet.create({
   cameraFrame: {
     borderRadius: FRAME_RADIUS,
     overflow: 'hidden',
-    backgroundColor: '#000',
+    backgroundColor: colors.black,
     ...shadows.card,
     shadowOpacity: 0.22,
     shadowRadius: 20,

@@ -8,7 +8,7 @@
 // languages so callers never need to branch on language.
 // ---------------------------------------------------------------------------
 
-export type Language = 'fr' | 'ja';
+export type Language = 'fr' | 'ja' | 'yue';
 
 interface LanguageSchema {
   label: string;
@@ -38,16 +38,31 @@ const LANGUAGE_SCHEMAS: Record<Language, LanguageSchema> = {
   "category": "one of exactly: Kitchen, Animals, Study, Nature, Other"
 }`,
   },
+  yue: {
+    label: 'Cantonese',
+    schemaDescription: `{
+  "word": "the object name in Cantonese, written in Traditional Chinese characters as used in Hong Kong (e.g. 咖啡, 蘋果, 狗)",
+  "translation": "English translation (e.g. Coffee, Apple, Dog)",
+  "reading": "Jyutping romanization of the Cantonese word, with tone numbers (e.g. gaa3 fe1, ping4 gwo2, gau2)",
+  "sentence": "a short, natural Cantonese sentence (written in Traditional Chinese characters, colloquial Cantonese grammar/vocabulary — not Standard Written Chinese) describing this object in the scene it was photographed in (e.g. '杯咖啡放喺張枱度，準備好聽朝飲。')",
+  "sentence_translation": "English translation of the sentence (e.g. 'The coffee is sitting on the desk, ready for the morning.')",
+  "category": "one of exactly: Kitchen, Animals, Study, Nature, Other"
+}`,
+  },
 };
 
 // Narrows an arbitrary request value to a supported Language, defaulting to
 // French — keeps callers from having to validate/throw on bad input.
 export function resolveLanguage(language: unknown): Language {
-  return language === 'ja' ? 'ja' : 'fr';
+  if (language === 'ja' || language === 'yue') return language;
+  return 'fr';
 }
 
 function cleanJsonResponse(text: string): string {
-  return text.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```\s*$/i, '').trim();
+  return text
+    .replace(/<think>[\s\S]*?<\/think>/gi, '')
+    .replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```\s*$/i, '')
+    .trim();
 }
 
 async function callGroq(apiKey: string, messages: unknown): Promise<string> {
@@ -55,9 +70,13 @@ async function callGroq(apiKey: string, messages: unknown): Promise<string> {
     method: 'POST',
     headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      model: 'meta-llama/llama-4-scout-17b-16e-instruct',
+      model: 'qwen/qwen3.6-27b',
       messages,
       temperature: 0.1,
+      // This model reasons by default, prepending a <think>...</think> block
+      // to its response — 'none' + 'hidden' keep the content field pure JSON.
+      reasoning_effort: 'none',
+      reasoning_format: 'hidden',
     }),
   });
 
@@ -85,7 +104,7 @@ export async function identifyWithGroq(base64Data: string, language: Language, m
   let instructions: string;
   if (memoryBase64Data) {
     content.push({ type: 'image_url', image_url: { url: `data:image/jpeg;base64,${memoryBase64Data}` } });
-    instructions = `The first image is a close-up of a single object. The second image is the wider scene it was photographed in. Identify the object in the first image, then write a short, natural sentence in ${label} describing that object as it appears in the wider scene (the second image) — what it's near, what's happening, who might be using it.`;
+    instructions = `The FIRST image is a close-up crop of a single object — this is the ONLY object you are identifying. The SECOND image is the wider, uncropped scene it was found in, provided purely for background context. The "word", "translation", and "reading" fields must describe ONLY the object in the FIRST image, never something else that happens to appear in the second image. Once you've identified that object, write a short, natural "sentence" in ${label} describing that exact same object as it appears in the wider scene (the second image) — what it's near, what's happening, who might be using it — but the object itself must stay the one from the first image.`;
   } else {
     instructions = `Identify the main object in this image, then write a short, natural sentence in ${label} describing the object in this scene.`;
   }

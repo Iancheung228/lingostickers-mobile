@@ -2,6 +2,7 @@ import { useState, useCallback } from 'react';
 import { Modal, View, Text, TextInput, FlatList, TouchableOpacity, StyleSheet, SafeAreaView, ActivityIndicator } from 'react-native';
 import { X, UserPlus, Check } from 'lucide-react-native';
 import { useFriends } from '@/hooks/useFriends';
+import { colors, radii, spacing, fonts } from '@/constants/theme';
 
 interface FriendSearchProps {
   visible: boolean;
@@ -32,7 +33,7 @@ export default function FriendSearch({ visible, onClose }: FriendSearchProps) {
         <View style={styles.header}>
           <Text style={styles.title}>Add Friend</Text>
           <TouchableOpacity onPress={onClose} hitSlop={8}>
-            <X size={22} color="#1A1A2E" />
+            <X size={22} color={colors.inkDark} />
           </TouchableOpacity>
         </View>
 
@@ -40,14 +41,14 @@ export default function FriendSearch({ visible, onClose }: FriendSearchProps) {
           <TextInput
             style={styles.input}
             placeholder="Search by username..."
-            placeholderTextColor="#9E9E9E"
+            placeholderTextColor={colors.inkFaint}
             value={query}
             onChangeText={handleQuery}
             autoCapitalize="none"
             autoCorrect={false}
             autoFocus
           />
-          {searching && <ActivityIndicator color="#A7D7C5" style={styles.spinner} />}
+          {searching && <ActivityIndicator color={colors.terra} style={styles.spinner} />}
         </View>
 
         {/* Search results */}
@@ -77,8 +78,8 @@ export default function FriendSearch({ visible, onClose }: FriendSearchProps) {
                     disabled={sent}
                   >
                     {sent
-                      ? <Check size={14} color="#fff" />
-                      : <UserPlus size={14} color="#fff" />}
+                      ? <Check size={14} color={colors.white} />
+                      : <UserPlus size={14} color={colors.white} />}
                     <Text style={styles.addText}>{sent ? 'Sent' : 'Add'}</Text>
                   </TouchableOpacity>
                 </View>
@@ -134,7 +135,7 @@ export default function FriendSearch({ visible, onClose }: FriendSearchProps) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F5F0E8' },
+  container: { flex: 1, backgroundColor: colors.sky },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -142,7 +143,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 16,
   },
-  title: { fontSize: 22, fontWeight: '800', color: '#1A1A2E' },
+  title: { fontSize: 22, fontWeight: '800', color: colors.inkDark },
   searchRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -151,14 +152,14 @@ const styles = StyleSheet.create({
   },
   input: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: colors.card,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: colors.borderLight,
     paddingHorizontal: 14,
     paddingVertical: 12,
     fontSize: 15,
-    color: '#1A1A2E',
+    color: colors.inkDark,
   },
   spinner: { marginLeft: 10 },
   list: { flex: 1 },
@@ -166,7 +167,7 @@ const styles = StyleSheet.create({
   sectionLabel: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#9E9E9E',
+    color: colors.inkFaint,
     letterSpacing: 1.5,
     marginBottom: 10,
     marginTop: 8,
@@ -174,42 +175,42 @@ const styles = StyleSheet.create({
   resultRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#fff',
+    backgroundColor: colors.card,
     borderRadius: 12,
     padding: 12,
     marginHorizontal: 16,
     marginBottom: 8,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: colors.borderLight,
   },
   avatar: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#A7D7C5',
+    backgroundColor: colors.terra,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
   },
-  avatarText: { fontSize: 15, fontWeight: '800', color: '#fff' },
-  username: { flex: 1, fontSize: 15, fontWeight: '600', color: '#1A1A2E' },
+  avatarText: { fontSize: 15, fontWeight: '800', color: colors.white },
+  username: { flex: 1, fontSize: 15, fontWeight: '600', color: colors.inkDark },
   addButton: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    backgroundColor: '#A7D7C5',
+    backgroundColor: colors.terra,
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 7,
   },
-  addButtonSent: { backgroundColor: '#9E9E9E' },
-  addText: { color: '#fff', fontWeight: '700', fontSize: 13 },
+  addButtonSent: { backgroundColor: colors.inkFaint },
+  addText: { color: colors.white, fontWeight: '700', fontSize: 13 },
   pendingBadge: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#A7D7C5',
+    color: colors.terra,
     borderWidth: 1,
-    borderColor: '#A7D7C5',
+    borderColor: colors.terra,
     borderRadius: 6,
     paddingHorizontal: 8,
     paddingVertical: 3,
@@ -217,11 +218,11 @@ const styles = StyleSheet.create({
   cancelButton: {
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: colors.borderLight,
     paddingHorizontal: 12,
     paddingVertical: 6,
   },
-  cancelText: { fontSize: 13, fontWeight: '700', color: '#6B7280' },
-  empty: { color: '#9E9E9E', textAlign: 'center', marginTop: 32, fontSize: 14 },
-  hint: { color: '#9E9E9E', textAlign: 'center', marginTop: 48, fontSize: 14, paddingHorizontal: 32 },
+  cancelText: { fontSize: 13, fontWeight: '700', color: colors.inkMid },
+  empty: { color: colors.inkFaint, textAlign: 'center', marginTop: 32, fontSize: 14 },
+  hint: { color: colors.inkFaint, textAlign: 'center', marginTop: 48, fontSize: 14, paddingHorizontal: 32 },
 });

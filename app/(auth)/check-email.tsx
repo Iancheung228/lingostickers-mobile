@@ -4,7 +4,7 @@ import { Link, useLocalSearchParams } from 'expo-router';
 import { useAuth } from '@/hooks/useAuth';
 import CozyBackground from '@/components/CozyBackground';
 import OtterMascot from '@/components/illustrations/OtterMascot';
-import { colors, shadows, radii, spacing, typography } from '@/constants/theme';
+import { colors, shadows, radii, spacing, typography, fonts } from '@/constants/theme';
 
 const RESEND_COOLDOWN_SECONDS = 30;
 
@@ -94,11 +94,10 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 30,
-    fontWeight: '800',
+    fontFamily: fonts.cozy,
     color: colors.inkDark,
     textAlign: 'center',
     letterSpacing: -0.5,
-    fontStyle: 'italic',
   },
   subtitle: {
     ...typography.body,

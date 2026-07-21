@@ -77,7 +77,8 @@
           "color": "#A7D7C5"
         }
       ],
-      "expo-asset"
+      "expo-asset",
+      "expo-font"
     ],
     "extra": {
       "router": {},

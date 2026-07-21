@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect, ReactNode, createElement } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
+import { getFunctionErrorMessage } from '@/lib/functionError';
 
 function useAuthState() {
   const [session, setSession] = useState<Session | null>(null);
@@ -47,6 +48,18 @@ function useAuthState() {
     await supabase.auth.signOut();
   };
 
+  // Permanently deletes the account (Apple Guideline 5.1.1(v) requires this
+  // to be possible from inside the app, not just via support). The edge
+  // function does the actual deletion with the service role key — clients
+  // can never delete an auth.users row directly — then this clears the
+  // local session so the root layout routes straight to sign-in.
+  const deleteAccount = async () => {
+    const { error } = await supabase.functions.invoke('delete-account');
+    if (error) return { error: new Error(await getFunctionErrorMessage(error)) };
+    await supabase.auth.signOut();
+    return { error: null };
+  };
+
   const resetPasswordForEmail = async (email: string) => {
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: 'lingostickers://reset-password?type=recovery',
@@ -71,7 +84,7 @@ function useAuthState() {
 
   return {
     session, user, loading, isPasswordRecovery,
-    signUp, signIn, signOut,
+    signUp, signIn, signOut, deleteAccount,
     resetPasswordForEmail, verifyRecoveryOtp, updatePassword, resendSignupEmail,
     clearPasswordRecovery,
   };

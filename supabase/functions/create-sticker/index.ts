@@ -1,5 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import UPNG from 'https://esm.sh/upng-js@2.1.0';
+import jpeg from 'https://esm.sh/jpeg-js@0.4.4';
 import { identifyWithGroq, resolveLanguage } from '../_shared/vocab.ts';
 
 const corsHeaders = {
@@ -13,7 +14,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { image, userId, language, memoryImage } = await req.json();
+    const { image, userId, language, memoryImage, lassoPolygon: rawLassoPolygon } = await req.json();
     if (!image || !userId) {
       return new Response(
         JSON.stringify({ error: 'Missing image or userId' }),
@@ -27,6 +28,13 @@ Deno.serve(async (req) => {
     const memoryBase64Data: string | undefined = memoryImage
       ? (memoryImage.includes(',') ? memoryImage.split(',')[1] : memoryImage)
       : undefined;
+    // The user's hand-drawn lasso, in the crop's own pixel coordinates — a
+    // stronger signal than automatic background removal (see forceIncludeLasso).
+    const lassoPolygon: { x: number; y: number }[] | null =
+      Array.isArray(rawLassoPolygon) &&
+      rawLassoPolygon.filter((p: any) => typeof p?.x === 'number' && typeof p?.y === 'number').length >= 3
+        ? rawLassoPolygon
+        : null;
 
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
@@ -48,12 +56,21 @@ Deno.serve(async (req) => {
     let fileExtension: string;
 
     if (bgResult.data) {
+      let processed = bgResult.data;
+      if (lassoPolygon) {
+        try {
+          processed = forceIncludeLasso(processed, imageBytes, lassoPolygon);
+          console.log('lasso force-include applied');
+        } catch (err: any) {
+          console.warn(`forceIncludeLasso failed (${err?.message}) — using unmodified bg-removed PNG`);
+        }
+      }
       try {
-        finalImageBytes = addStickerBorder(bgResult.data);
+        finalImageBytes = addStickerBorder(trimToContent(processed));
         console.log(`sticker border added: ${finalImageBytes.length} bytes`);
       } catch (err: any) {
         console.warn(`addStickerBorder failed (${err?.message}) — using bg-removed PNG without border`);
-        finalImageBytes = bgResult.data;
+        finalImageBytes = processed;
       }
       finalMimeType = 'image/png';
       fileExtension = 'png';
@@ -402,6 +419,124 @@ function pickBorderColor(src: Uint8Array, sw: number, sh: number): [number, numb
 
   // Soft pastel of the complementary hue — coordinated, not clashing.
   return hslToRgb(complementHue, 0.45, 0.82);
+}
+
+// ---------------------------------------------------------------------------
+// Force-include lasso — the user's hand-drawn loop is a stronger signal than
+// automatic background removal.
+//
+// Any pixel inside the loop is guaranteed to stay opaque, using its real
+// color decoded fresh from the original JPEG (bg-removed pixels don't
+// reliably keep usable RGB once their alpha hits 0). Pixels outside the loop
+// still go through normal automatic removal, and pixels inside the loop that
+// rembg already kept are left untouched — so its edge smoothing is preserved
+// everywhere it agrees with the user; this only rescues what it wrongly
+// stripped (wispy bits, low-contrast edges, reflective material).
+// ---------------------------------------------------------------------------
+function forceIncludeLasso(
+  bgPngBytes: Uint8Array,
+  originalJpegBytes: Uint8Array,
+  polygon: { x: number; y: number }[],
+): Uint8Array {
+  const img = UPNG.decode(bgPngBytes.buffer as ArrayBuffer);
+  const rgba = new Uint8Array(UPNG.toRGBA8(img)[0]);
+  const w = img.width;
+  const h = img.height;
+
+  const original = jpeg.decode(originalJpegBytes, { useTArray: true });
+  if (original.width !== w || original.height !== h) {
+    throw new Error(`dimension mismatch: bg=${w}x${h} original=${original.width}x${original.height}`);
+  }
+  const originalRgba: Uint8Array = original.data;
+
+  let minX = w, maxX = -1, minY = h, maxY = -1;
+  for (const p of polygon) {
+    if (p.x < minX) minX = p.x;
+    if (p.x > maxX) maxX = p.x;
+    if (p.y < minY) minY = p.y;
+    if (p.y > maxY) maxY = p.y;
+  }
+  minX = Math.max(0, Math.floor(minX));
+  minY = Math.max(0, Math.floor(minY));
+  maxX = Math.min(w - 1, Math.ceil(maxX));
+  maxY = Math.min(h - 1, Math.ceil(maxY));
+
+  for (let y = minY; y <= maxY; y++) {
+    for (let x = minX; x <= maxX; x++) {
+      if (!pointInPolygon(x + 0.5, y + 0.5, polygon)) continue;
+      const idx = (y * w + x) * 4;
+      if (rgba[idx + 3] >= 255) continue;
+      rgba[idx]     = originalRgba[idx];
+      rgba[idx + 1] = originalRgba[idx + 1];
+      rgba[idx + 2] = originalRgba[idx + 2];
+      rgba[idx + 3] = 255;
+    }
+  }
+
+  return new Uint8Array(UPNG.encode([rgba.buffer as ArrayBuffer], w, h, 0));
+}
+
+// Standard even-odd ray-casting point-in-polygon test.
+function pointInPolygon(x: number, y: number, poly: { x: number; y: number }[]): boolean {
+  let inside = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const xi = poly[i].x, yi = poly[i].y;
+    const xj = poly[j].x, yj = poly[j].y;
+    const intersect = ((yi > y) !== (yj > y)) &&
+      (x < ((xj - xi) * (y - yi)) / (yj - yi) + xi);
+    if (intersect) inside = !inside;
+  }
+  return inside;
+}
+
+// ---------------------------------------------------------------------------
+// Trim to content — recenters an off-center crop
+//
+// The user's crop/lasso selection isn't necessarily centered on the object,
+// so the bg-removed cutout can end up with the subject sitting lopsided in
+// its own transparent canvas. Every screen that displays the sticker centers
+// that whole canvas (resizeMode="contain"), not the subject within it — so
+// this crops tightly to the visible (non-transparent) pixels, plus a small
+// uniform margin, before addStickerBorder pads it symmetrically.
+// ---------------------------------------------------------------------------
+function trimToContent(pngBytes: Uint8Array, marginRatio = 0.06): Uint8Array {
+  const img = UPNG.decode(pngBytes.buffer as ArrayBuffer);
+  const src = new Uint8Array(UPNG.toRGBA8(img)[0]);
+  const sw = img.width;
+  const sh = img.height;
+
+  let minX = sw, maxX = -1, minY = sh, maxY = -1;
+  for (let y = 0; y < sh; y++) {
+    for (let x = 0; x < sw; x++) {
+      if (src[(y * sw + x) * 4 + 3] > 16) {
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+      }
+    }
+  }
+  // Nothing visible (bg removal wiped the whole image) — leave untouched.
+  if (maxX < minX || maxY < minY) return pngBytes;
+
+  const margin = Math.round(Math.max(maxX - minX + 1, maxY - minY + 1) * marginRatio);
+  const cropX0 = Math.max(0, minX - margin);
+  const cropY0 = Math.max(0, minY - margin);
+  const cropX1 = Math.min(sw - 1, maxX + margin);
+  const cropY1 = Math.min(sh - 1, maxY + margin);
+  const dw = cropX1 - cropX0 + 1;
+  const dh = cropY1 - cropY0 + 1;
+
+  // Already tight against every edge — nothing to trim.
+  if (dw === sw && dh === sh) return pngBytes;
+
+  const out = new Uint8Array(dw * dh * 4);
+  for (let y = 0; y < dh; y++) {
+    const srcRowStart = ((y + cropY0) * sw + cropX0) * 4;
+    out.set(src.subarray(srcRowStart, srcRowStart + dw * 4), y * dw * 4);
+  }
+
+  return new Uint8Array(UPNG.encode([out.buffer as ArrayBuffer], dw, dh, 0));
 }
 
 // ---------------------------------------------------------------------------

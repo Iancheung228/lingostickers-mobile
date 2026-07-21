@@ -3,14 +3,16 @@ import { X } from 'lucide-react-native';
 import { Chapter } from '@/lib/chapters';
 import { Sticker } from '@/lib/types';
 import StickerCard from './StickerCard';
+import { colors, shadows, radii, spacing, fonts } from '@/constants/theme';
 
 interface ChapterDetailViewProps {
   chapter: Chapter | null;
   onClose: () => void;
   onSelectSticker: (sticker: Sticker) => void;
+  onToggleFavorite?: (id: string) => void;
 }
 
-export default function ChapterDetailView({ chapter, onClose, onSelectSticker }: ChapterDetailViewProps) {
+export default function ChapterDetailView({ chapter, onClose, onSelectSticker, onToggleFavorite }: ChapterDetailViewProps) {
   if (!chapter) return null;
 
   return (
@@ -18,7 +20,7 @@ export default function ChapterDetailView({ chapter, onClose, onSelectSticker }:
       <SafeAreaView style={styles.container}>
         <View style={styles.header}>
           <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-            <X size={24} color="#1A1A2E" />
+            <X size={22} color={colors.inkDark} />
           </TouchableOpacity>
           <Text style={styles.headerTitle} numberOfLines={1}>{chapter.title}</Text>
           <View style={styles.headerSpacer} />
@@ -32,7 +34,7 @@ export default function ChapterDetailView({ chapter, onClose, onSelectSticker }:
           contentContainerStyle={styles.grid}
           renderItem={({ item }) => (
             <View style={styles.cardWrapper}>
-              <StickerCard sticker={item} onPress={() => onSelectSticker(item)} />
+              <StickerCard sticker={item} onPress={() => onSelectSticker(item)} onToggleFavorite={onToggleFavorite} />
             </View>
           )}
         />
@@ -42,26 +44,27 @@ export default function ChapterDetailView({ chapter, onClose, onSelectSticker }:
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F5F0E8' },
+  container: { flex: 1, backgroundColor: colors.sky },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    gap: 12,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm + 4,
+    gap: spacing.sm,
   },
   closeButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#fff',
+    width: 38,
+    height: 38,
+    borderRadius: radii.full,
+    backgroundColor: colors.card,
     alignItems: 'center',
     justifyContent: 'center',
+    ...shadows.card,
   },
-  headerSpacer: { width: 40 },
-  headerTitle: { flex: 1, fontSize: 18, fontWeight: '700', color: '#1A1A2E', textAlign: 'center' },
-  grid: { paddingHorizontal: 16, paddingBottom: 32, paddingTop: 4 },
-  row: { gap: 12, marginBottom: 12 },
+  headerSpacer: { width: 38 },
+  headerTitle: { flex: 1, fontSize: 16, fontFamily: fonts.cozy, color: colors.inkDark, textAlign: 'center' },
+  grid: { paddingHorizontal: spacing.md, paddingBottom: spacing.xxl, paddingTop: spacing.xs },
+  row: { gap: spacing.sm, marginBottom: spacing.sm },
   cardWrapper: { flex: 1 },
 });

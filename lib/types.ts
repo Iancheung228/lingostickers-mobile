@@ -1,9 +1,14 @@
-export type Language = 'fr' | 'ja';
+export type Language = 'fr' | 'ja' | 'yue';
+
+export type WallDisplayStyle = 'framed' | 'cutout';
+export type CutoutBorderStyle = 'shadow' | 'outline' | 'none';
 
 export interface Profile {
   id: string;
   username: string | null;
   target_language: Language;
+  wall_display_style: WallDisplayStyle;
+  cutout_border_style: CutoutBorderStyle;
   created_at: string;
 }
 
@@ -21,11 +26,40 @@ export interface Sticker {
   category: Category;
   image_path: string;
   memory_photo_path: string | null;
+  voice_note_path: string | null;
+  // Where within the recorded file actual speech starts/ends — playback
+  // seeks to voice_note_start_ms and stops at voice_note_end_ms so it
+  // skips leading/trailing silence without re-encoding the audio. Null on
+  // recordings made before this existed — play the whole file for those.
+  voice_note_start_ms: number | null;
+  voice_note_end_ms: number | null;
   discovered_at: string;
   latitude: number | null;
   longitude: number | null;
   location_label: string | null;
   source: 'scan' | 'challenge';
+  is_favorite: boolean;
+  notes: string | null;
+}
+
+export interface Board {
+  id: string;
+  user_id: string;
+  name: string;
+  created_at: string;
+}
+
+export interface BoardSticker {
+  board_id: string;
+  sticker_id: string;
+  x: number;
+  y: number;
+  rotation: number;
+  added_at: string;
+}
+
+export interface BoardStickerWithSticker extends BoardSticker {
+  sticker: Sticker;
 }
 
 export type FriendshipStatus = 'pending' | 'accepted' | 'declined';

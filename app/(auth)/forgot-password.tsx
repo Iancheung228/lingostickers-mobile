@@ -6,7 +6,7 @@ import {
 import { Link } from 'expo-router';
 import { useAuth } from '@/hooks/useAuth';
 import CozyBackground from '@/components/CozyBackground';
-import { colors, shadows, radii, spacing, typography } from '@/constants/theme';
+import { colors, shadows, radii, spacing, typography, fonts } from '@/constants/theme';
 
 export default function ForgotPasswordScreen() {
   const { resetPasswordForEmail, verifyRecoveryOtp } = useAuth();
@@ -134,12 +134,11 @@ const styles = StyleSheet.create({
   inner: { flex: 1, justifyContent: 'center', paddingHorizontal: spacing.lg },
   title: {
     fontSize: 34,
-    fontWeight: '800',
+    fontFamily: fonts.cozy,
     color: colors.inkDark,
     textAlign: 'center',
     marginBottom: spacing.sm,
     letterSpacing: -0.5,
-    fontStyle: 'italic',
   },
   subtitle: {
     ...typography.body,

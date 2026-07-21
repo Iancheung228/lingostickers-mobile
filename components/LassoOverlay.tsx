@@ -4,6 +4,7 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { runOnJS, useSharedValue } from 'react-native-reanimated';
 import Svg, { Path } from 'react-native-svg';
 import { Point } from '@/lib/cropGeometry';
+import { colors, radii, spacing, fonts } from '@/constants/theme';
 
 interface LassoOverlayProps {
   // Called once the user lifts their finger, with the drawn loop's points
@@ -64,7 +65,7 @@ export default function LassoOverlay({ onComplete }: LassoOverlayProps) {
       <Svg style={StyleSheet.absoluteFill} pointerEvents="box-only">
         <Path
           d={pointsToPathD(points)}
-          stroke="#A7D7C5"
+          stroke={colors.terra}
           strokeWidth={3}
           strokeLinecap="round"
           strokeLinejoin="round"

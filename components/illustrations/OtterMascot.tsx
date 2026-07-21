@@ -1,6 +1,10 @@
+import { useEffect } from 'react';
 import Svg, {
   Ellipse, Circle, Path, G, Line, Text as SvgText,
 } from 'react-native-svg';
+import Animated, {
+  useSharedValue, useAnimatedStyle, withRepeat, withSequence, withTiming, Easing,
+} from 'react-native-reanimated';
 
 interface OtterMascotProps {
   size?: number;
@@ -11,10 +15,30 @@ interface OtterMascotProps {
 // 'sleeping': large, used on auth screens
 // 'small': compact, used in empty states
 export default function OtterMascot({ size = 180, variant = 'sleeping' }: OtterMascotProps) {
-  if (variant === 'small') {
-    return <OtterSmall size={size} />;
-  }
-  return <OtterSleeping size={size} />;
+  // Gentle continuous bob, echoing the design's floating-mascot motif
+  // (e.g. the AI Studio mockup's peeking sheep) without a new dependency.
+  const floatY = useSharedValue(0);
+
+  useEffect(() => {
+    floatY.value = withRepeat(
+      withSequence(
+        withTiming(-4, { duration: 1800, easing: Easing.inOut(Easing.sin) }),
+        withTiming(0, { duration: 1800, easing: Easing.inOut(Easing.sin) }),
+      ),
+      -1,
+      true
+    );
+  }, [floatY]);
+
+  const floatStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: floatY.value }],
+  }));
+
+  return (
+    <Animated.View style={floatStyle}>
+      {variant === 'small' ? <OtterSmall size={size} /> : <OtterSleeping size={size} />}
+    </Animated.View>
+  );
 }
 
 // ─── Sleeping otter (auth / hero) ────────────────────────────────────────────

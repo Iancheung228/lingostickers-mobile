@@ -1,15 +1,16 @@
 import { useState, useEffect } from 'react';
 import {
   Modal, View, Text, TextInput, TouchableOpacity, StyleSheet,
-  SafeAreaView, Image, ActivityIndicator, Alert,
+  SafeAreaView, Image, ActivityIndicator, Alert, KeyboardAvoidingView, Platform, ScrollView,
 } from 'react-native';
 import Animated, { useSharedValue, useAnimatedStyle, withSequence, withTiming } from 'react-native-reanimated';
 import { X } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { ChallengeWithSender, Language } from '@/lib/types';
 import { useChallenges } from '@/hooks/useChallenges';
+import { colors, radii, spacing, fonts } from '@/constants/theme';
 
-const LANGUAGE_LABELS: Record<Language, string> = { fr: 'French', ja: 'Japanese' };
+const LANGUAGE_LABELS: Record<Language, string> = { fr: 'French', ja: 'Japanese', yue: 'Cantonese' };
 
 interface ChallengeScreenProps {
   challenge: ChallengeWithSender | null;
@@ -107,7 +108,7 @@ export default function ChallengeScreen({ challenge, onClose, onWin }: Challenge
         {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity onPress={onClose} hitSlop={8}>
-            <X size={22} color="#1A1A2E" />
+            <X size={22} color={colors.inkDark} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Challenge</Text>
           {attemptsUsed > 0 && (
@@ -115,6 +116,8 @@ export default function ChallengeScreen({ challenge, onClose, onWin }: Challenge
           )}
         </View>
 
+        <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+        <ScrollView contentContainerStyle={styles.scrollBody} keyboardShouldPersistTaps="handled">
         {/* Sticker */}
         <View style={styles.stickerWrap}>
           {imageUrl
@@ -153,7 +156,7 @@ export default function ChallengeScreen({ challenge, onClose, onWin }: Challenge
             value={answer}
             onChangeText={setAnswer}
             placeholder={`Type in ${LANGUAGE_LABELS[challenge.snapshot_language]}...`}
-            placeholderTextColor="#9E9E9E"
+            placeholderTextColor={colors.inkFaint}
             autoCapitalize="none"
             autoCorrect={false}
             onSubmitEditing={handleSubmit}
@@ -169,7 +172,7 @@ export default function ChallengeScreen({ challenge, onClose, onWin }: Challenge
           disabled={!answer.trim() || submitting}
         >
           {submitting
-            ? <ActivityIndicator color="#fff" />
+            ? <ActivityIndicator color={colors.white} />
             : <Text style={styles.submitText}>Check Answer</Text>}
         </TouchableOpacity>
 
@@ -179,13 +182,17 @@ export default function ChallengeScreen({ challenge, onClose, onWin }: Challenge
             <Text style={styles.hintText}>Show first letter</Text>
           </TouchableOpacity>
         )}
+        </ScrollView>
+        </KeyboardAvoidingView>
       </SafeAreaView>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F5F0E8' },
+  container: { flex: 1, backgroundColor: colors.sky },
+  flex: { flex: 1 },
+  scrollBody: { flexGrow: 1 },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -193,63 +200,63 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 14,
   },
-  headerTitle: { fontSize: 16, fontWeight: '700', color: '#1A1A2E' },
-  attemptsText: { fontSize: 12, fontWeight: '600', color: '#9E9E9E' },
+  headerTitle: { fontSize: 16, fontWeight: '700', color: colors.inkDark },
+  attemptsText: { fontSize: 12, fontWeight: '600', color: colors.inkFaint },
   stickerWrap: { alignItems: 'center', paddingVertical: 16 },
   stickerImage: { width: 200, height: 200 },
-  stickerPlaceholder: { width: 200, height: 200, backgroundColor: '#E5E7EB', borderRadius: 20 },
+  stickerPlaceholder: { width: 200, height: 200, backgroundColor: colors.borderLight, borderRadius: 20 },
   definitionBox: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     marginHorizontal: 20,
     marginBottom: 12,
-    backgroundColor: '#fff',
+    backgroundColor: colors.card,
     borderRadius: 12,
     padding: 14,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: colors.borderLight,
     gap: 8,
   },
   definitionLabel: { fontSize: 16 },
-  definitionText: { flex: 1, fontSize: 14, color: '#1A1A2E', lineHeight: 20 },
+  definitionText: { flex: 1, fontSize: 14, color: colors.inkDark, lineHeight: 20 },
   sentenceBox: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     marginHorizontal: 20,
     marginBottom: 12,
-    backgroundColor: '#fff',
+    backgroundColor: colors.card,
     borderRadius: 12,
     padding: 14,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: colors.borderLight,
     gap: 8,
   },
   sentenceLabel: { fontSize: 16 },
-  sentenceText: { flex: 1, fontSize: 14, color: '#6B7280', lineHeight: 20, fontStyle: 'italic' },
-  letterCountHint: { textAlign: 'center', fontSize: 13, color: '#9E9E9E', marginBottom: 6 },
-  firstLetterHint: { textAlign: 'center', fontSize: 14, color: '#6B7280', marginBottom: 8 },
-  firstLetterValue: { fontWeight: '800', color: '#1A1A2E' },
+  sentenceText: { flex: 1, fontSize: 14, color: colors.inkMid, lineHeight: 20, fontStyle: 'italic' },
+  letterCountHint: { textAlign: 'center', fontSize: 13, color: colors.inkFaint, marginBottom: 6 },
+  firstLetterHint: { textAlign: 'center', fontSize: 14, color: colors.inkMid, marginBottom: 8 },
+  firstLetterValue: { fontWeight: '800', color: colors.inkDark },
   inputWrap: { marginHorizontal: 20, marginBottom: 12 },
   input: {
-    backgroundColor: '#fff',
+    backgroundColor: colors.card,
     borderRadius: 12,
     borderWidth: 1.5,
-    borderColor: '#A7D7C5',
+    borderColor: colors.terra,
     paddingHorizontal: 16,
     paddingVertical: 14,
     fontSize: 16,
-    color: '#1A1A2E',
+    color: colors.inkDark,
   },
   submitButton: {
     marginHorizontal: 20,
-    backgroundColor: '#A7D7C5',
+    backgroundColor: colors.terra,
     borderRadius: 12,
     paddingVertical: 16,
     alignItems: 'center',
     marginBottom: 10,
   },
   submitDisabled: { opacity: 0.5 },
-  submitText: { fontSize: 16, fontWeight: '700', color: '#fff' },
+  submitText: { fontSize: 16, fontWeight: '700', color: colors.white },
   hintButton: { alignItems: 'center', paddingVertical: 8 },
-  hintText: { fontSize: 13, color: '#9E9E9E', textDecorationLine: 'underline' },
+  hintText: { fontSize: 13, color: colors.inkFaint, textDecorationLine: 'underline' },
 });

@@ -5,6 +5,7 @@ import { Language } from './types';
 const LOCALE_BY_LANGUAGE: Record<Language, string> = {
   fr: 'fr-FR',
   ja: 'ja-JP',
+  yue: 'zh-HK',
 };
 
 // By default, iOS plays expo-speech audio through the app's ambient audio

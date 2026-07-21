@@ -1,10 +1,10 @@
 import { useState, useCallback } from 'react';
 import {
   View, Text, SectionList, StyleSheet, SafeAreaView,
-  TouchableOpacity, RefreshControl, ActivityIndicator,
+  TouchableOpacity, RefreshControl, ActivityIndicator, Alert,
 } from 'react-native';
 import { useFocusEffect } from 'expo-router';
-import { UserPlus } from 'lucide-react-native';
+import { UserPlus, Send } from 'lucide-react-native';
 import { useAuth } from '@/hooks/useAuth';
 import { useFriends } from '@/hooks/useFriends';
 import { useChallenges } from '@/hooks/useChallenges';
@@ -13,21 +13,35 @@ import FriendSearch from '@/components/FriendSearch';
 import ChallengeScreen from '@/components/ChallengeScreen';
 import ChallengeSuccess from '@/components/ChallengeSuccess';
 import FriendProfile from '@/components/FriendProfile';
-import { ChallengeWithSender, ChallengeWithReceiver, FriendWithProfile } from '@/lib/types';
-import CozyBackground from '@/components/CozyBackground';
+import StickerPickerModal from '@/components/StickerPickerModal';
+import SendChallengeModal from '@/components/SendChallengeModal';
+import { ChallengeWithSender, ChallengeWithReceiver, FriendWithProfile, Sticker } from '@/lib/types';
 import OtterMascot from '@/components/illustrations/OtterMascot';
-import { colors, shadows, radii, spacing, typography } from '@/constants/theme';
+import { colors, shadows, radii, spacing, typography, fonts } from '@/constants/theme';
 
 export default function FriendsScreen() {
   const { user } = useAuth();
   const { friends, loading: friendsLoading, respondToRequest, refetch: refetchFriends } = useFriends();
-  const { inbox, feed, loading: challengesLoading, fetchInbox, fetchFeed } = useChallenges();
+  const { inbox, feed, loading: challengesLoading, fetchInbox, fetchFeed, sendChallenge } = useChallenges();
 
   const [searchVisible, setSearchVisible] = useState(false);
   const [activeChallenge, setActiveChallenge] = useState<ChallengeWithSender | null>(null);
   const [wonState, setWonState] = useState<{ challenge: ChallengeWithSender; stickerId: string } | null>(null);
   const [selectedFriend, setSelectedFriend] = useState<FriendWithProfile | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [challengeSticker, setChallengeSticker] = useState<Sticker | null>(null);
+
+  const handlePickStickerForChallenge = (sticker: Sticker) => {
+    setPickerOpen(false);
+    setChallengeSticker(sticker);
+  };
+
+  const handleSendChallenge = async (receiverId: string) => {
+    if (!challengeSticker) return;
+    const { error } = await sendChallenge(challengeSticker.id, receiverId);
+    if (error) Alert.alert('Challenge failed', error.message);
+  };
 
   const acceptedFriends = friends.filter(f => f.status === 'accepted');
   const pendingReceived = friends.filter(f => f.status === 'pending' && !f.is_requester);
@@ -48,14 +62,23 @@ export default function FriendsScreen() {
   ];
 
   return (
-    <CozyBackground variant="strip">
-      <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.title}>Friends</Text>
-        <TouchableOpacity onPress={() => setSearchVisible(true)} style={styles.addBtn} hitSlop={8}>
-          <UserPlus size={20} color={colors.inkMid} />
-        </TouchableOpacity>
+        <Text style={styles.title}>Cozy Harbor</Text>
+        <View style={styles.headerActions}>
+          <TouchableOpacity
+            onPress={() => { if (acceptedFriends.length > 0) setPickerOpen(true); }}
+            style={[styles.sendChallengeBtn, acceptedFriends.length === 0 && styles.sendChallengeBtnDisabled]}
+            disabled={acceptedFriends.length === 0}
+          >
+            <Send size={13} color={colors.white} />
+            <Text style={styles.sendChallengeText}>Challenge</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => setSearchVisible(true)} style={styles.addBtn} hitSlop={8}>
+            <UserPlus size={20} color={colors.inkMid} />
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Pending friend requests */}
@@ -163,13 +186,26 @@ export default function FriendsScreen() {
         onClose={() => setSelectedFriend(null)}
         onRemoved={refetchFriends}
       />
+
+      <StickerPickerModal
+        visible={pickerOpen}
+        currentUserId={user?.id}
+        onSelect={handlePickStickerForChallenge}
+        onClose={() => setPickerOpen(false)}
+      />
+
+      <SendChallengeModal
+        sticker={challengeSticker}
+        friends={acceptedFriends}
+        onSend={handleSendChallenge}
+        onClose={() => setChallengeSticker(null)}
+      />
     </SafeAreaView>
-    </CozyBackground>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
+  container: { flex: 1, backgroundColor: colors.sky },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -179,12 +215,24 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.md,
   },
   title: {
-    fontSize: 28,
-    fontWeight: '800',
+    fontSize: 22,
+    fontFamily: fonts.cozy,
     color: colors.inkDark,
     letterSpacing: -0.5,
-    fontStyle: 'italic',
   },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  sendChallengeBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    height: 38,
+    paddingHorizontal: spacing.md,
+    borderRadius: radii.full,
+    backgroundColor: colors.terra,
+    ...shadows.card,
+  },
+  sendChallengeBtnDisabled: { opacity: 0.4 },
+  sendChallengeText: { fontSize: 12, fontFamily: fonts.cozyMedium, color: colors.white },
   addBtn: {
     width: 38,
     height: 38,

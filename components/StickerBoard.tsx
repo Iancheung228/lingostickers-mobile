@@ -3,14 +3,18 @@ import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   Image, ActivityIndicator, useWindowDimensions,
 } from 'react-native';
-import Svg, { Defs, LinearGradient, RadialGradient, Stop, Rect } from 'react-native-svg';
-import { Sticker } from '@/lib/types';
+import { Sticker, WallDisplayStyle, CutoutBorderStyle } from '@/lib/types';
 import { Chapter } from '@/lib/chapters';
 import { supabase } from '@/lib/supabase';
+import CorkBackground from '@/components/CorkBackground';
+import CutoutSticker from '@/components/CutoutSticker';
+import { colors, fonts } from '@/constants/theme';
 
 interface StickerBoardProps {
   chapters: Chapter[];
   onSelectSticker: (sticker: Sticker) => void;
+  displayStyle?: WallDisplayStyle;
+  borderStyle?: CutoutBorderStyle;
 }
 
 interface BoardPage {
@@ -23,7 +27,7 @@ interface BoardPage {
 const MAX_PER_PAGE = 9;
 const BOARD_HEIGHT = 460;
 const BOARD_MARGIN = 16;
-const TAPE_COLORS = ['#C9A87CB3', '#A8C2A3B3', '#D9A98CB3'];
+const TAPE_COLORS = [colors.skyNight + 'CC', colors.sageLight + 'EE', colors.terraLight + 'EE'];
 const STAMP_GLYPHS = ['印', '友', '夢'];
 
 function chunk<T>(arr: T[], size: number): T[][] {
@@ -64,9 +68,10 @@ function seededRandom(seed: string, salt: number): number {
 }
 
 function BoardTile({
-  sticker, cellWidth, cellHeight, x, y, onPress,
+  sticker, cellWidth, cellHeight, x, y, onPress, displayStyle, borderStyle,
 }: {
   sticker: Sticker; cellWidth: number; cellHeight: number; x: number; y: number; onPress: () => void;
+  displayStyle: WallDisplayStyle; borderStyle: CutoutBorderStyle;
 }) {
   const [imageUrl, setImageUrl] = useState<string | null>(null);
 
@@ -89,6 +94,8 @@ function BoardTile({
     <TouchableOpacity
       style={[
         styles.tile,
+        displayStyle === 'cutout' && styles.tileCutout,
+        displayStyle === 'cutout' && (borderStyle === 'shadow' ? styles.tileCutoutShadow : styles.tileCutoutFlat),
         {
           left: x - tileWidth / 2,
           top: y - tileHeight / 2,
@@ -108,11 +115,15 @@ function BoardTile({
           ]}
         />
       )}
-      <View style={styles.tileImageWrap}>
+      <View style={displayStyle === 'cutout' ? styles.tileImageWrapCutout : styles.tileImageWrap}>
         {imageUrl ? (
-          <Image source={{ uri: imageUrl }} style={styles.tileImage} resizeMode="contain" />
+          displayStyle === 'cutout' && borderStyle === 'outline' ? (
+            <CutoutSticker uri={imageUrl} borderStyle="outline" />
+          ) : (
+            <Image source={{ uri: imageUrl }} style={styles.tileImage} resizeMode="contain" />
+          )
         ) : (
-          <ActivityIndicator color="#A7D7C5" />
+          <ActivityIndicator color={colors.terra} />
         )}
       </View>
       <Text style={styles.tileWord} numberOfLines={1}>{sticker.word}</Text>
@@ -126,8 +137,11 @@ function BoardTile({
 }
 
 function BoardPageView({
-  page, width, onSelectSticker,
-}: { page: BoardPage; width: number; onSelectSticker: (s: Sticker) => void }) {
+  page, width, onSelectSticker, displayStyle, borderStyle,
+}: {
+  page: BoardPage; width: number; onSelectSticker: (s: Sticker) => void;
+  displayStyle: WallDisplayStyle; borderStyle: CutoutBorderStyle;
+}) {
   const columns = page.stickers.length <= 4 ? 2 : 3;
   const rows = Math.ceil(page.stickers.length / columns);
   const cellWidth = width / columns;
@@ -140,31 +154,7 @@ function BoardPageView({
         <Text style={styles.pageSubtitle}>{page.subtitle}</Text>
       </View>
       <View style={[styles.board, { height: BOARD_HEIGHT }]}>
-        <Svg width="100%" height="100%" style={StyleSheet.absoluteFill}>
-          <Defs>
-            <LinearGradient id="wood" x1="0" y1="0" x2="0" y2="1">
-              <Stop offset="0" stopColor="#D9AE7E" />
-              <Stop offset="1" stopColor="#AD7B4C" />
-            </LinearGradient>
-            <RadialGradient id="vignette" cx="50%" cy="50%" r="75%">
-              <Stop offset="0.6" stopColor="#3A2210" stopOpacity="0" />
-              <Stop offset="1" stopColor="#3A2210" stopOpacity="0.35" />
-            </RadialGradient>
-          </Defs>
-          <Rect x="0" y="0" width="100%" height="100%" fill="url(#wood)" />
-          {Array.from({ length: 10 }).map((_, i) => (
-            <Rect
-              key={i}
-              x="0"
-              y={`${(i + 0.5) * 10}%`}
-              width="100%"
-              height="1"
-              fill="#5A3A1E"
-              opacity={0.06 + (i % 3) * 0.02}
-            />
-          ))}
-          <Rect x="0" y="0" width="100%" height="100%" fill="url(#vignette)" />
-        </Svg>
+        <CorkBackground />
         {page.stickers.map((sticker, i) => {
           const col = i % columns;
           const row = Math.floor(i / columns);
@@ -181,6 +171,8 @@ function BoardPageView({
               x={baseX + jitterX}
               y={baseY + jitterY}
               onPress={() => onSelectSticker(sticker)}
+              displayStyle={displayStyle}
+              borderStyle={borderStyle}
             />
           );
         })}
@@ -189,7 +181,9 @@ function BoardPageView({
   );
 }
 
-export default function StickerBoard({ chapters, onSelectSticker }: StickerBoardProps) {
+export default function StickerBoard({
+  chapters, onSelectSticker, displayStyle = 'framed', borderStyle = 'shadow',
+}: StickerBoardProps) {
   const { width: screenWidth } = useWindowDimensions();
   const pageWidth = screenWidth - BOARD_MARGIN * 2;
   const [pageIndex, setPageIndex] = useState(0);
@@ -218,7 +212,13 @@ export default function StickerBoard({ chapters, onSelectSticker }: StickerBoard
         }}
         renderItem={({ item }) => (
           <View style={{ width: screenWidth, paddingHorizontal: BOARD_MARGIN }}>
-            <BoardPageView page={item} width={pageWidth} onSelectSticker={onSelectSticker} />
+            <BoardPageView
+              page={item}
+              width={pageWidth}
+              onSelectSticker={onSelectSticker}
+              displayStyle={displayStyle}
+              borderStyle={borderStyle}
+            />
           </View>
         )}
       />
@@ -235,28 +235,39 @@ export default function StickerBoard({ chapters, onSelectSticker }: StickerBoard
 
 const styles = StyleSheet.create({
   pageLabel: { paddingHorizontal: 4, marginBottom: 10 },
-  pageTitle: { fontSize: 18, fontWeight: '800', color: '#1A1A2E' },
-  pageSubtitle: { fontSize: 12, color: '#9E9E9E', fontStyle: 'italic', marginTop: 2 },
+  pageTitle: { fontSize: 18, fontFamily: fonts.cozy, color: colors.inkDark },
+  pageSubtitle: { fontSize: 12, color: colors.inkFaint, fontStyle: 'italic', marginTop: 2 },
   board: {
-    borderRadius: 18,
+    borderRadius: 24,
     overflow: 'hidden',
-    borderWidth: 6,
-    borderColor: '#7C5230',
+    borderWidth: 4,
+    borderColor: colors.skyNight,
   },
   tile: {
     position: 'absolute',
-    backgroundColor: '#FBF6EC',
-    borderRadius: 4,
+    backgroundColor: colors.card,
+    borderRadius: 12,
     padding: 6,
-    shadowColor: '#000',
-    shadowOpacity: 0.3,
+    shadowColor: colors.inkDark,
+    shadowOpacity: 0.18,
     shadowRadius: 5,
     shadowOffset: { width: 0, height: 3 },
     elevation: 6,
   },
+  // "Cutout" mode: just the sticker shape floating on the corkboard, no
+  // card behind it.
+  tileCutout: {
+    backgroundColor: 'transparent',
+    padding: 0,
+  },
+  // Elevation is dropped for both — Android draws it as a rectangle
+  // regardless of the PNG's alpha, which looks wrong without a card.
+  tileCutoutShadow: { shadowOpacity: 0.22, elevation: 0 },
+  tileCutoutFlat: { shadowOpacity: 0, elevation: 0 },
   tileImageWrap: { flex: 1, marginBottom: 4 },
+  tileImageWrapCutout: { flex: 1, marginBottom: 2 },
   tileImage: { width: '100%', height: '100%' },
-  tileWord: { fontSize: 11, fontWeight: '700', color: '#1A1A2E', textAlign: 'center' },
+  tileWord: { fontSize: 11, fontFamily: fonts.jp, color: colors.inkDark, textAlign: 'center' },
   tape: {
     position: 'absolute',
     top: -10,
@@ -274,17 +285,17 @@ const styles = StyleSheet.create({
     height: 26,
     borderRadius: 13,
     borderWidth: 1.5,
-    borderColor: '#A6362E',
-    backgroundColor: 'rgba(255,255,255,0.85)',
+    borderColor: colors.error,
+    backgroundColor: 'rgba(255,255,255,0.9)',
     alignItems: 'center',
     justifyContent: 'center',
     transform: [{ rotate: '-8deg' }],
   },
-  stampGlyph: { fontSize: 12, color: '#A6362E', fontWeight: '800' },
+  stampGlyph: { fontSize: 12, color: colors.error, fontWeight: '800' },
   dots: { flexDirection: 'row', justifyContent: 'center', gap: 6, marginTop: 12 },
-  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#E5E7EB' },
-  dotActive: { backgroundColor: '#A7D7C5', width: 16 },
+  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.borderLight },
+  dotActive: { backgroundColor: colors.terra, width: 16 },
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 },
-  emptyTitle: { fontSize: 20, fontWeight: '700', color: '#1A1A2E', marginBottom: 8 },
-  emptySubtitle: { fontSize: 14, color: '#9E9E9E', textAlign: 'center', lineHeight: 22 },
+  emptyTitle: { fontSize: 20, fontFamily: fonts.cozy, color: colors.inkDark, marginBottom: 8 },
+  emptySubtitle: { fontSize: 14, color: colors.inkFaint, textAlign: 'center', lineHeight: 22 },
 });

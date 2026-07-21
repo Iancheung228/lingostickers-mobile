@@ -7,6 +7,7 @@ import { RotateCw } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { ChallengeWithSender, Sticker } from '@/lib/types';
 import { supabase } from '@/lib/supabase';
+import { colors, radii, spacing, fonts } from '@/constants/theme';
 
 interface ChallengeSuccessProps {
   challenge: ChallengeWithSender | null;
@@ -125,7 +126,7 @@ export default function ChallengeSuccess({ challenge, wonStickerId, onClose }: C
 
           {sticker?.memory_photo_path && (
             <View style={styles.flipHint}>
-              <RotateCw size={12} color="#9CA3AF" />
+              <RotateCw size={12} color={colors.inkFaint} />
               <Text style={styles.flipHintText}>Tap to see the moment</Text>
             </View>
           )}
@@ -155,7 +156,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   sheet: {
-    backgroundColor: '#F5F0E8',
+    backgroundColor: colors.sky,
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
     padding: 28,
@@ -163,8 +164,8 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
   },
   emoji: { fontSize: 40, marginBottom: 8 },
-  title: { fontSize: 26, fontWeight: '800', color: '#1A1A2E', marginBottom: 4 },
-  subtitle: { fontSize: 14, color: '#9E9E9E', marginBottom: 20 },
+  title: { fontSize: 26, fontWeight: '800', color: colors.inkDark, marginBottom: 4 },
+  subtitle: { fontSize: 14, color: colors.inkFaint, marginBottom: 20 },
   stickerWrap: { marginBottom: 8 },
   stickerFrame: { width: 160, height: 160 },
   face: {
@@ -175,32 +176,32 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  backFace: { backgroundColor: '#1A1A2E' },
+  backFace: { backgroundColor: colors.inkDark },
   stickerImage: { width: '100%', height: '100%' },
   memoryImage: { width: '100%', height: '100%' },
-  stickerPlaceholder: { width: '100%', height: '100%', backgroundColor: '#E5E7EB', borderRadius: 20 },
+  stickerPlaceholder: { width: '100%', height: '100%', backgroundColor: colors.borderLight, borderRadius: 20 },
   flipHint: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 12 },
-  flipHintText: { fontSize: 12, color: '#9CA3AF', fontWeight: '600' },
-  word: { fontSize: 28, fontWeight: '800', color: '#1A1A2E', marginBottom: 2 },
-  reading: { fontSize: 14, color: '#9E9E9E', marginBottom: 4 },
-  translation: { fontSize: 16, color: '#6B7280', marginBottom: 20 },
+  flipHintText: { fontSize: 12, color: colors.inkFaint, fontWeight: '600' },
+  word: { fontSize: 28, fontWeight: '800', color: colors.inkDark, marginBottom: 2 },
+  reading: { fontSize: 14, color: colors.inkFaint, marginBottom: 4 },
+  translation: { fontSize: 16, color: colors.inkMid, marginBottom: 20 },
   replyPrompt: {
-    backgroundColor: '#fff',
+    backgroundColor: colors.card,
     borderRadius: 12,
     padding: 14,
     width: '100%',
     marginBottom: 20,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: colors.borderLight,
   },
-  replyLabel: { fontSize: 13, fontWeight: '700', color: '#1A1A2E', marginBottom: 6 },
-  replyHint: { fontSize: 13, color: '#6B7280', fontStyle: 'italic', lineHeight: 18 },
+  replyLabel: { fontSize: 13, fontWeight: '700', color: colors.inkDark, marginBottom: 6 },
+  replyHint: { fontSize: 13, color: colors.inkMid, fontStyle: 'italic', lineHeight: 18 },
   doneButton: {
-    backgroundColor: '#A7D7C5',
+    backgroundColor: colors.terra,
     borderRadius: 12,
     paddingVertical: 14,
     paddingHorizontal: 48,
     alignItems: 'center',
   },
-  doneText: { fontSize: 16, fontWeight: '700', color: '#fff' },
+  doneText: { fontSize: 16, fontWeight: '700', color: colors.white },
 });

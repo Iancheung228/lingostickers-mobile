@@ -4,15 +4,20 @@ import { X } from 'lucide-react-native';
 import { Sticker } from '@/lib/types';
 import { supabase } from '@/lib/supabase';
 import StickerCard from '@/components/StickerCard';
+import { colors, radii, spacing, fonts } from '@/constants/theme';
 
 interface StickerPickerModalProps {
   visible: boolean;
   currentUserId: string | undefined;
   onSelect: (sticker: Sticker) => void;
   onClose: () => void;
+  title?: string;
+  selectedIds?: Set<string>;
 }
 
-export default function StickerPickerModal({ visible, currentUserId, onSelect, onClose }: StickerPickerModalProps) {
+export default function StickerPickerModal({
+  visible, currentUserId, onSelect, onClose, title = 'Pick a Sticker', selectedIds,
+}: StickerPickerModalProps) {
   const [stickers, setStickers] = useState<Sticker[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -34,14 +39,14 @@ export default function StickerPickerModal({ visible, currentUserId, onSelect, o
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet">
       <SafeAreaView style={styles.container}>
         <View style={styles.header}>
-          <Text style={styles.title}>Pick a Sticker</Text>
+          <Text style={styles.title}>{title}</Text>
           <TouchableOpacity onPress={onClose} hitSlop={8}>
-            <X size={22} color="#1A1A2E" />
+            <X size={22} color={colors.inkDark} />
           </TouchableOpacity>
         </View>
 
         {loading ? (
-          <ActivityIndicator style={{ marginTop: 48 }} color="#A7D7C5" size="large" />
+          <ActivityIndicator style={{ marginTop: 48 }} color={colors.terra} size="large" />
         ) : stickers.length === 0 ? (
           <Text style={styles.empty}>Scan something first to send a challenge!</Text>
         ) : (
@@ -53,7 +58,7 @@ export default function StickerPickerModal({ visible, currentUserId, onSelect, o
             contentContainerStyle={styles.grid}
             renderItem={({ item }) => (
               <View style={styles.cardWrapper}>
-                <StickerCard sticker={item} onPress={() => onSelect(item)} />
+                <StickerCard sticker={item} onPress={() => onSelect(item)} selected={selectedIds?.has(item.id)} />
               </View>
             )}
           />
@@ -64,7 +69,7 @@ export default function StickerPickerModal({ visible, currentUserId, onSelect, o
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F5F0E8' },
+  container: { flex: 1, backgroundColor: colors.sky },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -72,8 +77,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 16,
   },
-  title: { fontSize: 20, fontWeight: '800', color: '#1A1A2E' },
-  empty: { color: '#9E9E9E', textAlign: 'center', marginTop: 48, fontSize: 14, paddingHorizontal: 32 },
+  title: { fontSize: 20, fontWeight: '800', color: colors.inkDark },
+  empty: { color: colors.inkFaint, textAlign: 'center', marginTop: 48, fontSize: 14, paddingHorizontal: 32 },
   grid: { paddingHorizontal: 16, paddingBottom: 32 },
   row: { gap: 12, marginBottom: 12 },
   cardWrapper: { flex: 1 },

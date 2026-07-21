@@ -11,6 +11,7 @@ import ToolModeSwitch, { ToolMode } from './ToolModeSwitch';
 import CropBoxOverlay from './CropBoxOverlay';
 import LassoOverlay from './LassoOverlay';
 import { Rect, Point, computeContainRect, boxToImageCrop, boundingBoxOfPoints, polygonFillRatio, padBox } from '@/lib/cropGeometry';
+import { colors, radii, spacing, fonts } from '@/constants/theme';
 
 interface PhotoExtractorProps {
   imageUri: string | null;
@@ -18,8 +19,11 @@ interface PhotoExtractorProps {
   imageHeight: number;
   onClose: () => void;
   // `uri` is the rendered crop's local file URI — handed back so the caller
-  // can show it during the ghost-cutout reveal transition.
-  onExtract: (result: { base64: string; uri: string }) => Promise<void> | void;
+  // can show it during the ghost-cutout reveal transition. `lassoPolygon`,
+  // when present, is in the *cropped output image's* own pixel coordinates —
+  // the server uses it to force-include everything inside the user's loop
+  // regardless of what automatic background removal decides.
+  onExtract: (result: { base64: string; uri: string; lassoPolygon?: Point[] }) => Promise<void> | void;
   processing: boolean;
 }
 
@@ -42,6 +46,7 @@ export default function PhotoExtractor({ imageUri, imageWidth, imageHeight, onCl
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
   const [cropping, setCropping] = useState(false);
   const [lassoReady, setLassoReady] = useState(false);
+  const [lassoPoints, setLassoPoints] = useState<Point[]>([]);
   const initializedFor = useRef<string | null>(null);
 
   const box = useSharedValue<Rect>(ZERO_RECT);
@@ -79,6 +84,7 @@ export default function PhotoExtractor({ imageUri, imageWidth, imageHeight, onCl
   const handleModeChange = useCallback((next: ToolMode) => {
     setMode(next);
     if (next === 'lasso') setLassoReady(false);
+    else setLassoPoints([]);
   }, []);
 
   // A completed loop becomes the crop region: pad its bounding box — by an
@@ -96,6 +102,7 @@ export default function PhotoExtractor({ imageUri, imageWidth, imageHeight, onCl
       Math.max(LASSO_PADDING_SCALE_RANGE[0], fillRatio / LASSO_REFERENCE_FILL_RATIO),
     );
     box.value = padBox(raw, LASSO_BASE_PADDING_RATIO * scale, displayRect);
+    setLassoPoints(points);
     setLassoReady(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   }, [displayRect]);
@@ -110,16 +117,31 @@ export default function PhotoExtractor({ imageUri, imageWidth, imageHeight, onCl
     try {
       const crop = boxToImageCrop(box.value, displayRect, imageWidth, imageHeight);
       const context = ImageManipulator.manipulate(imageUri).crop(crop);
-      const rendered = await (crop.width > MAX_UPLOAD_WIDTH
+      const needsResize = crop.width > MAX_UPLOAD_WIDTH;
+      const rendered = await (needsResize
         ? context.resize({ width: MAX_UPLOAD_WIDTH }).renderAsync()
         : context.renderAsync());
       const result = await rendered.saveAsync({ compress: 0.9, format: SaveFormat.JPEG, base64: true });
       if (!result.base64) throw new Error('Failed to process image');
-      await onExtract({ base64: result.base64, uri: result.uri });
+
+      // Reproject the lasso loop from display coordinates into the exact
+      // pixel space of the cropped (and possibly resized) output image, so
+      // the server can use it as a force-include mask.
+      let lassoPolygon: Point[] | undefined;
+      if (mode === 'lasso' && lassoReady && lassoPoints.length >= 3) {
+        const imageScale = imageWidth / displayRect.width;
+        const resizeScale = needsResize ? MAX_UPLOAD_WIDTH / crop.width : 1;
+        lassoPolygon = lassoPoints.map(p => ({
+          x: ((p.x - displayRect.x) * imageScale - crop.originX) * resizeScale,
+          y: ((p.y - displayRect.y) * imageScale - crop.originY) * resizeScale,
+        }));
+      }
+
+      await onExtract({ base64: result.base64, uri: result.uri, lassoPolygon });
     } finally {
       setCropping(false);
     }
-  }, [imageUri, displayRect, imageWidth, imageHeight, onExtract, cropping, processing, mode, lassoReady]);
+  }, [imageUri, displayRect, imageWidth, imageHeight, onExtract, cropping, processing, mode, lassoReady, lassoPoints]);
 
   if (!imageUri) return null;
   const busy = cropping || processing;
@@ -135,7 +157,7 @@ export default function PhotoExtractor({ imageUri, imageWidth, imageHeight, onCl
             style={styles.closeButton}
             disabled={busy}
           >
-            <X size={24} color="#1A1A2E" />
+            <X size={24} color={colors.inkDark} />
           </TouchableOpacity>
         </View>
 
@@ -151,7 +173,14 @@ export default function PhotoExtractor({ imageUri, imageWidth, imageHeight, onCl
         </View>
 
         <View style={styles.photoArea} onLayout={handleLayout}>
-          <Image source={{ uri: imageUri }} style={styles.photo} resizeMode="contain" />
+          <Image
+            source={{ uri: imageUri }}
+            style={styles.photo}
+            resizeMode="contain"
+            onLoadStart={() => console.log('[PhotoExtractor] load start', imageUri)}
+            onLoad={(e) => console.log('[PhotoExtractor] loaded', e.nativeEvent.source)}
+            onError={(e) => console.log('[PhotoExtractor] error', imageUri, JSON.stringify(e.nativeEvent))}
+          />
           {displayRect.width > 0 && mode === 'box' && (
             <CropBoxOverlay box={box} startBox={startBox} displayRect={displayRect} />
           )}
@@ -167,10 +196,10 @@ export default function PhotoExtractor({ imageUri, imageWidth, imageHeight, onCl
             disabled={busy || !canExtract}
           >
             {busy ? (
-              <ActivityIndicator color="#fff" />
+              <ActivityIndicator color={colors.white} />
             ) : (
               <>
-                <Scissors size={20} color="#fff" />
+                <Scissors size={20} color={colors.white} />
                 <Text style={styles.extractButtonText}>Extract Sticker</Text>
               </>
             )}
@@ -182,7 +211,7 @@ export default function PhotoExtractor({ imageUri, imageWidth, imageHeight, onCl
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F5F0E8' },
+  container: { flex: 1, backgroundColor: colors.sky },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -190,12 +219,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
   },
-  headerTitle: { fontSize: 18, fontWeight: '700', color: '#1A1A2E' },
+  headerTitle: { fontSize: 18, fontWeight: '700', color: colors.inkDark },
   closeButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#fff',
+    backgroundColor: colors.card,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -205,24 +234,24 @@ const styles = StyleSheet.create({
     gap: 12,
     alignItems: 'center',
   },
-  modeHint: { color: '#6B7280', fontSize: 13, fontWeight: '500' },
+  modeHint: { color: colors.inkMid, fontSize: 13, fontWeight: '500' },
   photoArea: { flex: 1, padding: 16 },
   photo: { width: '100%', height: '100%' },
   actions: { paddingHorizontal: 16, paddingBottom: 16, paddingTop: 4 },
   extractButton: {
-    backgroundColor: '#A7D7C5',
+    backgroundColor: colors.terra,
     borderRadius: 16,
     paddingVertical: 16,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 10,
-    shadowColor: '#A7D7C5',
+    shadowColor: colors.terra,
     shadowOpacity: 0.5,
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 4 },
     elevation: 6,
   },
   extractButtonDisabled: { opacity: 0.6 },
-  extractButtonText: { color: '#fff', fontSize: 16, fontWeight: '800', letterSpacing: 1 },
+  extractButtonText: { color: colors.white, fontSize: 16, fontWeight: '800', letterSpacing: 1 },
 });

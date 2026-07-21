@@ -3,6 +3,7 @@ import { StyleSheet } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { SharedValue, useAnimatedStyle } from 'react-native-reanimated';
 import { Rect, Corner, clampBox, resizeBoxFromCorner } from '@/lib/cropGeometry';
+import { colors, radii, spacing, fonts } from '@/constants/theme';
 
 interface CropBoxOverlayProps {
   box: SharedValue<Rect>;
@@ -105,7 +106,7 @@ const styles = StyleSheet.create({
   box: {
     position: 'absolute',
     borderWidth: 2,
-    borderColor: '#A7D7C5',
+    borderColor: colors.terra,
     borderRadius: 4,
     backgroundColor: 'rgba(167,215,197,0.08)',
   },
@@ -114,10 +115,10 @@ const styles = StyleSheet.create({
     width: HANDLE_SIZE,
     height: HANDLE_SIZE,
     borderRadius: HANDLE_SIZE / 2,
-    backgroundColor: '#fff',
+    backgroundColor: colors.card,
     borderWidth: 3,
-    borderColor: '#A7D7C5',
-    shadowColor: '#1A1A2E',
+    borderColor: colors.terra,
+    shadowColor: colors.inkDark,
     shadowOpacity: 0.18,
     shadowRadius: 4,
     shadowOffset: { width: 0, height: 2 },

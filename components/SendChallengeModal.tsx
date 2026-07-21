@@ -3,6 +3,7 @@ import { Modal, View, Text, FlatList, TouchableOpacity, StyleSheet, SafeAreaView
 import { X, Check } from 'lucide-react-native';
 import { Sticker, FriendWithProfile } from '@/lib/types';
 import { supabase } from '@/lib/supabase';
+import { colors, radii, spacing, fonts } from '@/constants/theme';
 
 interface SendChallengeModalProps {
   sticker: Sticker | null;
@@ -38,7 +39,7 @@ export default function SendChallengeModal({ sticker, friends, onSend, onClose }
         <View style={styles.header}>
           <Text style={styles.title}>Challenge a Friend</Text>
           <TouchableOpacity onPress={onClose} hitSlop={8}>
-            <X size={22} color="#1A1A2E" />
+            <X size={22} color={colors.inkDark} />
           </TouchableOpacity>
         </View>
 
@@ -78,9 +79,9 @@ export default function SendChallengeModal({ sticker, friends, onSend, onClose }
                     disabled={isSent || !!sending}
                   >
                     {isSending
-                      ? <ActivityIndicator size="small" color="#fff" />
+                      ? <ActivityIndicator size="small" color={colors.white} />
                       : isSent
-                        ? <Check size={14} color="#fff" />
+                        ? <Check size={14} color={colors.white} />
                         : <Text style={styles.sendText}>Send</Text>}
                   </TouchableOpacity>
                 </View>
@@ -94,7 +95,7 @@ export default function SendChallengeModal({ sticker, friends, onSend, onClose }
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F5F0E8' },
+  container: { flex: 1, backgroundColor: colors.sky },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -102,52 +103,52 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 16,
   },
-  title: { fontSize: 20, fontWeight: '800', color: '#1A1A2E' },
-  preview: { alignItems: 'center', paddingVertical: 20, borderBottomWidth: 1, borderBottomColor: '#E5E7EB' },
+  title: { fontSize: 20, fontWeight: '800', color: colors.inkDark },
+  preview: { alignItems: 'center', paddingVertical: 20, borderBottomWidth: 1, borderBottomColor: colors.borderLight },
   stickerImage: { width: 120, height: 120, marginBottom: 10 },
-  stickerPlaceholder: { width: 120, height: 120, backgroundColor: '#E5E7EB', borderRadius: 16, marginBottom: 10 },
-  word: { fontSize: 22, fontWeight: '800', color: '#1A1A2E', marginBottom: 4 },
-  translation: { fontSize: 14, color: '#6B7280' },
+  stickerPlaceholder: { width: 120, height: 120, backgroundColor: colors.borderLight, borderRadius: 16, marginBottom: 10 },
+  word: { fontSize: 22, fontWeight: '800', color: colors.inkDark, marginBottom: 4 },
+  translation: { fontSize: 14, color: colors.inkMid },
   sectionLabel: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#9E9E9E',
+    color: colors.inkFaint,
     letterSpacing: 1.5,
     paddingHorizontal: 20,
     paddingTop: 16,
     paddingBottom: 10,
   },
-  empty: { color: '#9E9E9E', textAlign: 'center', marginTop: 40, fontSize: 14, paddingHorizontal: 32 },
+  empty: { color: colors.inkFaint, textAlign: 'center', marginTop: 40, fontSize: 14, paddingHorizontal: 32 },
   friendRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#fff',
+    backgroundColor: colors.card,
     borderRadius: 12,
     padding: 14,
     marginHorizontal: 16,
     marginBottom: 8,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: colors.borderLight,
   },
   avatar: {
     width: 38,
     height: 38,
     borderRadius: 19,
-    backgroundColor: '#A7D7C5',
+    backgroundColor: colors.terra,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
   },
-  avatarText: { fontSize: 16, fontWeight: '800', color: '#fff' },
-  username: { flex: 1, fontSize: 15, fontWeight: '600', color: '#1A1A2E' },
+  avatarText: { fontSize: 16, fontWeight: '800', color: colors.white },
+  username: { flex: 1, fontSize: 15, fontWeight: '600', color: colors.inkDark },
   sendButton: {
-    backgroundColor: '#A7D7C5',
+    backgroundColor: colors.terra,
     borderRadius: 8,
     paddingHorizontal: 16,
     paddingVertical: 8,
     minWidth: 60,
     alignItems: 'center',
   },
-  sendButtonSent: { backgroundColor: '#9E9E9E' },
-  sendText: { color: '#fff', fontWeight: '700', fontSize: 14 },
+  sendButtonSent: { backgroundColor: colors.inkFaint },
+  sendText: { color: colors.white, fontWeight: '700', fontSize: 14 },
 });

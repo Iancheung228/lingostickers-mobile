@@ -1,56 +1,66 @@
-// Warm risograph / retro Japanese travel poster palette
+// Cozy pastel watercolor palette (AI Studio redesign)
 export const colors = {
   // Backgrounds
-  sky:        '#F5E6C8', // warm parchment — primary screen bg
-  skyDeep:    '#E8C882', // amber gold — gradient bottom
-  skyNight:   '#D4B896', // muted warm sand
+  sky:        '#FDFDF4', // warm cream — primary screen bg
+  skyDeep:    '#C0EAFD', // panel blue — rounded feature panels
+  skyNight:   '#A6DDF6', // muted sky border
 
   // UI surfaces
-  card:       '#FFFBF0', // warm white — cards, inputs
-  cardAlt:    '#FFF5DC', // slightly more amber — alt cards
-  overlay:    'rgba(245, 230, 200, 0.88)', // semi-transparent sky for list screens
+  card:       '#FFFFFF', // white — cards, inputs
+  cardAlt:    '#EAF7FE', // pale sky tint — alt cards
+  overlay:    'rgba(253, 253, 244, 0.88)', // semi-transparent cream for list screens
 
   // Brand / interactive
-  terra:      '#C4956A', // terracotta — primary CTA
-  terraDark:  '#A67550', // pressed state
-  terraLight: '#DDB98A', // disabled / muted CTA
-  sage:       '#8BAF8B', // sage green — active tabs, badges
-  sageDark:   '#6A8F6A',
-  sageLight:  '#B8D4B8',
+  terra:      '#9BE0FC', // sky blue — primary CTA
+  terraDark:  '#85D3F2', // pressed state
+  terraLight: '#D6F1FD', // disabled / muted CTA
+  sage:       '#F2B84B', // amber — active tabs, badges
+  sageDark:   '#D99A2B',
+  sageLight:  '#FDECC8',
 
   // Text
-  inkDark:    '#2C1A0E', // deep warm brown — headings
-  inkMid:     '#5C3D1E', // body text
-  inkLight:   '#8B6914', // captions, muted
-  inkFaint:   '#B8956A', // placeholder, disabled
+  inkDark:    '#1C4966', // navy — headings
+  inkMid:     '#334155', // body text
+  inkLight:   '#64748B', // captions, muted
+  inkFaint:   '#94A3B8', // placeholder, disabled
 
   // Illustration accents
-  moonGold:   '#F0C060',
-  starWhite:  '#FFF8E8',
+  moonGold:   '#FED330',
+  starWhite:  '#FFFFFF',
   hillGreen:  '#7A9E7A',
   hillDark:   '#5A7A5A',
   treeTrunk:  '#8B6040',
-  skyBlue:    '#C8D8E8', // cool accent (ref 2)
+  skyBlue:    '#9BE0FC', // cool accent (ref 2)
 
   // Semantic
-  error:      '#C4614A',
-  errorLight: '#F5D5CC',
-  success:    '#6A9A6A',
-  successLight: '#D0E8D0',
+  error:      '#F87171',
+  errorLight: '#FEE2E2',
+  success:    '#22C55E',
+  successLight: '#DCFCE7',
 
   // Utility
-  border:     '#DDD0B8',
-  borderLight:'#EDE4D0',
+  border:     '#E2E8F0',
+  borderLight:'#F1F5F9',
   white:      '#FFFFFF',
   black:      '#000000',
   transparent:'transparent',
 };
 
+// Font families loaded via @expo-google-fonts/* in app/_layout.tsx — the
+// string values match each package's exported constant name exactly, so
+// no import is needed at usage sites.
+export const fonts = {
+  cozy:       'Quicksand_700Bold',    // headings, buttons — the design's rounded "cozy" voice
+  cozyMedium: 'Quicksand_600SemiBold',
+  jp:         'KosugiMaru_400Regular', // Japanese word display
+  mono:       'JetBrainsMono_500Medium', // romaji, stats, technical labels
+};
+
 export const typography = {
-  display:  { fontSize: 40, fontWeight: '800' as const, letterSpacing: -1, color: colors.inkDark },
-  h1:       { fontSize: 28, fontWeight: '800' as const, letterSpacing: -0.5, color: colors.inkDark },
-  h2:       { fontSize: 22, fontWeight: '700' as const, color: colors.inkDark },
-  h3:       { fontSize: 18, fontWeight: '700' as const, color: colors.inkDark },
+  display:  { fontSize: 40, fontFamily: fonts.cozy, letterSpacing: -1, color: colors.inkDark },
+  h1:       { fontSize: 28, fontFamily: fonts.cozy, letterSpacing: -0.5, color: colors.inkDark },
+  h2:       { fontSize: 22, fontFamily: fonts.cozy, color: colors.inkDark },
+  h3:       { fontSize: 18, fontFamily: fonts.cozy, color: colors.inkDark },
   body:     { fontSize: 15, fontWeight: '400' as const, color: colors.inkMid, lineHeight: 22 },
   bodyBold: { fontSize: 15, fontWeight: '600' as const, color: colors.inkMid },
   caption:  { fontSize: 12, fontWeight: '500' as const, color: colors.inkLight },

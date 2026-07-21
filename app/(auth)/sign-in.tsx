@@ -7,7 +7,7 @@ import { Link } from 'expo-router';
 import { useAuth } from '@/hooks/useAuth';
 import CozyBackground from '@/components/CozyBackground';
 import OtterMascot from '@/components/illustrations/OtterMascot';
-import { colors, typography, shadows, radii, spacing } from '@/constants/theme';
+import { colors, typography, shadows, radii, spacing, fonts } from '@/constants/theme';
 
 export default function SignInScreen() {
   const { signIn, resendSignupEmail } = useAuth();
@@ -152,10 +152,9 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 52,
-    fontWeight: '800',
+    fontFamily: fonts.cozy,
     color: colors.inkDark,
     letterSpacing: -1.5,
-    fontStyle: 'italic',
   },
   tagline: {
     ...typography.body,

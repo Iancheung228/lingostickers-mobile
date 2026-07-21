@@ -3,6 +3,7 @@ import Svg, {
   Defs, RadialGradient, LinearGradient, Stop,
   Rect, Ellipse, Circle, Path, G, Polygon,
 } from 'react-native-svg';
+import { colors } from '@/constants/theme';
 
 interface BackgroundSceneProps {
   // 'full'  → entire screen (auth screens)
@@ -27,45 +28,45 @@ export default function BackgroundScene({ variant = 'full', height }: Background
       preserveAspectRatio="xMidYMid slice"
     >
       <Defs>
-        {/* Sky gradient — warm amber at horizon, deeper parchment above */}
+        {/* Sky gradient — sky blue up top fading to cream near the horizon */}
         <LinearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
-          <Stop offset="0"   stopColor="#ECD5A8" stopOpacity="1" />
-          <Stop offset="0.5" stopColor="#F5E6C8" stopOpacity="1" />
-          <Stop offset="1"   stopColor="#E8C882" stopOpacity="1" />
+          <Stop offset="0"   stopColor={colors.terraDark} stopOpacity="1" />
+          <Stop offset="0.5" stopColor={colors.skyDeep} stopOpacity="1" />
+          <Stop offset="1"   stopColor={colors.sky} stopOpacity="1" />
         </LinearGradient>
 
-        {/* Ground gradient */}
+        {/* Ground gradient — gentle coastline blue */}
         <LinearGradient id="ground" x1="0" y1="0" x2="0" y2="1">
-          <Stop offset="0" stopColor="#7A9E7A" stopOpacity="1" />
-          <Stop offset="1" stopColor="#5A7A5A" stopOpacity="1" />
+          <Stop offset="0" stopColor={colors.terra} stopOpacity="1" />
+          <Stop offset="1" stopColor={colors.terraDark} stopOpacity="1" />
         </LinearGradient>
 
         {/* Far hill */}
         <LinearGradient id="hillFar" x1="0" y1="0" x2="0" y2="1">
-          <Stop offset="0" stopColor="#9AB89A" stopOpacity="1" />
-          <Stop offset="1" stopColor="#7A9E7A" stopOpacity="1" />
+          <Stop offset="0" stopColor={colors.skyNight} stopOpacity="1" />
+          <Stop offset="1" stopColor={colors.terra} stopOpacity="1" />
         </LinearGradient>
 
-        {/* Moon glow */}
+        {/* Sun glow */}
         <RadialGradient id="moonGlow" cx="50%" cy="50%" r="50%">
-          <Stop offset="0"   stopColor="#FFF0A0" stopOpacity="0.6" />
-          <Stop offset="1"   stopColor="#F5E6C8" stopOpacity="0"   />
+          <Stop offset="0"   stopColor="#FED330" stopOpacity="0.5" />
+          <Stop offset="1"   stopColor={colors.skyDeep} stopOpacity="0"   />
         </RadialGradient>
       </Defs>
 
       {/* ── Sky ── */}
       <Rect x={0} y={0} width={VW} height={VH} fill="url(#sky)" />
 
-      {/* ── Moon glow halo ── */}
+      {/* ── Sun glow halo ── */}
       <Ellipse cx={310} cy={90} rx={55} ry={55} fill="url(#moonGlow)" />
 
-      {/* ── Crescent moon ── */}
-      <Circle cx={310} cy={88} r={22} fill="#F0C060" />
-      <Circle cx={322} cy={82} r={18} fill="#ECD5A8" />
+      {/* ── Soft sun ── */}
+      <Circle cx={310} cy={88} r={22} fill="#FED330" />
+      <Circle cx={322} cy={82} r={18} fill="#FFF3C0" />
 
       {/* ── Stars ── */}
       {STARS.map((s, i) => (
-        <Circle key={i} cx={s.x} cy={s.y} r={s.r} fill="#FFF8E8" opacity={s.op} />
+        <Circle key={i} cx={s.x} cy={s.y} r={s.r} fill={colors.white} opacity={s.op} />
       ))}
 
       {/* ── Star sparkles (4-pointed) ── */}
@@ -73,7 +74,7 @@ export default function BackgroundScene({ variant = 'full', height }: Background
         <G key={i} transform={`translate(${s.x},${s.y})`}>
           <Polygon
             points={sparklePoints(s.size)}
-            fill="#FFF8E8"
+            fill={colors.white}
             opacity={s.op}
           />
         </G>
@@ -99,23 +100,23 @@ export default function BackgroundScene({ variant = 'full', height }: Background
         fill="url(#ground)"
       />
 
-      {/* ── Trees (flat geometric, Ref-2 style) ── */}
-      <FlatTree x={50}  groundY={VH * 0.68} trunkH={50} canopyR={28} color="#5A8060" trunkColor="#8B6040" />
-      <FlatTree x={128} groundY={VH * 0.66} trunkH={38} canopyR={22} color="#6A9070" trunkColor="#8B6040" />
-      <FlatTree x={290} groundY={VH * 0.67} trunkH={44} canopyR={25} color="#5A8060" trunkColor="#8B6040" />
-      <FlatTree x={355} groundY={VH * 0.69} trunkH={35} canopyR={20} color="#6A9070" trunkColor="#8B6040" />
+      {/* ── Trees (flat geometric, sea-glass tones) ── */}
+      <FlatTree x={50}  groundY={VH * 0.68} trunkH={50} canopyR={28} color="#7EC8B8" trunkColor="#8B6040" />
+      <FlatTree x={128} groundY={VH * 0.66} trunkH={38} canopyR={22} color="#8FD4C4" trunkColor="#8B6040" />
+      <FlatTree x={290} groundY={VH * 0.67} trunkH={44} canopyR={25} color="#7EC8B8" trunkColor="#8B6040" />
+      <FlatTree x={355} groundY={VH * 0.69} trunkH={35} canopyR={20} color="#8FD4C4" trunkColor="#8B6040" />
 
       {/* ── Small bushes ── */}
-      <Ellipse cx={200} cy={VH * 0.71} rx={20} ry={12} fill="#6A9070" />
-      <Ellipse cx={220} cy={VH * 0.715} rx={15} ry={9} fill="#5A8060" />
-      <Ellipse cx={170} cy={VH * 0.715} rx={14} ry={8} fill="#78A078" />
+      <Ellipse cx={200} cy={VH * 0.71} rx={20} ry={12} fill="#8FD4C4" />
+      <Ellipse cx={220} cy={VH * 0.715} rx={15} ry={9} fill="#7EC8B8" />
+      <Ellipse cx={170} cy={VH * 0.715} rx={14} ry={8} fill="#9EE0D0" />
 
-      {/* ── Tent (right side, Ref-2 style) ── */}
+      {/* ── Little cottage (right side) ── */}
       <Tent x={310} y={VH * 0.69} size={44} />
 
       {/* ── Small flower ── */}
-      <Circle cx={230} cy={VH * 0.702} r={4} fill="#E8956A" />
-      <Circle cx={230} cy={VH * 0.702} r={2} fill="#F0C060" />
+      <Circle cx={230} cy={VH * 0.702} r={4} fill="#F2B84B" />
+      <Circle cx={230} cy={VH * 0.702} r={2} fill="#FED330" />
 
       {/* ── Soft cloud shapes ── */}
       <Cloud x={40}  y={130} scale={1.0} />
@@ -162,21 +163,21 @@ function Tent({ x, y, size }: { x: number; y: number; size: number }) {
       {/* Main tent body */}
       <Path
         d={`M ${x} ${y - h} L ${x - w / 2} ${y} L ${x + w / 2} ${y} Z`}
-        fill="#E8C882"
-        stroke="#C4956A"
+        fill={colors.card}
+        stroke={colors.skyNight}
         strokeWidth={1.5}
       />
       {/* Door */}
       <Path
         d={`M ${x - 8} ${y} Q ${x} ${y - h * 0.38} ${x + 8} ${y}`}
-        fill="#DDB08A"
-        stroke="#C4956A"
+        fill={colors.cardAlt}
+        stroke={colors.skyNight}
         strokeWidth={1}
       />
       {/* Left panel line */}
       <Path
         d={`M ${x} ${y - h} L ${x - w / 2} ${y}`}
-        stroke="#C4956A"
+        stroke={colors.skyNight}
         strokeWidth={1}
         fill="none"
         opacity={0.5}

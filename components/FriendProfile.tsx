@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase';
 import { useFriends } from '@/hooks/useFriends';
 import { useChallenges } from '@/hooks/useChallenges';
 import StickerPickerModal from '@/components/StickerPickerModal';
+import { colors, radii, spacing, fonts } from '@/constants/theme';
 
 interface FriendProfileProps {
   friend: FriendWithProfile | null;
@@ -76,7 +77,7 @@ export default function FriendProfile({ friend, currentUserId, onClose, onRemove
         <View style={styles.header}>
           <Text style={styles.title}>Friend</Text>
           <TouchableOpacity onPress={onClose} hitSlop={8}>
-            <X size={22} color="#1A1A2E" />
+            <X size={22} color={colors.inkDark} />
           </TouchableOpacity>
         </View>
 
@@ -89,7 +90,7 @@ export default function FriendProfile({ friend, currentUserId, onClose, onRemove
 
           <View style={styles.statBox}>
             {exchangeCount === null ? (
-              <ActivityIndicator color="#A7D7C5" />
+              <ActivityIndicator color={colors.terra} />
             ) : (
               <>
                 <Text style={styles.statCount}>{exchangeCount}</Text>
@@ -106,17 +107,17 @@ export default function FriendProfile({ friend, currentUserId, onClose, onRemove
             disabled={sending}
           >
             {sending
-              ? <ActivityIndicator color="#fff" />
+              ? <ActivityIndicator color={colors.white} />
               : (
                 <>
-                  <Send size={16} color="#fff" />
+                  <Send size={16} color={colors.white} />
                   <Text style={styles.challengeButtonText}>Send a Challenge</Text>
                 </>
               )}
           </TouchableOpacity>
 
           <TouchableOpacity style={[styles.actionButton, styles.removeButton]} onPress={handleRemove}>
-            <UserX size={16} color="#EF4444" />
+            <UserX size={16} color={colors.error} />
             <Text style={styles.removeButtonText}>Remove Friend</Text>
           </TouchableOpacity>
         </View>
@@ -133,7 +134,7 @@ export default function FriendProfile({ friend, currentUserId, onClose, onRemove
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F5F0E8' },
+  container: { flex: 1, backgroundColor: colors.sky },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -141,33 +142,33 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 16,
   },
-  title: { fontSize: 20, fontWeight: '800', color: '#1A1A2E' },
+  title: { fontSize: 20, fontWeight: '800', color: colors.inkDark },
   body: { flex: 1, alignItems: 'center', paddingTop: 12, paddingHorizontal: 32 },
   avatar: {
     width: 88,
     height: 88,
     borderRadius: 44,
-    backgroundColor: '#A7D7C5',
+    backgroundColor: colors.terra,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 16,
   },
-  avatarText: { fontSize: 36, fontWeight: '800', color: '#fff' },
-  username: { fontSize: 22, fontWeight: '800', color: '#1A1A2E', marginBottom: 4 },
-  since: { fontSize: 13, color: '#9E9E9E', marginBottom: 24 },
+  avatarText: { fontSize: 36, fontWeight: '800', color: colors.white },
+  username: { fontSize: 22, fontWeight: '800', color: colors.inkDark, marginBottom: 4 },
+  since: { fontSize: 13, color: colors.inkFaint, marginBottom: 24 },
   statBox: {
     alignItems: 'center',
-    backgroundColor: '#fff',
+    backgroundColor: colors.card,
     borderRadius: 16,
     paddingVertical: 16,
     paddingHorizontal: 32,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: colors.borderLight,
     marginBottom: 32,
     minWidth: 160,
   },
-  statCount: { fontSize: 28, fontWeight: '800', color: '#1A1A2E' },
-  statLabel: { fontSize: 12, color: '#9E9E9E', marginTop: 2 },
+  statCount: { fontSize: 28, fontWeight: '800', color: colors.inkDark },
+  statLabel: { fontSize: 12, color: colors.inkFaint, marginTop: 2 },
   actionButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -178,8 +179,8 @@ const styles = StyleSheet.create({
     paddingVertical: 15,
     marginBottom: 12,
   },
-  challengeButton: { backgroundColor: '#A7D7C5' },
-  challengeButtonText: { color: '#fff', fontSize: 15, fontWeight: '700' },
-  removeButton: { backgroundColor: '#FEE2E2' },
-  removeButtonText: { color: '#EF4444', fontSize: 15, fontWeight: '700' },
+  challengeButton: { backgroundColor: colors.terra },
+  challengeButtonText: { color: colors.white, fontSize: 15, fontWeight: '700' },
+  removeButton: { backgroundColor: colors.errorLight },
+  removeButtonText: { color: colors.error, fontSize: 15, fontWeight: '700' },
 });

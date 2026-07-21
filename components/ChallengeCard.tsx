@@ -1,5 +1,6 @@
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { ChallengeWithSender } from '@/lib/types';
+import { colors, fonts } from '@/constants/theme';
 
 interface ChallengeCardProps {
   challenge: ChallengeWithSender;
@@ -19,8 +20,8 @@ export default function ChallengeCard({ challenge, onPress }: ChallengeCardProps
   const senderName = challenge.sender.username ?? 'Friend';
 
   const badge = challenge.status === 'pending'
-    ? { label: 'New', color: '#A7D7C5' }
-    : { label: 'In Progress', color: '#F59E0B' };
+    ? { label: 'New', color: colors.terra }
+    : { label: 'In Progress', color: colors.sageDark };
 
   return (
     <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.85}>
@@ -48,29 +49,29 @@ const styles = StyleSheet.create({
   card: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#fff',
-    borderRadius: 14,
+    backgroundColor: colors.card,
+    borderRadius: 18,
     padding: 14,
     marginHorizontal: 16,
     marginBottom: 8,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: colors.borderLight,
   },
   avatarCircle: {
     width: 42,
     height: 42,
     borderRadius: 21,
-    backgroundColor: '#A7D7C5',
+    backgroundColor: colors.terra,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
   },
-  avatarText: { fontSize: 18, fontWeight: '800', color: '#fff' },
+  avatarText: { fontSize: 18, fontWeight: '800', color: colors.white },
   content: { flex: 1 },
-  title: { fontSize: 14, color: '#6B7280', marginBottom: 2 },
-  bold: { fontWeight: '700', color: '#1A1A2E' },
-  word: { fontSize: 15, fontWeight: '700', color: '#1A1A2E', marginBottom: 2 },
-  time: { fontSize: 11, color: '#9E9E9E' },
+  title: { fontSize: 14, color: colors.inkMid, marginBottom: 2 },
+  bold: { fontWeight: '700', color: colors.inkDark },
+  word: { fontSize: 15, fontFamily: fonts.jp, color: colors.inkDark, marginBottom: 2 },
+  time: { fontSize: 11, color: colors.inkFaint },
   badge: {
     borderRadius: 8,
     borderWidth: 1,

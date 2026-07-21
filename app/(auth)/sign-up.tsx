@@ -8,7 +8,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useUsernameAvailability } from '@/hooks/useUsernameAvailability';
 import CozyBackground from '@/components/CozyBackground';
 import OtterMascot from '@/components/illustrations/OtterMascot';
-import { colors, typography, shadows, radii, spacing } from '@/constants/theme';
+import { colors, typography, shadows, radii, spacing, fonts } from '@/constants/theme';
 
 function friendlySignUpError(message: string): string {
   if (message.includes('already registered')) {
@@ -166,10 +166,9 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 42,
-    fontWeight: '800',
+    fontFamily: fonts.cozy,
     color: colors.inkDark,
     letterSpacing: -1,
-    fontStyle: 'italic',
   },
   tagline: {
     ...typography.body,

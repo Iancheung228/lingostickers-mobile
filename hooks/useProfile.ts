@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
-import { Profile, Language } from '@/lib/types';
+import { Profile, Language, WallDisplayStyle, CutoutBorderStyle } from '@/lib/types';
 
 export function useProfile(userId: string | undefined) {
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -37,5 +37,31 @@ export function useProfile(userId: string | undefined) {
     return { error };
   }, [userId]);
 
-  return { profile, loading, setTargetLanguage };
+  const setWallDisplayStyle = useCallback(async (style: WallDisplayStyle) => {
+    if (!userId) return { error: new Error('Not signed in') };
+    const { error } = await supabase
+      .from('profiles')
+      .update({ wall_display_style: style })
+      .eq('id', userId);
+
+    if (!error) setProfile((p) => (p ? { ...p, wall_display_style: style } : p));
+    return { error };
+  }, [userId]);
+
+  const setCutoutBorderStyle = useCallback(async (style: CutoutBorderStyle) => {
+    if (!userId) return { error: new Error('Not signed in') };
+    const { error } = await supabase
+      .from('profiles')
+      .update({ cutout_border_style: style })
+      .eq('id', userId);
+
+    if (!error) setProfile((p) => (p ? { ...p, cutout_border_style: style } : p));
+    return { error };
+  }, [userId]);
+
+  return {
+    profile, loading,
+    setTargetLanguage, setWallDisplayStyle, setCutoutBorderStyle,
+    refetch: fetchProfile,
+  };
 }

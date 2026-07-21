@@ -1,6 +1,11 @@
 import { useEffect, useRef } from 'react';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import * as Linking from 'expo-linking';
+import * as SplashScreen from 'expo-splash-screen';
+import { useFonts } from 'expo-font';
+import { Quicksand_600SemiBold, Quicksand_700Bold } from '@expo-google-fonts/quicksand';
+import { KosugiMaru_400Regular } from '@expo-google-fonts/kosugi-maru';
+import { JetBrainsMono_500Medium } from '@expo-google-fonts/jetbrains-mono';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import * as Notifications from 'expo-notifications';
 import { useAuth, AuthProvider } from '@/hooks/useAuth';
@@ -9,16 +14,28 @@ import { ChallengesProvider } from '@/hooks/useChallenges';
 import { configureNotificationHandler, registerPushToken } from '@/lib/notifications';
 import { handleAuthDeepLink } from '@/lib/deepLinks';
 
+SplashScreen.preventAutoHideAsync();
+
 function RootLayout() {
   const { session, loading, isPasswordRecovery } = useAuth();
   const router = useRouter();
   const segments = useSegments();
   const notifListener = useRef<Notifications.EventSubscription | null>(null);
   const responseListener = useRef<Notifications.EventSubscription | null>(null);
+  const [fontsLoaded] = useFonts({
+    Quicksand_600SemiBold,
+    Quicksand_700Bold,
+    KosugiMaru_400Regular,
+    JetBrainsMono_500Medium,
+  });
 
   useEffect(() => {
     configureNotificationHandler();
   }, []);
+
+  useEffect(() => {
+    if (fontsLoaded) SplashScreen.hideAsync();
+  }, [fontsLoaded]);
 
   useEffect(() => {
     const onUrl = async ({ url }: { url: string }) => {
@@ -41,6 +58,12 @@ function RootLayout() {
 
     const inAuthGroup = segments[0] === '(auth)';
     const inTabsGroup = segments[0] === '(tabs)';
+    // Top-level screens (outside the (tabs) group) that a signed-in user can
+    // legitimately be on — pushed from within a tab (e.g. the sticker wall's
+    // "open board" flow). Without this, the generic "session -> tabs"
+    // redirect below fires on every one of these and instantly bounces the
+    // user back to the collection tab.
+    const inStandaloneAuthenticatedRoute = ['profile', 'board', 'day'].includes(segments[0] as string);
     const onResetPasswordScreen = (segments as string[])[1] === 'reset-password';
 
     // A recovery session looks identical to a normal sign-in session, so it
@@ -53,7 +76,7 @@ function RootLayout() {
 
     if (!session && !inAuthGroup) {
       router.replace('/(auth)/sign-in');
-    } else if (session && !inTabsGroup) {
+    } else if (session && !inTabsGroup && !inStandaloneAuthenticatedRoute) {
       router.replace('/(tabs)/collection');
     }
   }, [session, loading, segments, isPasswordRecovery]);
@@ -75,11 +98,16 @@ function RootLayout() {
     };
   }, [session?.user?.id]);
 
+  if (!fontsLoaded) return null;
+
   return (
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="index" />
       <Stack.Screen name="(auth)" />
       <Stack.Screen name="(tabs)" />
+      <Stack.Screen name="profile" options={{ presentation: 'card' }} />
+      <Stack.Screen name="board/[id]" options={{ presentation: 'card' }} />
+      <Stack.Screen name="day/[date]" options={{ presentation: 'card' }} />
     </Stack>
   );
 }
