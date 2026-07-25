@@ -3,10 +3,10 @@ import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   Image, ActivityIndicator, useWindowDimensions,
 } from 'react-native';
-import { Sticker, WallDisplayStyle, CutoutBorderStyle } from '@/lib/types';
+import { Sticker, WallDisplayStyle, CutoutBorderStyle, WallBackgroundDim } from '@/lib/types';
 import { Chapter } from '@/lib/chapters';
 import { supabase } from '@/lib/supabase';
-import CorkBackground from '@/components/CorkBackground';
+import WallBackground from '@/components/WallBackground';
 import CutoutSticker from '@/components/CutoutSticker';
 import { colors, fonts } from '@/constants/theme';
 
@@ -15,6 +15,8 @@ interface StickerBoardProps {
   onSelectSticker: (sticker: Sticker) => void;
   displayStyle?: WallDisplayStyle;
   borderStyle?: CutoutBorderStyle;
+  backgroundPath?: string | null;
+  backgroundDim?: WallBackgroundDim;
 }
 
 interface BoardPage {
@@ -137,10 +139,11 @@ function BoardTile({
 }
 
 function BoardPageView({
-  page, width, onSelectSticker, displayStyle, borderStyle,
+  page, width, onSelectSticker, displayStyle, borderStyle, backgroundPath, backgroundDim,
 }: {
   page: BoardPage; width: number; onSelectSticker: (s: Sticker) => void;
   displayStyle: WallDisplayStyle; borderStyle: CutoutBorderStyle;
+  backgroundPath?: string | null; backgroundDim?: WallBackgroundDim;
 }) {
   const columns = page.stickers.length <= 4 ? 2 : 3;
   const rows = Math.ceil(page.stickers.length / columns);
@@ -154,7 +157,7 @@ function BoardPageView({
         <Text style={styles.pageSubtitle}>{page.subtitle}</Text>
       </View>
       <View style={[styles.board, { height: BOARD_HEIGHT }]}>
-        <CorkBackground />
+        <WallBackground path={backgroundPath} dim={backgroundDim} />
         {page.stickers.map((sticker, i) => {
           const col = i % columns;
           const row = Math.floor(i / columns);
@@ -183,6 +186,7 @@ function BoardPageView({
 
 export default function StickerBoard({
   chapters, onSelectSticker, displayStyle = 'framed', borderStyle = 'shadow',
+  backgroundPath, backgroundDim,
 }: StickerBoardProps) {
   const { width: screenWidth } = useWindowDimensions();
   const pageWidth = screenWidth - BOARD_MARGIN * 2;
@@ -218,6 +222,8 @@ export default function StickerBoard({
               onSelectSticker={onSelectSticker}
               displayStyle={displayStyle}
               borderStyle={borderStyle}
+              backgroundPath={backgroundPath}
+              backgroundDim={backgroundDim}
             />
           </View>
         )}

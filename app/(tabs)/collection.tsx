@@ -1,10 +1,11 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View, Text, FlatList, StyleSheet, TouchableOpacity,
-  RefreshControl, SafeAreaView, ScrollView, ActivityIndicator,
+  RefreshControl, SafeAreaView, ScrollView, ActivityIndicator, Modal, Pressable,
 } from 'react-native';
+import * as Haptics from 'expo-haptics';
 import { useFocusEffect, router } from 'expo-router';
-import { Settings, Heart, ArrowUpDown } from 'lucide-react-native';
+import { Settings, Heart, ArrowUpDown, Check } from 'lucide-react-native';
 import { useAuth } from '@/hooks/useAuth';
 import { useProfile } from '@/hooks/useProfile';
 import { supabase } from '@/lib/supabase';
@@ -14,8 +15,10 @@ import StickerCard from '@/components/StickerCard';
 import StickerDetailView from '@/components/StickerDetailView';
 import ChapterCard from '@/components/ChapterCard';
 import ChapterDetailView from '@/components/ChapterDetailView';
+import MiniStickerWall from '@/components/MiniStickerWall';
 import OtterMascot from '@/components/illustrations/OtterMascot';
 import { colors, shadows, radii, spacing, typography, fonts } from '@/constants/theme';
+import { TAB_BAR_CLEARANCE } from '@/constants/tabBar';
 
 const CATEGORIES: Array<'All' | Category> = ['All', 'Kitchen', 'Animals', 'Study', 'Nature', 'Other'];
 
@@ -26,6 +29,19 @@ const VIEW_MODES = [
 ] as const;
 
 type ViewMode = typeof VIEW_MODES[number]['key'];
+
+// 'newest'/'oldest' sort by discovered_at (when the memory happened —
+// backdated to the photo's own date on import). 'recentlyAdded' sorts by
+// created_at (when it actually landed in your collection) instead, for
+// people who want to see today's imports at the top regardless of how old
+// the photo itself is.
+type SortMode = 'newest' | 'oldest' | 'recentlyAdded';
+const SORT_CYCLE: SortMode[] = ['newest', 'oldest', 'recentlyAdded'];
+const SORT_LABELS: Record<SortMode, string> = {
+  newest: 'Newest first',
+  oldest: 'Oldest first',
+  recentlyAdded: 'Recently added',
+};
 
 function getGreeting() {
   const h = new Date().getHours();
@@ -42,7 +58,8 @@ export default function CollectionScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [activeCategory, setActiveCategory] = useState<'All' | Category>('All');
   const [favoritesOnly, setFavoritesOnly] = useState(false);
-  const [sortOldestFirst, setSortOldestFirst] = useState(false);
+  const [sortMode, setSortMode] = useState<SortMode>('newest');
+  const [sortMenuVisible, setSortMenuVisible] = useState(false);
   const [selectedSticker, setSelectedSticker] = useState<Sticker | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const [openChapter, setOpenChapter] = useState<Chapter | null>(null);
@@ -90,14 +107,14 @@ export default function CollectionScreen() {
       : stickers.filter(s => s.category === activeCategory);
   if (viewMode === 'grid' && favoritesOnly) filtered = filtered.filter(s => s.is_favorite);
   if (viewMode === 'grid' || viewMode === 'challenges') {
+    const field = sortMode === 'recentlyAdded' ? 'created_at' : 'discovered_at';
     filtered = [...filtered].sort((a, b) => {
-      const diff = new Date(a.discovered_at).getTime() - new Date(b.discovered_at).getTime();
-      return sortOldestFirst ? diff : -diff;
+      const diff = new Date(a[field]).getTime() - new Date(b[field]).getTime();
+      return sortMode === 'oldest' ? diff : -diff;
     });
   }
 
   const chapters = useMemo(() => buildChapters(stickers), [stickers]);
-  const favoriteCount = useMemo(() => stickers.filter(s => s.is_favorite).length, [stickers]);
 
   const username = profile?.username ?? 'Explorer';
 
@@ -121,32 +138,8 @@ export default function CollectionScreen() {
         </View>
       </View>
 
-      {/* ── Cozy progress panel ── */}
-      <View style={styles.panel}>
-        <View style={styles.statCardsRow}>
-          <View style={styles.statCard}>
-            <Text style={styles.statValue}>{stickers.length}</Text>
-            <Text style={styles.statLabel}>Stickers Captured</Text>
-          </View>
-          <View style={styles.statCard}>
-            <Text style={styles.statValue}>{chapters.length}</Text>
-            <Text style={styles.statLabel}>Story Chapters</Text>
-          </View>
-        </View>
-        <View style={styles.dialogueRow}>
-          <View style={styles.dialogueAvatar}>
-            <OtterMascot size={30} variant="small" />
-          </View>
-          <View style={styles.dialogueBubble}>
-            <Text style={styles.dialogueText}>
-              {stickers.length === 0
-                ? "Nothing captured yet — tap the Scan tab to find your first word!"
-                : `You've collected ${stickers.length} sticker${stickers.length === 1 ? '' : 's'} so far`}
-              {favoriteCount > 0 ? `, ${favoriteCount} of them favorites` : ''}. Keep it up!
-            </Text>
-          </View>
-        </View>
-      </View>
+      {/* ── Mini sticker wall preview ── */}
+      <MiniStickerWall stickers={stickers} />
 
       {/* ── View mode pills ── */}
       <ScrollView
@@ -176,10 +169,18 @@ export default function CollectionScreen() {
         >
           <TouchableOpacity
             style={[styles.chip, styles.chipAlt]}
-            onPress={() => setSortOldestFirst(a => !a)}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              setSortMode(m => SORT_CYCLE[(SORT_CYCLE.indexOf(m) + 1) % SORT_CYCLE.length]);
+            }}
+            onLongPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              setSortMenuVisible(true);
+            }}
+            delayLongPress={350}
           >
             <ArrowUpDown size={11} color={colors.inkMid} />
-            <Text style={styles.chipText}>{sortOldestFirst ? 'Oldest first' : 'Newest first'}</Text>
+            <Text style={styles.chipText}>{SORT_LABELS[sortMode]}</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.chip, styles.chipAlt, favoritesOnly && styles.chipFavoriteActive]}
@@ -263,6 +264,35 @@ export default function CollectionScreen() {
         onDelete={() => { setSelectedSticker(null); fetchStickers(); }}
         onUpdate={patchSticker}
       />
+
+      <Modal
+        visible={sortMenuVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setSortMenuVisible(false)}
+      >
+        <Pressable style={styles.modalOverlay} onPress={() => setSortMenuVisible(false)}>
+          <Pressable style={styles.sortModalCard} onPress={() => {}}>
+            <Text style={styles.sortModalTitle}>Sort by</Text>
+            {SORT_CYCLE.map((mode, i) => (
+              <TouchableOpacity
+                key={mode}
+                style={[styles.sortOption, i === SORT_CYCLE.length - 1 && styles.sortOptionLast]}
+                onPress={() => {
+                  Haptics.selectionAsync();
+                  setSortMode(mode);
+                  setSortMenuVisible(false);
+                }}
+              >
+                <Text style={[styles.sortOptionText, sortMode === mode && styles.sortOptionTextActive]}>
+                  {SORT_LABELS[mode]}
+                </Text>
+                {sortMode === mode && <Check size={16} color={colors.terra} />}
+              </TouchableOpacity>
+            ))}
+          </Pressable>
+        </Pressable>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -278,7 +308,7 @@ function EmptyState({ title, subtitle }: { title: string; subtitle: string }) {
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: colors.sky },
+  safeArea: { flex: 1, backgroundColor: colors.sky, paddingBottom: TAB_BAR_CLEARANCE },
 
   header: {
     flexDirection: 'row',
@@ -311,45 +341,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     ...shadows.card,
   },
-
-  panel: {
-    marginHorizontal: spacing.md,
-    marginBottom: spacing.sm,
-    backgroundColor: colors.skyDeep,
-    borderRadius: radii.xl,
-    borderWidth: 1,
-    borderColor: colors.skyNight,
-    padding: spacing.md,
-    gap: spacing.sm + 4,
-  },
-  statCardsRow: { flexDirection: 'row', gap: spacing.sm },
-  statCard: {
-    flex: 1,
-    backgroundColor: colors.card,
-    borderRadius: radii.lg,
-    padding: spacing.sm + 4,
-    ...shadows.card,
-  },
-  statValue: { fontSize: 22, fontFamily: fonts.mono, fontWeight: '700', color: colors.inkDark },
-  statLabel: { fontSize: 10, fontWeight: '700', color: colors.inkFaint, marginTop: 2 },
-  dialogueRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm },
-  dialogueAvatar: {
-    width: 34,
-    height: 34,
-    borderRadius: radii.full,
-    backgroundColor: colors.card,
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
-  },
-  dialogueBubble: {
-    flex: 1,
-    backgroundColor: 'rgba(255,255,255,0.55)',
-    borderRadius: radii.lg,
-    borderTopLeftRadius: radii.xs,
-    padding: spacing.sm + 4,
-  },
-  dialogueText: { fontSize: 11, fontWeight: '500', color: colors.inkDark, lineHeight: 16 },
 
   pillScroll: { flexGrow: 0, flexShrink: 0, marginBottom: spacing.xs },
   pillContent: { paddingHorizontal: spacing.lg, paddingVertical: spacing.xs, gap: spacing.sm },
@@ -387,4 +378,31 @@ const styles = StyleSheet.create({
   },
   emptyTitle: { ...typography.h3, textAlign: 'center' },
   emptySubtitle: { ...typography.body, textAlign: 'center', color: colors.inkLight },
+
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.xl,
+  },
+  sortModalCard: {
+    alignSelf: 'stretch',
+    backgroundColor: colors.card,
+    borderRadius: radii.xl,
+    padding: spacing.lg,
+    ...shadows.card,
+  },
+  sortModalTitle: { fontSize: 16, fontFamily: fonts.cozy, color: colors.inkDark, marginBottom: spacing.sm },
+  sortOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.borderLight,
+  },
+  sortOptionLast: { borderBottomWidth: 0 },
+  sortOptionText: { fontSize: 15, fontWeight: '600', color: colors.inkMid },
+  sortOptionTextActive: { color: colors.terra },
 });

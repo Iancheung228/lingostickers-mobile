@@ -321,7 +321,12 @@ export default function StickerDetailView({ sticker, onClose, onDelete, onUpdate
   if (!sticker) return null;
 
   return (
-    <Modal visible animationType="slide" presentationStyle="fullScreen">
+    // "pageSheet" (iOS-only — this app is currently iOS-first, see skills.md
+    // #4) shows this as a card over the home screen instead of a fully
+    // opaque full-screen page, and gets the native swipe-down-to-dismiss
+    // gesture for free; onDismiss fires when that gesture completes so it
+    // stays in sync with tapping the X button.
+    <Modal visible animationType="slide" presentationStyle="pageSheet" onDismiss={onClose}>
       <SafeAreaView style={styles.container}>
         <View style={styles.header}>
           <TouchableOpacity onPress={onClose} style={styles.closeButton}>
@@ -544,7 +549,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm + 4,
+    paddingVertical: spacing.ms,
   },
   closeButton: {
     width: 38,
@@ -680,7 +685,7 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: spacing.xs,
     marginTop: spacing.md,
-    paddingTop: spacing.sm + 4,
+    paddingTop: spacing.ms,
     borderTopWidth: 1,
     borderTopColor: colors.borderLight,
   },
@@ -715,7 +720,7 @@ const styles = StyleSheet.create({
   sentenceBox: {
     backgroundColor: colors.cardAlt,
     borderRadius: radii.md,
-    padding: spacing.sm + 4,
+    padding: spacing.ms,
     gap: 6,
   },
   memorySentenceRow: {
@@ -732,13 +737,13 @@ const styles = StyleSheet.create({
   notesBox: {
     backgroundColor: colors.sageLight,
     borderRadius: radii.md,
-    padding: spacing.sm + 4,
+    padding: spacing.ms,
   },
   notesText: { fontSize: 12, fontFamily: fonts.mono, color: colors.inkMid, lineHeight: 18 },
   notesInput: {
     backgroundColor: colors.sky,
     borderRadius: radii.md,
-    padding: spacing.sm + 4,
+    padding: spacing.ms,
     fontSize: 12,
     fontFamily: fonts.mono,
     color: colors.inkMid,

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView, ActivityIndicator } from 'react-native';
 import { router, useLocalSearchParams, useFocusEffect } from 'expo-router';
-import { ArrowLeft, Plus } from 'lucide-react-native';
+import { ArrowLeft, LayoutGrid, Plus, Sparkles } from 'lucide-react-native';
 import { useAuth } from '@/hooks/useAuth';
 import { useProfile } from '@/hooks/useProfile';
 import { useBoardStickers } from '@/hooks/useBoards';
@@ -12,14 +12,11 @@ import StickerDetailView from '@/components/StickerDetailView';
 import StickerPickerModal from '@/components/StickerPickerModal';
 import { colors, shadows, radii, spacing, fonts } from '@/constants/theme';
 
-const TILE_WIDTH = 88;
-const TILE_HEIGHT = 100;
-
 export default function BoardScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { user } = useAuth();
   const { profile, refetch: refetchProfile } = useProfile(user?.id);
-  const { items, loading, addSticker, removeSticker, updatePosition, refetch: refetchItems } = useBoardStickers(id);
+  const { items, loading, addSticker, removeSticker, updatePosition, autoArrange, refetch: refetchItems } = useBoardStickers(id);
   const [board, setBoard] = useState<Board | null>(null);
   const [selectedSticker, setSelectedSticker] = useState<Sticker | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -52,23 +49,14 @@ export default function BoardScreen() {
     if (!user) return;
     const alreadyOnBoard = items.some(i => i.sticker_id === sticker.id);
     if (alreadyOnBoard) {
-      await removeSticker(sticker.id);
+      await removeSticker(sticker.id, canvasSize);
       return;
     }
-    const x = Math.max(0, (canvasSize.width - TILE_WIDTH) / 2 + (Math.random() * 60 - 30));
-    const y = Math.max(0, (canvasSize.height - TILE_HEIGHT) / 2 + (Math.random() * 60 - 30));
-    await addSticker(sticker.id, user.id, x, y);
+    await addSticker(sticker.id, user.id, canvasSize);
   };
 
-  const handleLongPressRemove = (item: BoardStickerWithSticker) => {
-    Alert.alert(
-      'Remove from board',
-      `Take "${item.sticker.word}" off this board? It stays in your collection.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Remove', style: 'destructive', onPress: () => removeSticker(item.sticker_id) },
-      ]
-    );
+  const handleRemove = (item: BoardStickerWithSticker) => {
+    removeSticker(item.sticker_id, canvasSize);
   };
 
   const patchSticker = useCallback((patchId: string, patch: Partial<Sticker>) => {
@@ -82,11 +70,28 @@ export default function BoardScreen() {
           <ArrowLeft size={18} color={colors.inkMid} />
         </TouchableOpacity>
         <Text style={styles.title} numberOfLines={1}>{board?.name ?? 'Board'}</Text>
-        <TouchableOpacity onPress={() => setPickerOpen(true)} style={styles.addBtn} hitSlop={8}>
-          <Plus size={18} color={colors.inkDark} />
-        </TouchableOpacity>
+        <View style={styles.headerActions}>
+          <TouchableOpacity
+            onPress={() => router.replace('/boards')}
+            style={styles.addBtn}
+            hitSlop={8}
+          >
+            <LayoutGrid size={16} color={colors.inkDark} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => autoArrange(canvasSize)}
+            disabled={items.length === 0}
+            style={[styles.addBtn, items.length === 0 && styles.addBtnDisabled]}
+            hitSlop={8}
+          >
+            <Sparkles size={16} color={colors.inkDark} />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => setPickerOpen(true)} style={styles.addBtn} hitSlop={8}>
+            <Plus size={18} color={colors.inkDark} />
+          </TouchableOpacity>
+        </View>
       </View>
-      <Text style={styles.hint}>Drag to arrange · hold to remove</Text>
+      <Text style={styles.hint}>Hold and drag to move · drop on the trash to remove</Text>
 
       <View
         style={styles.canvasWrap}
@@ -102,7 +107,9 @@ export default function BoardScreen() {
             canvasSize={canvasSize}
             onSelectSticker={setSelectedSticker}
             onMove={updatePosition}
-            onLongPressRemove={handleLongPressRemove}
+            onRemove={handleRemove}
+            backgroundPath={profile?.wall_background_path}
+            backgroundDim={profile?.wall_background_dim}
           />
         )}
         {!loading && items.length === 0 && (
@@ -138,7 +145,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: spacing.sm + 4,
+    gap: spacing.ms,
     paddingHorizontal: spacing.md,
     paddingTop: spacing.sm,
     paddingBottom: spacing.xs,
@@ -152,6 +159,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     ...shadows.card,
   },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   addBtn: {
     width: 36,
     height: 36,
@@ -161,6 +169,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     ...shadows.card,
   },
+  addBtnDisabled: { opacity: 0.4 },
   title: { flex: 1, fontSize: 15, fontFamily: fonts.cozy, color: colors.inkDark, textAlign: 'center' },
   hint: { fontSize: 10, color: colors.inkFaint, fontWeight: '600', textAlign: 'center', marginBottom: spacing.sm },
   canvasWrap: { flex: 1, marginHorizontal: spacing.md, marginBottom: spacing.md },

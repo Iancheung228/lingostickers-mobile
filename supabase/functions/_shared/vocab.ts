@@ -65,26 +65,65 @@ function cleanJsonResponse(text: string): string {
     .trim();
 }
 
-async function callGroq(apiKey: string, messages: unknown): Promise<string> {
-  const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-    method: 'POST',
-    headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model: 'qwen/qwen3.6-27b',
-      messages,
-      temperature: 0.1,
-      // This model reasons by default, prepending a <think>...</think> block
-      // to its response — 'none' + 'hidden' keep the content field pure JSON.
-      reasoning_effort: 'none',
-      reasoning_format: 'hidden',
-    }),
-  });
+// Groq's free-tier TPM budget is small enough that a single vision request
+// (base64 image(s) + prompt) can trip it on its own — this isn't a symptom
+// of stacked calls, just normal token pressure. The 429 body tells us
+// exactly how long to wait ("please try again in 7.95s"), so retry that
+// wait instead of failing the whole scan over a few-second token-bucket dip.
+const GROQ_MAX_RETRIES = 2;
+const GROQ_RETRY_CAP_MS = 15_000; // never wait longer than this per attempt, however long the API asks
 
-  if (!response.ok) throw new Error(`Groq API error: ${response.status} ${await response.text()}`);
-  const data = await response.json();
-  const text = data.choices?.[0]?.message?.content;
-  if (!text) throw new Error('Empty response from Groq');
-  return cleanJsonResponse(text);
+function parseRetryAfterMs(response: Response, bodyText: string): number {
+  const headerVal = response.headers.get('retry-after');
+  if (headerVal) {
+    const seconds = Number(headerVal);
+    if (!Number.isNaN(seconds)) return seconds * 1000;
+  }
+  const match = bodyText.match(/try again in ([\d.]+)s/i);
+  if (match) return parseFloat(match[1]) * 1000;
+  return 2000; // couldn't parse a wait time — small fallback delay before retrying
+}
+
+async function callGroq(apiKey: string, messages: unknown): Promise<string> {
+  for (let attempt = 0; attempt <= GROQ_MAX_RETRIES; attempt++) {
+    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'qwen/qwen3.6-27b',
+        messages,
+        temperature: 0.1,
+        // This model reasons by default, prepending a <think>...</think> block
+        // to its response — 'none' + 'hidden' keep the content field pure JSON.
+        reasoning_effort: 'none',
+        reasoning_format: 'hidden',
+      }),
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      const text = data.choices?.[0]?.message?.content;
+      if (!text) throw new Error('Empty response from Groq');
+      return cleanJsonResponse(text);
+    }
+
+    const bodyText = await response.text();
+
+    if (response.status === 429) {
+      if (attempt < GROQ_MAX_RETRIES) {
+        const waitMs = Math.min(parseRetryAfterMs(response, bodyText), GROQ_RETRY_CAP_MS);
+        await new Promise(resolve => setTimeout(resolve, waitMs));
+        continue;
+      }
+      throw new Error("We're being rate-limited right now — please wait a few seconds and try again.");
+    }
+
+    throw new Error(`Groq API error: ${response.status} ${bodyText}`);
+  }
+
+  // Unreachable — the loop always returns or throws — but keeps TypeScript
+  // happy about every code path returning a value.
+  throw new Error('Groq API error: exhausted retries');
 }
 
 // Vision: identify the main object in a photo and produce a vocab card in

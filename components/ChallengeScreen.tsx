@@ -4,7 +4,7 @@ import {
   SafeAreaView, Image, ActivityIndicator, Alert, KeyboardAvoidingView, Platform, ScrollView,
 } from 'react-native';
 import Animated, { useSharedValue, useAnimatedStyle, withSequence, withTiming } from 'react-native-reanimated';
-import { X } from 'lucide-react-native';
+import { BookOpen, MessageCircle, X } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { ChallengeWithSender, Language } from '@/lib/types';
 import { useChallenges } from '@/hooks/useChallenges';
@@ -127,13 +127,13 @@ export default function ChallengeScreen({ challenge, onClose, onWin }: Challenge
 
         {/* Definition */}
         <View style={styles.definitionBox}>
-          <Text style={styles.definitionLabel}>📖</Text>
+          <BookOpen size={16} color={colors.inkLight} style={styles.definitionLabel} />
           <Text style={styles.definitionText}>{challenge.snapshot_translation}</Text>
         </View>
 
         {/* Blanked sentence */}
         <View style={styles.sentenceBox}>
-          <Text style={styles.sentenceLabel}>💬</Text>
+          <MessageCircle size={16} color={colors.inkLight} style={styles.sentenceLabel} />
           <Text style={styles.sentenceText}>{blanked}</Text>
         </View>
 
@@ -217,7 +217,7 @@ const styles = StyleSheet.create({
     borderColor: colors.borderLight,
     gap: 8,
   },
-  definitionLabel: { fontSize: 16 },
+  definitionLabel: { marginTop: 2 },
   definitionText: { flex: 1, fontSize: 14, color: colors.inkDark, lineHeight: 20 },
   sentenceBox: {
     flexDirection: 'row',
@@ -231,7 +231,7 @@ const styles = StyleSheet.create({
     borderColor: colors.borderLight,
     gap: 8,
   },
-  sentenceLabel: { fontSize: 16 },
+  sentenceLabel: { marginTop: 2 },
   sentenceText: { flex: 1, fontSize: 14, color: colors.inkMid, lineHeight: 20, fontStyle: 'italic' },
   letterCountHint: { textAlign: 'center', fontSize: 13, color: colors.inkFaint, marginBottom: 6 },
   firstLetterHint: { textAlign: 'center', fontSize: 14, color: colors.inkMid, marginBottom: 8 },

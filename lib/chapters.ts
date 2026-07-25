@@ -131,3 +131,45 @@ export function buildChapters(stickers: Sticker[]): Chapter[] {
 
   return chapters.reverse();
 }
+
+const MONTH_YEAR = new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric' });
+
+// Local-time year-month key — mirrors the Calendar tab's own dateKey()
+// grouping so a sticker lands in the same month bucket in both places.
+function monthKey(iso: string): string {
+  const d = new Date(iso);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+/**
+ * Groups stickers into one chapter per calendar month they were discovered
+ * in (device-local time), newest month first — used by the Wall tab so its
+ * chapter carousel lines up with the Calendar tab's month pages.
+ */
+export function buildMonthlyChapters(stickers: Sticker[]): Chapter[] {
+  if (stickers.length === 0) return [];
+
+  const groups = new Map<string, Sticker[]>();
+  for (const sticker of stickers) {
+    const key = monthKey(sticker.discovered_at);
+    const list = groups.get(key) ?? [];
+    list.push(sticker);
+    groups.set(key, list);
+  }
+
+  const chapters: Chapter[] = Array.from(groups.entries()).map(([key, group]) => {
+    const newestFirst = [...group].sort(
+      (a, b) => new Date(b.discovered_at).getTime() - new Date(a.discovered_at).getTime()
+    );
+    const coverSticker = newestFirst[0];
+    const [year, month] = key.split('-').map(Number);
+    const title = MONTH_YEAR.format(new Date(year, month - 1, 1));
+    const subtitle = `${group.length} sticker${group.length === 1 ? '' : 's'}`;
+
+    return { key, title, subtitle, stickers: newestFirst, coverSticker };
+  });
+
+  // key is zero-padded "YYYY-MM", so a plain string compare sorts
+  // chronologically — reverse it for newest-first.
+  return chapters.sort((a, b) => (a.key < b.key ? 1 : -1));
+}

@@ -3,7 +3,7 @@ import { Modal, View, Text, TouchableOpacity, StyleSheet, SafeAreaView, Image } 
 import Animated, {
   useSharedValue, useAnimatedStyle, withSequence, withTiming, withDelay, interpolate, Easing,
 } from 'react-native-reanimated';
-import { RotateCw } from 'lucide-react-native';
+import { MessageCircle, PartyPopper, RotateCw } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { ChallengeWithSender, Sticker } from '@/lib/types';
 import { supabase } from '@/lib/supabase';
@@ -95,7 +95,7 @@ export default function ChallengeSuccess({ challenge, wonStickerId, onClose }: C
     <Modal visible={!!challenge} animationType="fade" transparent>
       <View style={styles.overlay}>
         <SafeAreaView style={styles.sheet}>
-          <Text style={styles.emoji}>🎉</Text>
+          <PartyPopper size={36} color={colors.sage} style={styles.emoji} />
           <Text style={styles.title}>You got it!</Text>
           <Text style={styles.subtitle}>
             Added to your collection
@@ -136,7 +136,10 @@ export default function ChallengeSuccess({ challenge, wonStickerId, onClose }: C
           <Text style={styles.translation}>{challenge.snapshot_translation}</Text>
 
           <View style={styles.replyPrompt}>
-            <Text style={styles.replyLabel}>💬 Use it in a sentence en français!</Text>
+            <View style={styles.replyLabelRow}>
+              <MessageCircle size={14} color={colors.inkDark} />
+              <Text style={styles.replyLabel}>Use it in a sentence en français!</Text>
+            </View>
             <Text style={styles.replyHint}>{challenge.snapshot_sentence}</Text>
           </View>
 
@@ -163,7 +166,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingBottom: 40,
   },
-  emoji: { fontSize: 40, marginBottom: 8 },
+  emoji: { marginBottom: 8 },
   title: { fontSize: 26, fontWeight: '800', color: colors.inkDark, marginBottom: 4 },
   subtitle: { fontSize: 14, color: colors.inkFaint, marginBottom: 20 },
   stickerWrap: { marginBottom: 8 },
@@ -194,7 +197,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.borderLight,
   },
-  replyLabel: { fontSize: 13, fontWeight: '700', color: colors.inkDark, marginBottom: 6 },
+  replyLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 },
+  replyLabel: { fontSize: 13, fontWeight: '700', color: colors.inkDark },
   replyHint: { fontSize: 13, color: colors.inkMid, fontStyle: 'italic', lineHeight: 18 },
   doneButton: {
     backgroundColor: colors.terra,

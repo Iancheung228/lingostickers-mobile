@@ -5,8 +5,7 @@ import {
 } from 'react-native';
 import { Link } from 'expo-router';
 import { useAuth } from '@/hooks/useAuth';
-import CozyBackground from '@/components/CozyBackground';
-import OtterMascot from '@/components/illustrations/OtterMascot';
+import AuthIntro from '@/components/AuthIntro';
 import { colors, typography, shadows, radii, spacing, fonts } from '@/constants/theme';
 
 export default function SignInScreen() {
@@ -45,7 +44,7 @@ export default function SignInScreen() {
   };
 
   return (
-    <CozyBackground variant="full">
+    <AuthIntro>
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -57,7 +56,7 @@ export default function SignInScreen() {
         >
           {/* Hero */}
           <View style={styles.hero}>
-            <OtterMascot size={160} variant="sleeping" />
+            <Text style={styles.eyebrow}>WELCOME BACK</Text>
             <Text style={styles.title}>Lingo</Text>
             <Text style={styles.tagline}>Learn words from the world around you.</Text>
           </View>
@@ -133,12 +132,12 @@ export default function SignInScreen() {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
-    </CozyBackground>
+    </AuthIntro>
   );
 }
 
 const styles = StyleSheet.create({
-  flex: { flex: 1 },
+  flex: { flex: 1, backgroundColor: colors.sky },
   scroll: {
     flexGrow: 1,
     justifyContent: 'flex-end',
@@ -148,13 +147,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingTop: spacing.xxl + spacing.md,
     paddingBottom: spacing.lg,
-    gap: spacing.sm,
+    gap: 6,
+  },
+  eyebrow: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.inkFaint,
+    letterSpacing: 2,
+    textTransform: 'uppercase',
   },
   title: {
-    fontSize: 52,
+    fontSize: 44,
     fontFamily: fonts.cozy,
     color: colors.inkDark,
-    letterSpacing: -1.5,
+    letterSpacing: -1,
   },
   tagline: {
     ...typography.body,
@@ -165,9 +171,10 @@ const styles = StyleSheet.create({
   card: {
     marginHorizontal: spacing.lg,
     backgroundColor: colors.card,
-    borderRadius: radii.xl,
+    borderRadius: radii.lg,
     padding: spacing.lg,
-    ...shadows.card,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   input: {
     backgroundColor: colors.sky,
@@ -176,7 +183,7 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     fontSize: 15,
     color: colors.inkDark,
-    marginBottom: spacing.sm + 4,
+    marginBottom: spacing.ms,
     borderWidth: 1.5,
     borderColor: colors.border,
   },

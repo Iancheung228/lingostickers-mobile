@@ -1,24 +1,22 @@
 import { useCallback, useMemo, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView, ActivityIndicator } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
+import { Sticker as StickerIcon } from 'lucide-react-native';
 import { useAuth } from '@/hooks/useAuth';
 import { useProfile } from '@/hooks/useProfile';
 import { useBoards } from '@/hooks/useBoards';
 import { supabase } from '@/lib/supabase';
-import { Board, Sticker } from '@/lib/types';
-import { buildChapters } from '@/lib/chapters';
+import { Sticker } from '@/lib/types';
+import { buildMonthlyChapters } from '@/lib/chapters';
 import StickerBoard from '@/components/StickerBoard';
 import StickerDetailView from '@/components/StickerDetailView';
-import BoardsList from '@/components/BoardsList';
 import { colors, shadows, radii, spacing, fonts } from '@/constants/theme';
-
-type ViewMode = 'chapters' | 'boards';
+import { TAB_BAR_CLEARANCE } from '@/constants/tabBar';
 
 export default function WallScreen() {
   const { user } = useAuth();
   const { profile, refetch: refetchProfile } = useProfile(user?.id);
-  const { boards, loading: boardsLoading, createBoard, deleteBoard } = useBoards(user?.id);
-  const [viewMode, setViewMode] = useState<ViewMode>('chapters');
+  const { boards } = useBoards(user?.id);
   const [stickers, setStickers] = useState<Sticker[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedSticker, setSelectedSticker] = useState<Sticker | null>(null);
@@ -41,50 +39,49 @@ export default function WallScreen() {
     setSelectedSticker(prev => prev && prev.id === id ? { ...prev, ...patch } : prev);
   }, []);
 
-  const chapters = useMemo(() => buildChapters(stickers), [stickers]);
+  const chapters = useMemo(() => buildMonthlyChapters(stickers), [stickers]);
+
+  // boards is fetched newest-created-first, so [0] is the most recent board —
+  // jumping straight to its canvas instead of an intermediate list is the
+  // point of this tab; "Boards" screen (for switching/creating) is still one
+  // tap away via the button on that canvas screen.
+  const openBoards = () => {
+    if (boards.length > 0) {
+      router.push(`/board/${boards[0].id}`);
+    } else {
+      router.push('/boards');
+    }
+  };
 
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>📌 Cozy Sticker Wall</Text>
-        <Text style={styles.subtitle}>
-          {viewMode === 'chapters' ? 'Swipe between your story chapters' : 'Your custom boards'}
-        </Text>
+        <View style={styles.titleRow}>
+          <StickerIcon size={13} color={colors.inkDark} />
+          <Text style={styles.title}>Cozy Sticker Wall</Text>
+        </View>
+        <Text style={styles.subtitle}>Swipe through your months</Text>
       </View>
 
       <View style={styles.tabs}>
-        <TouchableOpacity
-          style={[styles.tab, viewMode === 'chapters' && styles.tabActive]}
-          onPress={() => setViewMode('chapters')}
-        >
-          <Text style={[styles.tabText, viewMode === 'chapters' && styles.tabTextActive]}>Chapters</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.tab, viewMode === 'boards' && styles.tabActive]}
-          onPress={() => setViewMode('boards')}
-        >
-          <Text style={[styles.tabText, viewMode === 'boards' && styles.tabTextActive]}>My Boards</Text>
+        <View style={[styles.tab, styles.tabActive]}>
+          <Text style={[styles.tabText, styles.tabTextActive]}>Months</Text>
+        </View>
+        <TouchableOpacity style={styles.tab} onPress={openBoards}>
+          <Text style={styles.tabText}>My Boards</Text>
         </TouchableOpacity>
       </View>
 
-      {viewMode === 'chapters' ? (
-        loading ? (
-          <ActivityIndicator style={styles.loader} color={colors.terra} size="large" />
-        ) : (
-          <StickerBoard
-            chapters={chapters}
-            onSelectSticker={setSelectedSticker}
-            displayStyle={profile?.wall_display_style}
-            borderStyle={profile?.cutout_border_style}
-          />
-        )
+      {loading ? (
+        <ActivityIndicator style={styles.loader} color={colors.terra} size="large" />
       ) : (
-        <BoardsList
-          boards={boards}
-          loading={boardsLoading}
-          onCreateBoard={createBoard}
-          onDeleteBoard={deleteBoard}
-          onOpenBoard={(board: Board) => router.push(`/board/${board.id}`)}
+        <StickerBoard
+          chapters={chapters}
+          onSelectSticker={setSelectedSticker}
+          displayStyle={profile?.wall_display_style}
+          borderStyle={profile?.cutout_border_style}
+          backgroundPath={profile?.wall_background_path}
+          backgroundDim={profile?.wall_background_dim}
         />
       )}
 
@@ -99,13 +96,14 @@ export default function WallScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.sky },
+  container: { flex: 1, backgroundColor: colors.sky, paddingBottom: TAB_BAR_CLEARANCE },
   header: {
     alignItems: 'center',
     paddingHorizontal: spacing.md,
     paddingTop: spacing.sm,
     paddingBottom: spacing.md,
   },
+  titleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   title: { fontSize: 15, fontFamily: fonts.cozy, color: colors.inkDark },
   subtitle: { fontSize: 10, color: colors.inkFaint, fontWeight: '600', marginTop: 1 },
   loader: { flex: 1 },

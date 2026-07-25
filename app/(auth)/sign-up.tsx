@@ -6,8 +6,7 @@ import {
 import { Link, useRouter } from 'expo-router';
 import { useAuth } from '@/hooks/useAuth';
 import { useUsernameAvailability } from '@/hooks/useUsernameAvailability';
-import CozyBackground from '@/components/CozyBackground';
-import OtterMascot from '@/components/illustrations/OtterMascot';
+import AuthIntro from '@/components/AuthIntro';
 import { colors, typography, shadows, radii, spacing, fonts } from '@/constants/theme';
 
 function friendlySignUpError(message: string): string {
@@ -54,7 +53,7 @@ export default function SignUpScreen() {
   };
 
   return (
-    <CozyBackground variant="full">
+    <AuthIntro>
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -65,8 +64,8 @@ export default function SignUpScreen() {
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.hero}>
-            <OtterMascot size={120} variant="sleeping" />
-            <Text style={styles.title}>Join Lingo</Text>
+            <Text style={styles.eyebrow}>CREATE ACCOUNT</Text>
+            <Text style={styles.title}>Lingo</Text>
             <Text style={styles.tagline}>Create your collection</Text>
           </View>
 
@@ -147,12 +146,12 @@ export default function SignUpScreen() {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
-    </CozyBackground>
+    </AuthIntro>
   );
 }
 
 const styles = StyleSheet.create({
-  flex: { flex: 1 },
+  flex: { flex: 1, backgroundColor: colors.sky },
   scroll: {
     flexGrow: 1,
     justifyContent: 'flex-end',
@@ -160,12 +159,19 @@ const styles = StyleSheet.create({
   },
   hero: {
     alignItems: 'center',
-    paddingTop: spacing.xxl,
+    paddingTop: spacing.xxl + spacing.md,
     paddingBottom: spacing.lg,
-    gap: spacing.sm,
+    gap: 6,
+  },
+  eyebrow: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.inkFaint,
+    letterSpacing: 2,
+    textTransform: 'uppercase',
   },
   title: {
-    fontSize: 42,
+    fontSize: 40,
     fontFamily: fonts.cozy,
     color: colors.inkDark,
     letterSpacing: -1,
@@ -178,9 +184,10 @@ const styles = StyleSheet.create({
   card: {
     marginHorizontal: spacing.lg,
     backgroundColor: colors.card,
-    borderRadius: radii.xl,
+    borderRadius: radii.lg,
     padding: spacing.lg,
-    ...shadows.card,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   input: {
     backgroundColor: colors.sky,
@@ -189,7 +196,7 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     fontSize: 15,
     color: colors.inkDark,
-    marginBottom: spacing.sm + 4,
+    marginBottom: spacing.ms,
     borderWidth: 1.5,
     borderColor: colors.border,
   },

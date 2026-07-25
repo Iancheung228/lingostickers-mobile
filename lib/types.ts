@@ -2,6 +2,7 @@ export type Language = 'fr' | 'ja' | 'yue';
 
 export type WallDisplayStyle = 'framed' | 'cutout';
 export type CutoutBorderStyle = 'shadow' | 'outline' | 'none';
+export type WallBackgroundDim = 'light' | 'medium' | 'dark';
 
 export interface Profile {
   id: string;
@@ -9,6 +10,8 @@ export interface Profile {
   target_language: Language;
   wall_display_style: WallDisplayStyle;
   cutout_border_style: CutoutBorderStyle;
+  wall_background_path: string | null;
+  wall_background_dim: WallBackgroundDim;
   created_at: string;
 }
 
@@ -34,6 +37,10 @@ export interface Sticker {
   voice_note_start_ms: number | null;
   voice_note_end_ms: number | null;
   discovered_at: string;
+  // Row-insertion time — "when it landed in your collection", distinct from
+  // discovered_at ("when the memory happened", which can be backdated on
+  // photo import). Used only for the "Recently added" sort.
+  created_at: string;
   latitude: number | null;
   longitude: number | null;
   location_label: string | null;

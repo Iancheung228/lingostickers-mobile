@@ -13,6 +13,7 @@ import { ImagePlus, Zap } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useAuth } from '@/hooks/useAuth';
 import { colors, shadows, radii, spacing } from '@/constants/theme';
+import { TAB_BAR_CLEARANCE } from '@/constants/tabBar';
 import { useProfile } from '@/hooks/useProfile';
 import { supabase } from '@/lib/supabase';
 import { StickerDraft } from '@/lib/types';
@@ -444,7 +445,7 @@ const FRAME_RADIUS = 28;
 const FRAME_MARGIN = 16;
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.sky },
+  container: { flex: 1, backgroundColor: colors.sky, paddingBottom: TAB_BAR_CLEARANCE },
 
   header: {
     alignItems: 'center',
@@ -548,6 +549,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: spacing.xl,
+    paddingBottom: TAB_BAR_CLEARANCE,
   },
   permissionTitle: {
     fontSize: 22,

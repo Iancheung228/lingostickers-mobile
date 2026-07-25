@@ -5,7 +5,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { useFonts } from 'expo-font';
 import { Quicksand_600SemiBold, Quicksand_700Bold } from '@expo-google-fonts/quicksand';
 import { KosugiMaru_400Regular } from '@expo-google-fonts/kosugi-maru';
-import { JetBrainsMono_500Medium } from '@expo-google-fonts/jetbrains-mono';
+import { JetBrainsMono_500Medium, JetBrainsMono_700Bold } from '@expo-google-fonts/jetbrains-mono';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import * as Notifications from 'expo-notifications';
 import { useAuth, AuthProvider } from '@/hooks/useAuth';
@@ -27,6 +27,7 @@ function RootLayout() {
     Quicksand_700Bold,
     KosugiMaru_400Regular,
     JetBrainsMono_500Medium,
+    JetBrainsMono_700Bold,
   });
 
   useEffect(() => {
@@ -63,7 +64,7 @@ function RootLayout() {
     // "open board" flow). Without this, the generic "session -> tabs"
     // redirect below fires on every one of these and instantly bounces the
     // user back to the collection tab.
-    const inStandaloneAuthenticatedRoute = ['profile', 'board', 'day'].includes(segments[0] as string);
+    const inStandaloneAuthenticatedRoute = ['profile', 'board', 'boards', 'day'].includes(segments[0] as string);
     const onResetPasswordScreen = (segments as string[])[1] === 'reset-password';
 
     // A recovery session looks identical to a normal sign-in session, so it

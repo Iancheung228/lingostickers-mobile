@@ -18,6 +18,7 @@ import SendChallengeModal from '@/components/SendChallengeModal';
 import { ChallengeWithSender, ChallengeWithReceiver, FriendWithProfile, Sticker } from '@/lib/types';
 import OtterMascot from '@/components/illustrations/OtterMascot';
 import { colors, shadows, radii, spacing, typography, fonts } from '@/constants/theme';
+import { TAB_BAR_CLEARANCE } from '@/constants/tabBar';
 
 export default function FriendsScreen() {
   const { user } = useAuth();
@@ -205,7 +206,7 @@ export default function FriendsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.sky },
+  container: { flex: 1, backgroundColor: colors.sky, paddingBottom: TAB_BAR_CLEARANCE },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -248,7 +249,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: colors.card,
     borderRadius: radii.md,
-    padding: spacing.sm + 4,
+    padding: spacing.ms,
     marginBottom: spacing.sm,
     borderWidth: 1.5,
     borderColor: colors.borderLight,
@@ -271,7 +272,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: colors.card,
     borderRadius: radii.md,
-    padding: spacing.sm + 4,
+    padding: spacing.ms,
     marginHorizontal: spacing.md,
     marginBottom: spacing.sm,
     borderWidth: 1.5,
@@ -281,14 +282,14 @@ const styles = StyleSheet.create({
   acceptBtn: {
     backgroundColor: colors.sage,
     borderRadius: radii.sm,
-    paddingHorizontal: spacing.sm + 4,
+    paddingHorizontal: spacing.ms,
     paddingVertical: 6,
   },
   acceptText: { color: colors.card, fontWeight: '700', fontSize: 13 },
   declineBtn: {
     backgroundColor: colors.errorLight,
     borderRadius: radii.sm,
-    paddingHorizontal: spacing.sm + 4,
+    paddingHorizontal: spacing.ms,
     paddingVertical: 6,
   },
   declineText: { color: colors.error, fontWeight: '700', fontSize: 13 },
@@ -303,7 +304,7 @@ const styles = StyleSheet.create({
   },
   feedItem: {
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm + 4,
+    paddingVertical: spacing.ms,
     backgroundColor: colors.card,
     marginHorizontal: spacing.md,
     marginBottom: spacing.sm,

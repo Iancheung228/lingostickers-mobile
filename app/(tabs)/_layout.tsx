@@ -1,38 +1,36 @@
 import { View, Text, StyleSheet } from 'react-native';
 import { Tabs } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BookOpen, Calendar, Camera, Sticker as StickerIcon, Users } from 'lucide-react-native';
+import type { LucideIcon } from 'lucide-react-native';
 import { useChallenges } from '@/hooks/useChallenges';
 import { useFriends } from '@/hooks/useFriends';
 import { colors, shadows, radii } from '@/constants/theme';
+import { TAB_BAR_HEIGHT, TAB_BAR_SIDE_MARGIN, TAB_BAR_BOTTOM_MARGIN } from '@/constants/tabBar';
 
-function Badge({ count }: { count: number }) {
-  if (count === 0) return null;
+// Every tab gets the same treatment: a dark, legible icon by default, and a
+// soft rounded "area effect" behind it when active — no separate outlier
+// styling per tab, so the pill reads as one clean, consistent object.
+function TabIcon({ Icon, focused, badgeCount }: { Icon: LucideIcon; focused: boolean; badgeCount?: number }) {
   return (
-    <View style={badge.dot}>
-      <Text style={badge.text}>{count > 9 ? '9+' : String(count)}</Text>
+    <View style={[styles.iconWrap, focused && styles.iconWrapActive]}>
+      <Icon size={20} color={focused ? colors.sageDark : colors.inkMid} />
+      {!!badgeCount && <Badge count={badgeCount} />}
     </View>
   );
 }
 
-const badge = StyleSheet.create({
-  dot: {
-    position: 'absolute',
-    top: -5,
-    right: -9,
-    backgroundColor: colors.error,
-    borderRadius: radii.full,
-    minWidth: 17,
-    height: 17,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 3,
-    borderWidth: 1.5,
-    borderColor: colors.card,
-  },
-  text: { color: colors.card, fontSize: 10, fontWeight: '800' },
-});
+function Badge({ count }: { count: number }) {
+  if (count === 0) return null;
+  return (
+    <View style={styles.badgeDot}>
+      <Text style={styles.badgeText}>{count > 9 ? '9+' : String(count)}</Text>
+    </View>
+  );
+}
 
 export default function TabLayout() {
+  const insets = useSafeAreaInsets();
   const { pendingCount } = useChallenges();
   const { friends } = useFriends();
   const pendingRequestCount = friends.filter(f => f.status === 'pending' && !f.is_requester).length;
@@ -41,21 +39,20 @@ export default function TabLayout() {
     <Tabs
       screenOptions={{
         headerShown: false,
+        tabBarShowLabel: false,
         tabBarStyle: {
+          position: 'absolute',
+          left: TAB_BAR_SIDE_MARGIN,
+          right: TAB_BAR_SIDE_MARGIN,
+          bottom: insets.bottom + TAB_BAR_BOTTOM_MARGIN,
+          height: TAB_BAR_HEIGHT,
+          borderRadius: radii.full,
+          borderTopWidth: 0,
           backgroundColor: colors.card,
-          borderTopColor: colors.borderLight,
-          borderTopWidth: 1,
-          height: 82,
-          paddingBottom: 18,
-          paddingTop: 10,
           ...shadows.tab,
         },
-        tabBarActiveTintColor: colors.terra,
-        tabBarInactiveTintColor: colors.inkFaint,
-        tabBarLabelStyle: {
-          fontSize: 11,
-          fontWeight: '700',
-          marginTop: 2,
+        tabBarItemStyle: {
+          height: TAB_BAR_HEIGHT,
         },
       }}
     >
@@ -63,44 +60,36 @@ export default function TabLayout() {
         name="collection"
         options={{
           title: 'Collection',
-          tabBarIcon: ({ color, size }) => <BookOpen size={size} color={color} />,
+          tabBarIcon: ({ focused }) => <TabIcon Icon={BookOpen} focused={focused} />,
         }}
       />
       <Tabs.Screen
         name="calendar"
         options={{
           title: 'Calendar',
-          tabBarIcon: ({ color, size }) => <Calendar size={size} color={color} />,
+          tabBarIcon: ({ focused }) => <TabIcon Icon={Calendar} focused={focused} />,
         }}
       />
       <Tabs.Screen
         name="scan"
         options={{
           title: 'Scan',
-          tabBarIcon: ({ color, focused }) => (
-            <View style={[tabIcon.scanWrap, focused && tabIcon.scanWrapActive]}>
-              <Camera size={24} color={focused ? colors.card : colors.inkMid} />
-            </View>
-          ),
-          tabBarLabel: () => null,
+          tabBarIcon: ({ focused }) => <TabIcon Icon={Camera} focused={focused} />,
         }}
       />
       <Tabs.Screen
         name="wall"
         options={{
           title: 'Wall',
-          tabBarIcon: ({ color, size }) => <StickerIcon size={size} color={color} />,
+          tabBarIcon: ({ focused }) => <TabIcon Icon={StickerIcon} focused={focused} />,
         }}
       />
       <Tabs.Screen
         name="friends"
         options={{
           title: 'Friends',
-          tabBarIcon: ({ color, size }) => (
-            <View>
-              <Users size={size} color={color} />
-              <Badge count={pendingCount + pendingRequestCount} />
-            </View>
+          tabBarIcon: ({ focused }) => (
+            <TabIcon Icon={Users} focused={focused} badgeCount={pendingCount + pendingRequestCount} />
           ),
         }}
       />
@@ -108,18 +97,30 @@ export default function TabLayout() {
   );
 }
 
-const tabIcon = StyleSheet.create({
-  scanWrap: {
-    width: 52,
-    height: 52,
+const styles = StyleSheet.create({
+  iconWrap: {
+    width: 40,
+    height: 40,
     borderRadius: radii.full,
-    backgroundColor: colors.inkFaint,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: -18,
-    ...shadows.button,
   },
-  scanWrapActive: {
-    backgroundColor: colors.terra,
+  iconWrapActive: {
+    backgroundColor: colors.sageLight,
   },
+  badgeDot: {
+    position: 'absolute',
+    top: 2,
+    right: 2,
+    backgroundColor: colors.error,
+    borderRadius: radii.full,
+    minWidth: 16,
+    height: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 3,
+    borderWidth: 1.5,
+    borderColor: colors.card,
+  },
+  badgeText: { color: colors.card, fontSize: 9, fontWeight: '800' },
 });

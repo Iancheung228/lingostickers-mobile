@@ -1,41 +1,81 @@
-import { useCallback, useMemo, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView, ScrollView, ActivityIndicator, useWindowDimensions } from 'react-native';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView, Image, ActivityIndicator, useWindowDimensions } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
-import { ChevronLeft, ChevronRight } from 'lucide-react-native';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import Animated, { useSharedValue, useAnimatedStyle, withTiming, withSpring, Easing, runOnJS } from 'react-native-reanimated';
+import { Settings } from 'lucide-react-native';
+import * as Haptics from 'expo-haptics';
 import { useAuth } from '@/hooks/useAuth';
-import { useProfile } from '@/hooks/useProfile';
 import { supabase } from '@/lib/supabase';
 import { Sticker } from '@/lib/types';
-import DayStack from '@/components/DayStack';
-import { colors, shadows, radii, spacing, fonts } from '@/constants/theme';
+import { colors, spacing, fonts } from '@/constants/theme';
+import { TAB_BAR_CLEARANCE } from '@/constants/tabBar';
 
-const WEEKDAY_LABELS = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'];
-const MONTH_YEAR_FORMAT = new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric' });
-const DAY_LABEL_FORMAT = new Intl.DateTimeFormat('en-US', { weekday: 'short' });
+// Sunday-start week, matching the minimal-journal reference layout (the
+// rest of the app doesn't otherwise commit to a week-start convention).
+const WEEKDAY_LABELS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
+const MONTH_FORMAT = new Intl.DateTimeFormat('en-US', { month: 'long' });
 
 // Local-time date key (not UTC) so a sticker captured at 11pm doesn't get
-// bucketed into the next day — mirrors the same simplification lib/chapters.ts
-// already makes for date-range formatting.
+// bucketed into the next day.
 function dateKey(iso: string): string {
   const d = new Date(iso);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
+type MonthCell = { day: number; key: string } | null;
+
+// Always padded to exactly 6 rows (42 cells) so neighboring months in the
+// swipe carousel never cause a layout jump mid-drag.
+function buildMonthRows(monthDate: Date): MonthCell[][] {
+  const year = monthDate.getFullYear();
+  const month = monthDate.getMonth();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const firstWeekday = new Date(year, month, 1).getDay(); // 0=Sun
+  const cells: MonthCell[] = [];
+  for (let i = 0; i < firstWeekday; i++) cells.push(null);
+  for (let day = 1; day <= daysInMonth; day++) {
+    cells.push({ day, key: `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}` });
+  }
+  while (cells.length < 42) cells.push(null);
+  const rows: MonthCell[][] = [];
+  for (let i = 0; i < cells.length; i += 7) rows.push(cells.slice(i, i + 7));
+  return rows;
+}
+
+function useSignedUrl(path: string | undefined) {
+  const [url, setUrl] = useState<string | null>(null);
+  useEffect(() => {
+    if (!path) return;
+    supabase.storage.from('sticker-images').createSignedUrl(path, 3600)
+      .then(({ data }) => { if (data) setUrl(data.signedUrl); });
+  }, [path]);
+  return url;
+}
+
+// Replaces the date number entirely on days with a capture — mirrors the
+// reference's "icon instead of numeral" treatment, using the day's own
+// sticker photo rather than a fixed illustration set.
+function DayIcon({ sticker, size }: { sticker: Sticker; size: number }) {
+  const url = useSignedUrl(sticker.image_path);
+  return (
+    <View style={[styles.dayIcon, { width: size, height: size }]}>
+      {url ? (
+        <Image source={{ uri: url }} style={styles.dayIconImage} resizeMode="contain" />
+      ) : (
+        <ActivityIndicator size="small" color={colors.rust} />
+      )}
+    </View>
+  );
+}
+
 export default function CalendarScreen() {
   const { user } = useAuth();
-  const { profile, refetch: refetchProfile } = useProfile(user?.id);
   const [stickers, setStickers] = useState<Sticker[]>([]);
-  const [loading, setLoading] = useState(true);
   const [viewedMonth, setViewedMonth] = useState(() => new Date());
 
-  // Sticker-graphic size hint only — the cell box itself is sized by CSS
-  // (percentage width + aspectRatio, same as the weekday header row) so it
-  // can never drift out of sync with the header and wrap early. A JS-computed
-  // pixel width applied per-cell previously caused exactly that: rounding
-  // pushed 7 cells just past the row's real width, so flexWrap silently
-  // dropped the 7th cell (Sunday) to the next line every week.
   const { width: screenWidth } = useWindowDimensions();
-  const monthStackSize = (screenWidth - spacing.md * 4) / 7 - 8;
+  const pageWidth = screenWidth - spacing.lg * 2;
 
   const fetchStickers = useCallback(async () => {
     if (!user) return;
@@ -45,10 +85,9 @@ export default function CalendarScreen() {
       .eq('user_id', user.id)
       .order('discovered_at', { ascending: false });
     if (!error && data) setStickers(data as Sticker[]);
-    setLoading(false);
   }, [user]);
 
-  useFocusEffect(useCallback(() => { fetchStickers(); refetchProfile(); }, [fetchStickers, refetchProfile]));
+  useFocusEffect(useCallback(() => { fetchStickers(); }, [fetchStickers]));
 
   const stickersByDate = useMemo(() => {
     const map = new Map<string, Sticker[]>();
@@ -64,211 +103,175 @@ export default function CalendarScreen() {
   const today = useMemo(() => new Date(), []);
   const todayKey = dateKey(today.toISOString());
 
-  // Rolling 7-day strip ending today.
-  const weekDays = useMemo(() => {
-    const days: Date[] = [];
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date(today);
-      d.setDate(d.getDate() - i);
-      days.push(d);
-    }
-    return days;
-  }, [today]);
+  const prevMonth = useMemo(() => new Date(viewedMonth.getFullYear(), viewedMonth.getMonth() - 1, 1), [viewedMonth]);
+  const nextMonth = useMemo(() => new Date(viewedMonth.getFullYear(), viewedMonth.getMonth() + 1, 1), [viewedMonth]);
+  const prevRows = useMemo(() => buildMonthRows(prevMonth), [prevMonth]);
+  const currentRows = useMemo(() => buildMonthRows(viewedMonth), [viewedMonth]);
+  const nextRows = useMemo(() => buildMonthRows(nextMonth), [nextMonth]);
 
-  // Viewed month's grid, Monday-start — browsable via prev/next, independent
-  // of "today" (which only matters for highlighting the current day).
-  const monthCells = useMemo(() => {
-    const year = viewedMonth.getFullYear();
-    const month = viewedMonth.getMonth();
-    const daysInMonth = new Date(year, month + 1, 0).getDate();
-    const firstWeekday = (new Date(year, month, 1).getDay() + 6) % 7; // 0=Mon
-    const cells: Array<{ day: number; key: string } | null> = [];
-    for (let i = 0; i < firstWeekday; i++) cells.push(null);
-    for (let day = 1; day <= daysInMonth; day++) {
-      cells.push({ day, key: `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}` });
-    }
-    return cells;
-  }, [viewedMonth]);
+  const dragX = useSharedValue(0);
+  const isTransitioning = useSharedValue(false);
+  const hasTriggeredThresholdHaptic = useSharedValue(false);
 
-  const capturedInViewedMonth = useMemo(() => {
-    const year = viewedMonth.getFullYear();
-    const month = viewedMonth.getMonth();
-    const prefix = `${year}-${String(month + 1).padStart(2, '0')}`;
-    return stickers.filter(s => dateKey(s.discovered_at).startsWith(prefix)).length;
-  }, [stickers, viewedMonth]);
+  const commitSwipe = useCallback((direction: 1 | -1) => {
+    setViewedMonth(m => new Date(m.getFullYear(), m.getMonth() + direction, 1));
+  }, []);
 
-  const isCurrentMonth = viewedMonth.getFullYear() === today.getFullYear() && viewedMonth.getMonth() === today.getMonth();
+  const triggerThresholdHaptic = useCallback(() => {
+    Haptics.selectionAsync();
+  }, []);
 
-  const goToPrevMonth = () => setViewedMonth(m => new Date(m.getFullYear(), m.getMonth() - 1, 1));
-  const goToNextMonth = () => setViewedMonth(m => new Date(m.getFullYear(), m.getMonth() + 1, 1));
+  const triggerCommitHaptic = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  }, []);
+
+  useEffect(() => {
+    dragX.value = 0;
+    isTransitioning.value = false;
+  }, [viewedMonth, dragX, isTransitioning]);
+
+  const monthSwipeGesture = useMemo(() => {
+    const COMMIT_DISTANCE = pageWidth * 0.3;
+    const COMMIT_VELOCITY = 700;
+    return Gesture.Pan()
+      .activeOffsetX([-15, 15])
+      .failOffsetY([-10, 10])
+      .onStart(() => {
+        hasTriggeredThresholdHaptic.value = false;
+      })
+      .onUpdate((e) => {
+        if (isTransitioning.value) return;
+        dragX.value = e.translationX;
+        const pastThreshold = Math.abs(e.translationX) >= COMMIT_DISTANCE;
+        if (pastThreshold && !hasTriggeredThresholdHaptic.value) {
+          hasTriggeredThresholdHaptic.value = true;
+          runOnJS(triggerThresholdHaptic)();
+        } else if (!pastThreshold && hasTriggeredThresholdHaptic.value) {
+          hasTriggeredThresholdHaptic.value = false;
+        }
+      })
+      .onEnd((e) => {
+        if (isTransitioning.value) return;
+        const goingNext = e.translationX <= -COMMIT_DISTANCE || e.velocityX <= -COMMIT_VELOCITY;
+        const goingPrev = e.translationX >= COMMIT_DISTANCE || e.velocityX >= COMMIT_VELOCITY;
+        if (goingNext || goingPrev) {
+          isTransitioning.value = true;
+          runOnJS(triggerCommitHaptic)();
+          const direction = goingNext ? 1 : -1;
+          dragX.value = withTiming(-direction * pageWidth, { duration: 240, easing: Easing.out(Easing.cubic) }, (finished) => {
+            if (finished) runOnJS(commitSwipe)(direction);
+          });
+        } else {
+          dragX.value = withSpring(0, { damping: 30, stiffness: 260 });
+        }
+      });
+  }, [pageWidth, commitSwipe, dragX, isTransitioning, hasTriggeredThresholdHaptic, triggerThresholdHaptic, triggerCommitHaptic]);
+
+  const trackStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: -pageWidth + dragX.value }],
+  }));
+
+  const renderHeaderPage = (monthDate: Date) => (
+    <View style={[styles.headerPage, { width: pageWidth }]}>
+      <Text style={styles.yearText}>{monthDate.getFullYear()}</Text>
+      <Text style={styles.monthText}>{MONTH_FORMAT.format(monthDate)}</Text>
+    </View>
+  );
+
+  const renderMonthPage = (rows: MonthCell[][]) => (
+    <View style={{ width: pageWidth }}>
+      {rows.map((row, rowIdx) => (
+        <View key={rowIdx} style={styles.gridRow}>
+          {row.map((cell, i) => {
+            if (!cell) return <View key={i} style={styles.dayCell} />;
+            const dayStickers = stickersByDate.get(cell.key) ?? [];
+            const isToday = cell.key === todayKey;
+            return (
+              <TouchableOpacity
+                key={i}
+                style={styles.dayCell}
+                onPress={() => router.push(`/day/${cell.key}`)}
+                disabled={dayStickers.length === 0}
+                activeOpacity={0.7}
+              >
+                {dayStickers.length > 0 ? (
+                  <DayIcon sticker={dayStickers[0]} size={pageWidth / 7 - 18} />
+                ) : (
+                  <Text style={[styles.dayNumber, isToday && styles.dayNumberToday]}>{cell.day}</Text>
+                )}
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      ))}
+    </View>
+  );
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>📅 Cozy Stamp Calendar</Text>
+      <View style={styles.topBar}>
+        <TouchableOpacity onPress={() => router.push('/profile')} style={styles.iconBtn} hitSlop={10}>
+          <Settings size={20} color={colors.charcoal} />
+        </TouchableOpacity>
       </View>
 
-      {loading ? (
-        <ActivityIndicator style={styles.loader} color={colors.terra} size="large" />
-      ) : (
-        <ScrollView contentContainerStyle={styles.scrollBody}>
-          {/* This week strip */}
-          <View style={styles.card}>
-            <View style={styles.cardHeaderRow}>
-              <Text style={styles.cardTitle}>This Week</Text>
-              <Text style={styles.cardMeta}>{stickers.length} total</Text>
-            </View>
-            <View style={styles.weekRow}>
-              {weekDays.map((d) => {
-                const key = dateKey(d.toISOString());
-                const dayStickers = stickersByDate.get(key) ?? [];
-                const isToday = key === todayKey;
-                return (
-                  <TouchableOpacity
-                    key={key}
-                    style={[styles.weekCell, isToday && styles.weekCellToday]}
-                    onPress={() => router.push(`/day/${key}`)}
-                    disabled={dayStickers.length === 0}
-                    activeOpacity={0.8}
-                  >
-                    {dayStickers.length > 0 ? (
-                      <DayStack
-                        stickers={dayStickers}
-                        size={38}
-                        displayStyle={profile?.wall_display_style}
-                        borderStyle={profile?.cutout_border_style}
-                      />
-                    ) : (
-                      <Text style={[styles.weekDayNum, isToday && styles.weekDayNumToday]}>{d.getDate()}</Text>
-                    )}
-                    <Text style={styles.weekDayLabel}>{DAY_LABEL_FORMAT.format(d)[0]}</Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          </View>
+      <View style={[styles.headerViewport, { width: pageWidth }]}>
+        <Animated.View style={[styles.headerTrack, { width: pageWidth * 3 }, trackStyle]}>
+          {renderHeaderPage(prevMonth)}
+          {renderHeaderPage(viewedMonth)}
+          {renderHeaderPage(nextMonth)}
+        </Animated.View>
+      </View>
 
-          {/* Full month grid */}
-          <View style={styles.card}>
-            <View style={styles.cardHeaderRow}>
-              <View style={styles.monthNavGroup}>
-                <TouchableOpacity onPress={goToPrevMonth} hitSlop={8} style={styles.monthNavBtn}>
-                  <ChevronLeft size={16} color={colors.inkMid} />
-                </TouchableOpacity>
-                <Text style={styles.cardTitle}>{MONTH_YEAR_FORMAT.format(viewedMonth)}</Text>
-                <TouchableOpacity
-                  onPress={goToNextMonth}
-                  hitSlop={8}
-                  style={styles.monthNavBtn}
-                  disabled={isCurrentMonth}
-                >
-                  <ChevronRight size={16} color={isCurrentMonth ? colors.borderLight : colors.inkMid} />
-                </TouchableOpacity>
-              </View>
-              <Text style={styles.cardMeta}>{capturedInViewedMonth} captured</Text>
-            </View>
-            <View style={styles.weekdayHeaderRow}>
-              {WEEKDAY_LABELS.map((label, i) => (
-                <View key={i} style={styles.weekdayHeaderCell}>
-                  <Text style={styles.weekdayHeaderText}>{label}</Text>
-                </View>
-              ))}
-            </View>
-            <View style={styles.monthGrid}>
-              {monthCells.map((cell, i) => {
-                if (!cell) return <View key={i} style={styles.monthCell} />;
-                const dayStickers = stickersByDate.get(cell.key) ?? [];
-                const isToday = cell.key === todayKey;
-                return (
-                  <TouchableOpacity
-                    key={i}
-                    style={[styles.monthCell, isToday && styles.monthCellToday]}
-                    onPress={() => router.push(`/day/${cell.key}`)}
-                    disabled={dayStickers.length === 0}
-                    activeOpacity={0.8}
-                  >
-                    {dayStickers.length > 0 ? (
-                      <DayStack
-                        stickers={dayStickers}
-                        size={monthStackSize}
-                        displayStyle={profile?.wall_display_style}
-                        borderStyle={profile?.cutout_border_style}
-                      />
-                    ) : (
-                      <Text style={[styles.monthDayNum, isToday && styles.weekDayNumToday]}>{cell.day}</Text>
-                    )}
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
+      <View style={styles.weekdayRow}>
+        {WEEKDAY_LABELS.map((label, i) => (
+          <View key={i} style={styles.weekdayCell}>
+            <Text style={styles.weekdayText}>{label}</Text>
           </View>
+        ))}
+      </View>
 
-          {stickers.length === 0 && (
-            <Text style={styles.emptyHint}>
-              🌸 No captures yet — scan an object to start filling in your calendar!
-            </Text>
-          )}
-        </ScrollView>
-      )}
+      <GestureDetector gesture={monthSwipeGesture}>
+        <View style={[styles.monthViewport, { width: pageWidth }]}>
+          <Animated.View style={[styles.monthTrack, { width: pageWidth * 3 }, trackStyle]}>
+            {renderMonthPage(prevRows)}
+            {renderMonthPage(currentRows)}
+            {renderMonthPage(nextRows)}
+          </Animated.View>
+        </View>
+      </GestureDetector>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.sky },
-  header: {
+  container: { flex: 1, backgroundColor: colors.sky, paddingBottom: TAB_BAR_CLEARANCE },
+
+  topBar: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: spacing.md,
+    justifyContent: 'flex-end',
+    paddingHorizontal: spacing.lg,
     paddingTop: spacing.sm,
-    paddingBottom: spacing.md,
   },
-  title: { fontSize: 15, fontFamily: fonts.cozy, color: colors.inkDark },
-  loader: { flex: 1 },
+  iconBtn: { padding: spacing.xs },
 
-  scrollBody: { paddingHorizontal: spacing.md, paddingBottom: spacing.xxl, gap: spacing.md },
-  card: {
-    backgroundColor: colors.card,
-    borderRadius: radii.xl,
-    padding: spacing.md,
-    ...shadows.card,
-  },
-  cardHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.sm + 4 },
-  cardTitle: { fontSize: 13, fontFamily: fonts.cozy, color: colors.inkDark },
-  cardMeta: { fontSize: 10, fontWeight: '700', color: colors.inkFaint },
-  monthNavGroup: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
-  monthNavBtn: { padding: 2 },
+  headerViewport: { overflow: 'hidden', alignSelf: 'center', paddingTop: spacing.lg, paddingBottom: spacing.xl },
+  headerTrack: { flexDirection: 'row' },
+  headerPage: { alignItems: 'center' },
+  yearText: { fontSize: 15, fontFamily: fonts.mono, color: colors.inkLight },
+  monthText: { fontSize: 26, fontFamily: fonts.monoBold, color: colors.charcoal, marginTop: 2 },
 
-  weekRow: { flexDirection: 'row', justifyContent: 'space-between' },
-  weekCell: {
-    width: 46,
-    height: 62,
-    borderRadius: radii.md,
-    backgroundColor: colors.cardAlt,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 5,
-  },
-  weekCellToday: { borderWidth: 1.5, borderColor: colors.inkDark },
-  weekDayNum: { fontSize: 14, fontFamily: fonts.mono, color: colors.inkMid },
-  weekDayNumToday: { color: colors.inkDark, fontWeight: '800' },
-  weekDayLabel: { fontSize: 9, fontWeight: '700', color: colors.inkFaint, textTransform: 'uppercase' },
+  weekdayRow: { flexDirection: 'row', paddingHorizontal: spacing.lg, marginBottom: spacing.md },
+  weekdayCell: { flex: 1, alignItems: 'center' },
+  weekdayText: { fontSize: 12, fontFamily: fonts.mono, color: colors.inkFaint },
 
-  weekdayHeaderRow: { flexDirection: 'row', marginBottom: spacing.sm + 4 },
-  weekdayHeaderCell: { width: `${100 / 7}%`, alignItems: 'center' },
-  weekdayHeaderText: { fontSize: 10, fontWeight: '800', color: colors.inkFaint, textTransform: 'uppercase' },
-  monthGrid: { flexDirection: 'row', flexWrap: 'wrap' },
-  monthCell: {
-    width: `${100 / 7}%`,
-    aspectRatio: 1,
-    padding: 3,
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
-  },
-  monthCellToday: { borderWidth: 1.5, borderColor: colors.inkDark, borderRadius: radii.md },
-  monthDayNum: { fontSize: 13, fontFamily: fonts.mono, color: colors.inkMid },
+  monthViewport: { overflow: 'hidden', alignSelf: 'center' },
+  monthTrack: { flexDirection: 'row' },
+  gridRow: { flexDirection: 'row', marginBottom: spacing.lg },
+  dayCell: { flex: 1, aspectRatio: 1, alignItems: 'center', justifyContent: 'center' },
+  dayNumber: { fontSize: 15, fontFamily: fonts.mono, color: colors.charcoal },
+  dayNumberToday: { color: colors.rust, fontFamily: fonts.monoBold },
 
-  emptyHint: { textAlign: 'center', color: colors.inkFaint, fontSize: 12, marginTop: spacing.lg, paddingHorizontal: spacing.lg },
+  dayIcon: { alignItems: 'center', justifyContent: 'center' },
+  dayIconImage: { width: '100%', height: '100%' },
 });

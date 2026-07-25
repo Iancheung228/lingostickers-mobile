@@ -24,6 +24,13 @@ export const colors = {
   inkLight:   '#64748B', // captions, muted
   inkFaint:   '#94A3B8', // placeholder, disabled
 
+  // Journal / minimal-calendar redesign — neutral warm-black text (the rest
+  // of the app's "ink" family leans navy/slate, which reads too blue next
+  // to this screen's reference image) + single warm terracotta accent.
+  charcoal:   '#2B2A28',
+  rust:       '#B5651D',
+  rustLight:  '#E8C9A8',
+
   // Illustration accents
   moonGold:   '#FED330',
   starWhite:  '#FFFFFF',
@@ -54,6 +61,7 @@ export const fonts = {
   cozyMedium: 'Quicksand_600SemiBold',
   jp:         'KosugiMaru_400Regular', // Japanese word display
   mono:       'JetBrainsMono_500Medium', // romaji, stats, technical labels
+  monoBold:   'JetBrainsMono_700Bold', // minimal-calendar month heading
 };
 
 export const typography = {
@@ -111,6 +119,7 @@ export const radii = {
 export const spacing = {
   xs:  4,
   sm:  8,
+  ms:  12, // the "12px" rung — used constantly for section-header gaps, between sm and md
   md:  16,
   lg:  24,
   xl:  32,
