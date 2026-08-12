@@ -1,11 +1,12 @@
-import { useEffect, useMemo, useState } from 'react';
-import { View, Text, Image, StyleSheet, ActivityIndicator } from 'react-native';
+import { useEffect, useMemo } from 'react';
+import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
+import { Image } from 'expo-image';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { useSharedValue, useAnimatedStyle, runOnJS, withTiming, SharedValue } from 'react-native-reanimated';
 import { Trash2 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
-import { BoardStickerWithSticker, Sticker, WallDisplayStyle, CutoutBorderStyle, WallBackgroundDim } from '@/lib/types';
-import { supabase } from '@/lib/supabase';
+import { BoardStickerWithSticker, Sticker, WallDisplayStyle, CutoutBorderStyle } from '@/lib/types';
+import { useSignedUrls } from '@/hooks/useSignedUrls';
 import { getTileSize } from '@/lib/boardLayout';
 import WallBackground from '@/components/WallBackground';
 import CutoutSticker from '@/components/CutoutSticker';
@@ -30,18 +31,31 @@ interface BoardCanvasProps {
   onMove: (stickerId: string, x: number, y: number) => void;
   onRemove: (item: BoardStickerWithSticker) => void;
   backgroundPath?: string | null;
-  backgroundDim?: WallBackgroundDim;
+  // Percent (0-MAX_DIM_PCT, see WallBackground) — boards only, unlike the
+  // home mini-wall preview which still uses the fixed enum.
+  backgroundDim?: number;
+  backgroundVersion?: number;
+  // Bubbled up so a parent that embeds this canvas inside its own horizontal
+  // pager (the Wall tab's board carousel) can disable that pager's swipe
+  // while a tile is mid-drag — otherwise the two horizontal pan gestures
+  // fight over the same touch.
+  onDragStart?: () => void;
+  onDragEnd?: () => void;
 }
 
 export default function BoardCanvas({
   items, displayStyle, borderStyle, canvasSize, onSelectSticker, onMove, onRemove,
-  backgroundPath, backgroundDim,
+  backgroundPath, backgroundDim, backgroundVersion, onDragStart, onDragEnd,
 }: BoardCanvasProps) {
   // Shared across every tile so whichever one is currently being held can
   // reveal the trash zone and report hovering over it — a single drag at a
   // time is the only case that matters here.
   const dragActive = useSharedValue(0);
   const hoverTrash = useSharedValue(0);
+
+  // Signed once for the whole board in a single batched request, rather
+  // than each tile below minting its own — see hooks/useSignedUrls.ts.
+  const imageUrls = useSignedUrls(useMemo(() => items.map(i => i.sticker.image_path), [items]));
 
   const trashBounds: TrashBounds = {
     left: canvasSize.width / 2 - TRASH_SIZE / 2,
@@ -57,17 +71,20 @@ export default function BoardCanvas({
 
   return (
     <View style={[styles.canvas, { width: canvasSize.width, height: canvasSize.height }]}>
-      <WallBackground path={backgroundPath} dim={backgroundDim} />
+      <WallBackground path={backgroundPath} dim={backgroundDim} version={backgroundVersion} />
       {canvasSize.width > 0 && items.map(item => (
         <CanvasTile
           key={item.sticker_id}
           item={item}
+          imageUrl={imageUrls.get(item.sticker.image_path) ?? null}
           canvasSize={canvasSize}
           displayStyle={displayStyle}
           borderStyle={borderStyle}
           onSelect={onSelectSticker}
           onMove={onMove}
           onRemove={onRemove}
+          onDragStart={onDragStart}
+          onDragEnd={onDragEnd}
           dragActive={dragActive}
           hoverTrash={hoverTrash}
           trashBounds={trashBounds}
@@ -95,31 +112,27 @@ function clamp(value: number, min: number, max: number) {
 }
 
 function CanvasTile({
-  item, canvasSize, displayStyle, borderStyle, onSelect, onMove, onRemove, dragActive, hoverTrash, trashBounds,
+  item, imageUrl, canvasSize, displayStyle, borderStyle, onSelect, onMove, onRemove, onDragStart, onDragEnd, dragActive, hoverTrash, trashBounds,
 }: {
   item: BoardStickerWithSticker;
+  imageUrl: string | null;
   canvasSize: { width: number; height: number };
   displayStyle: WallDisplayStyle;
   borderStyle: CutoutBorderStyle;
   onSelect: (sticker: Sticker) => void;
   onMove: (stickerId: string, x: number, y: number) => void;
   onRemove: (item: BoardStickerWithSticker) => void;
+  onDragStart?: () => void;
+  onDragEnd?: () => void;
   dragActive: SharedValue<number>;
   hoverTrash: SharedValue<number>;
   trashBounds: TrashBounds;
 }) {
-  const [imageUrl, setImageUrl] = useState<string | null>(null);
   const { width: tileWidth, height: tileHeight } = useMemo(() => getTileSize(item.sticker_id), [item.sticker_id]);
   const translateX = useSharedValue(item.x);
   const translateY = useSharedValue(item.y);
   const startX = useSharedValue(item.x);
   const startY = useSharedValue(item.y);
-
-  useEffect(() => {
-    supabase.storage.from('sticker-images')
-      .createSignedUrl(item.sticker.image_path, 3600)
-      .then(({ data }) => { if (data) setImageUrl(data.signedUrl); });
-  }, [item.sticker.image_path]);
 
   // Re-sync the shared position if this item's stored coordinates change
   // from outside a gesture (e.g. a fresh fetch after re-opening the board).
@@ -134,8 +147,12 @@ function CanvasTile({
   const handleTap = () => onSelect(item.sticker);
   const handleMove = (x: number, y: number) => onMove(item.sticker_id, x, y);
   const handleRemove = () => onRemove(item);
-  const handlePickup = () => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+  const handlePickup = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    onDragStart?.();
+  };
   const handleHoverTrash = () => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  const handleDragEnd = () => onDragEnd?.();
 
   // Pan only takes over after a hold, so a quick tap still opens the
   // sticker detail via the sibling Tap gesture below (see Gesture.Race).
@@ -163,6 +180,7 @@ function CanvasTile({
     })
     .onEnd(() => {
       dragActive.value = withTiming(0, { duration: 150 });
+      runOnJS(handleDragEnd)();
       if (hoverTrash.value === 1) {
         hoverTrash.value = 0;
         runOnJS(handleRemove)();
@@ -198,17 +216,34 @@ function CanvasTile({
         <View style={styles.imageWrap}>
           {imageUrl ? (
             displayStyle === 'cutout' && borderStyle === 'outline' ? (
-              <CutoutSticker uri={imageUrl} borderStyle="outline" />
+              <CutoutSticker uri={imageUrl} cacheKey={item.sticker.image_path} borderStyle="outline" />
             ) : (
-              <Image source={{ uri: imageUrl }} style={styles.image} resizeMode="contain" />
+              <Image
+                source={{ uri: imageUrl, cacheKey: item.sticker.image_path }}
+                cachePolicy="memory-disk"
+                style={styles.image}
+                contentFit="contain"
+              />
             )
           ) : (
             <ActivityIndicator color={colors.terra} />
           )}
         </View>
-        <Text style={[styles.word, { fontSize: clamp(tileWidth * 0.125, 9, 13) }]} numberOfLines={1}>
-          {item.sticker.word}
-        </Text>
+        {displayStyle === 'cutout' ? (
+          // Cutout tiles float directly on the (possibly photo/dynamic-color)
+          // board background with no card behind them, so the word needs its
+          // own contrast-guaranteeing chip rather than relying on whatever's
+          // underneath — see skills.md wall-legibility note.
+          <View style={styles.wordChip}>
+            <Text style={[styles.wordChipText, { fontSize: clamp(tileWidth * 0.115, 9, 12) }]} numberOfLines={1}>
+              {item.sticker.word}
+            </Text>
+          </View>
+        ) : (
+          <Text style={[styles.word, { fontSize: clamp(tileWidth * 0.125, 9, 13) }]} numberOfLines={1}>
+            {item.sticker.word}
+          </Text>
+        )}
       </Animated.View>
     </GestureDetector>
   );
@@ -251,4 +286,23 @@ const styles = StyleSheet.create({
   imageWrap: { flex: 1, marginBottom: 4 },
   image: { width: '100%', height: '100%' },
   word: { fontSize: 11, fontFamily: fonts.jp, color: colors.inkDark, textAlign: 'center' },
+  // Frosted label: translucent paper chip + its own shadow, so the word
+  // reads at full contrast whether it's sitting over a bright sky photo, a
+  // dark night shot, or any other background color the user picks.
+  wordChip: {
+    position: 'absolute',
+    bottom: -6,
+    alignSelf: 'center',
+    maxWidth: '92%',
+    backgroundColor: 'rgba(255, 253, 244, 0.92)',
+    borderRadius: 8,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    shadowColor: colors.inkDark,
+    shadowOpacity: 0.25,
+    shadowRadius: 3,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 3,
+  },
+  wordChipText: { fontFamily: fonts.jp, color: colors.inkDark, textAlign: 'center' },
 });

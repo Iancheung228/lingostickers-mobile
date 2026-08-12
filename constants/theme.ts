@@ -57,8 +57,8 @@ export const colors = {
 // string values match each package's exported constant name exactly, so
 // no import is needed at usage sites.
 export const fonts = {
-  cozy:       'Quicksand_700Bold',    // headings, buttons — the design's rounded "cozy" voice
-  cozyMedium: 'Quicksand_600SemiBold',
+  cozy:       'Fraunces_700Bold',    // headings, buttons — warm serif display voice
+  cozyMedium: 'Fraunces_600SemiBold',
   jp:         'KosugiMaru_400Regular', // Japanese word display
   mono:       'JetBrainsMono_500Medium', // romaji, stats, technical labels
   monoBold:   'JetBrainsMono_700Bold', // minimal-calendar month heading

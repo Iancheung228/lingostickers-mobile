@@ -1,8 +1,7 @@
-import { useEffect, useState } from 'react';
-import { TouchableOpacity, Image, Text, View, StyleSheet, ActivityIndicator } from 'react-native';
+import { TouchableOpacity, Text, View, StyleSheet, ActivityIndicator } from 'react-native';
+import { Image } from 'expo-image';
 import { Heart, MapPin, Volume2, Check, Play } from 'lucide-react-native';
 import { Sticker } from '@/lib/types';
-import { supabase } from '@/lib/supabase';
 import { speak } from '@/lib/speech';
 import { useTrimmedVoicePlayback } from '@/hooks/useTrimmedVoicePlayback';
 import { colors, shadows, radii, spacing, fonts } from '@/constants/theme';
@@ -12,27 +11,16 @@ interface StickerCardProps {
   onPress: () => void;
   onToggleFavorite?: (id: string) => void;
   selected?: boolean;
+  // Signed by the parent list in one batched request (hooks/useSignedUrls)
+  // rather than each card minting its own — see skills.md wall-loading note.
+  imageUrl: string | null;
+  voiceUrl: string | null;
 }
 
-export default function StickerCard({ sticker, onPress, onToggleFavorite, selected }: StickerCardProps) {
-  const [imageUrl, setImageUrl] = useState<string | null>(null);
-  const [voiceUrl, setVoiceUrl] = useState<string | null>(null);
+export default function StickerCard({ sticker, onPress, onToggleFavorite, selected, imageUrl, voiceUrl }: StickerCardProps) {
   const { play: playVoice } = useTrimmedVoicePlayback(
     voiceUrl, sticker.voice_note_start_ms, sticker.voice_note_end_ms
   );
-
-  useEffect(() => {
-    supabase.storage.from('sticker-images')
-      .createSignedUrl(sticker.image_path, 3600)
-      .then(({ data }) => { if (data) setImageUrl(data.signedUrl); });
-  }, [sticker.image_path]);
-
-  useEffect(() => {
-    if (!sticker.voice_note_path) { setVoiceUrl(null); return; }
-    supabase.storage.from('sticker-images')
-      .createSignedUrl(sticker.voice_note_path, 3600)
-      .then(({ data }) => { if (data) setVoiceUrl(data.signedUrl); });
-  }, [sticker.voice_note_path]);
 
   return (
     <TouchableOpacity style={[styles.card, selected && styles.cardSelected]} onPress={onPress} activeOpacity={0.9}>
@@ -78,7 +66,12 @@ export default function StickerCard({ sticker, onPress, onToggleFavorite, select
 
       <View style={styles.imageContainer}>
         {imageUrl ? (
-          <Image source={{ uri: imageUrl }} style={styles.image} resizeMode="contain" />
+          <Image
+            source={{ uri: imageUrl, cacheKey: sticker.image_path }}
+            cachePolicy="memory-disk"
+            style={styles.image}
+            contentFit="contain"
+          />
         ) : (
           <ActivityIndicator style={styles.spinner} color={colors.terra} />
         )}

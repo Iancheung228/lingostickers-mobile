@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView, Image, ActivityIndicator, useWindowDimensions } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView, ActivityIndicator, useWindowDimensions } from 'react-native';
+import { Image } from 'expo-image';
 import { router, useFocusEffect } from 'expo-router';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { useSharedValue, useAnimatedStyle, withTiming, withSpring, Easing, runOnJS } from 'react-native-reanimated';
@@ -7,6 +8,7 @@ import { Settings } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
+import { useSignedUrls } from '@/hooks/useSignedUrls';
 import { Sticker } from '@/lib/types';
 import { colors, spacing, fonts } from '@/constants/theme';
 import { TAB_BAR_CLEARANCE } from '@/constants/tabBar';
@@ -43,25 +45,19 @@ function buildMonthRows(monthDate: Date): MonthCell[][] {
   return rows;
 }
 
-function useSignedUrl(path: string | undefined) {
-  const [url, setUrl] = useState<string | null>(null);
-  useEffect(() => {
-    if (!path) return;
-    supabase.storage.from('sticker-images').createSignedUrl(path, 3600)
-      .then(({ data }) => { if (data) setUrl(data.signedUrl); });
-  }, [path]);
-  return url;
-}
-
 // Replaces the date number entirely on days with a capture — mirrors the
 // reference's "icon instead of numeral" treatment, using the day's own
 // sticker photo rather than a fixed illustration set.
-function DayIcon({ sticker, size }: { sticker: Sticker; size: number }) {
-  const url = useSignedUrl(sticker.image_path);
+function DayIcon({ sticker, size, url }: { sticker: Sticker; size: number; url: string | null }) {
   return (
     <View style={[styles.dayIcon, { width: size, height: size }]}>
       {url ? (
-        <Image source={{ uri: url }} style={styles.dayIconImage} resizeMode="contain" />
+        <Image
+          source={{ uri: url, cacheKey: sticker.image_path }}
+          cachePolicy="memory-disk"
+          style={styles.dayIconImage}
+          contentFit="contain"
+        />
       ) : (
         <ActivityIndicator size="small" color={colors.rust} />
       )}
@@ -99,6 +95,14 @@ export default function CalendarScreen() {
     }
     return map;
   }, [stickers]);
+
+  // One batched sign request for every day-icon photo (only the first
+  // sticker of each day is ever shown) instead of one per rendered cell —
+  // see hooks/useSignedUrls.ts.
+  const dayIconUrls = useSignedUrls(useMemo(
+    () => Array.from(stickersByDate.values(), list => list[0].image_path),
+    [stickersByDate]
+  ));
 
   const today = useMemo(() => new Date(), []);
   const todayKey = dateKey(today.toISOString());
@@ -195,7 +199,11 @@ export default function CalendarScreen() {
                 activeOpacity={0.7}
               >
                 {dayStickers.length > 0 ? (
-                  <DayIcon sticker={dayStickers[0]} size={pageWidth / 7 - 18} />
+                  <DayIcon
+                    sticker={dayStickers[0]}
+                    size={pageWidth / 7 - 18}
+                    url={dayIconUrls.get(dayStickers[0].image_path) ?? null}
+                  />
                 ) : (
                   <Text style={[styles.dayNumber, isToday && styles.dayNumberToday]}>{cell.day}</Text>
                 )}

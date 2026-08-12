@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Modal, View, Text, FlatList, TouchableOpacity, StyleSheet, SafeAreaView, ActivityIndicator } from 'react-native';
 import { X } from 'lucide-react-native';
 import { Sticker } from '@/lib/types';
 import { supabase } from '@/lib/supabase';
+import { useSignedUrls } from '@/hooks/useSignedUrls';
 import StickerCard from '@/components/StickerCard';
 import { colors, radii, spacing, fonts } from '@/constants/theme';
 
@@ -35,6 +36,13 @@ export default function StickerPickerModal({
       });
   }, [visible, currentUserId]);
 
+  // One batched sign request for the whole picker grid — see
+  // hooks/useSignedUrls.ts.
+  const urls = useSignedUrls(useMemo(
+    () => stickers.flatMap(s => [s.image_path, s.voice_note_path]),
+    [stickers]
+  ));
+
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet">
       <SafeAreaView style={styles.container}>
@@ -58,7 +66,13 @@ export default function StickerPickerModal({
             contentContainerStyle={styles.grid}
             renderItem={({ item }) => (
               <View style={styles.cardWrapper}>
-                <StickerCard sticker={item} onPress={() => onSelect(item)} selected={selectedIds?.has(item.id)} />
+                <StickerCard
+                  sticker={item}
+                  onPress={() => onSelect(item)}
+                  selected={selectedIds?.has(item.id)}
+                  imageUrl={urls.get(item.image_path) ?? null}
+                  voiceUrl={item.voice_note_path ? urls.get(item.voice_note_path) ?? null : null}
+                />
               </View>
             )}
           />

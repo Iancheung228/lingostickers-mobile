@@ -1,26 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { View, Text, Image, TouchableOpacity, StyleSheet, SafeAreaView, ScrollView, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView, ScrollView, ActivityIndicator, Alert } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
-import { ArrowLeft, Camera, LogOut, BookOpen, Heart, Check, Trash2, ImagePlus } from 'lucide-react-native';
-import * as ImagePicker from 'expo-image-picker';
-import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
-import { File } from 'expo-file-system';
+import { ArrowLeft, Camera, LogOut, BookOpen, Heart, Check, Trash2 } from 'lucide-react-native';
 import { useAuth } from '@/hooks/useAuth';
 import { useProfile } from '@/hooks/useProfile';
 import { supabase } from '@/lib/supabase';
-import { Language, Sticker, WallDisplayStyle, CutoutBorderStyle, WallBackgroundDim } from '@/lib/types';
+import { Language, Sticker, WallDisplayStyle, CutoutBorderStyle } from '@/lib/types';
 import OtterMascot from '@/components/illustrations/OtterMascot';
 import { colors, shadows, radii, spacing, fonts } from '@/constants/theme';
-
-// Long side capped so a full-res photo library import doesn't balloon
-// storage/bandwidth — this is a full-screen backdrop, so it gets more
-// headroom than the 1280px cap used for sticker memory photos.
-const WALL_BACKGROUND_MAX_SIDE = 1600;
-const WALL_BACKGROUND_DIMS: { code: WallBackgroundDim; label: string }[] = [
-  { code: 'light', label: 'Light' },
-  { code: 'medium', label: 'Medium' },
-  { code: 'dark', label: 'Dark' },
-];
 
 const LANGUAGES: { code: Language; native: string; label: string }[] = [
   { code: 'fr', native: 'Français', label: 'French' },
@@ -41,18 +28,12 @@ const CUTOUT_BORDER_STYLES: { code: CutoutBorderStyle; label: string; subtitle: 
 
 export default function ProfileScreen() {
   const { user, signOut, deleteAccount } = useAuth();
-  const {
-    profile, setTargetLanguage, setWallDisplayStyle, setCutoutBorderStyle,
-    setWallBackground, setWallBackgroundDim,
-  } = useProfile(user?.id);
+  const { profile, setTargetLanguage, setWallDisplayStyle, setCutoutBorderStyle } = useProfile(user?.id);
   const [stickers, setStickers] = useState<Sticker[]>([]);
   const [loading, setLoading] = useState(true);
   const [updatingLanguage, setUpdatingLanguage] = useState<Language | null>(null);
   const [updatingWallStyle, setUpdatingWallStyle] = useState<WallDisplayStyle | null>(null);
   const [updatingBorderStyle, setUpdatingBorderStyle] = useState<CutoutBorderStyle | null>(null);
-  const [updatingBackgroundDim, setUpdatingBackgroundDim] = useState<WallBackgroundDim | null>(null);
-  const [uploadingBackground, setUploadingBackground] = useState(false);
-  const [backgroundPreviewUrl, setBackgroundPreviewUrl] = useState<string | null>(null);
   const [deletingAccount, setDeletingAccount] = useState(false);
 
   const fetchStickers = useCallback(async () => {
@@ -66,13 +47,6 @@ export default function ProfileScreen() {
   }, [user]);
 
   useFocusEffect(useCallback(() => { fetchStickers(); }, [fetchStickers]));
-
-  useEffect(() => {
-    if (!profile?.wall_background_path) { setBackgroundPreviewUrl(null); return; }
-    supabase.storage.from('sticker-images')
-      .createSignedUrl(profile.wall_background_path, 3600)
-      .then(({ data }) => { if (data) setBackgroundPreviewUrl(data.signedUrl); });
-  }, [profile?.wall_background_path]);
 
   const favoriteCount = useMemo(() => stickers.filter(s => s.is_favorite).length, [stickers]);
   const username = profile?.username ?? 'Explorer';
@@ -98,74 +72,6 @@ export default function ProfileScreen() {
     setUpdatingBorderStyle(style);
     const { error } = await setCutoutBorderStyle(style);
     setUpdatingBorderStyle(null);
-    if (error) Alert.alert("Couldn't update", error.message);
-  };
-
-  const handlePickBackground = async () => {
-    if (!user || uploadingBackground) return;
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('Photos Access Needed', 'LingoStickers needs access to your photo library to set a wall background.');
-      return;
-    }
-    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 1 });
-    const asset = !result.canceled ? result.assets[0] : null;
-    if (!asset) return;
-
-    setUploadingBackground(true);
-    try {
-      let context = ImageManipulator.manipulate(asset.uri);
-      const longSide = Math.max(asset.width, asset.height);
-      if (longSide > WALL_BACKGROUND_MAX_SIDE) {
-        const scale = WALL_BACKGROUND_MAX_SIDE / longSide;
-        context = context.resize({ width: Math.round(asset.width * scale) });
-      }
-      const rendered = await context.renderAsync();
-      const saved = await rendered.saveAsync({ compress: 0.75, format: SaveFormat.JPEG });
-
-      // Fixed filename + upsert so re-uploading just replaces the old photo
-      // rather than accumulating orphaned files under the user's folder.
-      const path = `${user.id}/wall-background.jpg`;
-      const bytes = await new File(saved.uri).bytes();
-      const { error: uploadError } = await supabase.storage
-        .from('sticker-images')
-        .upload(path, bytes, { contentType: 'image/jpeg', upsert: true });
-      if (uploadError) throw uploadError;
-
-      const { error } = await setWallBackground(path);
-      if (error) throw error;
-    } catch (err: any) {
-      Alert.alert("Couldn't set background", err?.message ?? 'Something went wrong.');
-    } finally {
-      setUploadingBackground(false);
-    }
-  };
-
-  const handleRemoveBackground = () => {
-    if (!profile?.wall_background_path) return;
-    Alert.alert(
-      'Remove background',
-      'Go back to the default corkboard look?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Remove', style: 'destructive',
-          onPress: async () => {
-            const path = profile.wall_background_path!;
-            const { error } = await setWallBackground(null);
-            if (error) { Alert.alert("Couldn't remove background", error.message); return; }
-            await supabase.storage.from('sticker-images').remove([path]);
-          },
-        },
-      ]
-    );
-  };
-
-  const handleSelectBackgroundDim = async (dim: WallBackgroundDim) => {
-    if (!profile || dim === profile.wall_background_dim || updatingBackgroundDim) return;
-    setUpdatingBackgroundDim(dim);
-    const { error } = await setWallBackgroundDim(dim);
-    setUpdatingBackgroundDim(null);
     if (error) Alert.alert("Couldn't update", error.message);
   };
 
@@ -353,72 +259,6 @@ export default function ProfileScreen() {
             </>
           )}
 
-          {/* Custom wall photo */}
-          <Text style={styles.sectionLabel}>WALL BACKGROUND</Text>
-          <View style={styles.card}>
-            <TouchableOpacity
-              style={styles.backgroundPreview}
-              onPress={handlePickBackground}
-              disabled={uploadingBackground}
-              activeOpacity={0.85}
-            >
-              {backgroundPreviewUrl ? (
-                <Image source={{ uri: backgroundPreviewUrl }} style={styles.backgroundPreviewImage} resizeMode="cover" />
-              ) : (
-                <View style={styles.backgroundPreviewEmpty}>
-                  <ImagePlus size={22} color={colors.inkFaint} />
-                </View>
-              )}
-              {uploadingBackground && (
-                <View style={styles.backgroundPreviewOverlay}>
-                  <ActivityIndicator color={colors.white} />
-                </View>
-              )}
-            </TouchableOpacity>
-            <View style={styles.backgroundActionsRow}>
-              <TouchableOpacity
-                style={styles.backgroundActionBtn}
-                onPress={handlePickBackground}
-                disabled={uploadingBackground}
-              >
-                <Text style={styles.backgroundActionText}>
-                  {profile?.wall_background_path ? 'Change Photo' : 'Choose Photo'}
-                </Text>
-              </TouchableOpacity>
-              {profile?.wall_background_path && (
-                <TouchableOpacity
-                  style={styles.backgroundActionBtn}
-                  onPress={handleRemoveBackground}
-                  disabled={uploadingBackground}
-                >
-                  <Text style={[styles.backgroundActionText, styles.backgroundActionTextDanger]}>Remove</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-            {profile?.wall_background_path && (
-              <View style={[styles.dimRow, styles.rowDivider]}>
-                {WALL_BACKGROUND_DIMS.map(({ code, label }) => {
-                  const active = profile?.wall_background_dim === code;
-                  return (
-                    <TouchableOpacity
-                      key={code}
-                      style={[styles.dimChip, active && styles.dimChipActive]}
-                      onPress={() => handleSelectBackgroundDim(code)}
-                      disabled={!profile}
-                      activeOpacity={0.8}
-                    >
-                      {updatingBackgroundDim === code ? (
-                        <ActivityIndicator size="small" color={active ? colors.white : colors.terra} />
-                      ) : (
-                        <Text style={[styles.dimChipText, active && styles.dimChipTextActive]}>{label}</Text>
-                      )}
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-            )}
-          </View>
-
           {/* Info */}
           <Text style={styles.sectionLabel}>ABOUT</Text>
           <View style={styles.card}>
@@ -583,55 +423,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-
-  backgroundPreview: {
-    height: 120,
-    margin: spacing.md,
-    marginBottom: spacing.sm,
-    borderRadius: radii.md,
-    overflow: 'hidden',
-    backgroundColor: colors.cardAlt,
-  },
-  backgroundPreviewImage: { width: '100%', height: '100%' },
-  backgroundPreviewEmpty: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  backgroundPreviewOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(28,73,102,0.45)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  backgroundActionsRow: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.md,
-    paddingBottom: spacing.md,
-  },
-  backgroundActionBtn: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: spacing.sm + 2,
-    borderRadius: radii.md,
-    backgroundColor: colors.cardAlt,
-  },
-  backgroundActionText: { fontSize: 12, fontWeight: '700', color: colors.inkDark },
-  backgroundActionTextDanger: { color: colors.error },
-  dimRow: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.md,
-    paddingBottom: spacing.md,
-  },
-  dimChip: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: spacing.sm,
-    borderRadius: radii.full,
-    backgroundColor: colors.cardAlt,
-  },
-  dimChipActive: { backgroundColor: colors.terra },
-  dimChipText: { fontSize: 12, fontWeight: '700', color: colors.inkMid },
-  dimChipTextActive: { color: colors.white },
 
   infoRow: {
     flexDirection: 'row',

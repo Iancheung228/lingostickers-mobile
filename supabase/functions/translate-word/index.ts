@@ -1,4 +1,5 @@
 import { translateWithGroq, resolveLanguage } from '../_shared/vocab.ts';
+import { requireUserId, consumeQuota, serviceClient, errorResponse } from '../_shared/rateLimit.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -11,6 +12,8 @@ Deno.serve(async (req) => {
   }
 
   try {
+    const userId = await requireUserId(req);
+
     const { englishWord, language } = await req.json();
     if (!englishWord || typeof englishWord !== 'string' || !englishWord.trim()) {
       return new Response(
@@ -18,6 +21,9 @@ Deno.serve(async (req) => {
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
+
+    // Claimed before the Groq call — see create-sticker for the reasoning.
+    await consumeQuota(serviceClient(), userId, 'translate-word');
 
     const lang = resolveLanguage(language);
     const vocab = await translateWithGroq(englishWord.trim(), lang);
@@ -28,9 +34,6 @@ Deno.serve(async (req) => {
     );
   } catch (err: any) {
     console.error('translate-word error:', err);
-    return new Response(
-      JSON.stringify({ error: err?.message ?? 'Internal server error' }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+    return errorResponse(err, corsHeaders);
   }
 });

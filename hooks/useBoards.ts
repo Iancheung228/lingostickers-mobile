@@ -43,7 +43,28 @@ export function useBoards(userId: string | undefined) {
     return { error };
   }, [boards]);
 
-  return { boards, loading, createBoard, deleteBoard, refetch: fetchBoards };
+  // Each board carries its own cover photo (see 025_per_board_background.sql)
+  // — patches a single board's row/local state rather than the whole list,
+  // mirroring useProfile's per-field setters.
+  const setBoardBackground = useCallback(async (boardId: string, path: string | null) => {
+    const { error } = await supabase.from('boards').update({ background_path: path }).eq('id', boardId);
+    if (!error) setBoards(prev => prev.map(b => b.id === boardId ? { ...b, background_path: path } : b));
+    return { error };
+  }, []);
+
+  // dim is a percent (0-MAX_DIM_PCT, see WallBackground) via the board's
+  // tint slider — not the fixed enum profiles.home_background_dim still uses.
+  const setBoardBackgroundDim = useCallback(async (boardId: string, dim: number) => {
+    const { error } = await supabase.from('boards').update({ background_dim: dim }).eq('id', boardId);
+    if (!error) setBoards(prev => prev.map(b => b.id === boardId ? { ...b, background_dim: dim } : b));
+    return { error };
+  }, []);
+
+  return {
+    boards, loading, createBoard, deleteBoard,
+    setBoardBackground, setBoardBackgroundDim,
+    refetch: fetchBoards,
+  };
 }
 
 // Manages one board's stickers — membership plus each sticker's dragged

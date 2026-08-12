@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { pickDominantColor } from '../_shared/imageColor.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -97,17 +98,31 @@ Deno.serve(async (req) => {
       if (copyErr) console.error('submit-challenge-answer: image copy failed:', copyErr);
 
       // Same treatment for the memory photo, if the sender had one, so the
-      // awarded sticker gets the same flip-to-reveal-the-moment experience
-      // as a sticker the receiver scanned themselves.
+      // awarded sticker gets the same photo-hero detail view as a sticker
+      // the receiver scanned themselves.
       let wonMemoryPath: string | null = null;
+      let wonMemoryColor: string | null = null;
       if (challenge.snapshot_memory_photo_path) {
         const memoryExt = challenge.snapshot_memory_photo_path.split('.').pop() || 'jpg';
         const candidate = `${receiverId}/${crypto.randomUUID()}-challenge-memory.${memoryExt}`;
         const { error: memoryCopyErr } = await admin.storage
           .from('sticker-images')
           .copy(challenge.snapshot_memory_photo_path, candidate);
-        if (memoryCopyErr) console.error('submit-challenge-answer: memory photo copy failed:', memoryCopyErr);
-        else wonMemoryPath = candidate;
+        if (memoryCopyErr) {
+          console.error('submit-challenge-answer: memory photo copy failed:', memoryCopyErr);
+        } else {
+          wonMemoryPath = candidate;
+          try {
+            const { data: memoryBlob, error: downloadErr } = await admin.storage
+              .from('sticker-images')
+              .download(candidate);
+            if (downloadErr) throw downloadErr;
+            const bytes = new Uint8Array(await memoryBlob.arrayBuffer());
+            wonMemoryColor = pickDominantColor(bytes);
+          } catch (err: any) {
+            console.warn(`submit-challenge-answer: memory photo color extraction failed: ${err?.message}`);
+          }
+        }
       }
 
       const { data: newSticker, error: stickerErr } = await admin
@@ -122,6 +137,7 @@ Deno.serve(async (req) => {
           category: 'Other',
           image_path: copyErr ? challenge.snapshot_image_path : wonImagePath,
           memory_photo_path: wonMemoryPath,
+          memory_photo_color: wonMemoryColor,
           language: challenge.snapshot_language,
           source: 'challenge',
           discovered_at: new Date().toISOString(),

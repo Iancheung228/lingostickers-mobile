@@ -1,12 +1,13 @@
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, useWindowDimensions } from 'react-native';
 import { Tabs } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BookOpen, Calendar, Camera, Sticker as StickerIcon, Users } from 'lucide-react-native';
 import type { LucideIcon } from 'lucide-react-native';
+import * as Haptics from 'expo-haptics';
 import { useChallenges } from '@/hooks/useChallenges';
 import { useFriends } from '@/hooks/useFriends';
 import { colors, shadows, radii } from '@/constants/theme';
-import { TAB_BAR_HEIGHT, TAB_BAR_SIDE_MARGIN, TAB_BAR_BOTTOM_MARGIN } from '@/constants/tabBar';
+import { TAB_BAR_HEIGHT, TAB_BAR_BOTTOM_MARGIN, TAB_BAR_WIDTH, TAB_BAR_ITEM_WIDTH, TAB_BAR_SCAN_ITEM_WIDTH } from '@/constants/tabBar';
 
 // Every tab gets the same treatment: a dark, legible icon by default, and a
 // soft rounded "area effect" behind it when active — no separate outlier
@@ -29,21 +30,54 @@ function Badge({ count }: { count: number }) {
   );
 }
 
+// Scan is the one action that actually produces stickers — everything else
+// in this bar is just a way to browse what scanning made. Its own solid
+// color makes it read as the bar's one deliberate call to action rather
+// than a fifth peer of Collection/Calendar/Wall/Friends, but it sits
+// in-line with the rest of the row instead of floating above it.
+// Intentionally the same regardless of `focused` — a CTA, not a destination
+// you "arrive at" the way the other four are.
+function ScanTabIcon() {
+  return (
+    <View style={styles.scanWrap}>
+      <Camera size={22} color={colors.white} strokeWidth={2.25} />
+    </View>
+  );
+}
+
 export default function TabLayout() {
   const insets = useSafeAreaInsets();
+  const { width: winW } = useWindowDimensions();
   const { pendingCount } = useChallenges();
   const { friends } = useFriends();
   const pendingRequestCount = friends.filter(f => f.status === 'pending' && !f.is_requester).length;
 
   return (
     <Tabs
+      screenListeners={({ navigation }) => ({
+        // isFocused() is false only when the pressed tab isn't the one
+        // already showing — re-tapping the current tab stays silent, same
+        // as native iOS/Android tab bars.
+        tabPress: () => {
+          if (!navigation.isFocused()) {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          }
+        },
+      })}
       screenOptions={{
         headerShown: false,
         tabBarShowLabel: false,
         tabBarStyle: {
           position: 'absolute',
-          left: TAB_BAR_SIDE_MARGIN,
-          right: TAB_BAR_SIDE_MARGIN,
+          // React Navigation's own default tab bar style sets `start: 0,
+          // end: 0` (RN's logical left/right) to make it span edge-to-edge
+          // — and per RN's own precedence rules, `start`/`end` win over
+          // `left`/`right`/`width` when both are present. Overriding
+          // `start`/`end` directly (not `left`/`width`) is what actually
+          // takes effect; symmetric offsets fully determine both position
+          // and width without a redundant, ambiguity-prone `width` key.
+          start: (winW - TAB_BAR_WIDTH) / 2,
+          end: (winW - TAB_BAR_WIDTH) / 2,
           bottom: insets.bottom + TAB_BAR_BOTTOM_MARGIN,
           height: TAB_BAR_HEIGHT,
           borderRadius: radii.full,
@@ -52,7 +86,19 @@ export default function TabLayout() {
           ...shadows.tab,
         },
         tabBarItemStyle: {
+          width: TAB_BAR_ITEM_WIDTH,
           height: TAB_BAR_HEIGHT,
+        },
+        // The item's own flex:1 fills the full pill height, but its inner
+        // layout still defaults to justifyContent: 'flex-start' (meant for
+        // icon-above-label) — with tabBarShowLabel: false there's no label
+        // to make room for, so the icon sat pinned near the top. That
+        // inner layout isn't reachable via tabBarItemStyle at all; the icon
+        // wrapper itself has to be told to grow and center within it.
+        tabBarIconStyle: {
+          flex: 1,
+          alignItems: 'center',
+          justifyContent: 'center',
         },
       }}
     >
@@ -74,7 +120,8 @@ export default function TabLayout() {
         name="scan"
         options={{
           title: 'Scan',
-          tabBarIcon: ({ focused }) => <TabIcon Icon={Camera} focused={focused} />,
+          tabBarIcon: () => <ScanTabIcon />,
+          tabBarItemStyle: { width: TAB_BAR_SCAN_ITEM_WIDTH, height: TAB_BAR_HEIGHT },
         }}
       />
       <Tabs.Screen
@@ -107,6 +154,19 @@ const styles = StyleSheet.create({
   },
   iconWrapActive: {
     backgroundColor: colors.sageLight,
+  },
+  scanWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: radii.full,
+    backgroundColor: colors.rust,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: colors.rust,
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 4,
   },
   badgeDot: {
     position: 'absolute',

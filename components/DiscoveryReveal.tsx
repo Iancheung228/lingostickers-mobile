@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Modal, View, Text, Image, TouchableOpacity, TextInput, StyleSheet, SafeAreaView, ActivityIndicator, Alert, KeyboardAvoidingView, Platform } from 'react-native';
-import { X, Bookmark, Pencil, Volume2 } from 'lucide-react-native';
+import { X, Bookmark, Pencil, Volume2, Lightbulb, Info, RotateCcw } from 'lucide-react-native';
 import { StickerDraft } from '@/lib/types';
 import { supabase } from '@/lib/supabase';
 import { speak, stopSpeaking } from '@/lib/speech';
@@ -10,6 +10,9 @@ interface DiscoveryRevealProps {
   draft: StickerDraft | null;
   onAdd: () => void;
   onDiscard: () => void;
+  // Reopens the box/lasso step on the same source photo, in case the cutout
+  // didn't come out right — an alternative to discarding and starting over.
+  onRetryExtraction: () => void;
   onEditWord: (newWord: string) => Promise<void>;
   onEditSentence: (newSentence: string) => Promise<void>;
   saving: boolean;
@@ -17,7 +20,7 @@ interface DiscoveryRevealProps {
   retranslatingSentence: boolean;
 }
 
-export default function DiscoveryReveal({ draft, onAdd, onDiscard, onEditWord, onEditSentence, saving, retranslating, retranslatingSentence }: DiscoveryRevealProps) {
+export default function DiscoveryReveal({ draft, onAdd, onDiscard, onRetryExtraction, onEditWord, onEditSentence, saving, retranslating, retranslatingSentence }: DiscoveryRevealProps) {
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [editingWord, setEditingWord] = useState(false);
   const [wordInput, setWordInput] = useState('');
@@ -83,6 +86,16 @@ export default function DiscoveryReveal({ draft, onAdd, onDiscard, onEditWord, o
         <View style={styles.body}>
           <Text style={styles.discoveredLabel}>NEW DISCOVERY FOUND</Text>
 
+          {/* Informational, not an error — shown inline rather than as a
+              blocking Alert, which used to fire right as the ghost-cutout
+              reveal animation started and interrupt it. */}
+          {!!draft.bgIssue && (
+            <View style={styles.bgIssueBanner}>
+              <Info size={14} color={colors.sageDark} />
+              <Text style={styles.bgIssueText}>{draft.bgIssue.message}</Text>
+            </View>
+          )}
+
           <View style={styles.stickerFrame}>
             {imageUrl ? (
               <Image source={{ uri: imageUrl }} style={styles.image} resizeMode="contain" />
@@ -140,6 +153,13 @@ export default function DiscoveryReveal({ draft, onAdd, onDiscard, onEditWord, o
               </>
             )}
           </TouchableOpacity>
+
+          {!!draft.sentenceInsight && !retranslatingSentence && (
+            <View style={styles.insightRow}>
+              <Lightbulb size={12} color={colors.sageDark} />
+              <Text style={styles.insightText}>{draft.sentenceInsight}</Text>
+            </View>
+          )}
         </View>
 
         <View style={styles.actions}>
@@ -152,6 +172,11 @@ export default function DiscoveryReveal({ draft, onAdd, onDiscard, onEditWord, o
                 <Text style={styles.addButtonText}>Add to Collection</Text>
               </>
             )}
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.retryButton} onPress={onRetryExtraction} disabled={saving}>
+            <RotateCcw size={13} color={colors.terra} />
+            <Text style={styles.retryButtonText}>Retry Extraction</Text>
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.discardButton} onPress={onDiscard} disabled={saving}>
@@ -224,6 +249,19 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     marginBottom: 24,
   },
+  bgIssueBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 6,
+    backgroundColor: colors.sageLight,
+    borderRadius: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    marginTop: -12,
+    marginBottom: 20,
+    maxWidth: 300,
+  },
+  bgIssueText: { flex: 1, fontSize: 12, color: colors.sageDark, lineHeight: 16, fontWeight: '600' },
   stickerFrame: {
     width: 240,
     height: 240,
@@ -272,6 +310,18 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
     textAlign: 'center',
   },
+  insightRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 6,
+    marginTop: spacing.md,
+    paddingTop: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.borderLight,
+    maxWidth: 280,
+  },
+  insightText: { flex: 1, fontSize: 12, color: colors.sageDark, lineHeight: 16 },
   actions: { paddingHorizontal: 32, paddingBottom: 32, gap: 12 },
   floatingEditWrap: {
     position: 'absolute',
@@ -315,6 +365,14 @@ const styles = StyleSheet.create({
     elevation: 6,
   },
   addButtonText: { color: colors.white, fontSize: 16, fontWeight: '800', letterSpacing: 1 },
+  retryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+  },
+  retryButtonText: { color: colors.terra, fontSize: 13, fontWeight: '700' },
   discardButton: { alignItems: 'center', paddingVertical: 12 },
   discardButtonText: { color: colors.inkFaint, fontSize: 14, fontWeight: '600' },
 });

@@ -15,6 +15,11 @@ interface LanguageSchema {
   schemaDescription: string;
 }
 
+// Shared instruction for the sentence_insight field — identical across
+// languages since it's an English-language note about the sentence, not
+// part of the target-language content itself.
+const SENTENCE_INSIGHT_FIELD = `"sentence_insight": "one short English note, under 14 words, that must accurately describe THIS sentence as written — pick whichever of these actually applies, in order of preference: (a) name the grammar pattern/tense/structure it actually uses (e.g. 'Uses the passé composé, the everyday past tense.'); (b) if the sentence names a second real object from the scene, call that word out with its meaning (e.g. 'Bonus word: bureau — desk.'); (c) if neither applies, give one specific, true fact about the headword itself — a false friend, an irregular form, a gender quirk, or a usage nuance (e.g. 'Une pomme is feminine, unlike most words ending in -e.'). Never state a generic fact unrelated to the sentence or word you actually produced, and never leave this field empty."`;
+
 const LANGUAGE_SCHEMAS: Record<Language, LanguageSchema> = {
   fr: {
     label: 'French',
@@ -22,8 +27,9 @@ const LANGUAGE_SCHEMAS: Record<Language, LanguageSchema> = {
   "word": "the object name in French with article (e.g. Le Café, La Pomme, Le Chien)",
   "translation": "English translation (e.g. Coffee, Apple, Dog)",
   "reading": "phonetic spelling of the French word in English (e.g. luh ka-fay, la pum, luh she-en)",
-  "sentence": "a short, natural French sentence describing this object in the scene it was photographed in (e.g. 'Le café est posé sur le bureau, prêt pour le matin.')",
-  "sentence_translation": "English translation of the sentence (e.g. 'The coffee is sitting on the desk, ready for the morning.')",
+  "sentence": "a short, natural French sentence about this object, grounded in the SPECIFIC real details of the scene it was photographed in — not a generic placement sentence",
+  "sentence_translation": "English translation of the sentence",
+  ${SENTENCE_INSIGHT_FIELD},
   "category": "one of exactly: Kitchen, Animals, Study, Nature, Other"
 }`,
   },
@@ -33,8 +39,9 @@ const LANGUAGE_SCHEMAS: Record<Language, LanguageSchema> = {
   "word": "the object name in Japanese, written naturally with kanji/katakana/hiragana as appropriate (e.g. コーヒー, りんご, 犬)",
   "translation": "English translation (e.g. Coffee, Apple, Dog)",
   "reading": "romaji reading of the Japanese word, using macrons for long vowels (e.g. kōhī, ringo, inu)",
-  "sentence": "a short, natural Japanese sentence describing this object in the scene it was photographed in (e.g. 'コーヒーがデスクの上に置いてあります。')",
-  "sentence_translation": "English translation of the sentence (e.g. 'The coffee is sitting on the desk.')",
+  "sentence": "a short, natural Japanese sentence about this object, grounded in the SPECIFIC real details of the scene it was photographed in — not a generic placement sentence",
+  "sentence_translation": "English translation of the sentence",
+  ${SENTENCE_INSIGHT_FIELD},
   "category": "one of exactly: Kitchen, Animals, Study, Nature, Other"
 }`,
   },
@@ -44,8 +51,9 @@ const LANGUAGE_SCHEMAS: Record<Language, LanguageSchema> = {
   "word": "the object name in Cantonese, written in Traditional Chinese characters as used in Hong Kong (e.g. 咖啡, 蘋果, 狗)",
   "translation": "English translation (e.g. Coffee, Apple, Dog)",
   "reading": "Jyutping romanization of the Cantonese word, with tone numbers (e.g. gaa3 fe1, ping4 gwo2, gau2)",
-  "sentence": "a short, natural Cantonese sentence (written in Traditional Chinese characters, colloquial Cantonese grammar/vocabulary — not Standard Written Chinese) describing this object in the scene it was photographed in (e.g. '杯咖啡放喺張枱度，準備好聽朝飲。')",
-  "sentence_translation": "English translation of the sentence (e.g. 'The coffee is sitting on the desk, ready for the morning.')",
+  "sentence": "a short, natural Cantonese sentence (written in Traditional Chinese characters, colloquial Cantonese grammar/vocabulary — not Standard Written Chinese) about this object, grounded in the SPECIFIC real details of the scene it was photographed in — not a generic placement sentence",
+  "sentence_translation": "English translation of the sentence",
+  ${SENTENCE_INSIGHT_FIELD},
   "category": "one of exactly: Kitchen, Animals, Study, Nature, Other"
 }`,
   },
@@ -70,7 +78,18 @@ function cleanJsonResponse(text: string): string {
 // of stacked calls, just normal token pressure. The 429 body tells us
 // exactly how long to wait ("please try again in 7.95s"), so retry that
 // wait instead of failing the whole scan over a few-second token-bucket dip.
-const GROQ_MAX_RETRIES = 2;
+//
+// This used to be tightened to 1 retry/8s under the assumption that the
+// "EarlyDrop" failures seen in the edge function logs were a wall-clock
+// timeout — they weren't. They were the edge runtime's separate 2-second
+// *CPU-time* budget (see the RGBA-pipeline comment in create-sticker's
+// index.ts), which retry backoff never touched in the first place (an
+// awaited setTimeout burns wall-clock, not CPU). Wall-clock has generous
+// headroom (150s free tier / 400s paid) compared to a Groq token-bucket
+// refill, so there's no reason to fail fast here — more retries just means
+// more transient rate-limit blips get absorbed instead of surfacing to the
+// user.
+const GROQ_MAX_RETRIES = 3;
 const GROQ_RETRY_CAP_MS = 15_000; // never wait longer than this per attempt, however long the API asks
 
 function parseRetryAfterMs(response: Response, bodyText: string): number {
@@ -140,12 +159,28 @@ export async function identifyWithGroq(base64Data: string, language: Language, m
     { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${base64Data}` } },
   ];
 
+  // The goal of "sentence" is for the learner to anchor the word to their own
+  // actual daily life, not a plausible-sounding textbook caption — so it must
+  // read as unmistakably THIS photo, not a scene that could be any photo of
+  // this object. It's also a teaching moment beyond the headword: naturally
+  // mentioning a second real object visible in the scene (with its own
+  // vocabulary) or landing on a grammar point that fits what's actually
+  // happening is encouraged — but only if the scene genuinely supports it;
+  // never invent detail or force complexity the photo doesn't have.
   let instructions: string;
   if (memoryBase64Data) {
     content.push({ type: 'image_url', image_url: { url: `data:image/jpeg;base64,${memoryBase64Data}` } });
-    instructions = `The FIRST image is a close-up crop of a single object — this is the ONLY object you are identifying. The SECOND image is the wider, uncropped scene it was found in, provided purely for background context. The "word", "translation", and "reading" fields must describe ONLY the object in the FIRST image, never something else that happens to appear in the second image. Once you've identified that object, write a short, natural "sentence" in ${label} describing that exact same object as it appears in the wider scene (the second image) — what it's near, what's happening, who might be using it — but the object itself must stay the one from the first image.`;
+    instructions = `The FIRST image is a close-up crop of a single object — this is the ONLY object you are identifying. The SECOND image is the wider, uncropped scene it was found in. The "word", "translation", and "reading" fields must describe ONLY the object in the FIRST image, never something else that happens to appear in the second image.
+
+Once you've identified that object, inspect the SECOND image and pick at least TWO of these five kinds of concrete detail, using only what is actually visible:
+1. its real color, material, or condition (worn, new, open, half-full, etc.)
+2. the exact surface, room, or place it's sitting in/on
+3. one specific other object next to or touching it
+4. an activity or state actually in progress (someone's hand near it, a lid off, a page open)
+5. a lighting/time-of-day cue genuinely visible (sunlight through a window, a lamp on, dim evening light)
+Weave at least two of those into a short, natural "sentence" in ${label}, so it reads as unmistakably this exact photo rather than a generic scene that could describe any photo of this object. Never invent a detail that isn't actually visible — skip a category if the photo doesn't support it, but still find two that it does. Avoid stock phrasing like "sitting on the desk, ready for the morning" unless a desk and morning are genuinely what's in the photo. If detail #3 gives you a second real object worth naming, that doubles as a bonus vocabulary moment. The object identified in the FIRST image must still stay the sentence's main subject.`;
   } else {
-    instructions = `Identify the main object in this image, then write a short, natural sentence in ${label} describing the object in this scene.`;
+    instructions = `Identify the main object in this image, then write a short, natural sentence in ${label} describing the object in this scene. Ground it in at least two concrete, specific details actually visible — real color/material/condition, the exact surface or place it's on, a specific nearby object, or a visible activity/lighting cue — rather than a generic description.`;
   }
 
   content.push({
@@ -212,9 +247,10 @@ export async function translateSentenceWithGroq(englishSentence: string, languag
   const text = await callGroq(apiKey, [{
     role: 'user',
     content: `Translate the following English sentence into natural, conversational ${label}: "${englishSentence}"
-Return ONLY a valid JSON object with this exact field:
+Return ONLY a valid JSON object with these exact fields:
 {
-  "sentence": "the ${label} translation"
+  "sentence": "the ${label} translation",
+  ${SENTENCE_INSIGHT_FIELD}
 }
 Return only the JSON, no markdown, no explanation.`,
   }]);

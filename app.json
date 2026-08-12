@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "lingostickers-mobile",
+    "name": "Souvenir",
     "slug": "lingostickers-mobile",
     "scheme": "lingostickers",
     "version": "1.0.0",
@@ -69,7 +69,12 @@
           "locationWhenInUsePermission": "LingoStickers can tag where this memory happened, turning your collection into a map of your language journey. This is entirely optional."
         }
       ],
-      "expo-audio",
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "LingoStickers uses your microphone to record yourself practicing a word's pronunciation."
+        }
+      ],
       [
         "expo-notifications",
         {

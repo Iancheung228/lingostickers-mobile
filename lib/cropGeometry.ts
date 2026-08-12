@@ -65,6 +65,19 @@ export function computeContainRect(containerW: number, containerH: number, image
   return { x: (containerW - width) / 2, y: 0, width, height };
 }
 
+// Pulls a single point back onto the image's own display rect — used while
+// drawing a freehand lasso so a finger that slides past the photo's edge
+// keeps tracing along that edge instead of wandering into the letterboxed
+// margin around it (which would otherwise end up as stray polygon vertices
+// outside the actual image once reprojected for the server).
+export function clampPointToRect(p: Point, bounds: Rect): Point {
+  'worklet';
+  return {
+    x: Math.min(Math.max(p.x, bounds.x), bounds.x + bounds.width),
+    y: Math.min(Math.max(p.y, bounds.y), bounds.y + bounds.height),
+  };
+}
+
 export function clampBox(box: Rect, bounds: Rect): Rect {
   'worklet';
   const width = Math.min(box.width, bounds.width);

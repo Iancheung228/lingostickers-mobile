@@ -39,9 +39,13 @@ export default function FriendsScreen() {
   };
 
   const handleSendChallenge = async (receiverId: string) => {
-    if (!challengeSticker) return;
+    if (!challengeSticker) return false;
     const { error } = await sendChallenge(challengeSticker.id, receiverId);
-    if (error) Alert.alert('Challenge failed', error.message);
+    if (error) {
+      Alert.alert('Challenge failed', error.message);
+      return false;
+    }
+    return true;
   };
 
   const acceptedFriends = friends.filter(f => f.status === 'accepted');

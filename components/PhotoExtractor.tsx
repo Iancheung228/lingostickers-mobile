@@ -58,7 +58,11 @@ export default function PhotoExtractor({ imageUri, imageWidth, imageHeight, onCl
   );
 
   // Seed the box centered at ~70% of the displayed image once we know its
-  // layout. Re-seeds when a new photo is loaded (tracked by URI).
+  // layout. Re-seeds when a new photo is loaded (tracked by URI) — but NOT
+  // when the same photo reopens (e.g. "Retry Extraction" in DiscoveryReveal,
+  // which reuses this same mounted instance rather than remounting it, since
+  // rendering `null` while hidden doesn't unmount), so a retry deliberately
+  // picks up right where the box/lasso was left, instead of resetting.
   useEffect(() => {
     if (!imageUri || displayRect.width <= 0 || displayRect.height <= 0) return;
     if (initializedFor.current === imageUri) return;
@@ -74,6 +78,13 @@ export default function PhotoExtractor({ imageUri, imageWidth, imageHeight, onCl
     box.value = initial;
     startBox.value = initial;
     initializedFor.current = imageUri;
+    // A genuinely different photo (not a same-photo reopen) — clear any
+    // lasso left over from whatever was previously loaded in this same
+    // instance. Without this, a stale `lassoReady=true` would let Extract
+    // fire immediately using another photo's leftover polygon.
+    setMode('box');
+    setLassoPoints([]);
+    setLassoReady(false);
   }, [imageUri, displayRect]);
 
   const handleLayout = useCallback((e: LayoutChangeEvent) => {
@@ -166,7 +177,7 @@ export default function PhotoExtractor({ imageUri, imageWidth, imageHeight, onCl
             {mode === 'box'
               ? 'Drag the corners to box in the object'
               : lassoReady
-                ? 'Looks good — redraw anytime, or extract below'
+                ? 'Loop locked in — redraw anytime, or tap Extract below'
                 : 'Circle the object with your finger'}
           </Text>
           <ToolModeSwitch mode={mode} onChange={handleModeChange} />
@@ -185,7 +196,7 @@ export default function PhotoExtractor({ imageUri, imageWidth, imageHeight, onCl
             <CropBoxOverlay box={box} startBox={startBox} displayRect={displayRect} />
           )}
           {displayRect.width > 0 && mode === 'lasso' && (
-            <LassoOverlay onComplete={handleLassoComplete} />
+            <LassoOverlay bounds={displayRect} onComplete={handleLassoComplete} />
           )}
         </View>
 
@@ -204,6 +215,12 @@ export default function PhotoExtractor({ imageUri, imageWidth, imageHeight, onCl
               </>
             )}
           </TouchableOpacity>
+          {/* `cropping` covers the brief local crop/resize too, but `processing`
+              (the actual network call, up to ~20s) is the one worth telling
+              the user about instead of leaving a bare spinner for that long. */}
+          {processing && (
+            <Text style={styles.busyHint}>Identifying the word and cutting it out…</Text>
+          )}
         </View>
       </SafeAreaView>
     </Modal>
@@ -253,5 +270,6 @@ const styles = StyleSheet.create({
     elevation: 6,
   },
   extractButtonDisabled: { opacity: 0.6 },
+  busyHint: { textAlign: 'center', marginTop: 10, fontSize: 12, color: colors.inkFaint, fontWeight: '600' },
   extractButtonText: { color: colors.white, fontSize: 16, fontWeight: '800', letterSpacing: 1 },
 });

@@ -2,7 +2,7 @@ export type Language = 'fr' | 'ja' | 'yue';
 
 export type WallDisplayStyle = 'framed' | 'cutout';
 export type CutoutBorderStyle = 'shadow' | 'outline' | 'none';
-export type WallBackgroundDim = 'light' | 'medium' | 'dark';
+export type WallBackgroundDim = 'none' | 'light' | 'medium' | 'dark';
 
 export interface Profile {
   id: string;
@@ -10,8 +10,11 @@ export interface Profile {
   target_language: Language;
   wall_display_style: WallDisplayStyle;
   cutout_border_style: CutoutBorderStyle;
-  wall_background_path: string | null;
-  wall_background_dim: WallBackgroundDim;
+  // Home-screen mini wall's own cover photo — deliberately separate from
+  // any individual board's background_path so personalizing the home
+  // preview doesn't force a matching change onto any board, or vice versa.
+  home_background_path: string | null;
+  home_background_dim: WallBackgroundDim;
   created_at: string;
 }
 
@@ -26,9 +29,17 @@ export interface Sticker {
   reading: string;
   sentence: string;
   sentence_translation: string;
+  // Short English callout naming a grammar pattern the sentence uses, or a
+  // bonus word it introduces — see supabase/functions/_shared/vocab.ts.
+  // Null for stickers created before this existed.
+  sentence_insight: string | null;
   category: Category;
   image_path: string;
   memory_photo_path: string | null;
+  // Dominant color of the memory photo (hex), extracted server-side at
+  // upload time — see supabase/functions/_shared/imageColor.ts. Null when
+  // there's no memory photo, or for rows created before this existed.
+  memory_photo_color: string | null;
   voice_note_path: string | null;
   // Where within the recorded file actual speech starts/ends — playback
   // seeks to voice_note_start_ms and stops at voice_note_end_ms so it
@@ -53,6 +64,13 @@ export interface Board {
   id: string;
   user_id: string;
   name: string;
+  // Each board has its own independent cover photo — see
+  // 025_per_board_background.sql.
+  background_path: string | null;
+  // Tint strength as a percent (0-70), via a continuous slider — see
+  // 026_board_background_dim_percent.sql. Unlike home_background_dim above,
+  // this is NOT the fixed none/light/medium/dark enum.
+  background_dim: number;
   created_at: string;
 }
 
@@ -129,9 +147,12 @@ export interface StickerDraft {
   reading: string;
   sentence: string;
   sentenceTranslation: string;
+  sentenceInsight: string | null;
   category: Category;
   imagePath: string;
   memoryPhotoPath: string | null;
+  memoryPhotoColor: string | null;
+  bgIssue: { kind: string; message: string } | null;
   discoveredAt: string;
   latitude: number | null;
   longitude: number | null;

@@ -5,6 +5,7 @@ import { ArrowLeft } from 'lucide-react-native';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
 import { Sticker } from '@/lib/types';
+import { useSignedUrls } from '@/hooks/useSignedUrls';
 import StickerCard from '@/components/StickerCard';
 import StickerDetailView from '@/components/StickerDetailView';
 import { colors, shadows, radii, spacing, fonts } from '@/constants/theme';
@@ -43,6 +44,13 @@ export default function DayScreen() {
     setSelectedSticker(prev => prev && prev.id === id ? { ...prev, ...patch } : prev);
   }, []);
 
+  // One batched sign request for the whole day's grid — see
+  // hooks/useSignedUrls.ts.
+  const urls = useSignedUrls(useMemo(
+    () => stickers.flatMap(s => [s.image_path, s.voice_note_path]),
+    [stickers]
+  ));
+
   const formattedDate = useMemo(() => {
     if (!date) return '';
     return DATE_FORMAT.format(new Date(`${date}T00:00:00`));
@@ -71,7 +79,12 @@ export default function DayScreen() {
           contentContainerStyle={styles.grid}
           renderItem={({ item }) => (
             <View style={styles.cardWrapper}>
-              <StickerCard sticker={item} onPress={() => setSelectedSticker(item)} />
+              <StickerCard
+                sticker={item}
+                onPress={() => setSelectedSticker(item)}
+                imageUrl={urls.get(item.image_path) ?? null}
+                voiceUrl={item.voice_note_path ? urls.get(item.voice_note_path) ?? null : null}
+              />
             </View>
           )}
         />

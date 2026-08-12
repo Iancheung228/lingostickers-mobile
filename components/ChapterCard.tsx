@@ -1,29 +1,30 @@
-import { useEffect, useState } from 'react';
-import { TouchableOpacity, Image, Text, View, StyleSheet, ActivityIndicator } from 'react-native';
+import { TouchableOpacity, Text, View, StyleSheet, ActivityIndicator } from 'react-native';
+import { Image } from 'expo-image';
 import { Chapter } from '@/lib/chapters';
-import { supabase } from '@/lib/supabase';
 import { colors, fonts } from '@/constants/theme';
 
 interface ChapterCardProps {
   chapter: Chapter;
   onPress: () => void;
+  // Signed by the parent list in one batched request (hooks/useSignedUrls)
+  // rather than each card minting its own — see skills.md wall-loading note.
+  imageUrl: string | null;
 }
 
-export default function ChapterCard({ chapter, onPress }: ChapterCardProps) {
-  const [imageUrl, setImageUrl] = useState<string | null>(null);
-
-  useEffect(() => {
-    const path = chapter.coverSticker.memory_photo_path ?? chapter.coverSticker.image_path;
-    supabase.storage.from('sticker-images')
-      .createSignedUrl(path, 3600)
-      .then(({ data }) => { if (data) setImageUrl(data.signedUrl); });
-  }, [chapter.coverSticker.id]);
-
+export default function ChapterCard({ chapter, onPress, imageUrl }: ChapterCardProps) {
   return (
     <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.9}>
       <View style={styles.imageContainer}>
         {imageUrl ? (
-          <Image source={{ uri: imageUrl }} style={styles.image} resizeMode="cover" />
+          <Image
+            source={{
+              uri: imageUrl,
+              cacheKey: chapter.coverSticker.memory_photo_path ?? chapter.coverSticker.image_path,
+            }}
+            cachePolicy="memory-disk"
+            style={styles.image}
+            contentFit="cover"
+          />
         ) : (
           <ActivityIndicator style={styles.image} color={colors.terra} />
         )}

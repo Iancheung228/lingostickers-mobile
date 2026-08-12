@@ -1,7 +1,19 @@
 import { useEffect, useRef, useState } from 'react';
-import { Modal, View, Text, Image, TouchableOpacity, TextInput, StyleSheet, SafeAreaView, ScrollView, ActivityIndicator, Alert, KeyboardAvoidingView, Platform } from 'react-native';
-import Animated, { useSharedValue, useAnimatedStyle, withTiming, interpolate, Easing } from 'react-native-reanimated';
-import { X, Trash2, Share2, RotateCw, Volume2, Send, Heart, Tag, MapPin, MessageSquare, BookOpen, Mic, Play, Square } from 'lucide-react-native';
+import { Modal, View, Text, TouchableOpacity, TextInput, StyleSheet, ActivityIndicator, Alert, KeyboardAvoidingView, Platform, AccessibilityInfo, useWindowDimensions } from 'react-native';
+import { Image } from 'expo-image';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  useAnimatedScrollHandler,
+  interpolate,
+  Extrapolation,
+  withSpring,
+  runOnJS,
+} from 'react-native-reanimated';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import Svg, { Defs, LinearGradient, Stop, Rect } from 'react-native-svg';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { X, Trash2, Share2, Volume2, Send, Heart, Tag, MapPin, MessageSquare, BookOpen, Mic, Play, Square, Lightbulb } from 'lucide-react-native';
 import { File, Directory, Paths } from 'expo-file-system';
 import {
   useAudioRecorder,
@@ -19,6 +31,7 @@ import { supabase } from '@/lib/supabase';
 import { speak, stopSpeaking } from '@/lib/speech';
 import { computeTrimOffsets, MeteringSample } from '@/lib/audioTrim';
 import { useTrimmedVoicePlayback } from '@/hooks/useTrimmedVoicePlayback';
+import { getSurfaceTint, getPanelTint, getPanelBorderTint, getAccentSurfaceTint, getAccentTint } from '@/lib/color';
 import SendChallengeModal from '@/components/SendChallengeModal';
 import { useFriends } from '@/hooks/useFriends';
 import { useChallenges } from '@/hooks/useChallenges';
@@ -27,6 +40,21 @@ import { colors, shadows, radii, spacing, fonts } from '@/constants/theme';
 // WeChat custom-sticker uploads look best as small square PNGs with a
 // transparent background — see "Custom Stickers" in WeChat's gallery settings.
 const WECHAT_STICKER_SIZE = 240;
+
+// Header row's own content height (excludes the safe-area top inset, which
+// varies per device and gets added separately).
+const HEADER_BAR_HEIGHT = 38 + spacing.ms * 2;
+const CUTOUT_SIZE = 190;
+// How much of the cutout sits up over the photo vs. down onto the panel
+// below — a postcard-sticker-peeling-off-the-edge effect.
+const CUTOUT_OVERLAP = 68;
+
+const CAPTION_DATE = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+
+// Reanimated's own Animated.Image only wraps core RN primitives, not
+// expo-image — this lets the parallax hero (heroAnimatedStyle below) animate
+// an expo-image so the memory photo still benefits from disk caching.
+const AnimatedImage = Animated.createAnimatedComponent(Image);
 
 interface StickerDetailViewProps {
   sticker: Sticker | null;
@@ -48,7 +76,12 @@ export default function StickerDetailView({ sticker, onClose, onDelete, onUpdate
   const [editingNotes, setEditingNotes] = useState(false);
   const [notesDraft, setNotesDraft] = useState('');
   const [savingNotes, setSavingNotes] = useState(false);
-  const flipProgress = useSharedValue(0);
+  const [reducedMotion, setReducedMotion] = useState(false);
+  const insets = useSafeAreaInsets();
+  const { height: windowHeight } = useWindowDimensions();
+  const heroHeight = Math.round(windowHeight * 0.42);
+  const scrollY = useSharedValue(0);
+  const dismissTranslateY = useSharedValue(0);
   const { friends } = useFriends();
   const { sendChallenge } = useChallenges();
   const acceptedFriends = friends.filter(f => f.status === 'accepted');
@@ -60,6 +93,88 @@ export default function StickerDetailView({ sticker, onClose, onDelete, onUpdate
   const { play: playVoice, pause: pauseVoice } = useTrimmedVoicePlayback(
     voiceUrl, sticker?.voice_note_start_ms, sticker?.voice_note_end_ms
   );
+
+  const hasHero = !!sticker?.memory_photo_path;
+
+  // Every surface on this screen derived from the sticker's memory photo —
+  // same hue as the photo for structural/passive surfaces (recedes,
+  // harmonizes), complementary hue for interactive/CTA elements (pops).
+  // Falls back to the app's exact fixed palette when there's no photo, so
+  // a sticker with no memory photo renders pixel-identical to before.
+  const photoColor = sticker?.memory_photo_color;
+  const pageTint = getSurfaceTint(photoColor, colors.sky);
+  const cardTint = getSurfaceTint(photoColor, colors.card);
+  const tagTint = getSurfaceTint(photoColor, colors.cardAlt);
+  const tagAltTint = getSurfaceTint(photoColor, colors.sky);
+  const panelTint = getPanelTint(photoColor, colors.skyDeep);
+  const panelBorderTint = getPanelBorderTint(photoColor, colors.skyNight);
+  const ctaSurfaceTint = getAccentSurfaceTint(photoColor, colors.cardAlt);
+  // Border and icon share the same computed accent hue when a photo is
+  // present (getAccentTint's fallback param is only read when there's no
+  // photo) — kept as two calls purely so each falls back to its own
+  // original fixed color when there's nothing to derive from.
+  const ctaBorderTint = getAccentTint(photoColor, colors.skyNight, colors.cardAlt);
+  const ctaIconTint = getAccentTint(photoColor, colors.inkDark, colors.cardAlt);
+  const aiSurfaceTint = getAccentSurfaceTint(photoColor, colors.terraLight);
+  const aiAccentTint = getAccentTint(photoColor, colors.terraDark, colors.terraLight);
+  const micIdleTint = getAccentTint(photoColor, colors.terra, colors.sky);
+
+  useEffect(() => {
+    let mounted = true;
+    AccessibilityInfo.isReduceMotionEnabled().then((enabled) => { if (mounted) setReducedMotion(enabled); });
+    const sub = AccessibilityInfo.addEventListener('reduceMotionChanged', setReducedMotion);
+    return () => { mounted = false; sub.remove(); };
+  }, []);
+
+  const scrollHandler = useAnimatedScrollHandler((event) => {
+    scrollY.value = event.contentOffset.y;
+  });
+
+  // Photo grows/lags behind the scroll when pulled down past the top
+  // (rubber-band stretch) and lags slightly on the way up (parallax) — the
+  // same recipe as the App Store / Apple Music hero header. Skipped
+  // entirely under Reduce Motion.
+  const heroAnimatedStyle = useAnimatedStyle(() => {
+    if (reducedMotion) return {};
+    const translateY = interpolate(
+      scrollY.value, [-heroHeight, 0, heroHeight], [-heroHeight * 0.3, 0, heroHeight * 0.4], Extrapolation.CLAMP
+    );
+    const scale = interpolate(scrollY.value, [-heroHeight, 0], [1.5, 1], Extrapolation.CLAMP);
+    return { transform: [{ translateY }, { scale }] };
+  });
+
+  // Header chrome starts fully transparent over the photo and fades to a
+  // solid backing as the hero scrolls out of view — Apple Music's
+  // now-playing title-reveal pattern. No hero photo → always solid.
+  const headerProgressStyle = useAnimatedStyle(() => {
+    if (!hasHero) return { opacity: 1 };
+    const threshold = Math.max(heroHeight - HEADER_BAR_HEIGHT - insets.top, 1);
+    return { opacity: interpolate(scrollY.value, [0, threshold], [0, 1], Extrapolation.CLAMP) };
+  });
+
+  // Drag-the-header-down-to-dismiss — lives on the fixed header bar (a
+  // sibling of the ScrollView, not inside it) so it never has to arbitrate
+  // gesture priority with the scroll/hero-parallax pan underneath. Past the
+  // threshold (distance or a fast flick), it hands off to the same onClose
+  // the X button uses — the Modal's own dismiss animation takes it from
+  // wherever the finger let go, same as the native iOS pageSheet gesture.
+  const DISMISS_DISTANCE_THRESHOLD = 110;
+  const DISMISS_VELOCITY_THRESHOLD = 800;
+  const dismissPan = Gesture.Pan()
+    .hitSlop({ top: 12, bottom: 12, left: 60, right: 60 })
+    .onUpdate((e) => {
+      dismissTranslateY.value = Math.max(0, e.translationY);
+    })
+    .onEnd((e) => {
+      if (e.translationY > DISMISS_DISTANCE_THRESHOLD || e.velocityY > DISMISS_VELOCITY_THRESHOLD) {
+        runOnJS(onClose)();
+      } else {
+        dismissTranslateY.value = withSpring(0, { damping: 18 });
+      }
+    });
+  const dismissAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: dismissTranslateY.value }],
+  }));
 
   useEffect(() => {
     if (!recorderState.isRecording) return;
@@ -86,10 +201,11 @@ export default function StickerDetailView({ sticker, onClose, onDelete, onUpdate
     if (sticker?.voice_note_path) refreshVoiceUrl(sticker.voice_note_path);
   }, [sticker?.voice_note_path]);
 
-  // Fresh sticker opened — start showing the front face, and resolve the
-  // memory photo (if any) so it's ready by the time the user flips.
+  // Fresh sticker opened — resolve the memory photo (if any) for the hero,
+  // and reset scroll-dependent/edit state.
   useEffect(() => {
-    flipProgress.value = 0;
+    scrollY.value = 0;
+    dismissTranslateY.value = 0;
     setMemoryImageUrl(null);
     setEditingNotes(false);
     setNotesDraft(sticker?.notes ?? '');
@@ -108,29 +224,6 @@ export default function StickerDetailView({ sticker, onClose, onDelete, onUpdate
       if (recorderState.isRecording) recorder.stop();
     };
   }, [sticker?.id]);
-
-  const frontFaceStyle = useAnimatedStyle(() => ({
-    transform: [
-      { perspective: 1200 },
-      { rotateY: `${interpolate(flipProgress.value, [0, 1], [0, 180])}deg` },
-    ],
-  }));
-
-  const backFaceStyle = useAnimatedStyle(() => ({
-    transform: [
-      { perspective: 1200 },
-      { rotateY: `${interpolate(flipProgress.value, [0, 1], [180, 360])}deg` },
-    ],
-  }));
-
-  const handleFlip = () => {
-    if (!sticker?.memory_photo_path) return;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    flipProgress.value = withTiming(flipProgress.value === 0 ? 1 : 0, {
-      duration: 500,
-      easing: Easing.out(Easing.cubic),
-    });
-  };
 
   const handleToggleFavorite = async () => {
     if (!sticker) return;
@@ -320,220 +413,283 @@ export default function StickerDetailView({ sticker, onClose, onDelete, onUpdate
 
   if (!sticker) return null;
 
+  const captionText = sticker.location_label
+    ? `${sticker.location_label} · ${CAPTION_DATE.format(new Date(sticker.discovered_at))}`
+    : CAPTION_DATE.format(new Date(sticker.discovered_at));
+
   return (
     // "pageSheet" (iOS-only — this app is currently iOS-first, see skills.md
     // #4) shows this as a card over the home screen instead of a fully
-    // opaque full-screen page, and gets the native swipe-down-to-dismiss
-    // gesture for free; onDismiss fires when that gesture completes so it
-    // stays in sync with tapping the X button.
+    // opaque full-screen page. onDismiss fires if iOS's own native
+    // swipe-down gesture completes, so it stays in sync with tapping the X
+    // button — but that native gesture is iOS-only and undiscoverable (no
+    // visual affordance), so the header's grabber handle below adds an
+    // explicit, cross-platform drag-to-dismiss on top of it.
     <Modal visible animationType="slide" presentationStyle="pageSheet" onDismiss={onClose}>
-      <SafeAreaView style={styles.container}>
-        <View style={styles.header}>
-          <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-            <X size={22} color={colors.inkDark} />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Sticker Inspector</Text>
-          <View style={styles.headerActions}>
-            <TouchableOpacity onPress={handleToggleFavorite} style={styles.iconButton} hitSlop={4}>
-              <Heart
-                size={18}
-                color={sticker.is_favorite ? colors.error : colors.inkFaint}
-                fill={sticker.is_favorite ? colors.error : 'transparent'}
-              />
-            </TouchableOpacity>
-            <TouchableOpacity onPress={handleExportPress} style={styles.iconButton} disabled={exporting || !imageUrl} hitSlop={4}>
-              {exporting
-                ? <ActivityIndicator size="small" color={colors.inkDark} />
-                : <Share2 size={17} color={colors.inkDark} />}
-            </TouchableOpacity>
-            <TouchableOpacity onPress={handleDelete} style={styles.iconButton} disabled={deleting} hitSlop={4}>
-              {deleting
-                ? <ActivityIndicator size="small" color={colors.error} />
-                : <Trash2 size={18} color={colors.error} />}
-            </TouchableOpacity>
-          </View>
-        </View>
-
+      <Animated.View style={[styles.container, { backgroundColor: pageTint }, dismissAnimatedStyle]}>
         <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-        <ScrollView contentContainerStyle={styles.scrollBody} showsVerticalScrollIndicator={false}>
-          <TouchableOpacity
-            style={styles.stickerFrame}
-            onPress={handleFlip}
-            activeOpacity={sticker.memory_photo_path ? 0.85 : 1}
-            disabled={!sticker.memory_photo_path}
+          <Animated.ScrollView
+            onScroll={scrollHandler}
+            scrollEventThrottle={16}
+            contentContainerStyle={[
+              styles.scrollBody,
+              {
+                // Hero photos intentionally run edge-to-edge behind the
+                // transparent header. Without one, there's no content to
+                // show through it, so reserve the header's own height —
+                // otherwise it paints over (crops) the top of the cutout.
+                paddingTop: hasHero ? 0 : HEADER_BAR_HEIGHT + insets.top,
+                paddingBottom: spacing.xxl + insets.bottom,
+              },
+            ]}
+            showsVerticalScrollIndicator={false}
           >
-            <Animated.View style={[styles.face, frontFaceStyle]}>
-              {imageUrl ? (
-                <Image source={{ uri: imageUrl }} style={styles.image} resizeMode="contain" />
-              ) : (
-                <ActivityIndicator style={styles.image} color={colors.terra} />
-              )}
-            </Animated.View>
+            {hasHero ? (
+              <>
+                <View style={[styles.heroBox, { height: heroHeight }]}>
+                  {memoryImageUrl ? (
+                    <AnimatedImage
+                      source={{ uri: memoryImageUrl, cacheKey: sticker.memory_photo_path ?? undefined }}
+                      cachePolicy="memory-disk"
+                      style={[styles.heroImage, heroAnimatedStyle]}
+                      contentFit="cover"
+                    />
+                  ) : (
+                    <ActivityIndicator style={styles.heroImage} color={colors.card} />
+                  )}
+                  <Svg width="100%" height="100%" style={StyleSheet.absoluteFill} pointerEvents="none">
+                    <Defs>
+                      <LinearGradient id="heroFade" x1="0" y1="0" x2="0" y2="1">
+                        <Stop offset="0" stopColor={pageTint} stopOpacity={0} />
+                        <Stop offset="0.6" stopColor={pageTint} stopOpacity={0} />
+                        <Stop offset="1" stopColor={pageTint} stopOpacity={1} />
+                      </LinearGradient>
+                    </Defs>
+                    <Rect x="0" y="0" width="100%" height="100%" fill="url(#heroFade)" />
+                  </Svg>
+                  <View style={styles.captionPill}>
+                    <MapPin size={12} color={colors.white} />
+                    <Text style={styles.captionText} numberOfLines={1}>{captionText}</Text>
+                  </View>
+                </View>
 
-            {sticker.memory_photo_path && (
-              <Animated.View style={[styles.face, styles.backFace, backFaceStyle]}>
-                {memoryImageUrl ? (
-                  <Image source={{ uri: memoryImageUrl }} style={styles.memoryImage} resizeMode="cover" />
+                <View style={styles.heroCutoutWrap}>
+                  {imageUrl ? (
+                    <Image
+                      source={{ uri: imageUrl, cacheKey: sticker.image_path }}
+                      cachePolicy="memory-disk"
+                      style={styles.heroCutoutImage}
+                      contentFit="contain"
+                    />
+                  ) : (
+                    <ActivityIndicator color={colors.terra} />
+                  )}
+                </View>
+              </>
+            ) : (
+              <View style={styles.classicFrame}>
+                {imageUrl ? (
+                  <Image
+                    source={{ uri: imageUrl, cacheKey: sticker.image_path }}
+                    cachePolicy="memory-disk"
+                    style={styles.image}
+                    contentFit="contain"
+                  />
                 ) : (
                   <ActivityIndicator style={styles.image} color={colors.terra} />
                 )}
-                <View style={styles.memoryLabel}>
-                  <Text style={styles.memoryLabelText}>THE MOMENT</Text>
-                </View>
-              </Animated.View>
-            )}
-          </TouchableOpacity>
-
-          {sticker.memory_photo_path && (
-            <View style={styles.flipHint}>
-              <RotateCw size={13} color={colors.inkFaint} />
-              <Text style={styles.flipHintText}>Tap the sticker to flip</Text>
-            </View>
-          )}
-
-          <TouchableOpacity
-            onPress={() => setChallengeOpen(true)}
-            style={styles.challengeButton}
-            disabled={!imageUrl}
-          >
-            <Send size={13} color={colors.inkDark} />
-            <Text style={styles.challengeButtonText}>Challenge a Friend</Text>
-          </TouchableOpacity>
-
-          {/* Cozy panel — word, tags, contextual sentence, notes */}
-          <View style={styles.panel}>
-            <View style={styles.wordCard}>
-              <View style={styles.wordRow}>
-                <Text style={styles.word}>{sticker.word}</Text>
               </View>
+            )}
 
-              <View style={styles.pronunciationRow}>
-                <TouchableOpacity
-                  onPress={() => speak(sticker.word, sticker.language)}
-                  style={[styles.pronButton, styles.pronButtonAi]}
-                  hitSlop={6}
-                >
-                  <Volume2 size={16} color={colors.terraDark} />
-                  <Text style={[styles.pronButtonLabel, styles.pronButtonLabelAi]}>AI</Text>
-                </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => setChallengeOpen(true)}
+              style={[styles.challengeButton, { backgroundColor: ctaSurfaceTint, borderColor: ctaBorderTint }]}
+              disabled={!imageUrl}
+            >
+              <Send size={13} color={ctaIconTint} />
+              <Text style={styles.challengeButtonText}>Challenge a Friend</Text>
+            </TouchableOpacity>
 
-                {sticker.voice_note_path && !recorderState.isRecording && (
+            {/* Cozy panel — word, tags, contextual sentence, notes */}
+            <View style={[styles.panel, { backgroundColor: panelTint, borderColor: panelBorderTint }]}>
+              <View style={[styles.wordCard, { backgroundColor: cardTint }]}>
+                <View style={styles.wordRow}>
+                  <Text style={styles.word}>{sticker.word}</Text>
+                </View>
+
+                <View style={styles.pronunciationRow}>
                   <TouchableOpacity
-                    onPress={handlePlayVoice}
-                    style={[styles.pronButton, styles.pronButtonMe]}
+                    onPress={() => speak(sticker.word, sticker.language)}
+                    style={[styles.pronButton, { backgroundColor: aiSurfaceTint }]}
+                    hitSlop={6}
+                  >
+                    <Volume2 size={16} color={aiAccentTint} />
+                    <Text style={[styles.pronButtonLabel, { color: aiAccentTint }]}>AI</Text>
+                  </TouchableOpacity>
+
+                  {sticker.voice_note_path && !recorderState.isRecording && (
+                    <TouchableOpacity
+                      onPress={handlePlayVoice}
+                      style={[styles.pronButton, styles.pronButtonMe]}
+                      disabled={uploadingVoice}
+                      hitSlop={6}
+                    >
+                      <Play size={14} color={colors.sageDark} fill={colors.sageDark} />
+                      <Text style={[styles.pronButtonLabel, styles.pronButtonLabelMe]}>You</Text>
+                    </TouchableOpacity>
+                  )}
+
+                  <TouchableOpacity
+                    onPressIn={handleStartRecording}
+                    onPressOut={handleStopRecording}
+                    style={styles.micButton}
                     disabled={uploadingVoice}
                     hitSlop={6}
                   >
-                    <Play size={14} color={colors.sageDark} fill={colors.sageDark} />
-                    <Text style={[styles.pronButtonLabel, styles.pronButtonLabelMe]}>You</Text>
+                    {uploadingVoice ? (
+                      <ActivityIndicator size="small" color={colors.terra} />
+                    ) : recorderState.isRecording ? (
+                      <Square size={16} color={colors.error} fill={colors.error} />
+                    ) : (
+                      <Mic size={18} color={sticker.voice_note_path ? colors.inkFaint : micIdleTint} />
+                    )}
                   </TouchableOpacity>
-                )}
-
-                <TouchableOpacity
-                  onPressIn={handleStartRecording}
-                  onPressOut={handleStopRecording}
-                  style={styles.micButton}
-                  disabled={uploadingVoice}
-                  hitSlop={6}
-                >
-                  {uploadingVoice ? (
-                    <ActivityIndicator size="small" color={colors.terra} />
-                  ) : recorderState.isRecording ? (
-                    <Square size={16} color={colors.error} fill={colors.error} />
-                  ) : (
-                    <Mic size={18} color={sticker.voice_note_path ? colors.inkFaint : colors.terra} />
-                  )}
-                </TouchableOpacity>
-              </View>
-              {recorderState.isRecording ? (
-                <Text style={styles.recordingHint}>Recording… let go to stop</Text>
-              ) : (
-                <Text style={styles.recordingHintIdle}>Hold the mic to record your pronunciation</Text>
-              )}
-              <Text style={styles.reading}>[{sticker.reading}]</Text>
-              <Text style={styles.translation}>{sticker.translation}</Text>
-
-              <View style={styles.tagsRow}>
-                <View style={styles.tag}>
-                  <Tag size={11} color={colors.inkDark} />
-                  <Text style={styles.tagText}>{sticker.category}</Text>
                 </View>
-                {!!sticker.location_label && (
-                  <View style={[styles.tag, styles.tagAlt]}>
-                    <MapPin size={11} color={colors.error} />
-                    <Text style={styles.tagText} numberOfLines={1}>{sticker.location_label}</Text>
+                {recorderState.isRecording ? (
+                  <Text style={styles.recordingHint}>Recording… let go to stop</Text>
+                ) : (
+                  <Text style={styles.recordingHintIdle}>Hold the mic to record your pronunciation</Text>
+                )}
+                <Text style={styles.reading}>[{sticker.reading}]</Text>
+                <Text style={styles.translation}>{sticker.translation}</Text>
+
+                <View style={styles.tagsRow}>
+                  <View style={[styles.tag, { backgroundColor: tagTint }]}>
+                    <Tag size={11} color={colors.inkDark} />
+                    <Text style={styles.tagText}>{sticker.category}</Text>
+                  </View>
+                  {!!sticker.location_label && (
+                    <View style={[styles.tag, { backgroundColor: tagAltTint }]}>
+                      <MapPin size={11} color={colors.error} />
+                      <Text style={styles.tagText} numberOfLines={1}>{sticker.location_label}</Text>
+                    </View>
+                  )}
+                </View>
+              </View>
+
+              {!!sticker.sentence && (
+                <View style={[styles.infoCard, { backgroundColor: cardTint }]}>
+                  <View style={styles.infoLabelRow}>
+                    <MessageSquare size={13} color={colors.terra} />
+                    <Text style={styles.infoLabel}>Contextual Sentence</Text>
+                  </View>
+                  <View style={styles.sentenceBox}>
+                    <View style={styles.memorySentenceRow}>
+                      <Text style={styles.sentenceText}>{sticker.sentence}</Text>
+                      <TouchableOpacity
+                        onPress={() => speak(sticker.sentence, sticker.language)}
+                        hitSlop={10}
+                      >
+                        <Volume2 size={14} color={colors.inkFaint} />
+                      </TouchableOpacity>
+                    </View>
+                    {!!sticker.sentence_translation && (
+                      <Text style={styles.sentenceTranslation}>{sticker.sentence_translation}</Text>
+                    )}
+                  </View>
+                  {!!sticker.sentence_insight && (
+                    <View style={styles.insightRow}>
+                      <Lightbulb size={12} color={colors.sageDark} />
+                      <Text style={styles.insightText}>{sticker.sentence_insight}</Text>
+                    </View>
+                  )}
+                </View>
+              )}
+
+              <View style={[styles.infoCard, { backgroundColor: cardTint }]}>
+                <View style={styles.infoLabelRow}>
+                  <BookOpen size={13} color={colors.sageDark} />
+                  <Text style={styles.infoLabel}>My Learning Notes</Text>
+                  <TouchableOpacity
+                    onPress={() => editingNotes ? handleSaveNotes() : setEditingNotes(true)}
+                    style={styles.notesEditBtn}
+                    disabled={savingNotes}
+                  >
+                    {savingNotes ? (
+                      <ActivityIndicator size="small" color={colors.terra} />
+                    ) : (
+                      <Text style={styles.notesEditText}>{editingNotes ? 'Save' : 'Edit'}</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+
+                {editingNotes ? (
+                  <TextInput
+                    value={notesDraft}
+                    onChangeText={setNotesDraft}
+                    placeholder="Add grammar notes, mnemonics, anything worth remembering..."
+                    placeholderTextColor={colors.inkFaint}
+                    multiline
+                    style={styles.notesInput}
+                  />
+                ) : (
+                  <View style={styles.notesBox}>
+                    <Text style={styles.notesText}>
+                      {sticker.notes || 'No notes yet — tap Edit to add some.'}
+                    </Text>
                   </View>
                 )}
               </View>
             </View>
+          </Animated.ScrollView>
+        </KeyboardAvoidingView>
 
-            {!!sticker.sentence && (
-              <View style={styles.infoCard}>
-                <View style={styles.infoLabelRow}>
-                  <MessageSquare size={13} color={colors.terra} />
-                  <Text style={styles.infoLabel}>Contextual Sentence</Text>
-                </View>
-                <View style={styles.sentenceBox}>
-                  <View style={styles.memorySentenceRow}>
-                    <Text style={styles.sentenceText}>{sticker.sentence}</Text>
-                    <TouchableOpacity
-                      onPress={() => speak(sticker.sentence, sticker.language)}
-                      hitSlop={10}
-                    >
-                      <Volume2 size={14} color={colors.inkFaint} />
-                    </TouchableOpacity>
-                  </View>
-                  {!!sticker.sentence_translation && (
-                    <Text style={styles.sentenceTranslation}>{sticker.sentence_translation}</Text>
-                  )}
-                </View>
+        <View style={[styles.headerWrap, { height: HEADER_BAR_HEIGHT + insets.top }]} pointerEvents="box-none">
+          <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: pageTint }, headerProgressStyle]} />
+          <GestureDetector gesture={dismissPan}>
+            <View style={styles.grabberZone}>
+              <View style={styles.grabberPill}>
+                <View style={styles.grabber} />
               </View>
-            )}
-
-            <View style={styles.infoCard}>
-              <View style={styles.infoLabelRow}>
-                <BookOpen size={13} color={colors.sageDark} />
-                <Text style={styles.infoLabel}>My Learning Notes</Text>
-                <TouchableOpacity
-                  onPress={() => editingNotes ? handleSaveNotes() : setEditingNotes(true)}
-                  style={styles.notesEditBtn}
-                  disabled={savingNotes}
-                >
-                  {savingNotes ? (
-                    <ActivityIndicator size="small" color={colors.terra} />
-                  ) : (
-                    <Text style={styles.notesEditText}>{editingNotes ? 'Save' : 'Edit'}</Text>
-                  )}
-                </TouchableOpacity>
-              </View>
-
-              {editingNotes ? (
-                <TextInput
-                  value={notesDraft}
-                  onChangeText={setNotesDraft}
-                  placeholder="Add grammar notes, mnemonics, anything worth remembering..."
-                  placeholderTextColor={colors.inkFaint}
-                  multiline
-                  style={styles.notesInput}
+            </View>
+          </GestureDetector>
+          <View style={[styles.header, { paddingTop: insets.top }]}>
+            <TouchableOpacity onPress={onClose} style={[styles.closeButton, { backgroundColor: cardTint }]}>
+              <X size={22} color={colors.inkDark} />
+            </TouchableOpacity>
+            <Animated.Text style={[styles.headerTitle, headerProgressStyle]}>Sticker Inspector</Animated.Text>
+            <View style={styles.headerActions}>
+              <TouchableOpacity onPress={handleToggleFavorite} style={[styles.iconButton, { backgroundColor: cardTint }]} hitSlop={4}>
+                <Heart
+                  size={18}
+                  color={sticker.is_favorite ? colors.error : colors.inkFaint}
+                  fill={sticker.is_favorite ? colors.error : 'transparent'}
                 />
-              ) : (
-                <View style={styles.notesBox}>
-                  <Text style={styles.notesText}>
-                    {sticker.notes || 'No notes yet — tap Edit to add some.'}
-                  </Text>
-                </View>
-              )}
+              </TouchableOpacity>
+              <TouchableOpacity onPress={handleExportPress} style={[styles.iconButton, { backgroundColor: cardTint }]} disabled={exporting || !imageUrl} hitSlop={4}>
+                {exporting
+                  ? <ActivityIndicator size="small" color={colors.inkDark} />
+                  : <Share2 size={17} color={colors.inkDark} />}
+              </TouchableOpacity>
+              <TouchableOpacity onPress={handleDelete} style={[styles.iconButton, { backgroundColor: cardTint }]} disabled={deleting} hitSlop={4}>
+                {deleting
+                  ? <ActivityIndicator size="small" color={colors.error} />
+                  : <Trash2 size={18} color={colors.error} />}
+              </TouchableOpacity>
             </View>
           </View>
-        </ScrollView>
-        </KeyboardAvoidingView>
-      </SafeAreaView>
+        </View>
+      </Animated.View>
       <SendChallengeModal
         sticker={challengeOpen ? sticker : null}
         friends={acceptedFriends}
         onSend={async (receiverId) => {
           const { error } = await sendChallenge(sticker.id, receiverId);
-          if (error) Alert.alert('Challenge failed', error.message);
+          if (error) {
+            Alert.alert('Challenge failed', error.message);
+            return false;
+          }
+          return true;
         }}
         onClose={() => setChallengeOpen(false)}
       />
@@ -544,12 +700,44 @@ export default function StickerDetailView({ sticker, onClose, onDelete, onUpdate
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.sky },
   flex: { flex: 1 },
+
+  headerWrap: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 10,
+  },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.ms,
+  },
+  grabberZone: {
+    position: 'absolute',
+    top: 8,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    paddingVertical: 8,
+    zIndex: 1,
+  },
+  // A translucent dark scrim behind the bar — same trick as captionPill
+  // below — so it stays visible whether it's sitting over a bright photo,
+  // a dark one, or the plain cream page background (no hero photo).
+  grabberPill: {
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: radii.full,
+    backgroundColor: 'rgba(0,0,0,0.28)',
+  },
+  grabber: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: 'rgba(255,255,255,0.95)',
   },
   closeButton: {
     width: 38,
@@ -572,43 +760,53 @@ const styles = StyleSheet.create({
   },
   headerTitle: { fontSize: 11, fontFamily: fonts.mono, color: colors.inkFaint, letterSpacing: 1.5, textTransform: 'uppercase' },
 
-  scrollBody: { alignItems: 'center', paddingHorizontal: spacing.lg, paddingBottom: spacing.xxl },
-  stickerFrame: {
+  scrollBody: { alignItems: 'center' },
+
+  // Hero — full-bleed memory photo behind the sticker cutout.
+  heroBox: {
+    alignSelf: 'stretch',
+    overflow: 'hidden',
+    backgroundColor: colors.skyNight,
+  },
+  heroImage: { width: '100%', height: '100%' },
+  captionPill: {
+    position: 'absolute',
+    left: spacing.md,
+    bottom: spacing.lg,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    maxWidth: '70%',
+    paddingVertical: 6,
+    paddingHorizontal: spacing.sm + 2,
+    borderRadius: radii.full,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+  },
+  captionText: { color: colors.white, fontSize: 11, fontWeight: '700', flexShrink: 1 },
+  heroCutoutWrap: {
+    width: CUTOUT_SIZE,
+    height: CUTOUT_SIZE,
+    marginTop: -CUTOUT_OVERLAP,
+    marginBottom: spacing.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+    transform: [{ rotate: '-4deg' }],
+    shadowColor: colors.inkDark,
+    shadowOpacity: 0.28,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 8,
+  },
+  heroCutoutImage: { width: '100%', height: '100%' },
+
+  // Fallback frame — used when a sticker has no memory photo.
+  classicFrame: {
     width: 220,
     height: 220,
     marginTop: spacing.sm,
     marginBottom: spacing.sm,
   },
   image: { width: '100%', height: '100%' },
-  face: {
-    ...StyleSheet.absoluteFillObject,
-    borderRadius: radii.lg,
-    overflow: 'hidden',
-    backfaceVisibility: 'hidden',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  backFace: {
-    backgroundColor: colors.inkDark,
-  },
-  memoryImage: { width: '100%', height: '100%' },
-  memoryLabel: {
-    position: 'absolute',
-    top: 10,
-    left: 10,
-    paddingVertical: 4,
-    paddingHorizontal: 10,
-    borderRadius: radii.md,
-    backgroundColor: 'rgba(0,0,0,0.45)',
-  },
-  memoryLabelText: { color: colors.white, fontSize: 11, fontWeight: '700', letterSpacing: 1 },
-  flipHint: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: spacing.md,
-  },
-  flipHintText: { fontSize: 12, color: colors.inkFaint, fontWeight: '600' },
 
   challengeButton: {
     flexDirection: 'row',
@@ -621,12 +819,14 @@ const styles = StyleSheet.create({
     backgroundColor: colors.cardAlt,
     borderWidth: 1,
     borderColor: colors.skyNight,
+    marginHorizontal: spacing.lg,
     marginBottom: spacing.lg,
   },
   challengeButtonText: { fontSize: 13, fontFamily: fonts.cozyMedium, color: colors.inkDark },
 
   panel: {
     alignSelf: 'stretch',
+    marginHorizontal: spacing.lg,
     backgroundColor: colors.skyDeep,
     borderRadius: radii.xl,
     borderWidth: 1,
@@ -663,10 +863,8 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     borderRadius: radii.full,
   },
-  pronButtonAi: { backgroundColor: colors.terraLight },
   pronButtonMe: { backgroundColor: colors.sageLight },
   pronButtonLabel: { fontSize: 10, fontWeight: '800', letterSpacing: 0.3 },
-  pronButtonLabelAi: { color: colors.terraDark },
   pronButtonLabelMe: { color: colors.sageDark },
   micButton: { padding: 6 },
   reading: { fontSize: 13, fontFamily: fonts.mono, color: colors.inkFaint, marginTop: 4, textAlign: 'center' },
@@ -698,7 +896,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm + 2,
     paddingVertical: 4,
   },
-  tagAlt: { backgroundColor: colors.sky },
   tagText: { fontSize: 10, fontWeight: '700', color: colors.inkMid },
 
   infoCard: {
@@ -731,6 +928,16 @@ const styles = StyleSheet.create({
   },
   sentenceText: { fontSize: 14, fontFamily: fonts.jp, color: colors.inkDark, flexShrink: 1, lineHeight: 20 },
   sentenceTranslation: { fontSize: 12, color: colors.inkLight, fontStyle: 'italic' },
+  insightRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 6,
+    marginTop: spacing.sm,
+    paddingTop: spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: colors.borderLight,
+  },
+  insightText: { flex: 1, fontSize: 11, color: colors.sageDark, lineHeight: 15 },
 
   notesEditBtn: { paddingHorizontal: spacing.xs },
   notesEditText: { fontSize: 12, fontWeight: '700', color: colors.terraDark },

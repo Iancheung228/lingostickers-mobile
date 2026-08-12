@@ -1,7 +1,9 @@
+import { useMemo } from 'react';
 import { Modal, View, Text, FlatList, TouchableOpacity, StyleSheet, SafeAreaView } from 'react-native';
 import { X } from 'lucide-react-native';
 import { Chapter } from '@/lib/chapters';
 import { Sticker } from '@/lib/types';
+import { useSignedUrls } from '@/hooks/useSignedUrls';
 import StickerCard from './StickerCard';
 import { colors, shadows, radii, spacing, fonts } from '@/constants/theme';
 
@@ -13,6 +15,15 @@ interface ChapterDetailViewProps {
 }
 
 export default function ChapterDetailView({ chapter, onClose, onSelectSticker, onToggleFavorite }: ChapterDetailViewProps) {
+  // One batched sign request for the whole chapter's grid — see
+  // hooks/useSignedUrls.ts. Called unconditionally (before the early return
+  // below) to keep hook order stable across renders.
+  const paths = useMemo(
+    () => (chapter?.stickers ?? []).flatMap(s => [s.image_path, s.voice_note_path]),
+    [chapter]
+  );
+  const urls = useSignedUrls(paths);
+
   if (!chapter) return null;
 
   return (
@@ -34,7 +45,13 @@ export default function ChapterDetailView({ chapter, onClose, onSelectSticker, o
           contentContainerStyle={styles.grid}
           renderItem={({ item }) => (
             <View style={styles.cardWrapper}>
-              <StickerCard sticker={item} onPress={() => onSelectSticker(item)} onToggleFavorite={onToggleFavorite} />
+              <StickerCard
+                sticker={item}
+                onPress={() => onSelectSticker(item)}
+                onToggleFavorite={onToggleFavorite}
+                imageUrl={urls.get(item.image_path) ?? null}
+                voiceUrl={item.voice_note_path ? urls.get(item.voice_note_path) ?? null : null}
+              />
             </View>
           )}
         />

@@ -2,6 +2,8 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import UPNG from 'https://esm.sh/upng-js@2.1.0';
 import jpeg from 'https://esm.sh/jpeg-js@0.4.4';
 import { identifyWithGroq, resolveLanguage } from '../_shared/vocab.ts';
+import { pickDominantColor } from '../_shared/imageColor.ts';
+import { requireUserId, consumeQuota, serviceClient, errorResponse } from '../_shared/rateLimit.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -14,13 +16,25 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { image, userId, language, memoryImage, lassoPolygon: rawLassoPolygon } = await req.json();
-    if (!image || !userId) {
+    // Identity comes from the verified JWT, never from the request body — the
+    // body's `userId` (still sent by older app builds) is attacker-controlled,
+    // so a quota keyed on it would be bypassed with a random UUID.
+    const userId = await requireUserId(req);
+
+    const { image, language, memoryImage, lassoPolygon: rawLassoPolygon } = await req.json();
+    if (!image) {
       return new Response(
-        JSON.stringify({ error: 'Missing image or userId' }),
+        JSON.stringify({ error: 'Missing image' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
+
+    const supabase = serviceClient();
+
+    // Claimed before any upstream call: background removal and vision are
+    // billed per request, so an image that ends up producing a bad cutout has
+    // cost exactly as much as one the user keeps. Throws 429 when spent.
+    const quota = await consumeQuota(supabase, userId, 'create-sticker');
 
     const lang = resolveLanguage(language);
     const base64Data = image.includes(',') ? image.split(',')[1] : image;
@@ -36,18 +50,14 @@ Deno.serve(async (req) => {
         ? rawLassoPolygon
         : null;
 
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-    );
-
     // Run vocab identification, background removal, and the memory-photo
     // upload in parallel
-    const [vocabResult, bgResult, memoryPhotoPath] = await Promise.all([
+    const [vocabResult, bgResult, memoryPhoto] = await Promise.all([
       identifyWithGroq(base64Data, lang, memoryBase64Data),
       removeBackground(imageBytes),
       uploadMemoryPhoto(supabase, memoryImage, userId),
     ]);
+    const { path: memoryPhotoPath, color: memoryPhotoColor } = memoryPhoto;
 
     console.log(`bg removal: ${bgResult.status}`);
 
@@ -56,22 +66,24 @@ Deno.serve(async (req) => {
     let fileExtension: string;
 
     if (bgResult.data) {
-      let processed = bgResult.data;
+      // Decoded once here, transformed through however many of these steps
+      // actually run, encoded once below — see the comment on decodePng.
+      let processed = decodePng(bgResult.data);
       if (lassoPolygon) {
         try {
           processed = forceIncludeLasso(processed, imageBytes, lassoPolygon);
           console.log('lasso force-include applied');
         } catch (err: any) {
-          console.warn(`forceIncludeLasso failed (${err?.message}) — using unmodified bg-removed PNG`);
+          console.warn(`forceIncludeLasso failed (${err?.message}) — using unmodified bg-removed image`);
         }
       }
       try {
-        finalImageBytes = addStickerBorder(trimToContent(processed));
-        console.log(`sticker border added: ${finalImageBytes.length} bytes`);
+        processed = addStickerBorder(trimToContent(processed));
+        console.log(`sticker border added: ${processed.width}x${processed.height}`);
       } catch (err: any) {
-        console.warn(`addStickerBorder failed (${err?.message}) — using bg-removed PNG without border`);
-        finalImageBytes = processed;
+        console.warn(`addStickerBorder failed (${err?.message}) — using bg-removed image without border`);
       }
+      finalImageBytes = encodePng(processed);
       finalMimeType = 'image/png';
       fileExtension = 'png';
     } else {
@@ -98,36 +110,38 @@ Deno.serve(async (req) => {
         reading: vocabResult.reading,
         sentence: vocabResult.sentence,
         sentenceTranslation: vocabResult.sentence_translation,
+        sentenceInsight: vocabResult.sentence_insight ?? null,
         category: vocabResult.category,
         imagePath,
         memoryPhotoPath,
+        memoryPhotoColor,
         bgIssue,
+        // Today's remaining allowance, for a "3 scans left" affordance in the
+        // UI. Nothing reads it yet.
+        scansRemainingToday: quota.remaining,
         _debug_bgStatus: bgResult.status,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (err: any) {
     console.error('create-sticker error:', err);
-    return new Response(
-      JSON.stringify({ error: err?.message ?? 'Internal server error' }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+    return errorResponse(err, corsHeaders);
   }
 });
 
 // ---------------------------------------------------------------------------
 // Memory photo — the full, uncropped scene the sticker was found in.
 //
-// Optional: uploads the raw photo so the app can "flip" a sticker to reveal
-// the original moment. Failures here are non-fatal — the sticker is still
-// created without a memory photo to flip to.
+// Uploads the raw photo so StickerDetailView can use it as a hero background
+// (and tint the word card to its dominant color). Failures here are
+// non-fatal — the sticker is still created without a memory photo.
 // ---------------------------------------------------------------------------
 async function uploadMemoryPhoto(
   supabase: ReturnType<typeof createClient>,
   memoryImage: string | undefined,
   userId: string
-): Promise<string | null> {
-  if (!memoryImage) return null;
+): Promise<{ path: string | null; color: string | null }> {
+  if (!memoryImage) return { path: null, color: null };
 
   try {
     const base64Data = memoryImage.includes(',') ? memoryImage.split(',')[1] : memoryImage;
@@ -140,12 +154,20 @@ async function uploadMemoryPhoto(
 
     if (error) {
       console.warn(`memory photo upload failed: ${error.message}`);
-      return null;
+      return { path: null, color: null };
     }
-    return path;
+
+    let color: string | null = null;
+    try {
+      color = pickDominantColor(bytes);
+    } catch (err: any) {
+      console.warn(`memory photo color extraction failed: ${err?.message}`);
+    }
+
+    return { path, color };
   } catch (err: any) {
     console.warn(`memory photo upload threw: ${err?.message}`);
-    return null;
+    return { path: null, color: null };
   }
 }
 
@@ -239,6 +261,26 @@ async function removeBackgroundReplicate(imageBytes: Uint8Array): Promise<{ data
       versionId = versionResult.versionId;
     }
 
+    // rembg's default (non-matting) output is close to a hard binary mask —
+    // barely any pixels land in the "uncertain" band forceIncludeLasso
+    // rescues from, which is exactly the hard-subject case (low-contrast,
+    // wispy, reflective) where the lasso hint matters most. Alpha matting
+    // produces a real gradient at the boundary instead, at no extra cost
+    // (same model call) — both a better cutout on its own and a wider band
+    // for the lasso rescue to actually act on. Env-gated (not a hardcoded
+    // `true`) so it can be switched off without a deploy if some subject
+    // class looks worse with it than the plain mask.
+    const input: Record<string, unknown> = { image: dataUri };
+    if ((Deno.env.get('REPLICATE_ALPHA_MATTING') ?? 'true') !== 'false') {
+      input.alpha_matting = true;
+      const fg = Deno.env.get('REPLICATE_ALPHA_MATTING_FG_THRESHOLD');
+      const bg = Deno.env.get('REPLICATE_ALPHA_MATTING_BG_THRESHOLD');
+      const erode = Deno.env.get('REPLICATE_ALPHA_MATTING_ERODE_SIZE');
+      if (fg) input.alpha_matting_foreground_threshold = Number(fg);
+      if (bg) input.alpha_matting_background_threshold = Number(bg);
+      if (erode) input.alpha_matting_erode_size = Number(erode);
+    }
+
     const response = await fetch('https://api.replicate.com/v1/predictions', {
       method: 'POST',
       headers: {
@@ -246,7 +288,7 @@ async function removeBackgroundReplicate(imageBytes: Uint8Array): Promise<{ data
         'Content-Type': 'application/json',
         'Prefer': 'wait=20',
       },
-      body: JSON.stringify({ version: versionId, input: { image: dataUri } }),
+      body: JSON.stringify({ version: versionId, input }),
     });
 
     if (!response.ok) {
@@ -422,32 +464,95 @@ function pickBorderColor(src: Uint8Array, sw: number, sh: number): [number, numb
 }
 
 // ---------------------------------------------------------------------------
-// Force-include lasso — the user's hand-drawn loop is a stronger signal than
-// automatic background removal.
+// RGBA pipeline — decode once, transform in place through however many of
+// forceIncludeLasso / trimToContent / addStickerBorder actually run, encode
+// once at the end.
 //
-// Any pixel inside the loop is guaranteed to stay opaque, using its real
-// color decoded fresh from the original JPEG (bg-removed pixels don't
-// reliably keep usable RGB once their alpha hits 0). Pixels outside the loop
-// still go through normal automatic removal, and pixels inside the loop that
-// rembg already kept are left untouched — so its edge smoothing is preserved
-// everywhere it agrees with the user; this only rescues what it wrongly
-// stripped (wispy bits, low-contrast edges, reflective material).
+// These three used to each take/return PNG bytes independently, which meant
+// chaining them (as create-sticker's handler does) cost up to three full
+// UPNG decode+encode round-trips on the same image — PNG deflate encoding is
+// by far the most expensive thing in this file, and doing it 2-3x instead of
+// once was blowing well past Edge Functions' 2s CPU-time budget (wall-clock
+// waiting on Groq/Replicate doesn't count against that budget — this pure
+// synchronous pixel work is what actually did). A worker hitting that limit
+// gets killed mid-request with no chance to return a normal JSON error,
+// which is what the client saw as a bare "non-2xx" response.
+// ---------------------------------------------------------------------------
+interface RgbaImage { data: Uint8Array; width: number; height: number; }
+
+function decodePng(pngBytes: Uint8Array): RgbaImage {
+  const img = UPNG.decode(pngBytes.buffer as ArrayBuffer);
+  return { data: new Uint8Array(UPNG.toRGBA8(img)[0]), width: img.width, height: img.height };
+}
+
+function encodePng(img: RgbaImage): Uint8Array {
+  return new Uint8Array(UPNG.encode([img.data.buffer as ArrayBuffer], img.width, img.height, 0));
+}
+
+// Below this, a pixel counts as "rembg was confident this is background,"
+// not "rembg was undecided" — small enough to still catch genuine partial
+// matting (wispy hair, reflective edges), large enough to ignore residual
+// noise near 0. Only applies in the rim between CORE_SHRINK_RATIO and the
+// traced edge (see below) — pixels at or below this stay removed there even
+// if the user's loop swept over them.
+const LASSO_RESCUE_MIN_ALPHA = 8;
+
+// How far in, radially toward the loop's own centroid, the "core" trust
+// region sits. A hand-drawn loop is least precise right at its own edge —
+// that's where wispy hair/fur or a reflective edge legitimately extends past
+// what the user meant to include, so alpha-band caution (LASSO_RESCUE_MIN_ALPHA)
+// stays in force there. But well inside the loop, away from that edge, there's
+// no such ambiguity — the user unambiguously meant "this is the subject."
+// 0.6 means the core covers most of the loop's radius, leaving only a thin
+// rim near the traced edge under alpha-band caution. A smaller core (0.25)
+// left rembg's salient-object guess in charge of most of a multi-color
+// subject's interior — since rembg can be confidently (not just
+// ambiguously) wrong about an entire color region that isn't near the
+// loop's edge at all, and the old, tighter core almost never reached it.
+const CORE_SHRINK_RATIO = 0.6;
+
+function shrinkTowardCentroid(polygon: { x: number; y: number }[], ratio: number): { x: number; y: number }[] {
+  const cx = polygon.reduce((s, p) => s + p.x, 0) / polygon.length;
+  const cy = polygon.reduce((s, p) => s + p.y, 0) / polygon.length;
+  return polygon.map(p => ({ x: cx + (p.x - cx) * (1 - ratio), y: cy + (p.y - cy) * (1 - ratio) }));
+}
+
+// ---------------------------------------------------------------------------
+// Force-include lasso — the user's hand-drawn loop is a hint for the
+// *uncertain* edge of automatic background removal, not a blanket override
+// of it — with one exception (the "core", see CORE_SHRINK_RATIO) for pixels
+// deep enough inside the loop that there's no genuine ambiguity left.
+//
+// rembg's alpha channel is close to binary away from the subject's boundary
+// — confidently-background pixels come back at alpha 0, confidently-kept
+// pixels at alpha 255, and only the actual edge (wispy hair, reflective
+// material, low-contrast boundaries) lands in between. That's fine for easy
+// subjects, but on harder ones (low-contrast against the background,
+// reflective, visually confusing) rembg can be confidently *wrong* well
+// inside the subject's true silhouette, not just at its edge — and the old
+// version of this function had no way to override that, since it only ever
+// rescued the uncertain middle band. Trust now decays from the loop's center
+// outward instead of being uniform: deep in the core, the user's loop is
+// trusted regardless of what alpha rembg assigned (using color decoded fresh
+// from the original JPEG, since bg-removed pixels don't reliably keep usable
+// RGB once their alpha drops); in the remaining rim out to the traced edge,
+// the original conservative uncertain-band-only rescue still applies, since
+// that's where a hand-drawn loop is least precise and most likely to have
+// swept over real background.
 // ---------------------------------------------------------------------------
 function forceIncludeLasso(
-  bgPngBytes: Uint8Array,
+  bg: RgbaImage,
   originalJpegBytes: Uint8Array,
   polygon: { x: number; y: number }[],
-): Uint8Array {
-  const img = UPNG.decode(bgPngBytes.buffer as ArrayBuffer);
-  const rgba = new Uint8Array(UPNG.toRGBA8(img)[0]);
-  const w = img.width;
-  const h = img.height;
+): RgbaImage {
+  const { data: rgba, width: w, height: h } = bg;
 
   const original = jpeg.decode(originalJpegBytes, { useTArray: true });
   if (original.width !== w || original.height !== h) {
     throw new Error(`dimension mismatch: bg=${w}x${h} original=${original.width}x${original.height}`);
   }
   const originalRgba: Uint8Array = original.data;
+  const corePolygon = shrinkTowardCentroid(polygon, CORE_SHRINK_RATIO);
 
   let minX = w, maxX = -1, minY = h, maxY = -1;
   for (const p of polygon) {
@@ -465,7 +570,13 @@ function forceIncludeLasso(
     for (let x = minX; x <= maxX; x++) {
       if (!pointInPolygon(x + 0.5, y + 0.5, polygon)) continue;
       const idx = (y * w + x) * 4;
-      if (rgba[idx + 3] >= 255) continue;
+      const alpha = rgba[idx + 3];
+      if (alpha >= 255) continue;
+      // Outside the core: keep the original conservative behavior (only the
+      // uncertain band gets rescued). Inside the core: rescue regardless of
+      // how confident rembg was that this is background.
+      const inCore = pointInPolygon(x + 0.5, y + 0.5, corePolygon);
+      if (!inCore && alpha <= LASSO_RESCUE_MIN_ALPHA) continue;
       rgba[idx]     = originalRgba[idx];
       rgba[idx + 1] = originalRgba[idx + 1];
       rgba[idx + 2] = originalRgba[idx + 2];
@@ -473,7 +584,7 @@ function forceIncludeLasso(
     }
   }
 
-  return new Uint8Array(UPNG.encode([rgba.buffer as ArrayBuffer], w, h, 0));
+  return bg;
 }
 
 // Standard even-odd ray-casting point-in-polygon test.
@@ -499,16 +610,13 @@ function pointInPolygon(x: number, y: number, poly: { x: number; y: number }[]):
 // this crops tightly to the visible (non-transparent) pixels, plus a small
 // uniform margin, before addStickerBorder pads it symmetrically.
 // ---------------------------------------------------------------------------
-function trimToContent(pngBytes: Uint8Array, marginRatio = 0.06): Uint8Array {
-  const img = UPNG.decode(pngBytes.buffer as ArrayBuffer);
-  const src = new Uint8Array(UPNG.toRGBA8(img)[0]);
-  const sw = img.width;
-  const sh = img.height;
+function trimToContent(src: RgbaImage, marginRatio = 0.06): RgbaImage {
+  const { data, width: sw, height: sh } = src;
 
   let minX = sw, maxX = -1, minY = sh, maxY = -1;
   for (let y = 0; y < sh; y++) {
     for (let x = 0; x < sw; x++) {
-      if (src[(y * sw + x) * 4 + 3] > 16) {
+      if (data[(y * sw + x) * 4 + 3] > 16) {
         if (x < minX) minX = x;
         if (x > maxX) maxX = x;
         if (y < minY) minY = y;
@@ -517,7 +625,7 @@ function trimToContent(pngBytes: Uint8Array, marginRatio = 0.06): Uint8Array {
     }
   }
   // Nothing visible (bg removal wiped the whole image) — leave untouched.
-  if (maxX < minX || maxY < minY) return pngBytes;
+  if (maxX < minX || maxY < minY) return src;
 
   const margin = Math.round(Math.max(maxX - minX + 1, maxY - minY + 1) * marginRatio);
   const cropX0 = Math.max(0, minX - margin);
@@ -528,15 +636,15 @@ function trimToContent(pngBytes: Uint8Array, marginRatio = 0.06): Uint8Array {
   const dh = cropY1 - cropY0 + 1;
 
   // Already tight against every edge — nothing to trim.
-  if (dw === sw && dh === sh) return pngBytes;
+  if (dw === sw && dh === sh) return src;
 
   const out = new Uint8Array(dw * dh * 4);
   for (let y = 0; y < dh; y++) {
     const srcRowStart = ((y + cropY0) * sw + cropX0) * 4;
-    out.set(src.subarray(srcRowStart, srcRowStart + dw * 4), y * dw * 4);
+    out.set(data.subarray(srcRowStart, srcRowStart + dw * 4), y * dw * 4);
   }
 
-  return new Uint8Array(UPNG.encode([out.buffer as ArrayBuffer], dw, dh, 0));
+  return { data: out, width: dw, height: dh };
 }
 
 // ---------------------------------------------------------------------------
@@ -547,11 +655,8 @@ function trimToContent(pngBytes: Uint8Array, marginRatio = 0.06): Uint8Array {
 // expanded-but-not-original pixels with a colour chosen to complement the
 // subject (see pickBorderColor — defaults to white).
 // ---------------------------------------------------------------------------
-function addStickerBorder(pngBytes: Uint8Array, borderWidth = 14): Uint8Array {
-  const img = UPNG.decode(pngBytes.buffer as ArrayBuffer);
-  const src = new Uint8Array(UPNG.toRGBA8(img)[0]);
-  const sw = img.width;
-  const sh = img.height;
+function addStickerBorder(srcImg: RgbaImage, borderWidth = 14): RgbaImage {
+  const { data: src, width: sw, height: sh } = srcImg;
 
   const [borderR, borderG, borderB] = pickBorderColor(src, sw, sh);
 
@@ -617,5 +722,5 @@ function addStickerBorder(pngBytes: Uint8Array, borderWidth = 14): Uint8Array {
     }
   }
 
-  return new Uint8Array(UPNG.encode([out.buffer as ArrayBuffer], dw, dh, 0));
+  return { data: out, width: dw, height: dh };
 }

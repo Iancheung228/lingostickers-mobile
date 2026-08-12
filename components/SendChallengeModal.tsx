@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Modal, View, Text, FlatList, TouchableOpacity, StyleSheet, SafeAreaView, ActivityIndicator, Image } from 'react-native';
 import { X, Check } from 'lucide-react-native';
 import { Sticker, FriendWithProfile } from '@/lib/types';
@@ -8,7 +8,10 @@ import { colors, radii, spacing, fonts } from '@/constants/theme';
 interface SendChallengeModalProps {
   sticker: Sticker | null;
   friends: FriendWithProfile[];
-  onSend: (receiverId: string) => Promise<void>;
+  // Resolves to whether the send actually succeeded — the caller already
+  // shows its own "Challenge failed" alert on error, so this just tells the
+  // modal whether to mark the friend as sent.
+  onSend: (receiverId: string) => Promise<boolean>;
   onClose: () => void;
 }
 
@@ -19,17 +22,27 @@ export default function SendChallengeModal({ sticker, friends, onSend, onClose }
 
   const acceptedFriends = friends.filter(f => f.status === 'accepted');
 
-  // Fetch signed URL for sticker preview
-  if (sticker?.image_path && !imageUrl) {
+  // Was previously firing this call unconditionally during render (not in an
+  // effect), so it re-fired on every re-render of the modal until the URL
+  // resolved — a useEffect keyed on the path runs it exactly once per
+  // sticker instead.
+  useEffect(() => {
+    setImageUrl(null);
+    // This modal instance stays mounted across stickers (only `sticker`
+    // toggles), so "sent" has to be cleared per-sticker too — otherwise a
+    // friend marked sent for one sticker still shows a stale checkmark when
+    // a completely different sticker's challenge is opened next.
+    setSent(new Set());
+    if (!sticker?.image_path) return;
     supabase.storage.from('sticker-images')
       .createSignedUrl(sticker.image_path, 3600)
       .then(({ data }) => { if (data) setImageUrl(data.signedUrl); });
-  }
+  }, [sticker?.image_path]);
 
   const handleSend = async (friendId: string) => {
     setSending(friendId);
-    await onSend(friendId);
-    setSent(prev => new Set([...prev, friendId]));
+    const ok = await onSend(friendId);
+    if (ok) setSent(prev => new Set([...prev, friendId]));
     setSending(null);
   };
 

@@ -140,32 +140,75 @@ this same boundary, not scattered across every screen that calls the hook.
 
 ---
 
-## 4. This project's build/test loop has no fast refresh
+## 4. This project's build/test loop has no fast refresh — and EAS builds are rationed
 
 **Context:** this is a managed Expo project (no `ios`/`android` native
-folders) using **EAS Build**, not Expo Go. There is no live Metro dev-client
-connection in the normal test flow — every JS/TS change requires a full
-`eas build` and a fresh install on the device to test manually.
+folders) using **EAS Build**, not Expo Go. The **free EAS plan caps you at
+15 iOS + 15 Android builds/month**, resetting monthly — burning a full
+`eas build` for every single JS/TS tweak eats that budget fast (two rounds
+of iterating on `StickerDetailView`'s hero layout alone used 2 of the 15).
+
+**Fix pattern — use the `development` profile (already in `eas.json`,
+`developmentClient: true`) instead of `preview` for day-to-day iteration:**
+1. Build the dev client **once**: `npx eas-cli build --platform ios --profile development --non-interactive`, install it on the device.
+2. Run `npx expo start --dev-client` and connect that install to it.
+3. From then on, every JS/TS/style change hot-reloads live through Metro —
+   shake-to-reload works, **zero build credits spent** — exactly like Expo
+   Go, just with this project's native modules included.
+4. Only spend a real `eas build` again when: (a) a native dependency is
+   added/changed (rare), or (b) you need a final `preview`-profile build to
+   hand the user a standalone install link that doesn't depend on a running
+   Metro server (e.g. for them to test disconnected from your machine).
 
 **Practical commands:**
 ```bash
+# one-time dev client:
+npx eas-cli build --platform ios --profile development --non-interactive
+# day-to-day after that:
+npx expo start --dev-client
+# only when you actually need a standalone build to hand off:
 npx eas-cli build --platform ios --profile preview --non-interactive
-# … wait, returns an expo.dev/.../builds/<id> install link
 ```
-Run it with `run_in_background: true` (it takes several minutes) and report
-the install link back once it completes — don't poll, you'll get a
-completion notification. There is currently no Android build profile in use
-(`eas build:list --platform android` returns empty) — this has only been
-tested on iOS so far.
+Run `eas-cli build` with `run_in_background: true` (it takes several
+minutes) and report the install link back once it completes — don't poll,
+you'll get a completion notification. There is currently no Android build
+profile in use (`eas build:list --platform android` returns empty) — this
+has only been tested on iOS so far.
+
+**Connecting a physical device to that Metro server — use LAN mode, not
+tunnel or USB/localhost:**
+- `npx expo start --dev-client` already defaults to LAN mode (`--host lan`),
+  which is the right choice. **Don't reach for `--tunnel` or `--localhost`
+  just because the phone is plugged into the Mac via USB** — a USB cable
+  alone gives the phone zero network path to Metro; it still connects over
+  WiFi. `--localhost` only works if Xcode itself launched the app in an
+  active debug session (it sets up the USB port-forward as a side effect of
+  attaching the debugger) — this project has no local `ios/` Xcode project,
+  so that path is unavailable. `--tunnel` (routes through ngrok) sounds like
+  the "works anywhere" option but was unreliable in practice (manifest and
+  bundle both served fine when checked with `curl` from the Mac, yet the
+  device's dev-client still failed with a bare "failed to connect" and no
+  further detail) — don't burn time debugging it, go straight to LAN.
+- **LAN mode fix pattern:** confirm the phone's WiFi is on the *same
+  network* as the Mac (`networksetup -getairportnetwork en0` on the Mac to
+  see the SSID, compare against the phone's WiFi settings), get the Mac's
+  LAN IP with `ipconfig getifaddr en0`, then in the dev client's "Enter URL
+  manually" field type `http://<that-ip>:8081` (no `exp://` prefix needed).
+  Sanity-check the server is actually answering before telling the user to
+  try it: `curl -H "Accept: application/expo+json,application/json" -H
+  "expo-platform: ios" "http://<ip>:8081/"` should return a JSON manifest,
+  not HTML — if it doesn't, the problem is server-side, not the phone.
 
 **Don't forget:** if a fix touches a Supabase **edge function**, that's a
 *separate* deploy from the app build — `npx supabase functions deploy <name>`
-(or list multiple names) BEFORE kicking off the EAS build, since the app
-just calls the function by name at runtime and won't see source changes
-otherwise. Match the existing functions' convention: deploy without
-`--no-verify-jwt` (default JWT verification) — every function in this
-project does its own `userClient.auth.getUser()` check anyway, so the
-platform-level check is just an extra layer, not a behavior change.
+(or list multiple names) BEFORE testing, since the app just calls the
+function by name at runtime and won't see source changes otherwise (this
+applies whether you're on the dev client or a fresh build — edge functions
+aren't bundled into the app either way). Match the existing functions'
+convention: deploy without `--no-verify-jwt` (default JWT verification) —
+every function in this project does its own `userClient.auth.getUser()`
+check anyway, so the platform-level check is just an extra layer, not a
+behavior change.
 
 ---
 
