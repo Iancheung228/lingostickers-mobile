@@ -3,14 +3,15 @@ import {
   View, Text, TextInput, TouchableOpacity,
   StyleSheet, KeyboardAvoidingView, Platform, ActivityIndicator,
 } from 'react-native';
-import { Link, useLocalSearchParams } from 'expo-router';
+import { Link, useRouter, useLocalSearchParams } from 'expo-router';
 import { useAuth } from '@/hooks/useAuth';
 import CozyBackground from '@/components/CozyBackground';
 import { colors, shadows, radii, spacing, typography, fonts } from '@/constants/theme';
 
 export default function ResetPasswordScreen() {
-  const { updatePassword, session, clearPasswordRecovery } = useAuth();
+  const { updatePassword, session, clearPasswordRecovery, signOut } = useAuth();
   const { error: linkError } = useLocalSearchParams<{ error?: string }>();
+  const router = useRouter();
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -29,6 +30,16 @@ export default function ResetPasswordScreen() {
     if (error) { setError(error.message); return; }
     clearPasswordRecovery();
     setSuccess(true);
+  };
+
+  // The recovery session is only ever meant to be used to set a new
+  // password — leaving it signed in without doing that would strand the
+  // user in a half-authenticated state, so cancel signs it out rather than
+  // just clearing the flag and leaving.
+  const handleCancel = async () => {
+    clearPasswordRecovery();
+    await signOut();
+    router.replace('/(auth)/sign-in');
   };
 
   if (linkError) {
@@ -59,6 +70,9 @@ export default function ResetPasswordScreen() {
           <Text style={[typography.body, { marginTop: spacing.md, color: colors.inkMid, textAlign: 'center' }]}>
             Verifying your link…
           </Text>
+          <TouchableOpacity style={styles.linkButton} onPress={handleCancel}>
+            <Text style={styles.linkText}>Back to <Text style={styles.linkAccent}>Sign In</Text></Text>
+          </TouchableOpacity>
         </View>
       </CozyBackground>
     );
@@ -120,6 +134,12 @@ export default function ResetPasswordScreen() {
                 ) : (
                   <Text style={styles.buttonText}>Update Password</Text>
                 )}
+              </TouchableOpacity>
+            )}
+
+            {!success && (
+              <TouchableOpacity style={styles.linkButton} onPress={handleCancel}>
+                <Text style={styles.linkText}>Back to <Text style={styles.linkAccent}>Sign In</Text></Text>
               </TouchableOpacity>
             )}
           </View>
@@ -196,4 +216,7 @@ const styles = StyleSheet.create({
   },
   errorText: { fontSize: 14, fontWeight: '600', color: colors.error },
   errorLink: { fontSize: 13, fontWeight: '700', color: colors.inkDark, textDecorationLine: 'underline' },
+  linkButton: { alignItems: 'center', marginTop: spacing.sm },
+  linkText: { color: colors.inkLight, fontSize: 14 },
+  linkAccent: { color: colors.terra, fontWeight: '700' },
 });
