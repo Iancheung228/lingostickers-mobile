@@ -17,6 +17,17 @@ export async function handleAuthDeepLink(url: string) {
     return { type, error: new Error(message) };
   }
 
+  // Email templates link straight to our own domain with a token_hash,
+  // rather than Supabase's default /auth/v1/verify + redirect_to hop —
+  // Universal Links only intercept a tap whose immediate href is on the
+  // associated domain, so a cross-domain redirect through supabase.co would
+  // open Safari instead of the app, even with everything else configured.
+  const tokenHash = queryParams?.token_hash as string | undefined;
+  if (tokenHash && type) {
+    const { error } = await supabase.auth.verifyOtp({ token_hash: tokenHash, type });
+    return { type, error };
+  }
+
   if (!url.includes('code=')) return { type: null as DeepLinkAuthType, error: null };
 
   const { error } = await supabase.auth.exchangeCodeForSession(url);
