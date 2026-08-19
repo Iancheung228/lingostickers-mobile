@@ -62,7 +62,7 @@ function useAuthState() {
 
   const resetPasswordForEmail = async (email: string) => {
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: 'lingostickers://reset-password?type=recovery',
+      redirectTo: 'https://tabistickers.com/reset-password?type=recovery',
     });
     return { error };
   };

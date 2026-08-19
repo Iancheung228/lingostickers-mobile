@@ -16,6 +16,12 @@
     }
   },
   "submit": {
-    "production": {}
+    "production": {
+      "ios": {
+        "ascApiKeyPath": "/Users/school/.eas-keys/AuthKey_7YCX8GPN5V.p8",
+        "ascApiKeyId": "7YCX8GPN5V",
+        "ascApiKeyIssuerId": "9550a35f-5018-41d2-95f0-0d721ca80f9f"
+      }
+    }
   }
 }

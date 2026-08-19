@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "main": "expo-router/entry",
   "dependencies": {
+    "@aptabase/react-native": "^0.5.0",
     "@expo-google-fonts/fraunces": "^0.4.1",
     "@expo-google-fonts/jetbrains-mono": "^0.4.1",
     "@expo-google-fonts/kosugi-maru": "^0.4.1",

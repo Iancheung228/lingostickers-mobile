@@ -10,6 +10,7 @@
     "ios": {
       "bundleIdentifier": "com.iancheung228.lingostickers",
       "supportsTablet": true,
+      "associatedDomains": ["applinks:tabistickers.com"],
       "infoPlist": {
         "NSCameraUsageDescription": "LingoStickers uses your camera to scan objects and create vocabulary stickers.",
         "NSLocationWhenInUseUsageDescription": "LingoStickers can tag where this memory happened, turning your collection into a map of your language journey. This is entirely optional.",

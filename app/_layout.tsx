@@ -13,6 +13,7 @@ import { FriendsProvider } from '@/hooks/useFriends';
 import { ChallengesProvider } from '@/hooks/useChallenges';
 import { configureNotificationHandler, registerPushToken } from '@/lib/notifications';
 import { handleAuthDeepLink } from '@/lib/deepLinks';
+import { initAnalytics, trackEvent } from '@/lib/analytics';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -32,6 +33,8 @@ function RootLayout() {
 
   useEffect(() => {
     configureNotificationHandler();
+    initAnalytics();
+    trackEvent('app_launched');
   }, []);
 
   useEffect(() => {
