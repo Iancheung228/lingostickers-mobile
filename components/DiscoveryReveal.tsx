@@ -32,11 +32,18 @@ export default function DiscoveryReveal({ draft, onAdd, onDiscard, onRetryExtrac
   const [sentenceInput, setSentenceInput] = useState('');
 
   useEffect(() => {
+    // Dry run: show the cutout the device just made, straight off local disk.
+    // It was never uploaded, so there is nothing to sign — this is the whole
+    // point of being able to evaluate the new pipeline without a deploy.
+    if (draft?.localCutoutUri) {
+      setImageUrl(draft.localCutoutUri);
+      return;
+    }
     if (!draft?.imagePath) return;
     supabase.storage.from('sticker-images')
       .createSignedUrl(draft.imagePath, 3600)
       .then(({ data }) => { if (data) setImageUrl(data.signedUrl); });
-  }, [draft?.imagePath]);
+  }, [draft?.imagePath, draft?.localCutoutUri]);
 
   // A fresh discovery — drop any leftover edit state from the previous one.
   useEffect(() => {
@@ -105,6 +112,11 @@ export default function DiscoveryReveal({ draft, onAdd, onDiscard, onRetryExtrac
               <Image source={{ uri: imageUrl }} style={styles.image} resizeMode="contain" />
             ) : (
               <ActivityIndicator style={styles.image} color={colors.terra} />
+            )}
+            {!!draft.localCutoutUri && (
+              <View style={styles.previewBadge}>
+                <Text style={styles.previewBadgeText}>ON-DEVICE PREVIEW · NOT SAVED</Text>
+              </View>
             )}
           </View>
 
@@ -378,6 +390,22 @@ const styles = StyleSheet.create({
     elevation: 6,
   },
   addButtonText: { color: colors.white, fontSize: 16, fontWeight: '800', letterSpacing: 1 },
+  previewBadge: {
+    position: 'absolute',
+    bottom: 6,
+    alignSelf: 'center',
+    backgroundColor: colors.inkDark,
+    borderRadius: radii.full,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    opacity: 0.85,
+  },
+  previewBadgeText: {
+    color: colors.white,
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 0.8,
+  },
   secondaryActions: {
     flexDirection: 'row',
     justifyContent: 'center',

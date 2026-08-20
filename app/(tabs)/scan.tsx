@@ -88,6 +88,10 @@ export default function ScanScreen() {
   const draftBeforeRetryRef = useRef<StickerDraft | null>(null);
   // What the current draft was extracted from. Lets "Redo cutout" re-run the
   // same selection through the server without making the user draw it again.
+  // Dry-run only: the device's cutout for the scan in flight, shown in the
+  // reveal instead of the saved image. Cleared each scan so a failed device
+  // cutout never shows the previous scan's preview.
+  const previewCutoutRef = useRef<string | null>(null);
   const lastExtractRef = useRef<{
     base64: string;
     memoryBase64: string | null | undefined;
@@ -239,6 +243,7 @@ export default function ScanScreen() {
       // there's no point offering a cloud re-cut on a sticker the cloud
       // already made.
       bgSource: data.bgSource === 'device' ? 'device' : 'server',
+      localCutoutUri: previewCutoutRef.current,
       discoveredAt,
       latitude: null,
       longitude: null,
@@ -398,6 +403,7 @@ export default function ScanScreen() {
       // through to the server exactly as before. The user sees no difference
       // beyond the wait.
       let precutImagePath: string | null = null;
+      previewCutoutRef.current = null;
       const local = await attemptLocalCutout({
         uri: segmentUri,
         polygon: selectionPolygon,
@@ -407,10 +413,11 @@ export default function ScanScreen() {
       });
 
       if (local.ok && CUTOUT_DRY_RUN) {
-        // Measuring, not adopting. The gate has already reported what it
-        // decided; the result itself goes in the bin and the sticker comes
-        // from the server, so nothing shared has to change to run this.
-        discardCutout(local.uri);
+        // Measuring, not adopting. The sticker still comes from the server and
+        // nothing is uploaded — but the device's version is kept on disk and
+        // shown in the reveal, so the new pipeline can actually be looked at
+        // without deploying anything.
+        previewCutoutRef.current = local.uri;
       } else if (local.ok) {
         try {
           precutImagePath = await uploadCutout(local.uri, user.id);

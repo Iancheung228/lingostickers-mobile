@@ -157,6 +157,10 @@ export interface StickerDraft {
   // locally; 'server' means it went through the edge function's background
   // removal. Only 'device' drafts are offered a cloud re-cut.
   bgSource: 'device' | 'server';
+  // Set only while CUTOUT_DRY_RUN is on: a local file URI for the cutout the
+  // device produced, shown in place of the saved one so the new pipeline can
+  // be looked at before anything is deployed or stored.
+  localCutoutUri?: string | null;
   discoveredAt: string;
   latitude: number | null;
   longitude: number | null;
