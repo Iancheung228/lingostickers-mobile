@@ -143,6 +143,25 @@ function stickerFileName(): string {
 // whole cost and quality model rests on, so they get recorded from day one.
 // ---------------------------------------------------------------------------
 function reportCutout(result: CutoutResult, kind: SelectionKind) {
+  // Also to the console, not just to Aptabase. While the thresholds are being
+  // tuned against real photos this is the feedback loop — analytics arrives
+  // too late to tell you why the scan you are looking at right now went the
+  // way it did.
+  if (result.ok) {
+    console.log(
+      `[cutout] device · ${kind} · ${result.selectedCount}/${result.instanceCount} instances · ` +
+        `containment ${result.containment.toFixed(2)} coverage ${result.coverage.toFixed(2)} · ${result.durationMs}ms`,
+    );
+  } else {
+    console.log(
+      `[cutout] escalated · ${kind} · ${result.reason}` +
+        (result.detail ? ` (${result.detail})` : '') +
+        ` · instances ${result.instanceCount ?? 0}` +
+        ` containment ${(result.containment ?? 0).toFixed(2)}` +
+        ` coverage ${(result.coverage ?? 0).toFixed(2)}`,
+    );
+  }
+
   if (result.ok) {
     trackEvent('cutout_local', {
       selection: kind,
