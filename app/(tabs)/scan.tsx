@@ -377,6 +377,10 @@ export default function ScanScreen() {
     }
 
     try {
+      // Checked here rather than left to submitImageForSticker, because the
+      // upload below runs first and would otherwise write to `undefined/…`.
+      if (!user) throw new Error('Not signed in');
+
       // The full, uncropped frame becomes the "memory photo" to flip to —
       // the true raw sensor capture for a live photo, or the whole picked
       // photo (before extraction) for a library import.
@@ -404,7 +408,7 @@ export default function ScanScreen() {
 
       if (local.ok) {
         try {
-          precutImagePath = await uploadCutout(local.uri, user!.id);
+          precutImagePath = await uploadCutout(local.uri, user.id);
         } catch (uploadErr: any) {
           // The cutout itself was fine; only getting it to storage failed.
           // Fall back rather than fail the scan.
@@ -417,13 +421,26 @@ export default function ScanScreen() {
       // through the server without making the user redraw their selection.
       lastExtractRef.current = { base64, memoryBase64, discoveredAt: fallbackDiscoveredAt, lassoPolygon };
 
-      await submitImageForSticker({
-        base64,
-        memoryBase64,
-        discoveredAt: fallbackDiscoveredAt,
-        lassoPolygon,
-        precutImagePath,
-      });
+      try {
+        await submitImageForSticker({
+          base64,
+          memoryBase64,
+          discoveredAt: fallbackDiscoveredAt,
+          lassoPolygon,
+          precutImagePath,
+        });
+      } catch (submitErr) {
+        // The cutout is already in storage but no sticker will ever point at
+        // it — most likely the daily quota was spent, which the function
+        // claims *after* this upload has happened. Nothing else will ever
+        // collect it, so collect it here.
+        if (precutImagePath) {
+          supabase.storage.from('sticker-images').remove([precutImagePath]).then(({ error }) => {
+            if (error) console.warn('Failed to clean up unused cutout', error);
+          });
+        }
+        throw submitErr;
+      }
 
       // A successful (re)extraction replaces whatever draft a "Retry
       // Extraction" was standing in for — clean up its now-orphaned storage

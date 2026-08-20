@@ -173,6 +173,17 @@ enum SubjectSegmenter {
       throw CutoutError(.visionFailed, "degenerate instance mask dimensions")
     }
 
+    // The label map is documented as one byte per pixel holding the instance
+    // index, with 0 for background — but that's an assumption about a buffer
+    // Vision hands us, and reading it at the wrong stride would produce
+    // plausible-looking nonsense scores rather than an obvious failure. Check
+    // it, and if the format ever changes under us, fall back to the server
+    // and say so in telemetry instead of quietly cutting out the wrong thing.
+    let format = CVPixelBufferGetPixelFormatType(instanceMask)
+    guard format == kCVPixelFormatType_OneComponent8 else {
+      throw CutoutError(.visionFailed, "unexpected instance mask format \(format)")
+    }
+
     // The label map covers the same framing as the source image, just at the
     // model's working resolution. Scaling each axis independently keeps this
     // correct even if Vision's mask isn't exactly the source aspect ratio.
