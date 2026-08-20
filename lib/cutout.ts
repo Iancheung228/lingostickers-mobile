@@ -46,6 +46,25 @@ const GATE = {
 const SEGMENT_MAX_DIMENSION = 1600;
 const OUTPUT_MAX_DIMENSION = 1280;
 
+/**
+ * Evaluate the on-device cutout without adopting it.
+ *
+ * While true, segmentation still runs on every scan and still reports what it
+ * decided — instance counts, containment, coverage, timing, refusal reason —
+ * but the result is thrown away instead of uploaded, and the sticker comes
+ * from the server exactly as it does today.
+ *
+ * The point is that this needs no deploy. There is only one Supabase project,
+ * so `create-sticker` is shared with real users; leaving this true means you
+ * can measure how the new segmenter performs on your own photos, and decide
+ * whether it's worth adopting, before touching anything shared.
+ *
+ * Set to false once `create-sticker` has been deployed with `precutImagePath`
+ * support — until then the field is ignored server-side, and uploading would
+ * only leave an orphaned PNG behind on every scan.
+ */
+export const CUTOUT_DRY_RUN = true;
+
 export function isLocalCutoutAvailable(): boolean {
   return isAvailable();
 }
@@ -120,6 +139,18 @@ export async function uploadCutout(uri: string, userId: string): Promise<string>
 }
 
 /**
+ * Throw away a cutout without uploading it — used by the dry run, and by any
+ * path that decides after the fact that it doesn't want the result.
+ */
+export function discardCutout(uri: string): void {
+  try {
+    new File(uri).delete();
+  } catch {
+    // Losing a temp file is not worth failing a scan over.
+  }
+}
+
+/**
  * A unique object name for this user's storage folder.
  *
  * Deliberately not a crypto UUID: Hermes has no global `crypto`, and Expo's
@@ -147,9 +178,10 @@ function reportCutout(result: CutoutResult, kind: SelectionKind) {
   // tuned against real photos this is the feedback loop — analytics arrives
   // too late to tell you why the scan you are looking at right now went the
   // way it did.
+  const mode = CUTOUT_DRY_RUN ? 'dry-run' : 'device';
   if (result.ok) {
     console.log(
-      `[cutout] device · ${kind} · ${result.selectedCount}/${result.instanceCount} instances · ` +
+      `[cutout] ${mode} · ${kind} · ${result.selectedCount}/${result.instanceCount} instances · ` +
         `containment ${result.containment.toFixed(2)} coverage ${result.coverage.toFixed(2)} · ${result.durationMs}ms`,
     );
   } else {

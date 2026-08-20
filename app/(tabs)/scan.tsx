@@ -22,7 +22,7 @@ import { StickerDraft } from '@/lib/types';
 import { Point } from '@/lib/cropGeometry';
 import { captureLocation, CapturedLocation } from '@/lib/location';
 import { getImportedPhotoMetadata } from '@/lib/photoMetadata';
-import { attemptLocalCutout, uploadCutout } from '@/lib/cutout';
+import { attemptLocalCutout, uploadCutout, discardCutout, CUTOUT_DRY_RUN } from '@/lib/cutout';
 import { trackEvent } from '@/lib/analytics';
 import DiscoveryReveal from '@/components/DiscoveryReveal';
 import PhotoExtractor, { ExtractResult } from '@/components/PhotoExtractor';
@@ -406,7 +406,12 @@ export default function ScanScreen() {
         kind: selectionKind,
       });
 
-      if (local.ok) {
+      if (local.ok && CUTOUT_DRY_RUN) {
+        // Measuring, not adopting. The gate has already reported what it
+        // decided; the result itself goes in the bin and the sticker comes
+        // from the server, so nothing shared has to change to run this.
+        discardCutout(local.uri);
+      } else if (local.ok) {
         try {
           precutImagePath = await uploadCutout(local.uri, user.id);
         } catch (uploadErr: any) {
