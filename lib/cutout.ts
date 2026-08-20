@@ -139,6 +139,17 @@ export async function uploadCutout(uri: string, userId: string): Promise<string>
 }
 
 /**
+ * A one-line verdict for the reveal screen's dry-run badge. Says which
+ * pipeline produced what you're looking at, and what it cost.
+ */
+export function describeCutout(result: CutoutResult): string {
+  if (result.ok) {
+    return `VISION · ${result.selectedCount}/${result.instanceCount} objects · ${result.durationMs}ms`;
+  }
+  return `SERVER · vision declined: ${result.reason}`;
+}
+
+/**
  * Throw away a cutout without uploading it — used by the dry run, and by any
  * path that decides after the fact that it doesn't want the result.
  */

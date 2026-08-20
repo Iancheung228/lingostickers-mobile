@@ -161,6 +161,10 @@ export interface StickerDraft {
   // device produced, shown in place of the saved one so the new pipeline can
   // be looked at before anything is deployed or stored.
   localCutoutUri?: string | null;
+  // Dry-run only: a one-line verdict from the on-device attempt, surfaced on
+  // the reveal screen so which pipeline ran (and how long it took) is legible
+  // without watching the Metro terminal.
+  cutoutInfo?: string | null;
   discoveredAt: string;
   latitude: number | null;
   longitude: number | null;

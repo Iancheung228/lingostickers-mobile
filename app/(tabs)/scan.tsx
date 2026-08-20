@@ -22,7 +22,7 @@ import { StickerDraft } from '@/lib/types';
 import { Point } from '@/lib/cropGeometry';
 import { captureLocation, CapturedLocation } from '@/lib/location';
 import { getImportedPhotoMetadata } from '@/lib/photoMetadata';
-import { attemptLocalCutout, uploadCutout, discardCutout, CUTOUT_DRY_RUN } from '@/lib/cutout';
+import { attemptLocalCutout, uploadCutout, discardCutout, describeCutout, CUTOUT_DRY_RUN } from '@/lib/cutout';
 import { trackEvent } from '@/lib/analytics';
 import DiscoveryReveal from '@/components/DiscoveryReveal';
 import PhotoExtractor, { ExtractResult } from '@/components/PhotoExtractor';
@@ -92,6 +92,7 @@ export default function ScanScreen() {
   // reveal instead of the saved image. Cleared each scan so a failed device
   // cutout never shows the previous scan's preview.
   const previewCutoutRef = useRef<string | null>(null);
+  const cutoutInfoRef = useRef<string | null>(null);
   const lastExtractRef = useRef<{
     base64: string;
     memoryBase64: string | null | undefined;
@@ -244,6 +245,7 @@ export default function ScanScreen() {
       // already made.
       bgSource: data.bgSource === 'device' ? 'device' : 'server',
       localCutoutUri: previewCutoutRef.current,
+      cutoutInfo: cutoutInfoRef.current,
       discoveredAt,
       latitude: null,
       longitude: null,
@@ -404,6 +406,7 @@ export default function ScanScreen() {
       // beyond the wait.
       let precutImagePath: string | null = null;
       previewCutoutRef.current = null;
+      cutoutInfoRef.current = null;
       const local = await attemptLocalCutout({
         uri: segmentUri,
         polygon: selectionPolygon,
@@ -428,6 +431,8 @@ export default function ScanScreen() {
           trackEvent('cutout_upload_failed', { reason: String(uploadErr?.message ?? 'unknown') });
         }
       }
+
+      if (CUTOUT_DRY_RUN) cutoutInfoRef.current = describeCutout(local);
 
       // Remember what this scan was made from, so "Redo cutout" can re-run it
       // through the server without making the user redraw their selection.

@@ -113,9 +113,9 @@ export default function DiscoveryReveal({ draft, onAdd, onDiscard, onRetryExtrac
             ) : (
               <ActivityIndicator style={styles.image} color={colors.terra} />
             )}
-            {!!draft.localCutoutUri && (
-              <View style={styles.previewBadge}>
-                <Text style={styles.previewBadgeText}>ON-DEVICE PREVIEW · NOT SAVED</Text>
+            {!!draft.cutoutInfo && (
+              <View style={[styles.previewBadge, !draft.localCutoutUri && styles.previewBadgeServer]}>
+                <Text style={styles.previewBadgeText}>{draft.cutoutInfo}</Text>
               </View>
             )}
           </View>
@@ -400,6 +400,7 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     opacity: 0.85,
   },
+  previewBadgeServer: { backgroundColor: colors.terra },
   previewBadgeText: {
     color: colors.white,
     fontSize: 9,
