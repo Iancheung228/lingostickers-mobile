@@ -23,8 +23,24 @@ interface PhotoExtractorProps {
   // when present, is in the *cropped output image's* own pixel coordinates —
   // the server uses it to force-include everything inside the user's loop
   // regardless of what automatic background removal decides.
-  onExtract: (result: { base64: string; uri: string; lassoPolygon?: Point[] }) => Promise<void> | void;
+  //
+  // The `segment*` fields describe a separate, more generously padded render
+  // used only for on-device segmentation (see SEGMENT_CONTEXT_PAD_RATIO).
+  onExtract: (result: ExtractResult) => Promise<void> | void;
   processing: boolean;
+}
+
+export interface ExtractResult {
+  base64: string;
+  uri: string;
+  lassoPolygon?: Point[];
+  /** Full-resolution, context-padded crop for the on-device segmenter. */
+  segmentUri: string;
+  segmentWidth: number;
+  segmentHeight: number;
+  /** The user's selection, in `segmentUri`'s pixel space. */
+  selectionPolygon: Point[];
+  selectionKind: 'box' | 'lasso';
 }
 
 const ZERO_RECT: Rect = { x: 0, y: 0, width: 0, height: 0 };
@@ -40,6 +56,30 @@ const MAX_UPLOAD_WIDTH = 800;
 const LASSO_BASE_PADDING_RATIO = 0.08;
 const LASSO_REFERENCE_FILL_RATIO = 0.6;
 const LASSO_PADDING_SCALE_RANGE: [number, number] = [0.5, 1.5];
+
+// Extra margin around the selection for the *segmentation* render only.
+//
+// On-device segmentation needs breathing room that the upload crop does not,
+// for two reasons. Vision looks for "noticeable objects", and an object that
+// fills its entire frame has no background left to be noticeable against — a
+// tight crop makes Vision more likely to return nothing at all. And the gate's
+// containment score ("is this instance mostly inside what the user selected?")
+// is only meaningful if an instance is *able* to extend outside the selection:
+// crop flush to the box and the tabletop gets truncated to exactly the box
+// too, scoring a perfect 1.0 for having grabbed the wrong thing.
+//
+// Costs nothing in the output — the matte is trimmed to its own content, so
+// the padding is discarded once it has done its job.
+const SEGMENT_CONTEXT_PAD_RATIO = 0.28;
+// Width the segmentation source is rendered at.
+//
+// Five times U-Net's effective 320px, and comfortably more than the shipped
+// PNG needs — but not more than that. The refinement passes hold several
+// float planes per channel, so resolution here is paid for in peak memory on
+// a device that is also holding a camera session; past roughly this point the
+// extra pixels stop showing up in the output and start showing up in the
+// memory graph.
+const SEGMENT_MAX_WIDTH = 1600;
 
 export default function PhotoExtractor({ imageUri, imageWidth, imageHeight, onClose, onExtract, processing }: PhotoExtractorProps) {
   const [mode, setMode] = useState<ToolMode>('box');
@@ -126,7 +166,8 @@ export default function PhotoExtractor({ imageUri, imageWidth, imageHeight, onCl
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setCropping(true);
     try {
-      const crop = boxToImageCrop(box.value, displayRect, imageWidth, imageHeight);
+      const selectionBox = box.value;
+      const crop = boxToImageCrop(selectionBox, displayRect, imageWidth, imageHeight);
       const context = ImageManipulator.manipulate(imageUri).crop(crop);
       const needsResize = crop.width > MAX_UPLOAD_WIDTH;
       const rendered = await (needsResize
@@ -135,20 +176,68 @@ export default function PhotoExtractor({ imageUri, imageWidth, imageHeight, onCl
       const result = await rendered.saveAsync({ compress: 0.9, format: SaveFormat.JPEG, base64: true });
       if (!result.base64) throw new Error('Failed to process image');
 
-      // Reproject the lasso loop from display coordinates into the exact
-      // pixel space of the cropped (and possibly resized) output image, so
-      // the server can use it as a force-include mask.
-      let lassoPolygon: Point[] | undefined;
-      if (mode === 'lasso' && lassoReady && lassoPoints.length >= 3) {
-        const imageScale = imageWidth / displayRect.width;
-        const resizeScale = needsResize ? MAX_UPLOAD_WIDTH / crop.width : 1;
-        lassoPolygon = lassoPoints.map(p => ({
-          x: ((p.x - displayRect.x) * imageScale - crop.originX) * resizeScale,
-          y: ((p.y - displayRect.y) * imageScale - crop.originY) * resizeScale,
-        }));
-      }
+      // Projects a point from display coordinates into an arbitrary crop's own
+      // pixel space. Used twice below, against two different crops.
+      const imageScale = imageWidth / displayRect.width;
+      const projectInto = (
+        p: Point,
+        target: { originX: number; originY: number },
+        scale: number,
+      ): Point => ({
+        x: ((p.x - displayRect.x) * imageScale - target.originX) * scale,
+        y: ((p.y - displayRect.y) * imageScale - target.originY) * scale,
+      });
 
-      await onExtract({ base64: result.base64, uri: result.uri, lassoPolygon });
+      // Reproject the lasso loop into the *upload* crop's pixel space, so the
+      // server fallback can still use it as a force-include mask exactly as
+      // it does today.
+      const usingLasso = mode === 'lasso' && lassoReady && lassoPoints.length >= 3;
+      const uploadScale = needsResize ? MAX_UPLOAD_WIDTH / crop.width : 1;
+      const lassoPolygon = usingLasso
+        ? lassoPoints.map(p => projectInto(p, crop, uploadScale))
+        : undefined;
+
+      // A second, context-padded render at full resolution — the source the
+      // on-device segmenter works from.
+      const segmentBox = padBox(selectionBox, SEGMENT_CONTEXT_PAD_RATIO, displayRect);
+      const segmentCrop = boxToImageCrop(segmentBox, displayRect, imageWidth, imageHeight);
+      const segmentContext = ImageManipulator.manipulate(imageUri).crop(segmentCrop);
+      const segmentNeedsResize = segmentCrop.width > SEGMENT_MAX_WIDTH;
+      const segmentRendered = await (segmentNeedsResize
+        ? segmentContext.resize({ width: SEGMENT_MAX_WIDTH }).renderAsync()
+        : segmentContext.renderAsync());
+      const segment = await segmentRendered.saveAsync({ compress: 0.95, format: SaveFormat.JPEG });
+
+      const segmentScale = segmentNeedsResize ? SEGMENT_MAX_WIDTH / segmentCrop.width : 1;
+      const segmentWidth = Math.round(segmentCrop.width * segmentScale);
+      const segmentHeight = Math.round(segmentCrop.height * segmentScale);
+
+      // The selection itself, in the padded render's space. For the lasso
+      // that's the traced loop; for the box it's the box's own four corners —
+      // which now sit strictly inside the padded frame, so an instance really
+      // can score badly for extending beyond them.
+      const selectionSource: Point[] = usingLasso
+        ? lassoPoints
+        : [
+            { x: selectionBox.x, y: selectionBox.y },
+            { x: selectionBox.x + selectionBox.width, y: selectionBox.y },
+            { x: selectionBox.x + selectionBox.width, y: selectionBox.y + selectionBox.height },
+            { x: selectionBox.x, y: selectionBox.y + selectionBox.height },
+          ];
+      const selectionPolygon = selectionSource.map(p =>
+        projectInto(p, segmentCrop, segmentScale),
+      );
+
+      await onExtract({
+        base64: result.base64,
+        uri: result.uri,
+        lassoPolygon,
+        segmentUri: segment.uri,
+        segmentWidth,
+        segmentHeight,
+        selectionPolygon,
+        selectionKind: usingLasso ? 'lasso' : 'box',
+      });
     } finally {
       setCropping(false);
     }

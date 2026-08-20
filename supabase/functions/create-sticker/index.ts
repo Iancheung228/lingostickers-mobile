@@ -21,10 +21,32 @@ Deno.serve(async (req) => {
     // so a quota keyed on it would be bypassed with a random UUID.
     const userId = await requireUserId(req);
 
-    const { image, language, memoryImage, lassoPolygon: rawLassoPolygon } = await req.json();
+    const {
+      image,
+      language,
+      memoryImage,
+      lassoPolygon: rawLassoPolygon,
+      precutImagePath: rawPrecutImagePath,
+    } = await req.json();
     if (!image) {
       return new Response(
         JSON.stringify({ error: 'Missing image' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // The device already cut this one out (Apple Vision, on-device) and
+    // uploaded the finished PNG itself — see lib/cutout.ts. All that's left
+    // for us is vocabulary and the memory photo.
+    //
+    // The path is attacker-controlled, so it is checked, not trusted: it must
+    // live under this user's own storage folder, which is the same boundary
+    // the bucket's RLS policy enforces. Without this check a client could
+    // point its sticker row at another user's file.
+    const precutImagePath = validatePrecutPath(rawPrecutImagePath, userId);
+    if (rawPrecutImagePath && !precutImagePath) {
+      return new Response(
+        JSON.stringify({ error: 'Invalid image path' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -51,15 +73,45 @@ Deno.serve(async (req) => {
         : null;
 
     // Run vocab identification, background removal, and the memory-photo
-    // upload in parallel
+    // upload in parallel. Background removal is skipped entirely when the
+    // device already did it — that's the whole point of the on-device path.
     const [vocabResult, bgResult, memoryPhoto] = await Promise.all([
       identifyWithGroq(base64Data, lang, memoryBase64Data),
-      removeBackground(imageBytes),
+      precutImagePath
+        ? Promise.resolve({ data: null, status: 'device cutout (skipped)' })
+        : removeBackground(imageBytes),
       uploadMemoryPhoto(supabase, memoryImage, userId),
     ]);
     const { path: memoryPhotoPath, color: memoryPhotoColor } = memoryPhoto;
 
     console.log(`bg removal: ${bgResult.status}`);
+
+    // Device path: the sticker image already exists in storage, styled at full
+    // resolution by the device. Nothing here to decode, composite or encode —
+    // which also keeps this worker well clear of the 2s CPU budget that the
+    // pure-JS pixel pipeline below flirts with.
+    if (precutImagePath) {
+      return new Response(
+        JSON.stringify({
+          language: lang,
+          word: vocabResult.word,
+          translation: vocabResult.translation,
+          reading: vocabResult.reading,
+          sentence: vocabResult.sentence,
+          sentenceTranslation: vocabResult.sentence_translation,
+          sentenceInsight: vocabResult.sentence_insight ?? null,
+          category: vocabResult.category,
+          imagePath: precutImagePath,
+          memoryPhotoPath,
+          memoryPhotoColor,
+          bgIssue: null,
+          bgSource: 'device',
+          scansRemainingToday: quota.remaining,
+          _debug_bgStatus: bgResult.status,
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
     let finalImageBytes: Uint8Array;
     let finalMimeType: string;
@@ -116,6 +168,7 @@ Deno.serve(async (req) => {
         memoryPhotoPath,
         memoryPhotoColor,
         bgIssue,
+        bgSource: 'server',
         // Today's remaining allowance, for a "3 scans left" affordance in the
         // UI. Nothing reads it yet.
         scansRemainingToday: quota.remaining,
@@ -128,6 +181,24 @@ Deno.serve(async (req) => {
     return errorResponse(err, corsHeaders);
   }
 });
+
+// ---------------------------------------------------------------------------
+// Validate a device-supplied storage path.
+//
+// Returns the path when it is safely this user's own, null otherwise. The
+// checks are deliberately narrow rather than clever: it must sit directly
+// under `{userId}/`, contain no traversal segment, and be a PNG — which is the
+// only thing the on-device path ever produces.
+// ---------------------------------------------------------------------------
+function validatePrecutPath(raw: unknown, userId: string): string | null {
+  if (typeof raw !== 'string' || raw.length === 0 || raw.length > 200) return null;
+  const prefix = `${userId}/`;
+  if (!raw.startsWith(prefix)) return null;
+  const remainder = raw.slice(prefix.length);
+  if (remainder.includes('/') || remainder.includes('..')) return null;
+  if (!remainder.endsWith('.png')) return null;
+  return raw;
+}
 
 // ---------------------------------------------------------------------------
 // Memory photo — the full, uncropped scene the sticker was found in.

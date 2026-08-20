@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Modal, View, Text, Image, TouchableOpacity, TextInput, StyleSheet, SafeAreaView, ActivityIndicator, Alert, KeyboardAvoidingView, Platform } from 'react-native';
-import { X, Bookmark, Pencil, Volume2, Lightbulb, Info, RotateCcw } from 'lucide-react-native';
+import { X, Bookmark, Pencil, Volume2, Lightbulb, Info, RotateCcw, Sparkles } from 'lucide-react-native';
 import { StickerDraft } from '@/lib/types';
 import { supabase } from '@/lib/supabase';
 import { speak, stopSpeaking } from '@/lib/speech';
@@ -13,6 +13,10 @@ interface DiscoveryRevealProps {
   // Reopens the box/lasso step on the same source photo, in case the cutout
   // didn't come out right — an alternative to discarding and starting over.
   onRetryExtraction: () => void;
+  // Re-cuts the same selection through the server's background removal, for
+  // when the on-device cutout picked the wrong thing. Only offered on drafts
+  // the device produced — see the note on handleForceServerCutout.
+  onRedoCutout: () => void;
   onEditWord: (newWord: string) => Promise<void>;
   onEditSentence: (newSentence: string) => Promise<void>;
   saving: boolean;
@@ -20,7 +24,7 @@ interface DiscoveryRevealProps {
   retranslatingSentence: boolean;
 }
 
-export default function DiscoveryReveal({ draft, onAdd, onDiscard, onRetryExtraction, onEditWord, onEditSentence, saving, retranslating, retranslatingSentence }: DiscoveryRevealProps) {
+export default function DiscoveryReveal({ draft, onAdd, onDiscard, onRetryExtraction, onRedoCutout, onEditWord, onEditSentence, saving, retranslating, retranslatingSentence }: DiscoveryRevealProps) {
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [editingWord, setEditingWord] = useState(false);
   const [wordInput, setWordInput] = useState('');
@@ -174,10 +178,19 @@ export default function DiscoveryReveal({ draft, onAdd, onDiscard, onRetryExtrac
             )}
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.retryButton} onPress={onRetryExtraction} disabled={saving}>
-            <RotateCcw size={13} color={colors.terra} />
-            <Text style={styles.retryButtonText}>Retry Extraction</Text>
-          </TouchableOpacity>
+          <View style={styles.secondaryActions}>
+            <TouchableOpacity style={styles.retryButton} onPress={onRetryExtraction} disabled={saving}>
+              <RotateCcw size={13} color={colors.terra} />
+              <Text style={styles.retryButtonText}>Retry Extraction</Text>
+            </TouchableOpacity>
+
+            {draft.bgSource === 'device' && (
+              <TouchableOpacity style={styles.retryButton} onPress={onRedoCutout} disabled={saving}>
+                <Sparkles size={13} color={colors.terra} />
+                <Text style={styles.retryButtonText}>Redo Cutout</Text>
+              </TouchableOpacity>
+            )}
+          </View>
 
           <TouchableOpacity style={styles.discardButton} onPress={onDiscard} disabled={saving}>
             <Text style={styles.discardButtonText}>Discard</Text>
@@ -365,6 +378,12 @@ const styles = StyleSheet.create({
     elevation: 6,
   },
   addButtonText: { color: colors.white, fontSize: 16, fontWeight: '800', letterSpacing: 1 },
+  secondaryActions: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: spacing.lg,
+  },
   retryButton: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -22,8 +22,10 @@ import { StickerDraft } from '@/lib/types';
 import { Point } from '@/lib/cropGeometry';
 import { captureLocation, CapturedLocation } from '@/lib/location';
 import { getImportedPhotoMetadata } from '@/lib/photoMetadata';
+import { attemptLocalCutout, uploadCutout } from '@/lib/cutout';
+import { trackEvent } from '@/lib/analytics';
 import DiscoveryReveal from '@/components/DiscoveryReveal';
-import PhotoExtractor from '@/components/PhotoExtractor';
+import PhotoExtractor, { ExtractResult } from '@/components/PhotoExtractor';
 import GhostCutoutReveal from '@/components/GhostCutoutReveal';
 
 export default function ScanScreen() {
@@ -84,6 +86,14 @@ export default function ScanScreen() {
   // cleaned up (its now-orphaned storage files removed) once the retry
   // actually succeeds. Null outside of a retry.
   const draftBeforeRetryRef = useRef<StickerDraft | null>(null);
+  // What the current draft was extracted from. Lets "Redo cutout" re-run the
+  // same selection through the server without making the user draw it again.
+  const lastExtractRef = useRef<{
+    base64: string;
+    memoryBase64: string | null | undefined;
+    discoveredAt: string;
+    lassoPolygon?: Point[];
+  } | null>(null);
 
   // Rectangular (3:4 portrait) camera viewport sized to the screen width
   // (with off-white margin), capped so it doesn't dominate on tablets and
@@ -155,7 +165,22 @@ export default function ScanScreen() {
   // result as a draft for DiscoveryReveal. Shared by both the live-capture and
   // photo-import flows — throws on failure so each caller can report it in its
   // own voice ("Scan failed" vs "Extraction failed").
-  const submitImageForSticker = useCallback(async (base64: string, memoryBase64: string | null | undefined, discoveredAt: string, lassoPolygon?: Point[]) => {
+  const submitImageForSticker = useCallback(async ({
+    base64,
+    memoryBase64,
+    discoveredAt,
+    lassoPolygon,
+    precutImagePath,
+  }: {
+    base64: string;
+    memoryBase64: string | null | undefined;
+    discoveredAt: string;
+    lassoPolygon?: Point[];
+    // Set when the device already cut this one out and uploaded it. The
+    // function then skips background removal entirely and only does
+    // vocabulary.
+    precutImagePath?: string | null;
+  }) => {
     if (!user) throw new Error('Not signed in');
 
     const { data, error } = await supabase.functions.invoke('create-sticker', {
@@ -165,6 +190,7 @@ export default function ScanScreen() {
         language,
         ...(memoryBase64 ? { memoryImage: `data:image/jpeg;base64,${memoryBase64}` } : {}),
         ...(lassoPolygon ? { lassoPolygon } : {}),
+        ...(precutImagePath ? { precutImagePath } : {}),
       },
     });
 
@@ -209,6 +235,10 @@ export default function ScanScreen() {
       // crossfade even starts, and a system dialog popping up mid-animation
       // would interrupt that choreographed reveal.
       bgIssue: data.bgIssue ?? null,
+      // Which engine produced this cutout. Drives the "Redo cutout" offer:
+      // there's no point offering a cloud re-cut on a sticker the cloud
+      // already made.
+      bgSource: data.bgSource === 'device' ? 'device' : 'server',
       discoveredAt,
       latitude: null,
       longitude: null,
@@ -321,7 +351,16 @@ export default function ScanScreen() {
     }
   }, [processing]);
 
-  const handleExtractFromPhoto = useCallback(async ({ base64, uri, lassoPolygon }: { base64: string; uri: string; lassoPolygon?: Point[] }) => {
+  const handleExtractFromPhoto = useCallback(async ({
+    base64,
+    uri,
+    lassoPolygon,
+    segmentUri,
+    segmentWidth,
+    segmentHeight,
+    selectionPolygon,
+    selectionKind,
+  }: ExtractResult) => {
     if (processing || !importedAsset) return;
     setProcessing(true);
 
@@ -345,7 +384,46 @@ export default function ScanScreen() {
         ? await prepareMemoryPhoto(cameraCaptureContext.rawUri, cameraCaptureContext.rawWidth, cameraCaptureContext.rawHeight)
         : await prepareMemoryPhoto(importedAsset.uri, importedAsset.width, importedAsset.height);
 
-      await submitImageForSticker(base64, memoryBase64, fallbackDiscoveredAt, lassoPolygon);
+      // Try the device first. Apple Vision returns the foreground objects it
+      // found, and the user's own selection picks which of them we keep —
+      // so the selection is the question the model was asked, not a
+      // correction applied to its answer afterwards.
+      //
+      // Anything short of a confident result (no objects found, nothing
+      // agreeing with the selection, a degenerate matte, an older iOS) falls
+      // through to the server exactly as before. The user sees no difference
+      // beyond the wait.
+      let precutImagePath: string | null = null;
+      const local = await attemptLocalCutout({
+        uri: segmentUri,
+        polygon: selectionPolygon,
+        sourceWidth: segmentWidth,
+        sourceHeight: segmentHeight,
+        kind: selectionKind,
+      });
+
+      if (local.ok) {
+        try {
+          precutImagePath = await uploadCutout(local.uri, user!.id);
+        } catch (uploadErr: any) {
+          // The cutout itself was fine; only getting it to storage failed.
+          // Fall back rather than fail the scan.
+          console.warn('[scan] cutout upload failed, falling back to server', uploadErr?.message);
+          trackEvent('cutout_upload_failed', { reason: String(uploadErr?.message ?? 'unknown') });
+        }
+      }
+
+      // Remember what this scan was made from, so "Redo cutout" can re-run it
+      // through the server without making the user redraw their selection.
+      lastExtractRef.current = { base64, memoryBase64, discoveredAt: fallbackDiscoveredAt, lassoPolygon };
+
+      await submitImageForSticker({
+        base64,
+        memoryBase64,
+        discoveredAt: fallbackDiscoveredAt,
+        lassoPolygon,
+        precutImagePath,
+      });
 
       // A successful (re)extraction replaces whatever draft a "Retry
       // Extraction" was standing in for — clean up its now-orphaned storage
@@ -397,7 +475,57 @@ export default function ScanScreen() {
     } finally {
       setProcessing(false);
     }
-  }, [processing, importedAsset, cameraCaptureContext, submitImageForSticker, prepareMemoryPhoto]);
+  }, [processing, importedAsset, cameraCaptureContext, submitImageForSticker, prepareMemoryPhoto, user]);
+
+  // The manual escape hatch.
+  //
+  // No engine picker anywhere in the app, deliberately: nobody can predict
+  // which cutout will be better for a photo they haven't seen cut out yet, and
+  // asking would put a decision in front of every single scan. But once the
+  // user is *looking* at a result they don't like, "try the other one" is an
+  // informed request — so the offer appears only there, and only on stickers
+  // the device made.
+  //
+  // Costs a Replicate call and a quota unit, same as any scan.
+  const handleForceServerCutout = useCallback(async () => {
+    const last = lastExtractRef.current;
+    if (!last || processing) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setProcessing(true);
+
+    const replaced = draft;
+    trackEvent('cutout_redo_requested', {});
+
+    try {
+      await submitImageForSticker({
+        base64: last.base64,
+        memoryBase64: last.memoryBase64,
+        discoveredAt: last.discoveredAt,
+        lassoPolygon: last.lassoPolygon,
+        precutImagePath: null,
+      });
+
+      // The device-made cutout (and its memory photo) are now orphaned —
+      // submitImageForSticker has already replaced the draft that pointed at
+      // them, and nothing else ever will.
+      if (replaced) {
+        const stalePaths = [
+          replaced.imagePath,
+          ...(replaced.memoryPhotoPath ? [replaced.memoryPhotoPath] : []),
+        ];
+        supabase.storage.from('sticker-images').remove(stalePaths).then(({ error }) => {
+          if (error) console.warn('Failed to clean up replaced cutout', error);
+        });
+      }
+    } catch (err: any) {
+      Alert.alert(
+        err?.isRateLimit ? 'Daily limit reached' : "Couldn't redo the cutout",
+        err?.message ?? 'Something went wrong. Please try again.',
+      );
+    } finally {
+      setProcessing(false);
+    }
+  }, [draft, processing, submitImageForSticker]);
 
   const handleAdd = async () => {
     if (!draft || !user) return;
@@ -677,6 +805,7 @@ export default function ScanScreen() {
         onAdd={handleAdd}
         onDiscard={handleDiscard}
         onRetryExtraction={handleRetryExtraction}
+        onRedoCutout={handleForceServerCutout}
         onEditWord={handleEditWord}
         onEditSentence={handleEditSentence}
         saving={saving}

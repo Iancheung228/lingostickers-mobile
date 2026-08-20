@@ -153,6 +153,10 @@ export interface StickerDraft {
   memoryPhotoPath: string | null;
   memoryPhotoColor: string | null;
   bgIssue: { kind: string; message: string } | null;
+  // Which engine produced this cutout. 'device' means Apple Vision cut it out
+  // locally; 'server' means it went through the edge function's background
+  // removal. Only 'device' drafts are offered a cloud re-cut.
+  bgSource: 'device' | 'server';
   discoveredAt: string;
   latitude: number | null;
   longitude: number | null;
