@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Modal, View, Text, Image, TouchableOpacity, TextInput, StyleSheet, SafeAreaView, ActivityIndicator, Alert, KeyboardAvoidingView, Platform } from 'react-native';
 import { X, Bookmark, Pencil, Volume2, Lightbulb, Info, RotateCcw, Sparkles } from 'lucide-react-native';
 import { StickerDraft } from '@/lib/types';
+import { CUTOUT_DRY_RUN } from '@/lib/cutout';
 import { supabase } from '@/lib/supabase';
 import { speak, stopSpeaking } from '@/lib/speech';
 import { colors, radii, spacing, fonts, shadows } from '@/constants/theme';
@@ -113,9 +114,13 @@ export default function DiscoveryReveal({ draft, onAdd, onDiscard, onRetryExtrac
             ) : (
               <ActivityIndicator style={styles.image} color={colors.terra} />
             )}
-            {!!draft.cutoutInfo && (
-              <View style={[styles.previewBadge, !draft.localCutoutUri && styles.previewBadgeServer]}>
-                <Text style={styles.previewBadgeText}>{draft.cutoutInfo}</Text>
+            {CUTOUT_DRY_RUN && (
+              <View style={styles.previewBadgeRow} pointerEvents="none">
+                <View style={[styles.previewBadge, !draft.localCutoutUri && styles.previewBadgeServer]}>
+                  <Text style={styles.previewBadgeText}>
+                    {draft.cutoutInfo ?? 'DRY RUN · no result recorded'}
+                  </Text>
+                </View>
               </View>
             )}
           </View>
@@ -390,10 +395,17 @@ const styles = StyleSheet.create({
     elevation: 6,
   },
   addButtonText: { color: colors.white, fontSize: 16, fontWeight: '800', letterSpacing: 1 },
-  previewBadge: {
+  // Anchored with explicit left/right rather than alignSelf: an absolutely
+  // positioned child with neither is the kind of thing that silently lays out
+  // to zero width, and this badge exists precisely to be unmissable.
+  previewBadgeRow: {
     position: 'absolute',
-    bottom: 6,
-    alignSelf: 'center',
+    left: -40,
+    right: -40,
+    bottom: -2,
+    alignItems: 'center',
+  },
+  previewBadge: {
     backgroundColor: colors.inkDark,
     borderRadius: radii.full,
     paddingHorizontal: 10,
