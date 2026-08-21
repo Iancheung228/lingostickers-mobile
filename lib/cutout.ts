@@ -16,7 +16,7 @@ export type SelectionKind = 'box' | 'lasso';
 /** Which pass produced the matte. The badge needs this; the console had it. */
 export type CutoutVia = 'crop' | 'full-frame' | 'lasso';
 
-export type LocalResult = CutoutResult & { via?: CutoutVia };
+export type LocalResult = CutoutResult & { via?: CutoutVia; attempts?: string[] };
 
 // ---------------------------------------------------------------------------
 // The confidence gate
@@ -105,18 +105,45 @@ export interface LocalCutoutRequest {
 
 export async function attemptLocalCutout(params: LocalCutoutRequest): Promise<LocalResult> {
   const { kind } = params;
-
-  if (!isAvailable()) {
-    const result: CutoutResult = { ok: false, reason: 'unavailable' };
-    reportCutout(result, kind);
-    return result;
-  }
-
   const gate = GATE[kind];
   GATE_HINT = `${gate.minCoverage} (${kind})`;
 
-  // First pass: the context-padded crop. The subject occupies most of the
-  // pixels here, so the matte comes out at its highest resolution.
+  // Which passes were tried, in order. Reported on the badge, because "the
+  // server did it" is not a diagnosis — knowing that the lasso pass was never
+  // reached is.
+  const attempts: string[] = [];
+
+  const finish = (result: CutoutResult, via?: CutoutVia): LocalResult => {
+    console.log(`[cutout] passes: ${attempts.join(' → ')}`);
+    reportCutout(result, kind, via, attempts);
+    return { ...result, ...(via ? { via } : {}), attempts: [...attempts] };
+  };
+
+  // The lasso pass needs no Vision at all — it is plain image processing over
+  // the loop the user drew — so it is defined up front and reachable from
+  // every failure below, not just from one of them.
+  const tryLasso = async (): Promise<LocalResult | null> => {
+    if (kind !== 'lasso') return null;
+    attempts.push('lasso');
+    const fromLasso = await runCutout({
+      uri: params.uri,
+      polygon: params.polygon,
+      sourceWidth: params.sourceWidth,
+      sourceHeight: params.sourceHeight,
+      gate,
+      selectionAsMask: true,
+    });
+    return fromLasso.ok ? finish(fromLasso, 'lasso') : null;
+  };
+
+  if (!isAvailable()) {
+    attempts.push('vision-unavailable');
+    return (await tryLasso()) ?? finish({ ok: false, reason: 'unavailable' });
+  }
+
+  // Pass 1 — the context-padded crop. The subject occupies most of the pixels
+  // here, so an accepted matte comes out at its highest resolution.
+  attempts.push('crop');
   const cropped = await runCutout({
     uri: params.uri,
     polygon: params.polygon,
@@ -124,69 +151,40 @@ export async function attemptLocalCutout(params: LocalCutoutRequest): Promise<Lo
     sourceHeight: params.sourceHeight,
     gate,
   });
-  if (cropped.ok) {
-    reportCutout(cropped, kind, 'crop');
-    return { ...cropped, via: 'crop' };
-  }
+  if (cropped.ok) return finish(cropped, 'crop');
 
-  // Second pass, only when Vision found nothing at all: the whole photo.
+  // Pass 2 — the whole photo.
   //
   // Vision looks for objects that stand out from a background, so a tightly
-  // framed subject can leave it with nothing to notice — the very cases that
-  // look easiest to a person are the ones most likely to fill their own crop.
-  // The full scene is the context the model was designed for. Costs another
-  // ~300ms, and only on scans that were about to be given away to the server
-  // for several seconds anyway.
-  //
-  // Not retried for a gate refusal: that means Vision *did* find objects and
-  // they disagreed with the selection, which more context will not fix.
-  if (cropped.reason !== 'no-instances') {
-    reportCutout(cropped, kind);
-    return cropped;
+  // framed subject can leave it nothing to notice; the photos that look
+  // easiest to a person are the ones most likely to fill their own crop. More
+  // context also changes how it splits a scene into instances, which is why
+  // this is worth trying for a gate refusal too and not only for an empty
+  // result — a different decomposition can agree with the selection where the
+  // cropped one didn't.
+  let best: CutoutResult = cropped;
+  if (cropped.reason === 'no-instances' || cropped.reason === 'no-matching-instance') {
+    attempts.push('full-frame');
+    const whole = await runCutout({
+      uri: params.fullUri,
+      polygon: params.fullPolygon,
+      sourceWidth: params.fullWidth,
+      sourceHeight: params.fullHeight,
+      gate,
+    });
+    if (whole.ok) return finish(whole, 'full-frame');
+    best = whole;
   }
 
-  const whole = await runCutout({
-    uri: params.fullUri,
-    polygon: params.fullPolygon,
-    sourceWidth: params.fullWidth,
-    sourceHeight: params.fullHeight,
-    gate,
-  });
-  console.log(
-    `[cutout] retried on full frame after no-instances → ${whole.ok ? 'recovered' : whole.reason}`,
-  );
-  if (whole.ok) {
-    reportCutout(whole, kind, 'full-frame');
-    return { ...whole, via: 'full-frame' };
-  }
-
-  // Third pass: cut it out from the loop itself.
+  // Pass 3 — cut from the loop itself.
   //
-  // Vision has now failed on both the crop and the whole scene, which means
-  // this subject simply isn't a "noticeable object" to it — a sign, a label, a
-  // patch of texture. But the user drew around it, and that signal is still
-  // sitting here unused. Handing the photo to the server instead would be
-  // giving up the one thing we know, and paying ~8.5s for the privilege.
-  //
-  // Only for a traced loop. A box is the tool's default framing, not a
-  // statement about where the object's edges are, so treating it as a mask
-  // would cut out a rectangle.
-  if (kind !== 'lasso') {
-    reportCutout(whole, kind);
-    return whole;
-  }
-
-  const fromLasso = await runCutout({
-    uri: params.uri,
-    polygon: params.polygon,
-    sourceWidth: params.sourceWidth,
-    sourceHeight: params.sourceHeight,
-    gate,
-    selectionAsMask: true,
-  });
-  console.log(`[cutout] fell back to the lasso itself → ${fromLasso.ok ? 'ok' : fromLasso.reason}`);
-  reportCutout(fromLasso, kind, fromLasso.ok ? 'lasso' : undefined);
-  return fromLasso.ok ? { ...fromLasso, via: 'lasso' } : fromLasso;
+  // This used to sit behind the pass-2 branch, so it was reachable only when
+  // Vision returned *nothing*. Every other outcome — most importantly
+  // no-matching-instance, where Vision found objects and the gate rejected
+  // them — fell straight through to the server, spending up to 18s to ignore
+  // the loop the user had just drawn. That is exactly the case the loop
+  // answers best, and it was the one case that couldn't reach it.
+  return (await tryLasso()) ?? finish(best);
 }
 
 function runCutout(params: {
@@ -280,10 +278,11 @@ export function describeCutout(
   const upload = phases?.upload
     ? ` · upload ${phases.upload.megabytes.toFixed(2)}MB/${phases.upload.ms}ms`
     : ' · upload none';
+  const passes = result.attempts?.length ? `\npasses: ${result.attempts.join(' → ')}` : '';
   const tail = phases
-    ? `\nmemory ${phases.memoryMs ?? 0} ‖ cutout ${phases.cutoutMs ?? 0}` +
+    ? `${passes}\nmemory ${phases.memoryMs ?? 0} ‖ cutout ${phases.cutoutMs ?? 0}` +
       ` · server ${phases.serverMs ?? 0}${upload}`
-    : '';
+    : passes;
   if (result.ok) {
     const source =
       result.via === 'lasso' ? 'LASSO MATTE' : result.via === 'full-frame' ? 'VISION (full frame)' : 'VISION (crop)';
@@ -341,7 +340,7 @@ function stickerFileName(): string {
 // The escalation rate and the mix of refusal reasons are the two numbers the
 // whole cost and quality model rests on, so they get recorded from day one.
 // ---------------------------------------------------------------------------
-function reportCutout(result: CutoutResult, kind: SelectionKind, via?: CutoutVia) {
+function reportCutout(result: CutoutResult, kind: SelectionKind, via?: CutoutVia, attempts: string[] = []) {
   // Also to the console, not just to Aptabase. While the thresholds are being
   // tuned against real photos this is the feedback loop — analytics arrives
   // too late to tell you why the scan you are looking at right now went the
@@ -369,6 +368,7 @@ function reportCutout(result: CutoutResult, kind: SelectionKind, via?: CutoutVia
     trackEvent('cutout_local', {
       selection: kind,
       via: via ?? 'crop',
+      attempts: attempts.join('>'),
       instances: result.instanceCount,
       selected: result.selectedCount,
       containment: round(result.containment),
@@ -382,6 +382,7 @@ function reportCutout(result: CutoutResult, kind: SelectionKind, via?: CutoutVia
   trackEvent('cutout_escalated', {
     selection: kind,
     reason: result.reason,
+    attempts: attempts.join('>'),
     instances: result.instanceCount ?? 0,
     containment: round(result.containment ?? 0),
     coverage: round(result.coverage ?? 0),
