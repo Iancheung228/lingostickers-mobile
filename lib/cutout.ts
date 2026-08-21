@@ -144,7 +144,11 @@ export async function uploadCutout(uri: string, userId: string): Promise<string>
  */
 export function describeCutout(result: CutoutResult): string {
   if (result.ok) {
-    return `VISION · ${result.selectedCount}/${result.instanceCount} objects · ${result.durationMs}ms`;
+    return (
+      `VISION ${result.workingWidth}×${result.workingHeight} · ${result.durationMs}ms\n` +
+      `decode ${result.decodeMs} · vision ${result.visionMs} · refine ${result.refineMs} · ` +
+      `style ${result.styleMs} · png ${result.encodeMs}`
+    );
   }
   return `SERVER · vision declined: ${result.reason}`;
 }
@@ -193,7 +197,10 @@ function reportCutout(result: CutoutResult, kind: SelectionKind) {
   if (result.ok) {
     console.log(
       `[cutout] ${mode} · ${kind} · ${result.selectedCount}/${result.instanceCount} instances · ` +
-        `containment ${result.containment.toFixed(2)} coverage ${result.coverage.toFixed(2)} · ${result.durationMs}ms`,
+        `containment ${result.containment.toFixed(2)} coverage ${result.coverage.toFixed(2)} · ` +
+        `${result.workingWidth}×${result.workingHeight} · total ${result.durationMs}ms ` +
+        `(decode ${result.decodeMs} vision ${result.visionMs} refine ${result.refineMs} ` +
+        `style ${result.styleMs} png ${result.encodeMs})`,
     );
   } else {
     console.log(

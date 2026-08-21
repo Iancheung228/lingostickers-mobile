@@ -86,8 +86,18 @@ private func performCutout(_ options: CutoutOptions) -> [String: Any] {
       throw CutoutError(.noMatchingInstance, "selection needs at least 3 points")
     }
 
+    // Per-stage timings, so a slow run can be diagnosed from one scan instead
+    // of from another build.
+    var mark = Date()
+    func lap() -> Int {
+      let elapsed = Int(Date().timeIntervalSince(mark) * 1000)
+      mark = Date()
+      return elapsed
+    }
+
     let cgImage = try ImageIO.loadCGImage(uri: options.uri, maxDimension: options.maxDimension)
     var working = try ImageIO.planarRGB(from: cgImage)
+    let decodeMs = lap()
 
     // The polygon arrives in the source file's pixel space, but the decode
     // above may have downsampled. Rescale rather than making the caller
@@ -107,6 +117,7 @@ private func performCutout(_ options: CutoutOptions) -> [String: Any] {
       minCoverage: options.minCoverage
     )
 
+    let visionMs = lap()
     working.a = segmentation.alpha
 
     let subjectArea = working.a.reduce(Float(0), +) / Float(max(1, working.count))
@@ -118,11 +129,15 @@ private func performCutout(_ options: CutoutOptions) -> [String: Any] {
     }
 
     MatteRefiner.refine(&working)
+    let refineMs = lap()
+
     let styled = StickerStyler.style(working, outputMaxDimension: options.outputMaxDimension)
+    let styleMs = lap()
 
     let destination = FileManager.default.temporaryDirectory
       .appendingPathComponent("cutout-\(UUID().uuidString).png")
     try ImageIO.writePNG(styled, to: destination)
+    let encodeMs = lap()
 
     return [
       "ok": true,
@@ -135,6 +150,13 @@ private func performCutout(_ options: CutoutOptions) -> [String: Any] {
       "coverage": segmentation.coverage,
       "subjectAreaRatio": Double(subjectArea),
       "durationMs": Int(Date().timeIntervalSince(started) * 1000),
+      "decodeMs": decodeMs,
+      "visionMs": visionMs,
+      "refineMs": refineMs,
+      "styleMs": styleMs,
+      "encodeMs": encodeMs,
+      "workingWidth": cgImage.width,
+      "workingHeight": cgImage.height,
     ]
   } catch let error as CutoutError {
     var payload = cutoutFailure(error.failure, error.detail)

@@ -68,6 +68,15 @@ export interface CutoutSuccess {
   /** Share of the working canvas the matte keeps. */
   subjectAreaRatio: number;
   durationMs: number;
+  /** Per-stage breakdown, so a slow run is diagnosable from one scan. */
+  decodeMs: number;
+  visionMs: number;
+  refineMs: number;
+  styleMs: number;
+  encodeMs: number;
+  /** Pixel dimensions the pipeline actually worked at. */
+  workingWidth: number;
+  workingHeight: number;
 }
 
 export interface CutoutFailure {
