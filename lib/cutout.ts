@@ -13,6 +13,11 @@ export type { CutoutResult } from '@/modules/subject-cutout';
  */
 export type SelectionKind = 'box' | 'lasso';
 
+/** Which pass produced the matte. The badge needs this; the console had it. */
+export type CutoutVia = 'crop' | 'full-frame' | 'lasso';
+
+export type LocalResult = CutoutResult & { via?: CutoutVia };
+
 // ---------------------------------------------------------------------------
 // The confidence gate
 //
@@ -98,7 +103,7 @@ export interface LocalCutoutRequest {
   fullPolygon: Point[];
 }
 
-export async function attemptLocalCutout(params: LocalCutoutRequest): Promise<CutoutResult> {
+export async function attemptLocalCutout(params: LocalCutoutRequest): Promise<LocalResult> {
   const { kind } = params;
 
   if (!isAvailable()) {
@@ -120,8 +125,8 @@ export async function attemptLocalCutout(params: LocalCutoutRequest): Promise<Cu
     gate,
   });
   if (cropped.ok) {
-    reportCutout(cropped, kind);
-    return cropped;
+    reportCutout(cropped, kind, 'crop');
+    return { ...cropped, via: 'crop' };
   }
 
   // Second pass, only when Vision found nothing at all: the whole photo.
@@ -152,7 +157,7 @@ export async function attemptLocalCutout(params: LocalCutoutRequest): Promise<Cu
   );
   if (whole.ok) {
     reportCutout(whole, kind, 'full-frame');
-    return whole;
+    return { ...whole, via: 'full-frame' };
   }
 
   // Third pass: cut it out from the loop itself.
@@ -181,7 +186,7 @@ export async function attemptLocalCutout(params: LocalCutoutRequest): Promise<Cu
   });
   console.log(`[cutout] fell back to the lasso itself → ${fromLasso.ok ? 'ok' : fromLasso.reason}`);
   reportCutout(fromLasso, kind, fromLasso.ok ? 'lasso' : undefined);
-  return fromLasso;
+  return fromLasso.ok ? { ...fromLasso, via: 'lasso' } : fromLasso;
 }
 
 function runCutout(params: {
@@ -269,18 +274,21 @@ export async function uploadCutout(uri: string, path: string): Promise<UploadOut
 let GATE_HINT = '?';
 
 export function describeCutout(
-  result: CutoutResult,
-  phases?: { memoryMs?: number; serverMs?: number; upload?: UploadOutcome | null },
+  result: LocalResult,
+  phases?: { memoryMs?: number; cutoutMs?: number; serverMs?: number; upload?: UploadOutcome | null },
 ): string {
   const upload = phases?.upload
     ? ` · upload ${phases.upload.megabytes.toFixed(2)}MB/${phases.upload.ms}ms`
     : ' · upload none';
   const tail = phases
-    ? `\nmemory ${phases.memoryMs ?? 0} · server ${phases.serverMs ?? 0}${upload}`
+    ? `\nmemory ${phases.memoryMs ?? 0} ‖ cutout ${phases.cutoutMs ?? 0}` +
+      ` · server ${phases.serverMs ?? 0}${upload}`
     : '';
   if (result.ok) {
+    const source =
+      result.via === 'lasso' ? 'LASSO MATTE' : result.via === 'full-frame' ? 'VISION (full frame)' : 'VISION (crop)';
     return (
-      `VISION ${result.workingWidth}×${result.workingHeight} · ${result.durationMs}ms\n` +
+      `${source} ${result.workingWidth}×${result.workingHeight} · ${result.durationMs}ms\n` +
       `decode ${result.decodeMs} · vision ${result.visionMs} · refine ${result.refineMs} · ` +
       `style ${result.styleMs} · png ${result.encodeMs}` + tail
     );
@@ -333,7 +341,7 @@ function stickerFileName(): string {
 // The escalation rate and the mix of refusal reasons are the two numbers the
 // whole cost and quality model rests on, so they get recorded from day one.
 // ---------------------------------------------------------------------------
-function reportCutout(result: CutoutResult, kind: SelectionKind, via?: string) {
+function reportCutout(result: CutoutResult, kind: SelectionKind, via?: CutoutVia) {
   // Also to the console, not just to Aptabase. While the thresholds are being
   // tuned against real photos this is the feedback loop — analytics arrives
   // too late to tell you why the scan you are looking at right now went the

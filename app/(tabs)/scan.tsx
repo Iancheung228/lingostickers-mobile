@@ -395,10 +395,14 @@ export default function ScanScreen() {
       // The full, uncropped frame becomes the "memory photo" to flip to —
       // the true raw sensor capture for a live photo, or the whole picked
       // photo (before extraction) for a library import.
-      const memoryStarted = Date.now();
-      // Resizing the full frame and segmenting the crop are independent, and
-      // both are hundreds of milliseconds. Running them together costs one
-      // extra native image buffer and saves the shorter of the two.
+      // Time each leg from inside, not around the Promise.all — the wrapper
+      // only ever reports the slower of the two, which made parallelising them
+      // look like a regression.
+      const timed = <T,>(work: Promise<T>): Promise<{ value: T; ms: number }> => {
+        const startedAt = Date.now();
+        return work.then((value) => ({ value, ms: Date.now() - startedAt }));
+      };
+
       const memoryPromise = cameraCaptureContext
         ? prepareMemoryPhoto(cameraCaptureContext.rawUri, cameraCaptureContext.rawWidth, cameraCaptureContext.rawHeight)
         : prepareMemoryPhoto(importedAsset.uri, importedAsset.width, importedAsset.height);
@@ -417,9 +421,9 @@ export default function ScanScreen() {
       previewCutoutRef.current = null;
       cutoutInfoRef.current = null;
 
-      const [memoryBase64, local] = await Promise.all([
-        memoryPromise,
-        attemptLocalCutout({
+      const [memoryLeg, cutoutLeg] = await Promise.all([
+        timed(memoryPromise),
+        timed(attemptLocalCutout({
           uri: segmentUri,
           polygon: selectionPolygon,
           sourceWidth: segmentWidth,
@@ -429,9 +433,12 @@ export default function ScanScreen() {
           fullWidth,
           fullHeight,
           fullPolygon: fullSelectionPolygon,
-        }),
+        })),
       ]);
-      const memoryMs = Date.now() - memoryStarted;
+      const memoryBase64 = memoryLeg.value;
+      const local = cutoutLeg.value;
+      const memoryMs = memoryLeg.ms;
+      const cutoutMs = cutoutLeg.ms;
 
       if (local.ok && CUTOUT_DRY_RUN) {
         // Measuring, not adopting. The sticker still comes from the server and
@@ -478,11 +485,11 @@ export default function ScanScreen() {
         });
         const serverMs = Date.now() - submitStarted;
         console.log(
-          `[scan] memory-photo ${memoryMs}ms · create-sticker ${serverMs}ms` +
+          `[scan] memory-photo ${memoryMs}ms ‖ cutout ${cutoutMs}ms · create-sticker ${serverMs}ms` +
             (CUTOUT_DRY_RUN ? ' (includes rembg — dry run runs both pipelines)' : ''),
         );
         if (__DEV__) {
-          const line = describeCutout(local, { memoryMs, serverMs, upload });
+          const line = describeCutout(local, { memoryMs, cutoutMs, serverMs, upload });
           setDraft((prev) => (prev ? { ...prev, cutoutInfo: line } : prev));
         }
       } catch (submitErr) {
