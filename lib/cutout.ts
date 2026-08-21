@@ -121,9 +121,17 @@ export async function uploadCutout(uri: string, userId: string): Promise<string>
   const bytes = await file.arrayBuffer();
   const path = `${userId}/${stickerFileName()}`;
 
+  const started = Date.now();
   const { error } = await supabase.storage
     .from('sticker-images')
     .upload(path, bytes, { contentType: 'image/png', upsert: false });
+
+  // Size and duration together: a slow upload is either a fat file or a slow
+  // link, and the fix is different for each.
+  console.log(
+    `[cutout] upload ${(bytes.byteLength / 1024 / 1024).toFixed(2)}MB in ${Date.now() - started}ms` +
+      ` (${((bytes.byteLength / 1024) / Math.max(1, Date.now() - started) * 1000).toFixed(0)} KB/s)`,
+  );
 
   if (error) throw new Error(`Cutout upload failed: ${error.message}`);
 
