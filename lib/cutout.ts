@@ -59,11 +59,12 @@ const OUTPUT_MAX_DIMENSION = 1280;
  * can measure how the new segmenter performs on your own photos, and decide
  * whether it's worth adopting, before touching anything shared.
  *
- * Set to false once `create-sticker` has been deployed with `precutImagePath`
- * support — until then the field is ignored server-side, and uploading would
- * only leave an orphaned PNG behind on every scan.
+ * `create-sticker` was deployed with `precutImagePath` support on 2026-08-21,
+ * so this is off: the device's cutout is uploaded and kept, and rembg runs
+ * only when the device declines. Turning it back on is a safe way to A/B the
+ * two pipelines again without touching anything shared.
  */
-export const CUTOUT_DRY_RUN = true;
+export const CUTOUT_DRY_RUN = false;
 
 export function isLocalCutoutAvailable(): boolean {
   return isAvailable();
