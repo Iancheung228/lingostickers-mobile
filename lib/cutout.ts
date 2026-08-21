@@ -26,16 +26,25 @@ export type SelectionKind = 'box' | 'lasso';
 // selection means Vision grabbed the table, not the object, and that's equally
 // wrong however the selection was drawn.
 //
-// `coverage` ("does the instance fill enough of the selection?") has to differ,
-// because the two tools mean different things. The box starts at 70% of the
-// frame and users often don't tighten it, so a genuinely small object can
-// legitimately fill very little of it — a strict bar there would reject
-// correct cutouts constantly. A traced lasso is deliberate and hugs the
-// subject, so an instance filling almost none of it really is the wrong thing.
+// `coverage` ("does the instance fill enough of the selection?") is the weaker
+// of the two, and it used to be set *stricter* for the lasso than the box —
+// which had the reasoning backwards. A traced loop is the highest-signal input
+// in this pipeline: the user has drawn around the object. That should make us
+// more willing to accept what Vision found inside it, not less.
+//
+// The case coverage was guarding — Vision returning only a fragment, a handle
+// or a logo, rather than the whole subject — is mostly already handled by
+// unioning every instance that clears containment, since a multi-part object
+// comes back as multiple instances. What remains is rare enough not to justify
+// rejecting good cutouts, and a rejection costs the user ~8.5s at the server.
+//
+// A hand-drawn loop is also just looser than it feels while drawing it, so a
+// perfectly good cutout of something thin — a pen, a fork — fills very little
+// of its own loop.
 // ---------------------------------------------------------------------------
 const GATE = {
   box: { minContainment: 0.55, minCoverage: 0.08 },
-  lasso: { minContainment: 0.55, minCoverage: 0.25 },
+  lasso: { minContainment: 0.55, minCoverage: 0.1 },
 } as const;
 
 /**
