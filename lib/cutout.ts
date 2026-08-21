@@ -122,10 +122,21 @@ export interface UploadOutcome {
   ms: number;
 }
 
-export async function uploadCutout(uri: string, userId: string): Promise<UploadOutcome> {
+/**
+ * The storage path a cutout will occupy, known before the bytes are sent.
+ *
+ * Split out from the upload on purpose: because the client picks the name, the
+ * path can be handed to `create-sticker` while the upload is still in flight,
+ * which lets a ~650ms transfer hide behind a ~1.9s vocabulary call instead of
+ * queueing in front of it.
+ */
+export function cutoutPath(userId: string): string {
+  return `${userId}/${stickerFileName()}`;
+}
+
+export async function uploadCutout(uri: string, path: string): Promise<UploadOutcome> {
   const file = new File(uri);
   const bytes = await file.arrayBuffer();
-  const path = `${userId}/${stickerFileName()}`;
 
   const started = Date.now();
   const { error } = await supabase.storage

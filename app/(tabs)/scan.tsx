@@ -22,7 +22,7 @@ import { StickerDraft } from '@/lib/types';
 import { Point } from '@/lib/cropGeometry';
 import { captureLocation, CapturedLocation } from '@/lib/location';
 import { getImportedPhotoMetadata } from '@/lib/photoMetadata';
-import { attemptLocalCutout, uploadCutout, discardCutout, describeCutout, CUTOUT_DRY_RUN, type UploadOutcome } from '@/lib/cutout';
+import { attemptLocalCutout, uploadCutout, cutoutPath, discardCutout, describeCutout, CUTOUT_DRY_RUN, type UploadOutcome } from '@/lib/cutout';
 import { trackEvent } from '@/lib/analytics';
 import DiscoveryReveal from '@/components/DiscoveryReveal';
 import PhotoExtractor, { ExtractResult } from '@/components/PhotoExtractor';
@@ -392,10 +392,12 @@ export default function ScanScreen() {
       // the true raw sensor capture for a live photo, or the whole picked
       // photo (before extraction) for a library import.
       const memoryStarted = Date.now();
-      const memoryBase64 = cameraCaptureContext
-        ? await prepareMemoryPhoto(cameraCaptureContext.rawUri, cameraCaptureContext.rawWidth, cameraCaptureContext.rawHeight)
-        : await prepareMemoryPhoto(importedAsset.uri, importedAsset.width, importedAsset.height);
-      const memoryMs = Date.now() - memoryStarted;
+      // Resizing the full frame and segmenting the crop are independent, and
+      // both are hundreds of milliseconds. Running them together costs one
+      // extra native image buffer and saves the shorter of the two.
+      const memoryPromise = cameraCaptureContext
+        ? prepareMemoryPhoto(cameraCaptureContext.rawUri, cameraCaptureContext.rawWidth, cameraCaptureContext.rawHeight)
+        : prepareMemoryPhoto(importedAsset.uri, importedAsset.width, importedAsset.height);
 
       // Try the device first. Apple Vision returns the foreground objects it
       // found, and the user's own selection picks which of them we keep —
@@ -410,13 +412,18 @@ export default function ScanScreen() {
       let upload: UploadOutcome | null = null;
       previewCutoutRef.current = null;
       cutoutInfoRef.current = null;
-      const local = await attemptLocalCutout({
-        uri: segmentUri,
-        polygon: selectionPolygon,
-        sourceWidth: segmentWidth,
-        sourceHeight: segmentHeight,
-        kind: selectionKind,
-      });
+
+      const [memoryBase64, local] = await Promise.all([
+        memoryPromise,
+        attemptLocalCutout({
+          uri: segmentUri,
+          polygon: selectionPolygon,
+          sourceWidth: segmentWidth,
+          sourceHeight: segmentHeight,
+          kind: selectionKind,
+        }),
+      ]);
+      const memoryMs = Date.now() - memoryStarted;
 
       if (local.ok && CUTOUT_DRY_RUN) {
         // Measuring, not adopting. The sticker still comes from the server and
@@ -426,11 +433,19 @@ export default function ScanScreen() {
         previewCutoutRef.current = local.uri;
       } else if (local.ok) {
         try {
-          upload = await uploadCutout(local.uri, user.id);
+          upload = await uploadCutout(local.uri, cutoutPath(user.id));
           precutImagePath = upload.path;
         } catch (uploadErr: any) {
           // The cutout itself was fine; only getting it to storage failed.
-          // Fall back rather than fail the scan.
+          // Fall back to the server rather than fail the scan.
+          //
+          // Deliberately still sequential. The path is known in advance, so
+          // this upload *could* run alongside create-sticker and save ~650ms —
+          // but then the sticker row would already reference a file that might
+          // never arrive, and recovering from that costs either a discarded
+          // scan or a second billed vocabulary call. #3 removes the wait
+          // properly instead, by rendering the cutout from local disk the
+          // moment it exists and letting the upload finish in the background.
           console.warn('[scan] cutout upload failed, falling back to server', uploadErr?.message);
           trackEvent('cutout_upload_failed', { reason: String(uploadErr?.message ?? 'unknown') });
         }
