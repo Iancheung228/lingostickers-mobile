@@ -116,7 +116,13 @@ export async function attemptLocalCutout(params: {
 // routing a finished PNG through a Deno worker would add a base64 round-trip
 // and an extra hop to gain nothing.
 // ---------------------------------------------------------------------------
-export async function uploadCutout(uri: string, userId: string): Promise<string> {
+export interface UploadOutcome {
+  path: string;
+  megabytes: number;
+  ms: number;
+}
+
+export async function uploadCutout(uri: string, userId: string): Promise<UploadOutcome> {
   const file = new File(uri);
   const bytes = await file.arrayBuffer();
   const path = `${userId}/${stickerFileName()}`;
@@ -125,13 +131,12 @@ export async function uploadCutout(uri: string, userId: string): Promise<string>
   const { error } = await supabase.storage
     .from('sticker-images')
     .upload(path, bytes, { contentType: 'image/png', upsert: false });
+  const ms = Date.now() - started;
+  const megabytes = bytes.byteLength / 1024 / 1024;
 
   // Size and duration together: a slow upload is either a fat file or a slow
   // link, and the fix is different for each.
-  console.log(
-    `[cutout] upload ${(bytes.byteLength / 1024 / 1024).toFixed(2)}MB in ${Date.now() - started}ms` +
-      ` (${((bytes.byteLength / 1024) / Math.max(1, Date.now() - started) * 1000).toFixed(0)} KB/s)`,
-  );
+  console.log(`[cutout] upload ${megabytes.toFixed(2)}MB in ${ms}ms`);
 
   if (error) throw new Error(`Cutout upload failed: ${error.message}`);
 
@@ -144,16 +149,22 @@ export async function uploadCutout(uri: string, userId: string): Promise<string>
     // Losing a temp file is not worth failing a scan over.
   }
 
-  return path;
+  return { path, megabytes, ms };
 }
 
 /**
  * A one-line verdict for the reveal screen's dry-run badge. Says which
  * pipeline produced what you're looking at, and what it cost.
  */
-export function describeCutout(result: CutoutResult, phases?: { prepMs?: number; memoryMs?: number; serverMs?: number }): string {
+export function describeCutout(
+  result: CutoutResult,
+  phases?: { memoryMs?: number; serverMs?: number; upload?: UploadOutcome | null },
+): string {
+  const upload = phases?.upload
+    ? ` · upload ${phases.upload.megabytes.toFixed(2)}MB/${phases.upload.ms}ms`
+    : ' · upload none';
   const tail = phases
-    ? `\nprep ${phases.prepMs ?? 0} · memory ${phases.memoryMs ?? 0} · server ${phases.serverMs ?? 0}`
+    ? `\nmemory ${phases.memoryMs ?? 0} · server ${phases.serverMs ?? 0}${upload}`
     : '';
   if (result.ok) {
     return (

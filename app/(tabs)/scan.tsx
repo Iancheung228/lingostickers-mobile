@@ -22,7 +22,7 @@ import { StickerDraft } from '@/lib/types';
 import { Point } from '@/lib/cropGeometry';
 import { captureLocation, CapturedLocation } from '@/lib/location';
 import { getImportedPhotoMetadata } from '@/lib/photoMetadata';
-import { attemptLocalCutout, uploadCutout, discardCutout, describeCutout, CUTOUT_DRY_RUN } from '@/lib/cutout';
+import { attemptLocalCutout, uploadCutout, discardCutout, describeCutout, CUTOUT_DRY_RUN, type UploadOutcome } from '@/lib/cutout';
 import { trackEvent } from '@/lib/analytics';
 import DiscoveryReveal from '@/components/DiscoveryReveal';
 import PhotoExtractor, { ExtractResult } from '@/components/PhotoExtractor';
@@ -407,6 +407,7 @@ export default function ScanScreen() {
       // through to the server exactly as before. The user sees no difference
       // beyond the wait.
       let precutImagePath: string | null = null;
+      let upload: UploadOutcome | null = null;
       previewCutoutRef.current = null;
       cutoutInfoRef.current = null;
       const local = await attemptLocalCutout({
@@ -425,7 +426,8 @@ export default function ScanScreen() {
         previewCutoutRef.current = local.uri;
       } else if (local.ok) {
         try {
-          precutImagePath = await uploadCutout(local.uri, user.id);
+          upload = await uploadCutout(local.uri, user.id);
+          precutImagePath = upload.path;
         } catch (uploadErr: any) {
           // The cutout itself was fine; only getting it to storage failed.
           // Fall back rather than fail the scan.
@@ -436,7 +438,7 @@ export default function ScanScreen() {
 
       // Placeholder — rewritten below once the server round-trip has been
       // timed, since that is where most of the wall clock actually goes.
-      if (CUTOUT_DRY_RUN) cutoutInfoRef.current = describeCutout(local);
+      if (__DEV__) cutoutInfoRef.current = describeCutout(local);
 
       // Remember what this scan was made from, so "Redo cutout" can re-run it
       // through the server without making the user redraw their selection.
@@ -456,8 +458,8 @@ export default function ScanScreen() {
           `[scan] memory-photo ${memoryMs}ms · create-sticker ${serverMs}ms` +
             (CUTOUT_DRY_RUN ? ' (includes rembg — dry run runs both pipelines)' : ''),
         );
-        if (CUTOUT_DRY_RUN) {
-          const line = describeCutout(local, { memoryMs, serverMs });
+        if (__DEV__) {
+          const line = describeCutout(local, { memoryMs, serverMs, upload });
           setDraft((prev) => (prev ? { ...prev, cutoutInfo: line } : prev));
         }
       } catch (submitErr) {
