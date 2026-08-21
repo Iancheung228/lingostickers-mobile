@@ -92,6 +92,7 @@ export async function attemptLocalCutout(params: {
   }
 
   const gate = GATE[kind];
+  GATE_HINT = `${gate.minCoverage} (${kind})`;
   const result = await cutout({
     uri,
     polygon,
@@ -167,6 +168,9 @@ export async function uploadCutout(uri: string, path: string): Promise<UploadOut
  * A one-line verdict for the reveal screen's dry-run badge. Says which
  * pipeline produced what you're looking at, and what it cost.
  */
+/** Filled in by attemptLocalCutout so the badge can name the bar that was missed. */
+let GATE_HINT = '?';
+
 export function describeCutout(
   result: CutoutResult,
   phases?: { memoryMs?: number; serverMs?: number; upload?: UploadOutcome | null },
@@ -184,7 +188,17 @@ export function describeCutout(
       `style ${result.styleMs} · png ${result.encodeMs}` + tail
     );
   }
-  return `SERVER · vision declined: ${result.reason}` + tail;
+  // The reason alone doesn't say whether Vision found nothing or the gate
+  // threw away something it did find — and those need opposite fixes. The
+  // scores are what distinguish them, so they belong here, not only in the
+  // analytics nobody reads mid-debug.
+  const scores =
+    result.instanceCount !== undefined
+      ? `\n${result.instanceCount} objects found · best containment ${(result.containment ?? 0).toFixed(2)}` +
+        ` · coverage ${(result.coverage ?? 0).toFixed(2)}` +
+        `\ngate needs containment ≥0.55 · coverage ≥${GATE_HINT}`
+      : '';
+  return `SERVER · declined: ${result.reason}` + (result.detail ? `\n${result.detail}` : '') + scores + tail;
 }
 
 /**
