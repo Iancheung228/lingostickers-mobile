@@ -357,7 +357,15 @@ async function removeBackgroundReplicate(imageBytes: Uint8Array): Promise<{ data
       headers: {
         'Authorization': `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
-        'Prefer': 'wait=20',
+        // Fail fast rather than wait it out.
+        //
+        // This used to be wait=20, which was reasonable while the server was
+        // the only way to get a cutout — a slow answer beat none. Now that the
+        // device handles the common case, reaching here already means the scan
+        // is degraded, and a 20s stall followed by the remove.bg fallback put
+        // the worst case near 40 seconds. Better to give up early and let the
+        // fallback have its turn.
+        'Prefer': `wait=${Number(Deno.env.get('REPLICATE_WAIT_SECONDS') ?? '10')}`,
       },
       body: JSON.stringify({ version: versionId, input }),
     });
@@ -369,7 +377,7 @@ async function removeBackgroundReplicate(imageBytes: Uint8Array): Promise<{ data
 
     const prediction = await response.json();
     if (prediction.status !== 'succeeded') {
-      return { data: null, status: `replicate ${prediction.status}: ${prediction.error ?? 'did not complete within 20s'}` };
+      return { data: null, status: `replicate ${prediction.status}: ${prediction.error ?? 'did not complete in time'}` };
     }
 
     const outputUrl = Array.isArray(prediction.output) ? prediction.output[0] : prediction.output;
