@@ -42,6 +42,13 @@ struct CutoutOptions: Record {
   @Field var minSubjectAreaRatio: Double = 0.01
   /// Reject a matte that keeps more than this share — nothing was separated.
   @Field var maxSubjectAreaRatio: Double = 0.98
+  /// Skip Vision entirely and build the matte from the selection itself.
+  ///
+  /// For when Vision found nothing but the user traced a loop: the loop is
+  /// still a strong signal, just an imprecise one, and solving alpha in a band
+  /// around it beats handing the photo to a server that knows even less about
+  /// where the object is. See LassoMatter.
+  @Field var selectionAsMask: Bool = false
 }
 
 public class SubjectCutoutModule: Module {
@@ -110,15 +117,33 @@ private func performCutout(_ options: CutoutOptions) -> [String: Any] {
       toHeight: cgImage.height
     )
 
-    let segmentation = try SubjectSegmenter.segment(
-      image: cgImage,
-      polygon: polygon,
-      minContainment: options.minContainment,
-      minCoverage: options.minCoverage
-    )
+    let instanceCount: Int
+    let selectedCount: Int
+    let containment: Double
+    let coverage: Double
+
+    if options.selectionAsMask {
+      working.a = LassoMatter.matte(image: working, polygon: polygon)
+      instanceCount = 0
+      selectedCount = 0
+      // The selection is, by construction, entirely within itself.
+      containment = 1
+      coverage = 1
+    } else {
+      let segmentation = try SubjectSegmenter.segment(
+        image: cgImage,
+        polygon: polygon,
+        minContainment: options.minContainment,
+        minCoverage: options.minCoverage
+      )
+      working.a = segmentation.alpha
+      instanceCount = segmentation.instanceCount
+      selectedCount = segmentation.selectedCount
+      containment = segmentation.containment
+      coverage = segmentation.coverage
+    }
 
     let visionMs = lap()
-    working.a = segmentation.alpha
 
     let subjectArea = working.a.reduce(Float(0), +) / Float(max(1, working.count))
     if Double(subjectArea) < options.minSubjectAreaRatio {
@@ -144,10 +169,10 @@ private func performCutout(_ options: CutoutOptions) -> [String: Any] {
       "uri": destination.absoluteString,
       "width": styled.width,
       "height": styled.height,
-      "instanceCount": segmentation.instanceCount,
-      "selectedCount": segmentation.selectedCount,
-      "containment": segmentation.containment,
-      "coverage": segmentation.coverage,
+      "instanceCount": instanceCount,
+      "selectedCount": selectedCount,
+      "containment": containment,
+      "coverage": coverage,
       "subjectAreaRatio": Double(subjectArea),
       "durationMs": Int(Date().timeIntervalSince(started) * 1000),
       "decodeMs": decodeMs,

@@ -49,6 +49,12 @@ export interface CutoutOptions {
   minSubjectAreaRatio?: number;
   /** Reject a matte keeping more than this share — nothing was separated. */
   maxSubjectAreaRatio?: number;
+  /**
+   * Skip Vision and build the matte from the selection itself, solving alpha
+   * in a band around the traced loop. For when Vision found nothing but the
+   * user still told us where the object is.
+   */
+  selectionAsMask?: boolean;
 }
 
 export interface CutoutSuccess {

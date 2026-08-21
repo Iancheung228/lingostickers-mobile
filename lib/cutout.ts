@@ -147,12 +147,41 @@ export async function attemptLocalCutout(params: LocalCutoutRequest): Promise<Cu
     sourceHeight: params.fullHeight,
     gate,
   });
-
   console.log(
     `[cutout] retried on full frame after no-instances → ${whole.ok ? 'recovered' : whole.reason}`,
   );
-  reportCutout(whole, kind, whole.ok ? 'full-frame' : undefined);
-  return whole;
+  if (whole.ok) {
+    reportCutout(whole, kind, 'full-frame');
+    return whole;
+  }
+
+  // Third pass: cut it out from the loop itself.
+  //
+  // Vision has now failed on both the crop and the whole scene, which means
+  // this subject simply isn't a "noticeable object" to it — a sign, a label, a
+  // patch of texture. But the user drew around it, and that signal is still
+  // sitting here unused. Handing the photo to the server instead would be
+  // giving up the one thing we know, and paying ~8.5s for the privilege.
+  //
+  // Only for a traced loop. A box is the tool's default framing, not a
+  // statement about where the object's edges are, so treating it as a mask
+  // would cut out a rectangle.
+  if (kind !== 'lasso') {
+    reportCutout(whole, kind);
+    return whole;
+  }
+
+  const fromLasso = await runCutout({
+    uri: params.uri,
+    polygon: params.polygon,
+    sourceWidth: params.sourceWidth,
+    sourceHeight: params.sourceHeight,
+    gate,
+    selectionAsMask: true,
+  });
+  console.log(`[cutout] fell back to the lasso itself → ${fromLasso.ok ? 'ok' : fromLasso.reason}`);
+  reportCutout(fromLasso, kind, fromLasso.ok ? 'lasso' : undefined);
+  return fromLasso;
 }
 
 function runCutout(params: {
@@ -161,6 +190,7 @@ function runCutout(params: {
   sourceWidth: number;
   sourceHeight: number;
   gate: { minContainment: number; minCoverage: number };
+  selectionAsMask?: boolean;
 }): Promise<CutoutResult> {
   return cutout({
     uri: params.uri,
@@ -171,6 +201,7 @@ function runCutout(params: {
     outputMaxDimension: OUTPUT_MAX_DIMENSION,
     minContainment: params.gate.minContainment,
     minCoverage: params.gate.minCoverage,
+    selectionAsMask: params.selectionAsMask ?? false,
   });
 }
 
