@@ -391,9 +391,11 @@ export default function ScanScreen() {
       // The full, uncropped frame becomes the "memory photo" to flip to —
       // the true raw sensor capture for a live photo, or the whole picked
       // photo (before extraction) for a library import.
+      const memoryStarted = Date.now();
       const memoryBase64 = cameraCaptureContext
         ? await prepareMemoryPhoto(cameraCaptureContext.rawUri, cameraCaptureContext.rawWidth, cameraCaptureContext.rawHeight)
         : await prepareMemoryPhoto(importedAsset.uri, importedAsset.width, importedAsset.height);
+      const memoryMs = Date.now() - memoryStarted;
 
       // Try the device first. Apple Vision returns the foreground objects it
       // found, and the user's own selection picks which of them we keep —
@@ -432,12 +434,15 @@ export default function ScanScreen() {
         }
       }
 
+      // Placeholder — rewritten below once the server round-trip has been
+      // timed, since that is where most of the wall clock actually goes.
       if (CUTOUT_DRY_RUN) cutoutInfoRef.current = describeCutout(local);
 
       // Remember what this scan was made from, so "Redo cutout" can re-run it
       // through the server without making the user redraw their selection.
       lastExtractRef.current = { base64, memoryBase64, discoveredAt: fallbackDiscoveredAt, lassoPolygon };
 
+      const submitStarted = Date.now();
       try {
         await submitImageForSticker({
           base64,
@@ -446,6 +451,15 @@ export default function ScanScreen() {
           lassoPolygon,
           precutImagePath,
         });
+        const serverMs = Date.now() - submitStarted;
+        console.log(
+          `[scan] memory-photo ${memoryMs}ms · create-sticker ${serverMs}ms` +
+            (CUTOUT_DRY_RUN ? ' (includes rembg — dry run runs both pipelines)' : ''),
+        );
+        if (CUTOUT_DRY_RUN) {
+          const line = describeCutout(local, { memoryMs, serverMs });
+          setDraft((prev) => (prev ? { ...prev, cutoutInfo: line } : prev));
+        }
       } catch (submitErr) {
         // The cutout is already in storage but no sticker will ever point at
         // it — most likely the daily quota was spent, which the function

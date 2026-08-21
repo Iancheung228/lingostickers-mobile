@@ -142,15 +142,18 @@ export async function uploadCutout(uri: string, userId: string): Promise<string>
  * A one-line verdict for the reveal screen's dry-run badge. Says which
  * pipeline produced what you're looking at, and what it cost.
  */
-export function describeCutout(result: CutoutResult): string {
+export function describeCutout(result: CutoutResult, phases?: { prepMs?: number; memoryMs?: number; serverMs?: number }): string {
+  const tail = phases
+    ? `\nprep ${phases.prepMs ?? 0} · memory ${phases.memoryMs ?? 0} · server ${phases.serverMs ?? 0}`
+    : '';
   if (result.ok) {
     return (
       `VISION ${result.workingWidth}×${result.workingHeight} · ${result.durationMs}ms\n` +
       `decode ${result.decodeMs} · vision ${result.visionMs} · refine ${result.refineMs} · ` +
-      `style ${result.styleMs} · png ${result.encodeMs}`
+      `style ${result.styleMs} · png ${result.encodeMs}` + tail
     );
   }
-  return `SERVER · vision declined: ${result.reason}`;
+  return `SERVER · vision declined: ${result.reason}` + tail;
 }
 
 /**

@@ -166,6 +166,7 @@ export default function PhotoExtractor({ imageUri, imageWidth, imageHeight, onCl
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setCropping(true);
     try {
+      const prepStarted = Date.now();
       const selectionBox = box.value;
       const crop = boxToImageCrop(selectionBox, displayRect, imageWidth, imageHeight);
       const context = ImageManipulator.manipulate(imageUri).crop(crop);
@@ -227,6 +228,8 @@ export default function PhotoExtractor({ imageUri, imageWidth, imageHeight, onCl
       const selectionPolygon = selectionSource.map(p =>
         projectInto(p, segmentCrop, segmentScale),
       );
+
+      console.log(`[scan] crop+render ${Date.now() - prepStarted}ms (upload jpeg + ${segmentWidth}×${segmentHeight} segment jpeg)`);
 
       await onExtract({
         base64: result.base64,
