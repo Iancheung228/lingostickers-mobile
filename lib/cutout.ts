@@ -76,14 +76,21 @@ export function isLocalCutoutAvailable(): boolean {
  * Returns a refusal rather than throwing — "the device declined" is an
  * ordinary branch here, and every refusal reason routes to the server path.
  */
-export async function attemptLocalCutout(params: {
+export interface LocalCutoutRequest {
   uri: string;
   polygon: Point[];
   sourceWidth: number;
   sourceHeight: number;
   kind: SelectionKind;
-}): Promise<CutoutResult> {
-  const { uri, polygon, sourceWidth, sourceHeight, kind } = params;
+  /** The whole photo, and the same selection in its coordinate space. */
+  fullUri: string;
+  fullWidth: number;
+  fullHeight: number;
+  fullPolygon: Point[];
+}
+
+export async function attemptLocalCutout(params: LocalCutoutRequest): Promise<CutoutResult> {
+  const { kind } = params;
 
   if (!isAvailable()) {
     const result: CutoutResult = { ok: false, reason: 'unavailable' };
@@ -93,19 +100,69 @@ export async function attemptLocalCutout(params: {
 
   const gate = GATE[kind];
   GATE_HINT = `${gate.minCoverage} (${kind})`;
-  const result = await cutout({
-    uri,
-    polygon,
-    sourceWidth,
-    sourceHeight,
-    maxDimension: SEGMENT_MAX_DIMENSION,
-    outputMaxDimension: OUTPUT_MAX_DIMENSION,
-    minContainment: gate.minContainment,
-    minCoverage: gate.minCoverage,
+
+  // First pass: the context-padded crop. The subject occupies most of the
+  // pixels here, so the matte comes out at its highest resolution.
+  const cropped = await runCutout({
+    uri: params.uri,
+    polygon: params.polygon,
+    sourceWidth: params.sourceWidth,
+    sourceHeight: params.sourceHeight,
+    gate,
+  });
+  if (cropped.ok) {
+    reportCutout(cropped, kind);
+    return cropped;
+  }
+
+  // Second pass, only when Vision found nothing at all: the whole photo.
+  //
+  // Vision looks for objects that stand out from a background, so a tightly
+  // framed subject can leave it with nothing to notice — the very cases that
+  // look easiest to a person are the ones most likely to fill their own crop.
+  // The full scene is the context the model was designed for. Costs another
+  // ~300ms, and only on scans that were about to be given away to the server
+  // for several seconds anyway.
+  //
+  // Not retried for a gate refusal: that means Vision *did* find objects and
+  // they disagreed with the selection, which more context will not fix.
+  if (cropped.reason !== 'no-instances') {
+    reportCutout(cropped, kind);
+    return cropped;
+  }
+
+  const whole = await runCutout({
+    uri: params.fullUri,
+    polygon: params.fullPolygon,
+    sourceWidth: params.fullWidth,
+    sourceHeight: params.fullHeight,
+    gate,
   });
 
-  reportCutout(result, kind);
-  return result;
+  console.log(
+    `[cutout] retried on full frame after no-instances → ${whole.ok ? 'recovered' : whole.reason}`,
+  );
+  reportCutout(whole, kind, whole.ok ? 'full-frame' : undefined);
+  return whole;
+}
+
+function runCutout(params: {
+  uri: string;
+  polygon: Point[];
+  sourceWidth: number;
+  sourceHeight: number;
+  gate: { minContainment: number; minCoverage: number };
+}): Promise<CutoutResult> {
+  return cutout({
+    uri: params.uri,
+    polygon: params.polygon,
+    sourceWidth: params.sourceWidth,
+    sourceHeight: params.sourceHeight,
+    maxDimension: SEGMENT_MAX_DIMENSION,
+    outputMaxDimension: OUTPUT_MAX_DIMENSION,
+    minContainment: params.gate.minContainment,
+    minCoverage: params.gate.minCoverage,
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -236,12 +293,12 @@ function stickerFileName(): string {
 // The escalation rate and the mix of refusal reasons are the two numbers the
 // whole cost and quality model rests on, so they get recorded from day one.
 // ---------------------------------------------------------------------------
-function reportCutout(result: CutoutResult, kind: SelectionKind) {
+function reportCutout(result: CutoutResult, kind: SelectionKind, via?: string) {
   // Also to the console, not just to Aptabase. While the thresholds are being
   // tuned against real photos this is the feedback loop — analytics arrives
   // too late to tell you why the scan you are looking at right now went the
   // way it did.
-  const mode = CUTOUT_DRY_RUN ? 'dry-run' : 'device';
+  const mode = (CUTOUT_DRY_RUN ? 'dry-run' : 'device') + (via ? ` (${via})` : '');
   if (result.ok) {
     console.log(
       `[cutout] ${mode} · ${kind} · ${result.selectedCount}/${result.instanceCount} instances · ` +
@@ -263,6 +320,7 @@ function reportCutout(result: CutoutResult, kind: SelectionKind) {
   if (result.ok) {
     trackEvent('cutout_local', {
       selection: kind,
+      via: via ?? 'crop',
       instances: result.instanceCount,
       selected: result.selectedCount,
       containment: round(result.containment),

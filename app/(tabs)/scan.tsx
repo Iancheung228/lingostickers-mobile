@@ -367,6 +367,10 @@ export default function ScanScreen() {
     segmentHeight,
     selectionPolygon,
     selectionKind,
+    fullUri,
+    fullWidth,
+    fullHeight,
+    fullSelectionPolygon,
   }: ExtractResult) => {
     if (processing || !importedAsset) return;
     setProcessing(true);
@@ -421,6 +425,10 @@ export default function ScanScreen() {
           sourceWidth: segmentWidth,
           sourceHeight: segmentHeight,
           kind: selectionKind,
+          fullUri,
+          fullWidth,
+          fullHeight,
+          fullPolygon: fullSelectionPolygon,
         }),
       ]);
       const memoryMs = Date.now() - memoryStarted;

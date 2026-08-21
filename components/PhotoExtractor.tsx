@@ -41,6 +41,17 @@ export interface ExtractResult {
   /** The user's selection, in `segmentUri`'s pixel space. */
   selectionPolygon: Point[];
   selectionKind: 'box' | 'lasso';
+  /**
+   * The whole photo, uncropped, plus the same selection in its coordinate
+   * space. A second chance for the segmenter: Vision hunts for objects that
+   * stand out from a background, so a tightly cropped subject — which is most
+   * of the frame by definition — can leave it with nothing to notice. The
+   * full scene is the context it was designed for.
+   */
+  fullUri: string;
+  fullWidth: number;
+  fullHeight: number;
+  fullSelectionPolygon: Point[];
 }
 
 const ZERO_RECT: Rect = { x: 0, y: 0, width: 0, height: 0 };
@@ -231,6 +242,13 @@ export default function PhotoExtractor({ imageUri, imageWidth, imageHeight, onCl
 
       console.log(`[scan] crop+render ${Date.now() - prepStarted}ms (upload jpeg + ${segmentWidth}×${segmentHeight} segment jpeg)`);
 
+      // The same selection, expressed against the original photo rather than
+      // the crop — the projection is just "no crop offset, no rescale".
+      const fullSelectionPolygon = selectionSource.map(p => ({
+        x: (p.x - displayRect.x) * imageScale,
+        y: (p.y - displayRect.y) * imageScale,
+      }));
+
       await onExtract({
         base64: result.base64,
         uri: result.uri,
@@ -240,6 +258,10 @@ export default function PhotoExtractor({ imageUri, imageWidth, imageHeight, onCl
         segmentHeight,
         selectionPolygon,
         selectionKind: usingLasso ? 'lasso' : 'box',
+        fullUri: imageUri,
+        fullWidth: imageWidth,
+        fullHeight: imageHeight,
+        fullSelectionPolygon,
       });
     } finally {
       setCropping(false);
