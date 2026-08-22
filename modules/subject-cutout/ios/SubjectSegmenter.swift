@@ -41,6 +41,10 @@ enum SubjectSegmenter {
     let coverage: Double
   }
 
+  /// Above this share of the frame, a selection is treated as expressing no
+  /// preference about *which* object — only that there is one.
+  private static let unspecificSelectionRatio = 0.9
+
   static func segment(
     image: CGImage,
     polygon: [CutoutPoint],
@@ -80,16 +84,39 @@ enum SubjectSegmenter {
     guard scores.polygonPixels > 0 else {
       throw CutoutError(.noMatchingInstance, "selection projected to zero pixels")
     }
+    let maskArea = scores.maskArea
+
+    // A selection covering essentially the whole frame expresses no preference
+    // — every instance is trivially "inside" it, so containment carries no
+    // information and unioning everything that passes would cut out the mug,
+    // the notebook and the plant together. The box tool now starts at the full
+    // frame, so this is the common case, not an edge one.
+    //
+    // Treated as "just pick the subject": the instance with the most pixels.
+    // Vision already returns a multi-part object as one instance most of the
+    // time, so the union this gives up was mostly defensive anyway — and when
+    // the user does want several things, narrowing the box or tracing a loop
+    // says so explicitly.
+    let unspecific = Double(scores.polygonPixels) >= Double(maskArea) * unspecificSelectionRatio
 
     var selected = IndexSet()
     var selectedInside = 0
     var selectedTotal = 0
-    for (index, tally) in scores.perInstance {
-      let containment = tally.total > 0 ? Double(tally.inside) / Double(tally.total) : 0
-      if containment >= minContainment {
-        selected.insert(index)
-        selectedInside += tally.inside
-        selectedTotal += tally.total
+
+    if unspecific {
+      if let dominant = scores.perInstance.max(by: { $0.value.inside < $1.value.inside }) {
+        selected.insert(dominant.key)
+        selectedInside = dominant.value.inside
+        selectedTotal = dominant.value.total
+      }
+    } else {
+      for (index, tally) in scores.perInstance {
+        let containment = tally.total > 0 ? Double(tally.inside) / Double(tally.total) : 0
+        if containment >= minContainment {
+          selected.insert(index)
+          selectedInside += tally.inside
+          selectedTotal += tally.total
+        }
       }
     }
 
@@ -106,7 +133,7 @@ enum SubjectSegmenter {
     let coverage = selected.isEmpty ? 0 : Double(selectedInside) / Double(scores.polygonPixels)
     let containment = selectedTotal > 0 ? Double(selectedInside) / Double(selectedTotal) : 0
 
-    if selected.isEmpty || coverage < minCoverage {
+    if selected.isEmpty || (!unspecific && coverage < minCoverage) {
       var err = CutoutError(
         .noMatchingInstance,
         selected.isEmpty
@@ -151,6 +178,9 @@ enum SubjectSegmenter {
   private struct Scores {
     var perInstance: [Int: Tally]
     var polygonPixels: Int
+    /// Total pixels in the label map, for judging how much of the frame the
+    /// selection actually covers.
+    var maskArea: Int
   }
 
   private static func score(
@@ -239,7 +269,11 @@ enum SubjectSegmenter {
       }
     }
 
-    return Scores(perInstance: perInstance, polygonPixels: polygonPixels)
+    return Scores(
+      perInstance: perInstance,
+      polygonPixels: polygonPixels,
+      maskArea: maskWidth * maskHeight
+    )
   }
 
   /// Even-odd ray casting, matching the server's existing pointInPolygon so

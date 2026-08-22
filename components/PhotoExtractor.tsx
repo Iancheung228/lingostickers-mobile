@@ -108,23 +108,27 @@ export default function PhotoExtractor({ imageUri, imageWidth, imageHeight, onCl
     [containerSize.width, containerSize.height, imageWidth, imageHeight],
   );
 
-  // Seed the box centered at ~70% of the displayed image once we know its
-  // layout. Re-seeds when a new photo is loaded (tracked by URI) — but NOT
-  // when the same photo reopens (e.g. "Retry Extraction" in DiscoveryReveal,
-  // which reuses this same mounted instance rather than remounting it, since
-  // rendering `null` while hidden doesn't unmount), so a retry deliberately
-  // picks up right where the box/lasso was left, instead of resetting.
+  // Seed the box to the whole photo once we know its layout. Re-seeds when a
+  // new photo is loaded (tracked by URI) — but NOT when the same photo reopens
+  // (e.g. "Retry Extraction" in DiscoveryReveal, which reuses this same
+  // mounted instance rather than remounting it, since rendering `null` while
+  // hidden doesn't unmount), so a retry deliberately picks up right where the
+  // box/lasso was left, instead of resetting.
+  //
+  // Starting at the full frame rather than an arbitrary 70% means the default
+  // never silently clips the subject; narrowing is a deliberate act. The
+  // segmenter treats a full-frame box as "no preference expressed" and picks
+  // the dominant object rather than unioning everything it finds — see
+  // UNSPECIFIC_SELECTION_RATIO in SubjectSegmenter.
   useEffect(() => {
     if (!imageUri || displayRect.width <= 0 || displayRect.height <= 0) return;
     if (initializedFor.current === imageUri) return;
 
-    const w = displayRect.width * 0.7;
-    const h = displayRect.height * 0.7;
     const initial: Rect = {
-      x: displayRect.x + (displayRect.width - w) / 2,
-      y: displayRect.y + (displayRect.height - h) / 2,
-      width: w,
-      height: h,
+      x: displayRect.x,
+      y: displayRect.y,
+      width: displayRect.width,
+      height: displayRect.height,
     };
     box.value = initial;
     startBox.value = initial;
