@@ -93,6 +93,10 @@ export default function ScanScreen() {
   // cutout never shows the previous scan's preview.
   const previewCutoutRef = useRef<string | null>(null);
   const cutoutInfoRef = useRef<string | null>(null);
+  // How long the vocabulary call itself took, as reported by the edge
+  // function. Separates 'the network was slow' from 'Groq was rate-limited',
+  // which is the difference between a payload problem and a quota problem.
+  const lastGroqMsRef = useRef<number | null>(null);
   const lastExtractRef = useRef<{
     base64: string;
     memoryBase64: string | null | undefined;
@@ -173,12 +177,16 @@ export default function ScanScreen() {
   const submitImageForSticker = useCallback(async ({
     base64,
     memoryBase64,
+    contextBase64,
     discoveredAt,
     lassoPolygon,
     precutImagePath,
   }: {
     base64: string;
     memoryBase64: string | null | undefined;
+    // A small copy of the same scene, for the vision model. See
+    // prepareContextPhoto.
+    contextBase64?: string | null;
     discoveredAt: string;
     lassoPolygon?: Point[];
     // Set when the device already cut this one out and uploaded it. The
@@ -194,6 +202,7 @@ export default function ScanScreen() {
         userId: user.id,
         language,
         ...(memoryBase64 ? { memoryImage: `data:image/jpeg;base64,${memoryBase64}` } : {}),
+        ...(contextBase64 ? { contextImage: `data:image/jpeg;base64,${contextBase64}` } : {}),
         ...(lassoPolygon ? { lassoPolygon } : {}),
         ...(precutImagePath ? { precutImagePath } : {}),
       },
@@ -221,7 +230,8 @@ export default function ScanScreen() {
       throw new Error(body?.error ?? 'This took too long and was cut off. Please try again.');
     }
     if (data.error) throw new Error(data.error);
-    console.log('[scan] edge fn debug:', data._debug_bgStatus);
+    lastGroqMsRef.current = typeof data._debug_groqMs === 'number' ? data._debug_groqMs : null;
+    console.log('[scan] edge fn debug:', data._debug_bgStatus, `groq ${lastGroqMsRef.current}ms`);
 
     setDraft({
       language: data.language === 'ja' || data.language === 'yue' ? data.language : 'fr',
@@ -256,6 +266,25 @@ export default function ScanScreen() {
   // Resizes the full, uncropped photo down to a manageable size (long side
   // capped at 1280px, never upscaled) so it can be stored alongside the
   // sticker as the "memory photo" to flip to.
+  // A small copy of the wider scene, for the vision model only.
+  //
+  // Groq is sent the scene so the example sentence can describe where the
+  // object actually was — but it needs far less resolution to do that than the
+  // hero background does to fill a phone screen. Sending the full 1280px copy
+  // to both was pushing every scan against a free-tier token budget, and the
+  // 429s that produced were being waited out for tens of seconds.
+  const prepareContextPhoto = useCallback(async (uri: string, width: number, height: number) => {
+    const longSide = Math.max(width, height);
+    let context = ImageManipulator.manipulate(uri);
+    if (longSide > 640) {
+      const scale = 640 / longSide;
+      context = context.resize({ width: Math.round(width * scale) });
+    }
+    const rendered = await context.renderAsync();
+    const result = await rendered.saveAsync({ compress: 0.6, format: SaveFormat.JPEG, base64: true });
+    return result.base64 ?? null;
+  }, []);
+
   const prepareMemoryPhoto = useCallback(async (uri: string, width: number, height: number) => {
     let context = ImageManipulator.manipulate(uri);
     const longSide = Math.max(width, height);
@@ -403,9 +432,11 @@ export default function ScanScreen() {
         return work.then((value) => ({ value, ms: Date.now() - startedAt }));
       };
 
-      const memoryPromise = cameraCaptureContext
-        ? prepareMemoryPhoto(cameraCaptureContext.rawUri, cameraCaptureContext.rawWidth, cameraCaptureContext.rawHeight)
-        : prepareMemoryPhoto(importedAsset.uri, importedAsset.width, importedAsset.height);
+      const sceneUri = cameraCaptureContext?.rawUri ?? importedAsset.uri;
+      const sceneWidth = cameraCaptureContext?.rawWidth ?? importedAsset.width;
+      const sceneHeight = cameraCaptureContext?.rawHeight ?? importedAsset.height;
+      const memoryPromise = prepareMemoryPhoto(sceneUri, sceneWidth, sceneHeight);
+      const contextPromise = prepareContextPhoto(sceneUri, sceneWidth, sceneHeight);
 
       // Try the device first. Apple Vision returns the foreground objects it
       // found, and the user's own selection picks which of them we keep —
@@ -421,8 +452,9 @@ export default function ScanScreen() {
       previewCutoutRef.current = null;
       cutoutInfoRef.current = null;
 
-      const [memoryLeg, cutoutLeg] = await Promise.all([
+      const [memoryLeg, contextBase64, cutoutLeg] = await Promise.all([
         timed(memoryPromise),
+        contextPromise,
         timed(attemptLocalCutout({
           uri: segmentUri,
           polygon: selectionPolygon,
@@ -479,6 +511,7 @@ export default function ScanScreen() {
         await submitImageForSticker({
           base64,
           memoryBase64,
+          contextBase64,
           discoveredAt: fallbackDiscoveredAt,
           lassoPolygon,
           precutImagePath,
@@ -486,6 +519,7 @@ export default function ScanScreen() {
         const serverMs = Date.now() - submitStarted;
         console.log(
           `[scan] memory-photo ${memoryMs}ms ‖ cutout ${cutoutMs}ms · create-sticker ${serverMs}ms` +
+            ` (groq ${lastGroqMsRef.current ?? '?'}ms)` +
             (CUTOUT_DRY_RUN ? ' (includes rembg — dry run runs both pipelines)' : ''),
         );
         if (__DEV__) {

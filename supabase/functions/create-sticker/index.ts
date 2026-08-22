@@ -27,6 +27,7 @@ Deno.serve(async (req) => {
       memoryImage,
       lassoPolygon: rawLassoPolygon,
       precutImagePath: rawPrecutImagePath,
+      contextImage,
     } = await req.json();
     if (!image) {
       return new Response(
@@ -61,8 +62,14 @@ Deno.serve(async (req) => {
     const lang = resolveLanguage(language);
     const base64Data = image.includes(',') ? image.split(',')[1] : image;
     const imageBytes = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0));
-    const memoryBase64Data: string | undefined = memoryImage
-      ? (memoryImage.includes(',') ? memoryImage.split(',')[1] : memoryImage)
+    // Two different consumers want two different sizes of the wider scene.
+    // Storage wants it big enough to fill a phone screen as the hero
+    // background; Groq only needs enough to describe what's around the object,
+    // and every extra pixel is tokens against a free-tier budget that is what
+    // actually rate-limits this endpoint. The client sends both when it can.
+    const sceneForVision: string | undefined = contextImage ?? memoryImage;
+    const memoryBase64Data: string | undefined = sceneForVision
+      ? (sceneForVision.includes(',') ? sceneForVision.split(',')[1] : sceneForVision)
       : undefined;
     // The user's hand-drawn lasso, in the crop's own pixel coordinates — a
     // stronger signal than automatic background removal (see forceIncludeLasso).
@@ -75,8 +82,10 @@ Deno.serve(async (req) => {
     // Run vocab identification, background removal, and the memory-photo
     // upload in parallel. Background removal is skipped entirely when the
     // device already did it — that's the whole point of the on-device path.
+    const groqStarted = Date.now();
     const [vocabResult, bgResult, memoryPhoto] = await Promise.all([
-      identifyWithGroq(base64Data, lang, memoryBase64Data),
+      identifyWithGroq(base64Data, lang, memoryBase64Data)
+        .finally(() => console.log(`groq: ${Date.now() - groqStarted}ms`)),
       precutImagePath
         ? Promise.resolve({ data: null, status: 'device cutout (skipped)' })
         : removeBackground(imageBytes),
@@ -108,6 +117,7 @@ Deno.serve(async (req) => {
           bgSource: 'device',
           scansRemainingToday: quota.remaining,
           _debug_bgStatus: bgResult.status,
+          _debug_groqMs: Date.now() - groqStarted,
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
@@ -173,6 +183,7 @@ Deno.serve(async (req) => {
         // UI. Nothing reads it yet.
         scansRemainingToday: quota.remaining,
         _debug_bgStatus: bgResult.status,
+        _debug_groqMs: Date.now() - groqStarted,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );

@@ -89,8 +89,16 @@ function cleanJsonResponse(text: string): string {
 // refill, so there's no reason to fail fast here — more retries just means
 // more transient rate-limit blips get absorbed instead of surfacing to the
 // user.
-const GROQ_MAX_RETRIES = 3;
-const GROQ_RETRY_CAP_MS = 15_000; // never wait longer than this per attempt, however long the API asks
+// Revised down from 3 retries / 15s once the cutout moved on-device.
+//
+// The old settings were chosen when a scan was slow anyway, so absorbing a
+// token-bucket dip by waiting was strictly better than surfacing an error.
+// That trade has inverted: the cutout is now ~400ms, the rest of the scan is
+// this call, and a worst case of 45s spent asleep is far worse for the user
+// than being told to try again. Retrying still absorbs the short dips the
+// comment below describes; it just no longer waits out the long ones.
+const GROQ_MAX_RETRIES = 2;
+const GROQ_RETRY_CAP_MS = 6_000; // never wait longer than this per attempt, however long the API asks
 
 function parseRetryAfterMs(response: Response, bodyText: string): number {
   const headerVal = response.headers.get('retry-after');
