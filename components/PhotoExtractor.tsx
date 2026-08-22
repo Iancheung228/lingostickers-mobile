@@ -8,6 +8,7 @@ import { useSharedValue } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import ToolModeSwitch, { ToolMode } from './ToolModeSwitch';
+import ScanProgress, { ScanStage } from './ScanProgress';
 import CropBoxOverlay from './CropBoxOverlay';
 import LassoOverlay from './LassoOverlay';
 import { Rect, Point, computeContainRect, boxToImageCrop, boundingBoxOfPoints, polygonFillRatio, padBox } from '@/lib/cropGeometry';
@@ -28,6 +29,9 @@ interface PhotoExtractorProps {
   // used only for on-device segmentation (see SEGMENT_CONTEXT_PAD_RATIO).
   onExtract: (result: ExtractResult) => Promise<void> | void;
   processing: boolean;
+  /// Which stage the scan is on, once one is running.
+  stage?: ScanStage | null;
+  usingServerCutout?: boolean;
 }
 
 export interface ExtractResult {
@@ -92,7 +96,7 @@ const SEGMENT_CONTEXT_PAD_RATIO = 0.28;
 // memory graph.
 const SEGMENT_MAX_WIDTH = 1600;
 
-export default function PhotoExtractor({ imageUri, imageWidth, imageHeight, onClose, onExtract, processing }: PhotoExtractorProps) {
+export default function PhotoExtractor({ imageUri, imageWidth, imageHeight, onClose, onExtract, processing, stage, usingServerCutout }: PhotoExtractorProps) {
   const [mode, setMode] = useState<ToolMode>('box');
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
   const [cropping, setCropping] = useState(false);
@@ -337,7 +341,9 @@ export default function PhotoExtractor({ imageUri, imageWidth, imageHeight, onCl
               (the actual network call, up to ~20s) is the one worth telling
               the user about instead of leaving a bare spinner for that long. */}
           {processing && (
-            <Text style={styles.busyHint}>Identifying the word and cutting it out…</Text>
+            <View style={styles.progressWrap}>
+              <ScanProgress stage={stage ?? 'cutting'} usingServerCutout={usingServerCutout} />
+            </View>
           )}
         </View>
       </SafeAreaView>
@@ -388,6 +394,6 @@ const styles = StyleSheet.create({
     elevation: 6,
   },
   extractButtonDisabled: { opacity: 0.6 },
-  busyHint: { textAlign: 'center', marginTop: 10, fontSize: 12, color: colors.inkFaint, fontWeight: '600' },
+  progressWrap: { marginTop: 12 },
   extractButtonText: { color: colors.white, fontSize: 16, fontWeight: '800', letterSpacing: 1 },
 });

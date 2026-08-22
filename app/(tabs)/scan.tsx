@@ -26,6 +26,7 @@ import { attemptLocalCutout, uploadCutout, cutoutPath, discardCutout, describeCu
 import { trackEvent } from '@/lib/analytics';
 import DiscoveryReveal from '@/components/DiscoveryReveal';
 import PhotoExtractor, { ExtractResult } from '@/components/PhotoExtractor';
+import { ScanStage } from '@/components/ScanProgress';
 import GhostCutoutReveal from '@/components/GhostCutoutReveal';
 
 export default function ScanScreen() {
@@ -34,6 +35,10 @@ export default function ScanScreen() {
   const language = profile?.target_language ?? 'fr';
   const [permission, requestPermission] = useCameraPermissions();
   const [processing, setProcessing] = useState(false);
+  // Which stage of the scan is running, and whether step one had to fall back
+  // to the server — both purely so the wait can explain itself.
+  const [stage, setStage] = useState<ScanStage>('cutting');
+  const [usingServerCutout, setUsingServerCutout] = useState(false);
   // Guards the shutter against double-taps during the brief local
   // take+crop step, kept separate from `processing` (which now only tracks
   // the actual network extraction call, gated behind PhotoExtractor).
@@ -402,6 +407,8 @@ export default function ScanScreen() {
     fullSelectionPolygon,
   }: ExtractResult) => {
     if (processing || !importedAsset) return;
+    setStage('cutting');
+    setUsingServerCutout(false);
     setProcessing(true);
 
     // Camera-sourced: reuse the exact moment/place captured at shutter-press
@@ -472,6 +479,11 @@ export default function ScanScreen() {
       const memoryMs = memoryLeg.ms;
       const cutoutMs = cutoutLeg.ms;
 
+      // Step one is over either way; what differs is who did it, and whether
+      // the user is about to wait seconds instead of milliseconds.
+      setUsingServerCutout(!local.ok);
+      setStage(local.ok ? 'saving' : 'word');
+
       if (local.ok && CUTOUT_DRY_RUN) {
         // Measuring, not adopting. The sticker still comes from the server and
         // nothing is uploaded — but the device's version is kept on disk and
@@ -506,6 +518,7 @@ export default function ScanScreen() {
       // through the server without making the user redraw their selection.
       lastExtractRef.current = { base64, memoryBase64, discoveredAt: fallbackDiscoveredAt, lassoPolygon };
 
+      setStage('word');
       const submitStarted = Date.now();
       try {
         await submitImageForSticker({
@@ -904,6 +917,8 @@ export default function ScanScreen() {
         }}
         onExtract={handleExtractFromPhoto}
         processing={processing}
+        stage={stage}
+        usingServerCutout={usingServerCutout}
       />
 
       {revealCrop && draft && (
