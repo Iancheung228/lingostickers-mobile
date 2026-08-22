@@ -51,7 +51,10 @@ function useChallengesState() {
       .in('receiver_id', friendIds)
       .eq('status', 'won')
       .order('completed_at', { ascending: false })
-      .limit(30);
+      // Trimmed from 30. This list is a "your challenge landed" notice, not an
+      // archive — a dozen recent ones is all anyone reads, and each row now
+      // carries a thumbnail that has to be signed.
+      .limit(12);
 
     if (!data) return;
 
@@ -115,17 +118,38 @@ function useChallengesState() {
     return res.data.url as string;
   }, []);
 
+  // Batched form, for a list of rows that each want a thumbnail. One
+  // invocation instead of one per row; the function still authorises each id
+  // separately and simply omits any the caller isn't party to.
+  const getChallengeImageUrls = useCallback(
+    async (challengeIds: string[]): Promise<Record<string, string>> => {
+      if (challengeIds.length === 0) return {};
+      const res = await supabase.functions.invoke('get-challenge-image', {
+        body: { challenge_ids: challengeIds.slice(0, 30) },
+      });
+      if (res.error || !res.data?.urls) return {};
+      return res.data.urls as Record<string, string>;
+    },
+    [],
+  );
+
   return {
     inbox,
     feed,
     loading,
-    pendingCount: inbox.filter(c => c.status === 'pending').length,
+    // Everything in the inbox, not just untouched ones. `fetchInbox` already
+    // filters to pending + active, and an active challenge is one the user
+    // opened and didn't finish — still owed, still worth a badge. Counting
+    // only 'pending' also made the tab badge disagree with the Friends tab's
+    // own "Needs you" count, which reads the whole inbox.
+    pendingCount: inbox.length,
     fetchInbox,
     fetchFeed,
     sendChallenge,
     submitAnswer,
     useHint,
     getChallengeImageUrl,
+    getChallengeImageUrls,
   };
 }
 

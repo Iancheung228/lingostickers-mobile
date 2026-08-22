@@ -6,7 +6,8 @@ import { supabase } from '@/lib/supabase';
 import { useFriends } from '@/hooks/useFriends';
 import { useChallenges } from '@/hooks/useChallenges';
 import StickerPickerModal from '@/components/StickerPickerModal';
-import { colors, radii, spacing, fonts } from '@/constants/theme';
+import Avatar from '@/components/Avatar';
+import { colors } from '@/constants/theme';
 
 interface FriendProfileProps {
   friend: FriendWithProfile | null;
@@ -75,16 +76,14 @@ export default function FriendProfile({ friend, currentUserId, onClose, onRemove
     <Modal visible={!!friend} animationType="slide" presentationStyle="pageSheet">
       <SafeAreaView style={styles.container}>
         <View style={styles.header}>
-          <Text style={styles.title}>Friend</Text>
+          <Text style={styles.title} numberOfLines={1}>{friend.friend.username ?? 'Friend'}</Text>
           <TouchableOpacity onPress={onClose} hitSlop={8}>
             <X size={22} color={colors.inkDark} />
           </TouchableOpacity>
         </View>
 
         <View style={styles.body}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{(friend.friend.username ?? '?').charAt(0).toUpperCase()}</Text>
-          </View>
+          <Avatar name={friend.friend.username} size={72} />
           <Text style={styles.username}>{friend.friend.username ?? 'Unknown'}</Text>
           <Text style={styles.since}>Friends since {friendsSince}</Text>
 
@@ -144,16 +143,6 @@ const styles = StyleSheet.create({
   },
   title: { fontSize: 20, fontWeight: '800', color: colors.inkDark },
   body: { flex: 1, alignItems: 'center', paddingTop: 12, paddingHorizontal: 32 },
-  avatar: {
-    width: 88,
-    height: 88,
-    borderRadius: 44,
-    backgroundColor: colors.terra,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 16,
-  },
-  avatarText: { fontSize: 36, fontWeight: '800', color: colors.white },
   username: { fontSize: 22, fontWeight: '800', color: colors.inkDark, marginBottom: 4 },
   since: { fontSize: 13, color: colors.inkFaint, marginBottom: 24 },
   statBox: {

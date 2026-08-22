@@ -3,7 +3,8 @@ import { Modal, View, Text, FlatList, TouchableOpacity, StyleSheet, SafeAreaView
 import { X, Check } from 'lucide-react-native';
 import { Sticker, FriendWithProfile } from '@/lib/types';
 import { supabase } from '@/lib/supabase';
-import { colors, radii, spacing, fonts } from '@/constants/theme';
+import Avatar from '@/components/Avatar';
+import { colors } from '@/constants/theme';
 
 interface SendChallengeModalProps {
   sticker: Sticker | null;
@@ -80,10 +81,8 @@ export default function SendChallengeModal({ sticker, friends, onSend, onClose }
               const isSent = sent.has(item.friend.id);
               return (
                 <View style={styles.friendRow}>
-                  <View style={styles.avatar}>
-                    <Text style={styles.avatarText}>
-                      {(item.friend.username ?? '?').charAt(0).toUpperCase()}
-                    </Text>
+                  <View style={styles.avatarSlot}>
+                    <Avatar name={item.friend.username} size={38} />
                   </View>
                   <Text style={styles.username}>{item.friend.username ?? 'Friend'}</Text>
                   <TouchableOpacity
@@ -143,16 +142,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.borderLight,
   },
-  avatar: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: colors.terra,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-  },
-  avatarText: { fontSize: 16, fontWeight: '800', color: colors.white },
+  avatarSlot: { marginRight: 12 },
   username: { flex: 1, fontSize: 15, fontWeight: '600', color: colors.inkDark },
   sendButton: {
     backgroundColor: colors.terra,
