@@ -22,9 +22,19 @@ import { StickerDraft } from '@/lib/types';
 import { Point } from '@/lib/cropGeometry';
 import { captureLocation, CapturedLocation } from '@/lib/location';
 import { getImportedPhotoMetadata } from '@/lib/photoMetadata';
+import { attemptLocalCutout, uploadCutout, cutoutPath, discardCutout, CUTOUT_DRY_RUN, type UploadOutcome } from '@/lib/cutout';
+import { trackEvent } from '@/lib/analytics';
 import DiscoveryReveal from '@/components/DiscoveryReveal';
-import PhotoExtractor from '@/components/PhotoExtractor';
+import PhotoExtractor, { ExtractResult, renderWholePhotoExtract } from '@/components/PhotoExtractor';
+import ScanProgress, { ScanStage } from '@/components/ScanProgress';
 import GhostCutoutReveal from '@/components/GhostCutoutReveal';
+import { debugLog, debugWarn } from '@/lib/debug';
+
+// The photo a scan is working from, and — for live captures only — the moment
+// and raw sensor frame the shutter caught. Named so the direct-capture path can
+// hand both to handleExtractFromPhoto explicitly; see the note there.
+type CaptureAsset = { uri: string; width: number; height: number; assetId?: string };
+type CameraCapture = { discoveredAt: string; rawUri: string; rawWidth: number; rawHeight: number };
 
 export default function ScanScreen() {
   const { user } = useAuth();
@@ -32,9 +42,13 @@ export default function ScanScreen() {
   const language = profile?.target_language ?? 'fr';
   const [permission, requestPermission] = useCameraPermissions();
   const [processing, setProcessing] = useState(false);
+  // Which stage of the scan is running, and whether step one had to fall back
+  // to the server — both purely so the wait can explain itself.
+  const [stage, setStage] = useState<ScanStage>('cutting');
+  const [usingServerCutout, setUsingServerCutout] = useState(false);
   // Guards the shutter against double-taps during the brief local
-  // take+crop step, kept separate from `processing` (which now only tracks
-  // the actual network extraction call, gated behind PhotoExtractor).
+  // take+crop+render step, kept separate from `processing` (which tracks the
+  // segmentation and network work that follows it).
   const [capturing, setCapturing] = useState(false);
   const [draft, setDraft] = useState<StickerDraft | null>(null);
   const [saving, setSaving] = useState(false);
@@ -49,27 +63,25 @@ export default function ScanScreen() {
   // closest approximation of tap-to-focus it supports.
   const [autofocusMode, setAutofocusMode] = useState<'on' | 'off'>('off');
   const focusPulseTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // The photo currently staged for box/lasso extraction — set by either a
-  // live capture or a gallery import, and kept alive past a *successful*
-  // extraction (not cleared until the resulting draft is finally Added or
-  // Discarded) so "Retry Extraction" can reopen the same source photo.
-  const [importedAsset, setImportedAsset] = useState<{ uri: string; width: number; height: number; assetId?: string } | null>(null);
+  // The photo the current scan is working from — set by either a live
+  // capture or a gallery import, and kept alive past a *successful* scan
+  // (not cleared until the resulting draft is finally Added or Discarded)
+  // so "Retry Extraction" can reopen the box/lasso on the same source photo.
+  const [importedAsset, setImportedAsset] = useState<CaptureAsset | null>(null);
   // Set only when importedAsset came from the live shutter (not the
   // gallery) — carries the "now"/GPS captured at the moment of the shutter
   // press, plus the true full, uncropped sensor frame for the memory photo
-  // (separate from the 3:4-cropped image actually handed to PhotoExtractor),
-  // so adjusting the box/lasso afterward (or retrying) never pushes the
-  // discovery's timestamp later than when it actually happened.
-  const [cameraCaptureContext, setCameraCaptureContext] = useState<{
-    discoveredAt: string; rawUri: string; rawWidth: number; rawHeight: number;
-  } | null>(null);
+  // (separate from the 3:4-cropped image the scan itself works from), so
+  // retrying the extraction afterward never pushes the discovery's timestamp
+  // later than when it actually happened.
+  const [cameraCaptureContext, setCameraCaptureContext] = useState<CameraCapture | null>(null);
   // Whether PhotoExtractor is actually on screen — decoupled from
   // importedAsset itself, since the source photo now outlives a single
   // extraction attempt (see "Retry Extraction" in DiscoveryReveal).
   const [extractorVisible, setExtractorVisible] = useState(false);
   // While set, the ghost-cutout reveal is shown instead of DiscoveryReveal —
   // it crossfades from this cropped photo into the finished cutout, then
-  // hands off. Only used for the photo-import/extraction flow.
+  // hands off. Set on every successful scan, live capture or import alike.
   const [revealCrop, setRevealCrop] = useState<string | null>(null);
   const cameraRef = useRef<CameraView>(null);
   // Fire-and-forget when/where lookups kicked off at the start of each
@@ -84,6 +96,14 @@ export default function ScanScreen() {
   // cleaned up (its now-orphaned storage files removed) once the retry
   // actually succeeds. Null outside of a retry.
   const draftBeforeRetryRef = useRef<StickerDraft | null>(null);
+  // Dry-run only: the device's cutout for the scan in flight, shown in the
+  // reveal instead of the saved image. Cleared each scan so a failed device
+  // cutout never shows the previous scan's preview.
+  const previewCutoutRef = useRef<string | null>(null);
+  // How long the vocabulary call itself took, as reported by the edge
+  // function. Separates 'the network was slow' from 'Groq was rate-limited',
+  // which is the difference between a payload problem and a quota problem.
+  const lastGroqMsRef = useRef<number | null>(null);
 
   // Rectangular (3:4 portrait) camera viewport sized to the screen width
   // (with off-white margin), capped so it doesn't dominate on tablets and
@@ -155,7 +175,26 @@ export default function ScanScreen() {
   // result as a draft for DiscoveryReveal. Shared by both the live-capture and
   // photo-import flows — throws on failure so each caller can report it in its
   // own voice ("Scan failed" vs "Extraction failed").
-  const submitImageForSticker = useCallback(async (base64: string, memoryBase64: string | null | undefined, discoveredAt: string, lassoPolygon?: Point[]) => {
+  const submitImageForSticker = useCallback(async ({
+    base64,
+    memoryBase64,
+    contextBase64,
+    discoveredAt,
+    lassoPolygon,
+    precutImagePath,
+  }: {
+    base64: string;
+    memoryBase64: string | null | undefined;
+    // A small copy of the same scene, for the vision model. See
+    // prepareContextPhoto.
+    contextBase64?: string | null;
+    discoveredAt: string;
+    lassoPolygon?: Point[];
+    // Set when the device already cut this one out and uploaded it. The
+    // function then skips background removal entirely and only does
+    // vocabulary.
+    precutImagePath?: string | null;
+  }) => {
     if (!user) throw new Error('Not signed in');
 
     const { data, error } = await supabase.functions.invoke('create-sticker', {
@@ -164,7 +203,9 @@ export default function ScanScreen() {
         userId: user.id,
         language,
         ...(memoryBase64 ? { memoryImage: `data:image/jpeg;base64,${memoryBase64}` } : {}),
+        ...(contextBase64 ? { contextImage: `data:image/jpeg;base64,${contextBase64}` } : {}),
         ...(lassoPolygon ? { lassoPolygon } : {}),
+        ...(precutImagePath ? { precutImagePath } : {}),
       },
     });
 
@@ -190,7 +231,8 @@ export default function ScanScreen() {
       throw new Error(body?.error ?? 'This took too long and was cut off. Please try again.');
     }
     if (data.error) throw new Error(data.error);
-    console.log('[scan] edge fn debug:', data._debug_bgStatus);
+    lastGroqMsRef.current = typeof data._debug_groqMs === 'number' ? data._debug_groqMs : null;
+    debugLog('[scan] edge fn debug:', data._debug_bgStatus, `groq ${lastGroqMsRef.current}ms`);
 
     setDraft({
       language: data.language === 'ja' || data.language === 'yue' ? data.language : 'fr',
@@ -200,6 +242,7 @@ export default function ScanScreen() {
       sentence: String(data.sentence ?? ''),
       sentenceTranslation: String(data.sentenceTranslation ?? ''),
       sentenceInsight: data.sentenceInsight ?? null,
+      partOfSpeech: data.partOfSpeech ?? null,
       category: data.category ?? 'Other',
       imagePath: String(data.imagePath ?? ''),
       memoryPhotoPath: data.memoryPhotoPath ?? null,
@@ -209,6 +252,11 @@ export default function ScanScreen() {
       // crossfade even starts, and a system dialog popping up mid-animation
       // would interrupt that choreographed reveal.
       bgIssue: data.bgIssue ?? null,
+      // Which engine produced this cutout. Drives the "Redo cutout" offer:
+      // there's no point offering a cloud re-cut on a sticker the cloud
+      // already made.
+      bgSource: data.bgSource === 'device' ? 'device' : 'server',
+      localCutoutUri: previewCutoutRef.current,
       discoveredAt,
       latitude: null,
       longitude: null,
@@ -219,6 +267,25 @@ export default function ScanScreen() {
   // Resizes the full, uncropped photo down to a manageable size (long side
   // capped at 1280px, never upscaled) so it can be stored alongside the
   // sticker as the "memory photo" to flip to.
+  // A small copy of the wider scene, for the vision model only.
+  //
+  // Groq is sent the scene so the example sentence can describe where the
+  // object actually was — but it needs far less resolution to do that than the
+  // hero background does to fill a phone screen. Sending the full 1280px copy
+  // to both was pushing every scan against a free-tier token budget, and the
+  // 429s that produced were being waited out for tens of seconds.
+  const prepareContextPhoto = useCallback(async (uri: string, width: number, height: number) => {
+    const longSide = Math.max(width, height);
+    let context = ImageManipulator.manipulate(uri);
+    if (longSide > 640) {
+      const scale = 640 / longSide;
+      context = context.resize({ width: Math.round(width * scale) });
+    }
+    const rendered = await context.renderAsync();
+    const result = await rendered.saveAsync({ compress: 0.6, format: SaveFormat.JPEG, base64: true });
+    return result.base64 ?? null;
+  }, []);
+
   const prepareMemoryPhoto = useCallback(async (uri: string, width: number, height: number) => {
     let context = ImageManipulator.manipulate(uri);
     const longSide = Math.max(width, height);
@@ -235,94 +302,31 @@ export default function ScanScreen() {
     return result.base64 ?? null;
   }, []);
 
-  // Captures a photo and stages it for box/lasso extraction — matching the
-  // gallery-import flow instead of submitting straight to the server, so
-  // live captures get the same chance to lasso-hint a hard subject that
-  // imports already had. Fast/local only (take + pre-crop); the actual
-  // network call happens later, from handleExtractFromPhoto, once the user
-  // confirms a box/lasso.
-  const handleCapture = useCallback(async () => {
-    if (!cameraRef.current || capturing || !user) return;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    setCapturing(true);
-
-    // This photo is "now, here" — capture both immediately, before the user
-    // spends any time adjusting the box/lasso. GPS cold-fix can take several
-    // seconds, so kick it off but don't await it yet.
-    const discoveredAt = new Date().toISOString();
-    locationPromiseRef.current = captureLocation();
-
-    try {
-      const photo = await cameraRef.current.takePictureAsync({ quality: 0.9 });
-      if (!photo) throw new Error('Failed to capture photo');
-
-      // Crop to the centered 3:4 rectangle shown inside the viewfinder, so
-      // what was framed is what gets refined next — matching what the
-      // rectangular preview center-crops ("cover") to show. This is only the
-      // *starting point* for PhotoExtractor now, not the final upload, so no
-      // resize/compress here (PhotoExtractor's own resize handles that after
-      // the box/lasso is set, same as the import path).
-      const photoRatio = photo.width / photo.height;
-      let cropWidth: number, cropHeight: number, originX: number, originY: number;
-      if (photoRatio > ASPECT_RATIO) {
-        cropHeight = photo.height;
-        cropWidth = Math.round(cropHeight * ASPECT_RATIO);
-        originX = Math.round((photo.width - cropWidth) / 2);
-        originY = 0;
-      } else {
-        cropWidth = photo.width;
-        cropHeight = Math.round(cropWidth / ASPECT_RATIO);
-        originX = 0;
-        originY = Math.round((photo.height - cropHeight) / 2);
-      }
-
-      const rendered = await ImageManipulator.manipulate(photo.uri)
-        .crop({ originX, originY, width: cropWidth, height: cropHeight })
-        .renderAsync();
-      const cropped = await rendered.saveAsync({ compress: 0.92, format: SaveFormat.JPEG });
-
-      // The true full, uncropped sensor frame (not the 3:4 pre-crop above)
-      // becomes the "memory photo" to flip to — stashed here since
-      // handleExtractFromPhoto runs later and photo.uri won't still be
-      // reachable from there.
-      setCameraCaptureContext({ discoveredAt, rawUri: photo.uri, rawWidth: photo.width, rawHeight: photo.height });
-      setImportedAsset({ uri: cropped.uri, width: cropWidth, height: cropHeight });
-      setExtractorVisible(true);
-    } catch (err: any) {
-      Alert.alert('Scan failed', err?.message ?? 'Something went wrong. Please try again.');
-    } finally {
-      setCapturing(false);
-    }
-  }, [capturing, user]);
-
-  const handleToggleTorch = useCallback(() => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setTorchOn((prev) => !prev);
-  }, []);
-
-  const handleImportPhoto = useCallback(async () => {
-    if (processing) return;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('Photos Access Needed', 'LingoStickers needs access to your photo library to import a picture.');
-      return;
-    }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      quality: 1,
-    });
-    const asset = !result.canceled ? result.assets[0] : null;
-    if (asset) {
-      metadataPromiseRef.current = null;
-      setCameraCaptureContext(null);
-      setImportedAsset({ uri: asset.uri, width: asset.width, height: asset.height, assetId: asset.assetId ?? undefined });
-      setExtractorVisible(true);
-    }
-  }, [processing]);
-
-  const handleExtractFromPhoto = useCallback(async ({ base64, uri, lassoPolygon }: { base64: string; uri: string; lassoPolygon?: Point[] }) => {
-    if (processing || !importedAsset) return;
+  const handleExtractFromPhoto = useCallback(async ({
+    base64,
+    uri,
+    lassoPolygon,
+    segmentUri,
+    segmentWidth,
+    segmentHeight,
+    selectionPolygon,
+    selectionKind,
+    fullUri,
+    fullWidth,
+    fullHeight,
+    fullSelectionPolygon,
+  }: ExtractResult,
+    // The live-capture path calls this in the same tick it stages its source,
+    // before those setState calls have flushed — so it hands the source in
+    // directly rather than letting this closure read a stale one (or, on the
+    // very first scan of a session, none at all).
+    sourceOverride?: { asset: CaptureAsset; camera: CameraCapture },
+  ) => {
+    const asset = sourceOverride?.asset ?? importedAsset;
+    const camera = sourceOverride?.camera ?? cameraCaptureContext;
+    if (processing || !asset) return;
+    setStage('cutting');
+    setUsingServerCutout(false);
     setProcessing(true);
 
     // Camera-sourced: reuse the exact moment/place captured at shutter-press
@@ -332,20 +336,126 @@ export default function ScanScreen() {
     // its own creation date/GPS instead (fire-and-forget; falls back to
     // "now"/no-location if unavailable) — reused as-is on a retry rather
     // than re-fetched.
-    const fallbackDiscoveredAt = cameraCaptureContext?.discoveredAt ?? new Date().toISOString();
-    if (!cameraCaptureContext && !metadataPromiseRef.current) {
-      metadataPromiseRef.current = getImportedPhotoMetadata(importedAsset.assetId);
+    const fallbackDiscoveredAt = camera?.discoveredAt ?? new Date().toISOString();
+    if (!camera && !metadataPromiseRef.current) {
+      metadataPromiseRef.current = getImportedPhotoMetadata(asset.assetId);
     }
 
     try {
+      // Checked here rather than left to submitImageForSticker, because the
+      // upload below runs first and would otherwise write to `undefined/…`.
+      if (!user) throw new Error('Not signed in');
+
       // The full, uncropped frame becomes the "memory photo" to flip to —
       // the true raw sensor capture for a live photo, or the whole picked
       // photo (before extraction) for a library import.
-      const memoryBase64 = cameraCaptureContext
-        ? await prepareMemoryPhoto(cameraCaptureContext.rawUri, cameraCaptureContext.rawWidth, cameraCaptureContext.rawHeight)
-        : await prepareMemoryPhoto(importedAsset.uri, importedAsset.width, importedAsset.height);
+      // Time each leg from inside, not around the Promise.all — the wrapper
+      // only ever reports the slower of the two, which made parallelising them
+      // look like a regression.
+      const timed = <T,>(work: Promise<T>): Promise<{ value: T; ms: number }> => {
+        const startedAt = Date.now();
+        return work.then((value) => ({ value, ms: Date.now() - startedAt }));
+      };
 
-      await submitImageForSticker(base64, memoryBase64, fallbackDiscoveredAt, lassoPolygon);
+      const sceneUri = camera?.rawUri ?? asset.uri;
+      const sceneWidth = camera?.rawWidth ?? asset.width;
+      const sceneHeight = camera?.rawHeight ?? asset.height;
+      const memoryPromise = prepareMemoryPhoto(sceneUri, sceneWidth, sceneHeight);
+      const contextPromise = prepareContextPhoto(sceneUri, sceneWidth, sceneHeight);
+
+      // Try the device first. Apple Vision returns the foreground objects it
+      // found, and the user's own selection picks which of them we keep —
+      // so the selection is the question the model was asked, not a
+      // correction applied to its answer afterwards.
+      //
+      // Anything short of a confident result (no objects found, nothing
+      // agreeing with the selection, a degenerate matte, an older iOS) falls
+      // through to the server exactly as before. The user sees no difference
+      // beyond the wait.
+      let precutImagePath: string | null = null;
+      let upload: UploadOutcome | null = null;
+      previewCutoutRef.current = null;
+
+      const [memoryLeg, contextBase64, cutoutLeg] = await Promise.all([
+        timed(memoryPromise),
+        contextPromise,
+        timed(attemptLocalCutout({
+          uri: segmentUri,
+          polygon: selectionPolygon,
+          sourceWidth: segmentWidth,
+          sourceHeight: segmentHeight,
+          kind: selectionKind,
+          fullUri,
+          fullWidth,
+          fullHeight,
+          fullPolygon: fullSelectionPolygon,
+        })),
+      ]);
+      const memoryBase64 = memoryLeg.value;
+      const local = cutoutLeg.value;
+      const memoryMs = memoryLeg.ms;
+      const cutoutMs = cutoutLeg.ms;
+
+      // Step one is over either way; what differs is who did it, and whether
+      // the user is about to wait seconds instead of milliseconds.
+      setUsingServerCutout(!local.ok);
+      setStage(local.ok ? 'saving' : 'word');
+
+      if (local.ok && CUTOUT_DRY_RUN) {
+        // Measuring, not adopting. The sticker still comes from the server and
+        // nothing is uploaded — but the device's version is kept on disk and
+        // shown in the reveal, so the new pipeline can actually be looked at
+        // without deploying anything.
+        previewCutoutRef.current = local.uri;
+      } else if (local.ok) {
+        try {
+          upload = await uploadCutout(local.uri, cutoutPath(user.id));
+          precutImagePath = upload.path;
+        } catch (uploadErr: any) {
+          // The cutout itself was fine; only getting it to storage failed.
+          // Fall back to the server rather than fail the scan.
+          //
+          // Deliberately still sequential. The path is known in advance, so
+          // this upload *could* run alongside create-sticker and save ~650ms —
+          // but then the sticker row would already reference a file that might
+          // never arrive, and recovering from that costs either a discarded
+          // scan or a second billed vocabulary call. #3 removes the wait
+          // properly instead, by rendering the cutout from local disk the
+          // moment it exists and letting the upload finish in the background.
+          debugWarn('[scan] cutout upload failed, falling back to server', uploadErr?.message);
+          trackEvent('cutout_upload_failed', { reason: String(uploadErr?.message ?? 'unknown') });
+        }
+      }
+
+      setStage('word');
+      const submitStarted = Date.now();
+      try {
+        await submitImageForSticker({
+          base64,
+          memoryBase64,
+          contextBase64,
+          discoveredAt: fallbackDiscoveredAt,
+          lassoPolygon,
+          precutImagePath,
+        });
+        const serverMs = Date.now() - submitStarted;
+        debugLog(
+          `[scan] memory-photo ${memoryMs}ms ‖ cutout ${cutoutMs}ms · create-sticker ${serverMs}ms` +
+            ` (groq ${lastGroqMsRef.current ?? '?'}ms)` +
+            (CUTOUT_DRY_RUN ? ' (includes rembg — dry run runs both pipelines)' : ''),
+        );
+      } catch (submitErr) {
+        // The cutout is already in storage but no sticker will ever point at
+        // it — most likely the daily quota was spent, which the function
+        // claims *after* this upload has happened. Nothing else will ever
+        // collect it, so collect it here.
+        if (precutImagePath) {
+          supabase.storage.from('sticker-images').remove([precutImagePath]).then(({ error }) => {
+            if (error) debugWarn('Failed to clean up unused cutout', error);
+          });
+        }
+        throw submitErr;
+      }
 
       // A successful (re)extraction replaces whatever draft a "Retry
       // Extraction" was standing in for — clean up its now-orphaned storage
@@ -355,7 +465,7 @@ export default function ScanScreen() {
       if (staleDraft) {
         const stalePaths = [staleDraft.imagePath, ...(staleDraft.memoryPhotoPath ? [staleDraft.memoryPhotoPath] : [])];
         supabase.storage.from('sticker-images').remove(stalePaths).then(({ error }) => {
-          if (error) console.warn('Failed to clean up previous extraction attempt', error);
+          if (error) debugWarn('Failed to clean up previous extraction attempt', error);
         });
       }
 
@@ -364,7 +474,7 @@ export default function ScanScreen() {
       // it hands off to DiscoveryReveal once the animation completes.
       setRevealCrop(uri);
 
-      if (cameraCaptureContext) {
+      if (camera) {
         const location = await locationPromiseRef.current;
         if (location) {
           setDraft((prev) => prev ? {
@@ -392,12 +502,115 @@ export default function ScanScreen() {
     } catch (err: any) {
       const title = err?.isRateLimit
         ? 'Daily limit reached'
-        : cameraCaptureContext ? 'Scan failed' : 'Extraction failed';
+        : camera ? 'Scan failed' : 'Extraction failed';
       Alert.alert(title, err?.message ?? 'Something went wrong. Please try again.');
     } finally {
       setProcessing(false);
     }
-  }, [processing, importedAsset, cameraCaptureContext, submitImageForSticker, prepareMemoryPhoto]);
+  }, [processing, importedAsset, cameraCaptureContext, submitImageForSticker, prepareMemoryPhoto, user]);
+
+  // Captures a photo and scans it immediately — no box/lasso step.
+  //
+  // Aiming the camera at something already *is* the selection; making the
+  // user confirm a box around the frame they just framed is a second answer
+  // to a question they already answered. So a live capture goes straight to
+  // segmentation with a full-frame selection, which the segmenter reads as
+  // "no preference expressed" and resolves by picking the dominant object.
+  //
+  // The box/lasso tools aren't gone — they stay one tap away behind "Retry
+  // Extraction" on the reveal, for the cluttered-desk case where the device
+  // grabs the wrong thing. Skipped by default, not removed. The gallery
+  // import still opens them up front, since an old photo was framed for
+  // something other than this.
+  const handleCapture = useCallback(async () => {
+    if (!cameraRef.current || capturing || !user) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setCapturing(true);
+
+    // This photo is "now, here". GPS cold-fix can take several seconds, so
+    // kick it off but don't await it yet.
+    const discoveredAt = new Date().toISOString();
+    locationPromiseRef.current = captureLocation();
+
+    try {
+      const photo = await cameraRef.current.takePictureAsync({ quality: 0.9 });
+      if (!photo) throw new Error('Failed to capture photo');
+
+      // Crop to the centered 3:4 rectangle shown inside the viewfinder, so
+      // what was framed is what gets scanned — matching what the rectangular
+      // preview center-crops ("cover") to show. No resize/compress here;
+      // renderWholePhotoExtract does that for both the upload copy and the
+      // segmentation copy, at their own sizes.
+      const photoRatio = photo.width / photo.height;
+      let cropWidth: number, cropHeight: number, originX: number, originY: number;
+      if (photoRatio > ASPECT_RATIO) {
+        cropHeight = photo.height;
+        cropWidth = Math.round(cropHeight * ASPECT_RATIO);
+        originX = Math.round((photo.width - cropWidth) / 2);
+        originY = 0;
+      } else {
+        cropWidth = photo.width;
+        cropHeight = Math.round(cropWidth / ASPECT_RATIO);
+        originX = 0;
+        originY = Math.round((photo.height - cropHeight) / 2);
+      }
+
+      const rendered = await ImageManipulator.manipulate(photo.uri)
+        .crop({ originX, originY, width: cropWidth, height: cropHeight })
+        .renderAsync();
+      const cropped = await rendered.saveAsync({ compress: 0.92, format: SaveFormat.JPEG });
+
+      // The true full, uncropped sensor frame (not the 3:4 pre-crop above)
+      // becomes the "memory photo" to flip to.
+      const camera: CameraCapture = {
+        discoveredAt, rawUri: photo.uri, rawWidth: photo.width, rawHeight: photo.height,
+      };
+      const asset: CaptureAsset = { uri: cropped.uri, width: cropWidth, height: cropHeight };
+
+      // Staged even though the extractor isn't being opened: this is what
+      // "Retry Extraction" reopens on if the automatic cutout picks wrong.
+      setCameraCaptureContext(camera);
+      setImportedAsset(asset);
+
+      const extract = await renderWholePhotoExtract(asset.uri, asset.width, asset.height);
+      // Hand the source in explicitly — the two setState calls above have not
+      // flushed yet, so the closure below would otherwise read the previous
+      // scan's asset.
+      setCapturing(false);
+      await handleExtractFromPhoto(extract, { asset, camera });
+    } catch (err: any) {
+      Alert.alert('Scan failed', err?.message ?? 'Something went wrong. Please try again.');
+    } finally {
+      setCapturing(false);
+    }
+  }, [capturing, user, handleExtractFromPhoto]);
+
+  const handleToggleTorch = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setTorchOn((prev) => !prev);
+  }, []);
+
+  const handleImportPhoto = useCallback(async () => {
+    if (processing) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Photos Access Needed', 'Tabi Stickers needs access to your photo library to import a picture.');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      quality: 1,
+    });
+    const asset = !result.canceled ? result.assets[0] : null;
+    if (asset) {
+      metadataPromiseRef.current = null;
+      setCameraCaptureContext(null);
+      setImportedAsset({ uri: asset.uri, width: asset.width, height: asset.height, assetId: asset.assetId ?? undefined });
+      setExtractorVisible(true);
+    }
+  }, [processing]);
+
 
   const handleAdd = async () => {
     if (!draft || !user) return;
@@ -411,6 +624,7 @@ export default function ScanScreen() {
       sentence: draft.sentence,
       sentence_translation: draft.sentenceTranslation,
       sentence_insight: draft.sentenceInsight,
+      part_of_speech: draft.partOfSpeech,
       category: draft.category,
       image_path: draft.imagePath,
       memory_photo_path: draft.memoryPhotoPath,
@@ -540,7 +754,7 @@ export default function ScanScreen() {
       <SafeAreaView style={styles.permissionContainer}>
         <Text style={styles.permissionTitle}>Camera Access Needed</Text>
         <Text style={styles.permissionSubtitle}>
-          LingoStickers needs your camera to identify objects and create stickers.
+          Tabi Stickers needs your camera to identify objects and create stickers.
         </Text>
         <TouchableOpacity style={styles.permissionButton} onPress={requestPermission}>
           <Text style={styles.permissionButtonText}>Grant Permission</Text>
@@ -597,6 +811,17 @@ export default function ScanScreen() {
         </GestureDetector>
       </View>
 
+      {/* While a direct capture is scanning there is no PhotoExtractor on
+          screen to host the progress list, and the shutter can't be used
+          anyway — so the controls hand their space over to it rather than
+          leaving the wait unexplained. */}
+      {processing && !extractorVisible ? (
+        <View style={styles.controls}>
+          <View style={styles.scanProgressWrap}>
+            <ScanProgress stage={stage} usingServerCutout={usingServerCutout} />
+          </View>
+        </View>
+      ) : (
       <View style={styles.controls}>
         <Text style={styles.hint}>Pinch to zoom · Tap frame to focus</Text>
         <View style={styles.captureRow}>
@@ -604,6 +829,9 @@ export default function ScanScreen() {
           <TouchableOpacity
             style={styles.sideBtn}
             onPress={handleImportPhoto}
+            accessibilityRole="button"
+            accessibilityLabel="Import a photo from your library"
+            accessibilityState={{ disabled: processing || capturing }}
             disabled={processing || capturing}
             activeOpacity={0.7}
           >
@@ -617,6 +845,9 @@ export default function ScanScreen() {
           <TouchableOpacity
             style={[styles.captureButton, (processing || capturing) && styles.captureButtonDisabled]}
             onPress={handleCapture}
+            accessibilityRole="button"
+            accessibilityLabel="Scan what the camera is pointing at"
+            accessibilityState={{ disabled: processing || capturing, busy: processing || capturing }}
             disabled={processing || capturing}
           >
             <View style={styles.captureRing}>
@@ -628,6 +859,9 @@ export default function ScanScreen() {
           <TouchableOpacity
             style={styles.sideBtn}
             onPress={handleToggleTorch}
+            accessibilityRole="button"
+            accessibilityLabel={torchOn ? 'Turn the flash off' : 'Turn the flash on'}
+            accessibilityState={{ selected: torchOn }}
             activeOpacity={0.7}
           >
             <View style={[styles.sideBtnCircle, torchOn && styles.sideBtnCircleActive]}>
@@ -641,6 +875,7 @@ export default function ScanScreen() {
           </TouchableOpacity>
         </View>
       </View>
+      )}
 
       <PhotoExtractor
         imageUri={extractorVisible ? (importedAsset?.uri ?? null) : null}
@@ -662,6 +897,8 @@ export default function ScanScreen() {
         }}
         onExtract={handleExtractFromPhoto}
         processing={processing}
+        stage={stage}
+        usingServerCutout={usingServerCutout}
       />
 
       {revealCrop && draft && (
@@ -776,6 +1013,7 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   hint: { color: colors.inkLight, fontSize: 13, fontWeight: '500' },
+  scanProgressWrap: { alignSelf: 'stretch', paddingHorizontal: spacing.lg },
 
   captureRow: {
     flexDirection: 'row',

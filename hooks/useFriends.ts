@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useCallback, useEffect, ReactNode, createElement } from 'react';
 import { supabase } from '@/lib/supabase';
-import { FriendWithProfile } from '@/lib/types';
+import { FriendWithProfile, PersonSummary } from '@/lib/types';
 import { useAuth } from '@/hooks/useAuth';
 
 function useFriendsState() {
@@ -8,7 +8,7 @@ function useFriendsState() {
   const userId = user?.id;
   const [friends, setFriends] = useState<FriendWithProfile[]>([]);
   const [loading, setLoading] = useState(true);
-  const [searchResults, setSearchResults] = useState<{ id: string; username: string | null }[]>([]);
+  const [searchResults, setSearchResults] = useState<PersonSummary[]>([]);
   const [searching, setSearching] = useState(false);
 
   const fetchFriends = useCallback(async () => {
@@ -30,7 +30,7 @@ function useFriendsState() {
 
     const { data: profiles } = await supabase
       .from('profiles')
-      .select('id, username')
+      .select('id, username, avatar_path')
       .in('id', friendIds);
 
     const profileMap = new Map((profiles ?? []).map(p => [p.id, p]));
@@ -39,7 +39,7 @@ function useFriendsState() {
       const friendId = f.requester_id === userId ? f.addressee_id : f.requester_id;
       return {
         ...f,
-        friend: profileMap.get(friendId) ?? { id: friendId, username: null },
+        friend: profileMap.get(friendId) ?? { id: friendId, username: null, avatar_path: null },
         is_requester: f.requester_id === userId,
       };
     });
@@ -59,7 +59,7 @@ function useFriendsState() {
 
     const { data } = await supabase
       .from('profiles')
-      .select('id, username')
+      .select('id, username, avatar_path')
       .ilike('username', `${query.trim()}%`)
       .neq('id', userId)
       .limit(10);

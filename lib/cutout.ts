@@ -1,0 +1,396 @@
+import { File } from 'expo-file-system';
+
+import { cutout, isAvailable, type CutoutResult } from '@/modules/subject-cutout';
+import { trackEvent } from '@/lib/analytics';
+import { supabase } from '@/lib/supabase';
+import type { Point } from '@/lib/cropGeometry';
+import { debugLog } from '@/lib/debug';
+
+export type { CutoutResult } from '@/modules/subject-cutout';
+
+/**
+ * Which tool the user drew their selection with. It changes how much we trust
+ * the selection, so it changes the gate.
+ */
+export type SelectionKind = 'box' | 'lasso';
+
+/** Which pass produced the matte. The badge needs this; the console had it. */
+export type CutoutVia = 'crop' | 'full-frame' | 'lasso';
+
+export type LocalResult = CutoutResult & { via?: CutoutVia; attempts?: string[] };
+
+// ---------------------------------------------------------------------------
+// The confidence gate
+//
+// These thresholds decide when the device hands off to the server. They live
+// here, in JavaScript, rather than in the Swift — the gate is the part most
+// likely to need tuning against real scans, and a constant in TypeScript can
+// be changed with a hot reload where a constant in Swift costs an EAS build.
+//
+// `containment` ("is this instance mostly inside what the user circled?") uses
+// the same bar for both tools: an instance sprawling well outside the
+// selection means Vision grabbed the table, not the object, and that's equally
+// wrong however the selection was drawn.
+//
+// `coverage` ("does the instance fill enough of the selection?") is the weaker
+// of the two, and it used to be set *stricter* for the lasso than the box —
+// which had the reasoning backwards. A traced loop is the highest-signal input
+// in this pipeline: the user has drawn around the object. That should make us
+// more willing to accept what Vision found inside it, not less.
+//
+// The case coverage was guarding — Vision returning only a fragment, a handle
+// or a logo, rather than the whole subject — is mostly already handled by
+// unioning every instance that clears containment, since a multi-part object
+// comes back as multiple instances. What remains is rare enough not to justify
+// rejecting good cutouts, and a rejection costs the user ~8.5s at the server.
+//
+// A hand-drawn loop is also just looser than it feels while drawing it, so a
+// perfectly good cutout of something thin — a pen, a fork — fills very little
+// of its own loop.
+// ---------------------------------------------------------------------------
+const GATE = {
+  box: { minContainment: 0.55, minCoverage: 0.08 },
+  lasso: { minContainment: 0.55, minCoverage: 0.1 },
+} as const;
+
+/**
+ * Segment at this; ship at the lower figure. Mask quality wants the pixels,
+ * the PNG doesn't. See SEGMENT_MAX_WIDTH in PhotoExtractor for why this isn't
+ * simply set as high as it will go.
+ */
+const SEGMENT_MAX_DIMENSION = 1600;
+const OUTPUT_MAX_DIMENSION = 1280;
+
+/**
+ * Evaluate the on-device cutout without adopting it.
+ *
+ * While true, segmentation still runs on every scan and still reports what it
+ * decided — instance counts, containment, coverage, timing, refusal reason —
+ * but the result is thrown away instead of uploaded, and the sticker comes
+ * from the server exactly as it does today.
+ *
+ * The point is that this needs no deploy. There is only one Supabase project,
+ * so `create-sticker` is shared with real users; leaving this true means you
+ * can measure how the new segmenter performs on your own photos, and decide
+ * whether it's worth adopting, before touching anything shared.
+ *
+ * `create-sticker` was deployed with `precutImagePath` support on 2026-08-21,
+ * so this is off: the device's cutout is uploaded and kept, and rembg runs
+ * only when the device declines. Turning it back on is a safe way to A/B the
+ * two pipelines again without touching anything shared.
+ */
+export const CUTOUT_DRY_RUN = false;
+
+export function isLocalCutoutAvailable(): boolean {
+  return isAvailable();
+}
+
+/**
+ * Try to cut the subject out on-device.
+ *
+ * Returns a refusal rather than throwing — "the device declined" is an
+ * ordinary branch here, and every refusal reason routes to the server path.
+ */
+export interface LocalCutoutRequest {
+  uri: string;
+  polygon: Point[];
+  sourceWidth: number;
+  sourceHeight: number;
+  kind: SelectionKind;
+  /** The whole photo, and the same selection in its coordinate space. */
+  fullUri: string;
+  fullWidth: number;
+  fullHeight: number;
+  fullPolygon: Point[];
+}
+
+export async function attemptLocalCutout(params: LocalCutoutRequest): Promise<LocalResult> {
+  const { kind } = params;
+  const gate = GATE[kind];
+  GATE_HINT = `${gate.minCoverage} (${kind})`;
+
+  // Which passes were tried, in order. Reported on the badge, because "the
+  // server did it" is not a diagnosis — knowing that the lasso pass was never
+  // reached is.
+  const attempts: string[] = [];
+
+  const finish = (result: CutoutResult, via?: CutoutVia): LocalResult => {
+    debugLog(`[cutout] passes: ${attempts.join(' → ')}`);
+    reportCutout(result, kind, via, attempts);
+    return { ...result, ...(via ? { via } : {}), attempts: [...attempts] };
+  };
+
+  // The lasso pass needs no Vision at all — it is plain image processing over
+  // the loop the user drew — so it is defined up front and reachable from
+  // every failure below, not just from one of them.
+  const tryLasso = async (): Promise<LocalResult | null> => {
+    if (kind !== 'lasso') return null;
+    attempts.push('lasso');
+    const fromLasso = await runCutout({
+      uri: params.uri,
+      polygon: params.polygon,
+      sourceWidth: params.sourceWidth,
+      sourceHeight: params.sourceHeight,
+      gate,
+      selectionAsMask: true,
+    });
+    return fromLasso.ok ? finish(fromLasso, 'lasso') : null;
+  };
+
+  if (!isAvailable()) {
+    attempts.push('vision-unavailable');
+    return (await tryLasso()) ?? finish({ ok: false, reason: 'unavailable' });
+  }
+
+  // Pass 1 — the context-padded crop. The subject occupies most of the pixels
+  // here, so an accepted matte comes out at its highest resolution.
+  attempts.push('crop');
+  const cropped = await runCutout({
+    uri: params.uri,
+    polygon: params.polygon,
+    sourceWidth: params.sourceWidth,
+    sourceHeight: params.sourceHeight,
+    gate,
+  });
+  if (cropped.ok) return finish(cropped, 'crop');
+
+  // Pass 2 — the whole photo.
+  //
+  // Vision looks for objects that stand out from a background, so a tightly
+  // framed subject can leave it nothing to notice; the photos that look
+  // easiest to a person are the ones most likely to fill their own crop. More
+  // context also changes how it splits a scene into instances, which is why
+  // this is worth trying for a gate refusal too and not only for an empty
+  // result — a different decomposition can agree with the selection where the
+  // cropped one didn't.
+  let best: CutoutResult = cropped;
+  if (cropped.reason === 'no-instances' || cropped.reason === 'no-matching-instance') {
+    attempts.push('full-frame');
+    const whole = await runCutout({
+      uri: params.fullUri,
+      polygon: params.fullPolygon,
+      sourceWidth: params.fullWidth,
+      sourceHeight: params.fullHeight,
+      gate,
+    });
+    if (whole.ok) return finish(whole, 'full-frame');
+    best = whole;
+  }
+
+  // Pass 3 — cut from the loop itself.
+  //
+  // This used to sit behind the pass-2 branch, so it was reachable only when
+  // Vision returned *nothing*. Every other outcome — most importantly
+  // no-matching-instance, where Vision found objects and the gate rejected
+  // them — fell straight through to the server, spending up to 18s to ignore
+  // the loop the user had just drawn. That is exactly the case the loop
+  // answers best, and it was the one case that couldn't reach it.
+  return (await tryLasso()) ?? finish(best);
+}
+
+function runCutout(params: {
+  uri: string;
+  polygon: Point[];
+  sourceWidth: number;
+  sourceHeight: number;
+  gate: { minContainment: number; minCoverage: number };
+  selectionAsMask?: boolean;
+}): Promise<CutoutResult> {
+  return cutout({
+    uri: params.uri,
+    polygon: params.polygon,
+    sourceWidth: params.sourceWidth,
+    sourceHeight: params.sourceHeight,
+    maxDimension: SEGMENT_MAX_DIMENSION,
+    outputMaxDimension: OUTPUT_MAX_DIMENSION,
+    minContainment: params.gate.minContainment,
+    minCoverage: params.gate.minCoverage,
+    selectionAsMask: params.selectionAsMask ?? false,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Upload
+//
+// The cutout goes straight from the device to Storage rather than through the
+// edge function. The bucket's RLS policy already scopes writes to
+// `{userId}/…`, which is the same path the function would have written to, so
+// routing a finished PNG through a Deno worker would add a base64 round-trip
+// and an extra hop to gain nothing.
+// ---------------------------------------------------------------------------
+export interface UploadOutcome {
+  path: string;
+  megabytes: number;
+  ms: number;
+}
+
+/**
+ * The storage path a cutout will occupy, known before the bytes are sent.
+ *
+ * Split out from the upload on purpose: because the client picks the name, the
+ * path can be handed to `create-sticker` while the upload is still in flight,
+ * which lets a ~650ms transfer hide behind a ~1.9s vocabulary call instead of
+ * queueing in front of it.
+ */
+export function cutoutPath(userId: string): string {
+  return `${userId}/${stickerFileName()}`;
+}
+
+export async function uploadCutout(uri: string, path: string): Promise<UploadOutcome> {
+  const file = new File(uri);
+  const bytes = await file.arrayBuffer();
+
+  const started = Date.now();
+  const { error } = await supabase.storage
+    .from('sticker-images')
+    .upload(path, bytes, { contentType: 'image/png', upsert: false });
+  const ms = Date.now() - started;
+  const megabytes = bytes.byteLength / 1024 / 1024;
+
+  // Size and duration together: a slow upload is either a fat file or a slow
+  // link, and the fix is different for each.
+  debugLog(`[cutout] upload ${megabytes.toFixed(2)}MB in ${ms}ms`);
+
+  if (error) throw new Error(`Cutout upload failed: ${error.message}`);
+
+  // The native module wrote this into the temp directory. iOS will clear it
+  // eventually, but a user scanning all afternoon shouldn't accumulate a
+  // full-resolution PNG per scan waiting for that.
+  try {
+    file.delete();
+  } catch {
+    // Losing a temp file is not worth failing a scan over.
+  }
+
+  return { path, megabytes, ms };
+}
+
+/**
+ * A one-line verdict for the reveal screen's dry-run badge. Says which
+ * pipeline produced what you're looking at, and what it cost.
+ */
+/** Filled in by attemptLocalCutout so the badge can name the bar that was missed. */
+let GATE_HINT = '?';
+
+export function describeCutout(
+  result: LocalResult,
+  phases?: { memoryMs?: number; cutoutMs?: number; serverMs?: number; upload?: UploadOutcome | null },
+): string {
+  const upload = phases?.upload
+    ? ` · upload ${phases.upload.megabytes.toFixed(2)}MB/${phases.upload.ms}ms`
+    : ' · upload none';
+  const passes = result.attempts?.length ? `\npasses: ${result.attempts.join(' → ')}` : '';
+  const tail = phases
+    ? `${passes}\nmemory ${phases.memoryMs ?? 0} ‖ cutout ${phases.cutoutMs ?? 0}` +
+      ` · server ${phases.serverMs ?? 0}${upload}`
+    : passes;
+  if (result.ok) {
+    const source =
+      result.via === 'lasso' ? 'LASSO MATTE' : result.via === 'full-frame' ? 'VISION (full frame)' : 'VISION (crop)';
+    return (
+      `${source} ${result.workingWidth}×${result.workingHeight} · ${result.durationMs}ms\n` +
+      `decode ${result.decodeMs} · vision ${result.visionMs} · refine ${result.refineMs} · ` +
+      `style ${result.styleMs} · png ${result.encodeMs}` + tail
+    );
+  }
+  // The reason alone doesn't say whether Vision found nothing or the gate
+  // threw away something it did find — and those need opposite fixes. The
+  // scores are what distinguish them, so they belong here, not only in the
+  // analytics nobody reads mid-debug.
+  const scores =
+    result.instanceCount !== undefined
+      ? `\n${result.instanceCount} objects found · best containment ${(result.containment ?? 0).toFixed(2)}` +
+        ` · coverage ${(result.coverage ?? 0).toFixed(2)}` +
+        `\ngate needs containment ≥0.55 · coverage ≥${GATE_HINT}`
+      : '';
+  return `SERVER · declined: ${result.reason}` + (result.detail ? `\n${result.detail}` : '') + scores + tail;
+}
+
+/**
+ * Throw away a cutout without uploading it — used by the dry run, and by any
+ * path that decides after the fact that it doesn't want the result.
+ */
+export function discardCutout(uri: string): void {
+  try {
+    new File(uri).delete();
+  } catch {
+    // Losing a temp file is not worth failing a scan over.
+  }
+}
+
+/**
+ * A unique object name for this user's storage folder.
+ *
+ * Deliberately not a crypto UUID: Hermes has no global `crypto`, and Expo's
+ * winter runtime polyfills FormData/TextDecoder/URL/fetch but not this — so
+ * `crypto.randomUUID()` throws on device. Nothing here needs unguessability
+ * either. The bucket's RLS already scopes every object to its owner, so a
+ * guessed path grants nothing, and `upsert: false` means the worst a collision
+ * could do is fail one upload rather than overwrite someone's sticker.
+ */
+function stickerFileName(): string {
+  const stamp = Date.now().toString(36);
+  const suffix = Math.random().toString(36).slice(2, 10);
+  return `${stamp}-${suffix}.png`;
+}
+
+// ---------------------------------------------------------------------------
+// Telemetry
+//
+// Aptabase is already wired up and has, until now, tracked exactly one event.
+// The escalation rate and the mix of refusal reasons are the two numbers the
+// whole cost and quality model rests on, so they get recorded from day one.
+// ---------------------------------------------------------------------------
+function reportCutout(result: CutoutResult, kind: SelectionKind, via?: CutoutVia, attempts: string[] = []) {
+  // Also to the console, not just to Aptabase. While the thresholds are being
+  // tuned against real photos this is the feedback loop — analytics arrives
+  // too late to tell you why the scan you are looking at right now went the
+  // way it did.
+  const mode = (CUTOUT_DRY_RUN ? 'dry-run' : 'device') + (via ? ` (${via})` : '');
+  if (result.ok) {
+    debugLog(
+      `[cutout] ${mode} · ${kind} · ${result.selectedCount}/${result.instanceCount} instances · ` +
+        `containment ${result.containment.toFixed(2)} coverage ${result.coverage.toFixed(2)} · ` +
+        `${result.workingWidth}×${result.workingHeight} · total ${result.durationMs}ms ` +
+        `(decode ${result.decodeMs} vision ${result.visionMs} refine ${result.refineMs} ` +
+        `style ${result.styleMs} png ${result.encodeMs})`,
+    );
+  } else {
+    debugLog(
+      `[cutout] escalated · ${kind} · ${result.reason}` +
+        (result.detail ? ` (${result.detail})` : '') +
+        ` · instances ${result.instanceCount ?? 0}` +
+        ` containment ${(result.containment ?? 0).toFixed(2)}` +
+        ` coverage ${(result.coverage ?? 0).toFixed(2)}`,
+    );
+  }
+
+  if (result.ok) {
+    trackEvent('cutout_local', {
+      selection: kind,
+      via: via ?? 'crop',
+      attempts: attempts.join('>'),
+      instances: result.instanceCount,
+      selected: result.selectedCount,
+      containment: round(result.containment),
+      coverage: round(result.coverage),
+      subjectArea: round(result.subjectAreaRatio),
+      durationMs: result.durationMs,
+    });
+    return;
+  }
+
+  trackEvent('cutout_escalated', {
+    selection: kind,
+    reason: result.reason,
+    attempts: attempts.join('>'),
+    instances: result.instanceCount ?? 0,
+    containment: round(result.containment ?? 0),
+    coverage: round(result.coverage ?? 0),
+    durationMs: result.durationMs ?? 0,
+  });
+}
+
+function round(value: number): number {
+  return Math.round(value * 100) / 100;
+}

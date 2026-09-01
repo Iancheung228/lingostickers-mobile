@@ -92,7 +92,7 @@ export default function ChallengeSuccess({ challenge, wonStickerId, onClose }: C
   if (!challenge) return null;
 
   return (
-    <Modal visible={!!challenge} animationType="fade" transparent>
+    <Modal visible={!!challenge} animationType="fade" transparent onRequestClose={onClose}>
       <View style={styles.overlay}>
         <SafeAreaView style={styles.sheet}>
           <PartyPopper size={36} color={colors.sage} style={styles.emoji} />

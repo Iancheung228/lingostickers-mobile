@@ -1,53 +1,66 @@
-// Cozy pastel watercolor palette (AI Studio redesign)
+// Dusty-rose / warm-cream palette (blush redesign, Aug 2026). Every hex
+// below is sampled from the reference mockup, so the token *names* are the
+// ones the whole app already imports — only their values moved. That's
+// deliberate: repainting the app is a palette edit, not 30 screen edits.
 export const colors = {
   // Backgrounds
-  sky:        '#FDFDF4', // warm cream — primary screen bg
-  skyDeep:    '#C0EAFD', // panel blue — rounded feature panels
-  skyNight:   '#A6DDF6', // muted sky border
+  sky:        '#FAF4EA', // warm cream — primary screen bg
+  skyDeep:    '#E4A0A1', // dusty rose — the header band and other feature panels
+  skyNight:   '#D08E90', // deeper rose border
 
   // UI surfaces
   card:       '#FFFFFF', // white — cards, inputs
-  cardAlt:    '#EAF7FE', // pale sky tint — alt cards
-  overlay:    'rgba(253, 253, 244, 0.88)', // semi-transparent cream for list screens
+  cardAlt:    '#F6EEDD', // warm sand tint — thumbnails, alt cards
+  overlay:    'rgba(250, 244, 234, 0.88)', // semi-transparent cream for list screens
 
   // Brand / interactive
-  terra:      '#9BE0FC', // sky blue — primary CTA
-  terraDark:  '#85D3F2', // pressed state
-  terraLight: '#D6F1FD', // disabled / muted CTA
-  sage:       '#F2B84B', // amber — active tabs, badges
-  sageDark:   '#D99A2B',
-  sageLight:  '#FDECC8',
+  terra:      '#9D4D51', // deep rose — primary CTA (white text sits on this)
+  terraDark:  '#833F46', // pressed state
+  terraLight: '#F2DCDC', // disabled / muted CTA
+  sage:       '#D9B87C', // warm sand — badges, accents
+  sageDark:   '#A9803E',
+  sageLight:  '#F6EEDD',
 
-  // Text
-  inkDark:    '#1C4966', // navy — headings
-  inkMid:     '#334155', // body text
-  inkLight:   '#64748B', // captions, muted
-  inkFaint:   '#94A3B8', // placeholder, disabled
+  // Text — the whole ink family is warm now. Headings are the rose-brown
+  // sampled off the mockup's section titles; body stays a warm near-black
+  // so long paragraphs don't read as tinted.
+  inkDark:    '#833F46', // rose-brown — headings
+  inkMid:     '#4A4340', // warm charcoal — body text
+  inkLight:   '#A98A8C', // muted rose — captions
+  inkFaint:   '#C4A9AB', // placeholder, disabled
 
-  // Journal / minimal-calendar redesign — neutral warm-black text (the rest
-  // of the app's "ink" family leans navy/slate, which reads too blue next
-  // to this screen's reference image) + single warm terracotta accent.
-  charcoal:   '#2B2A28',
-  rust:       '#B5651D',
-  rustLight:  '#E8C9A8',
+  // Journal / minimal-calendar redesign — neutral warm-black text + the
+  // single accent, which is now the same deep rose as the rest of the app.
+  charcoal:   '#33292A',
+  rust:       '#9D4D51',
+  rustLight:  '#E4B9B9',
+
+  // Blush-redesign specifics — named for what they are in the mockup, for
+  // the home screen's header band and its cards.
+  blush:      '#E4A0A1', // the rose band / tab bar pill
+  blushDeep:  '#9D4D51', // raised camera button, arrow circle
+  maroon:     '#662B31', // text on the rose band, where inkDark is too light
+  sand:       '#F6EEDD', // sticker-thumb wells, speaker buttons
+  cream:      '#FAF4EA', // page background
+  creamDeep:  '#EFE4DA', // page background where it deepens toward the bottom
 
   // Illustration accents
-  moonGold:   '#FED330',
+  moonGold:   '#E8C48A',
   starWhite:  '#FFFFFF',
-  hillGreen:  '#7A9E7A',
-  hillDark:   '#5A7A5A',
+  hillGreen:  '#9DAE8C',
+  hillDark:   '#7C8C6D',
   treeTrunk:  '#8B6040',
-  skyBlue:    '#9BE0FC', // cool accent (ref 2)
+  skyBlue:    '#DCE6EC', // cool accent — the one non-rose sticker tint
 
   // Semantic
-  error:      '#F87171',
-  errorLight: '#FEE2E2',
-  success:    '#22C55E',
-  successLight: '#DCFCE7',
+  error:      '#C4565B',
+  errorLight: '#F7E0E1',
+  success:    '#6E9E72',
+  successLight: '#E2EFE3',
 
   // Utility
-  border:     '#E2E8F0',
-  borderLight:'#F1F5F9',
+  border:     '#EADFD6',
+  borderLight:'#F4EBE2',
   white:      '#FFFFFF',
   black:      '#000000',
   transparent:'transparent',

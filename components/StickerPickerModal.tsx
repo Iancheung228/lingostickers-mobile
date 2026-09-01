@@ -13,11 +13,19 @@ interface StickerPickerModalProps {
   onSelect: (sticker: Sticker) => void;
   onClose: () => void;
   title?: string;
+  /// Passing this switches the grid from "pick one" to "toggle membership":
+  /// every id in here draws checked, and tapping a checked card calls
+  /// onSelect again to take it off. That was already true of the board
+  /// caller's handler — nothing on screen said so, which made removing a
+  /// sticker a behaviour you could only find by accident.
   selectedIds?: Set<string>;
+  /// What the checked state means here, e.g. "on this board". Only shown
+  /// alongside selectedIds.
+  selectionNoun?: string;
 }
 
 export default function StickerPickerModal({
-  visible, currentUserId, onSelect, onClose, title = 'Pick a Sticker', selectedIds,
+  visible, currentUserId, onSelect, onClose, title = 'Pick a Sticker', selectedIds, selectionNoun,
 }: StickerPickerModalProps) {
   const [stickers, setStickers] = useState<Sticker[]>([]);
   const [loading, setLoading] = useState(true);
@@ -44,10 +52,18 @@ export default function StickerPickerModal({
   ));
 
   return (
-    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet">
+    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
       <SafeAreaView style={styles.container}>
         <View style={styles.header}>
-          <Text style={styles.title}>{title}</Text>
+          <View style={styles.headerText}>
+            <Text style={styles.title}>{title}</Text>
+            {!!selectedIds && !!selectionNoun && (
+              <Text style={styles.subtitle}>
+                {selectedIds.size} {selectionNoun}
+                {selectedIds.size > 0 ? ' · tap a checked one to take it off' : ' — tap to add'}
+              </Text>
+            )}
+          </View>
           <TouchableOpacity onPress={onClose} hitSlop={8}>
             <X size={22} color={colors.inkDark} />
           </TouchableOpacity>
@@ -56,7 +72,7 @@ export default function StickerPickerModal({
         {loading ? (
           <ActivityIndicator style={{ marginTop: 48 }} color={colors.terra} size="large" />
         ) : stickers.length === 0 ? (
-          <Text style={styles.empty}>Scan something first to send a challenge!</Text>
+          <Text style={styles.empty}>Nothing in your collection yet — scan something first!</Text>
         ) : (
           <FlatList
             data={stickers}
@@ -91,7 +107,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 16,
   },
+  headerText: { flex: 1, paddingRight: spacing.md },
   title: { fontSize: 20, fontWeight: '800', color: colors.inkDark },
+  subtitle: { fontSize: 12, fontWeight: '600', color: colors.inkLight, marginTop: 2 },
   empty: { color: colors.inkFaint, textAlign: 'center', marginTop: 48, fontSize: 14, paddingHorizontal: 32 },
   grid: { paddingHorizontal: 16, paddingBottom: 32 },
   row: { gap: 12, marginBottom: 12 },

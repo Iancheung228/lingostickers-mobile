@@ -1,16 +1,26 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Alert } from 'react-native';
-import { Trash2, Plus, Sparkles, ImagePlus, Sticker as StickerIcon } from 'lucide-react-native';
+import {
+  Trash2, Plus, ImagePlus, ImageOff, MoreHorizontal, Pencil, Wand2, X, Crop,
+  Sticker as StickerIcon,
+} from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
-import { File } from 'expo-file-system';
+import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
+import { File, Paths } from 'expo-file-system';
 import { useBoardStickers } from '@/hooks/useBoards';
 import { supabase } from '@/lib/supabase';
-import { Board, BoardStickerWithSticker, Sticker, WallDisplayStyle, CutoutBorderStyle } from '@/lib/types';
+import { useCoachMark } from '@/lib/coachMarks';
+import {
+  BackgroundCrop, Board, BoardStickerWithSticker, CropRect, Sticker,
+  WallDisplayStyle, CutoutBorderStyle,
+} from '@/lib/types';
 import BoardCanvas from '@/components/BoardCanvas';
-import BackgroundCropper from '@/components/BackgroundCropper';
+import BoardMenu, { BoardMenuItem, MenuAnchor } from '@/components/BoardMenu';
+import BackgroundCropper, { CropResult } from '@/components/BackgroundCropper';
 import BackgroundDimSlider from '@/components/BackgroundDimSlider';
 import { MAX_DIM_PCT } from '@/components/WallBackground';
-import StickerDetailView from '@/components/StickerDetailView';
+import FieldEditor from '@/components/FieldEditor';
+import StudyCard from '@/components/StudyCard';
 import StickerPickerModal from '@/components/StickerPickerModal';
 import { colors, shadows, radii, spacing, fonts } from '@/constants/theme';
 
@@ -18,15 +28,39 @@ import { colors, shadows, radii, spacing, fonts } from '@/constants/theme';
 // storage/bandwidth — matches the old global wall-background cap.
 const BACKGROUND_MAX_SIDE = 1600;
 
+// The uncropped source is kept only so the framing can be changed later, and
+// it's never drawn at full size — so it's capped too, a little above the
+// visible cap to leave real room to zoom into. Uncapped it would be the
+// entire original photo, several MB per board, uploaded to be looked at
+// approximately never.
+const SOURCE_MAX_SIDE = 2048;
+
+// Both header side slots are pinned to this, so the title between them is
+// centred on the *screen* rather than merely on the leftover space. It's the
+// width of the widest thing either slot holds (the "+ Add" pill).
+const SIDE_SLOT_W = 78;
+
 interface BoardCarouselPageProps {
   board: Board;
   currentUserId: string | undefined;
   displayStyle: WallDisplayStyle;
   borderStyle: CutoutBorderStyle;
+  /// True for the page the carousel is actually showing. Every board is
+  /// mounted at once, so anything that must happen once per *viewing* — the
+  /// one-time coach mark below — has to be gated on this rather than on
+  /// mount, or every off-screen page burns it simultaneously.
+  isActive: boolean;
   onDeleteBoard: (id: string) => Promise<{ error: Error | null }>;
-  onChangeBackground: (boardId: string, path: string | null) => Promise<{ error: Error | null }>;
+  onRenameBoard: (id: string, name: string) => Promise<{ error: Error | null }>;
+  onChangeBackground: (boardId: string, path: string | null, crop?: BackgroundCrop | null) => Promise<{ error: Error | null }>;
   onChangeBackgroundDim: (boardId: string, dim: number) => Promise<{ error: Error | null }>;
   onDragStateChange: (dragging: boolean) => void;
+  // Fired whenever this board's sticker set or cover photo changes. The
+  // bottom rail draws its own thumbnails from a separate read-only query
+  // (useBoardPreviews), so without this it would keep showing a stale
+  // miniature of a board you just edited — skills.md #1, two copies of the
+  // same data drifting apart.
+  onContentChanged: () => void;
   // Set true for exactly the board the user just created, so this page can
   // jump straight into "pick stickers" instead of showing a bare canvas the
   // user has to notice the + button on. Cleared via onAutoOpenHandled once
@@ -36,10 +70,14 @@ interface BoardCarouselPageProps {
 }
 
 export default function BoardCarouselPage({
-  board, currentUserId, displayStyle, borderStyle,
-  onDeleteBoard, onChangeBackground, onChangeBackgroundDim, onDragStateChange, autoOpenPicker, onAutoOpenHandled,
+  board, currentUserId, displayStyle, borderStyle, isActive,
+  onDeleteBoard, onRenameBoard, onChangeBackground, onChangeBackgroundDim,
+  onDragStateChange, onContentChanged,
+  autoOpenPicker, onAutoOpenHandled,
 }: BoardCarouselPageProps) {
-  const { items, loading, addSticker, removeSticker, updatePosition, autoArrange, refetch: refetchItems } = useBoardStickers(board.id);
+  const {
+    items, loading, addSticker, removeSticker, updatePosition, autoArrange, refetch: refetchItems,
+  } = useBoardStickers(board.id);
   const [selectedSticker, setSelectedSticker] = useState<Sticker | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 });
@@ -55,7 +93,24 @@ export default function BoardCarouselPage({
   // time as you drag, before the actual DB write (which only fires on
   // release). Null once nothing is in-flight.
   const [previewDimPct, setPreviewDimPct] = useState<number | null>(null);
+  // Set only when the cropper was opened on the *existing* background rather
+  // than a newly picked photo, so it reopens on the saved framing instead of
+  // a centred fit. See BackgroundCropper's initialCrop.
+  const [editingCrop, setEditingCrop] = useState<CropRect | null>(null);
+  const [loadingSource, setLoadingSource] = useState(false);
+  // The local copy of the stored source, while repositioning. Confirming a
+  // reposition hands back this very file untouched unless the user rotated,
+  // so comparing against it is what lets the upload below skip re-sending a
+  // multi-megabyte photo that hasn't changed a byte.
+  const storedSourceUriRef = useRef<string | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [menuAnchor, setMenuAnchor] = useState<MenuAnchor | null>(null);
+  const [renaming, setRenaming] = useState(false);
+  const [savingName, setSavingName] = useState(false);
   const autoPromptedRef = useRef(false);
+  const menuAnchorRef = useRef<View>(null);
+
+  const dragCoach = useCoachMark('board-drag', isActive && !loading && items.length > 0);
 
   useEffect(() => {
     if (autoOpenPicker && !autoPromptedRef.current) {
@@ -70,14 +125,28 @@ export default function BoardCarouselPage({
     const alreadyOnBoard = items.some(i => i.sticker_id === sticker.id);
     if (alreadyOnBoard) {
       await removeSticker(sticker.id, canvasSize);
-      return;
+    } else {
+      await addSticker(sticker.id, currentUserId, canvasSize);
     }
-    await addSticker(sticker.id, currentUserId, canvasSize);
+    onContentChanged();
   };
 
-  const handleRemove = (item: BoardStickerWithSticker) => {
-    removeSticker(item.sticker_id, canvasSize);
+  const handleRemove = async (item: BoardStickerWithSticker) => {
+    await removeSticker(item.sticker_id, canvasSize);
+    onContentChanged();
   };
+
+  // The third way off a board, alongside the drag-to-bin gesture and
+  // re-tapping a checked sticker in the picker. It exists because the only
+  // destructive control the open card had was "Delete card", which removes
+  // the sticker from the whole collection — same trash glyph, a far wider
+  // blast radius, and no narrower option next to it.
+  const handleUnpinSelected = useCallback(async () => {
+    if (!selectedSticker) return;
+    await removeSticker(selectedSticker.id, canvasSize);
+    setSelectedSticker(null);
+    onContentChanged();
+  }, [selectedSticker, removeSticker, canvasSize, onContentChanged]);
 
   const patchSticker = useCallback((patchId: string, patch: Partial<Sticker>) => {
     setSelectedSticker(prev => prev && prev.id === patchId ? { ...prev, ...patch } : prev);
@@ -96,6 +165,16 @@ export default function BoardCarouselPage({
     ]);
   };
 
+  const handleRename = async (values: Record<string, string>) => {
+    const next = (values.name ?? '').trim();
+    if (!next || next === board.name) { setRenaming(false); return; }
+    setSavingName(true);
+    const { error } = await onRenameBoard(board.id, next);
+    setSavingName(false);
+    setRenaming(false);
+    if (error) Alert.alert("Couldn't rename board", error.message);
+  };
+
   // Picking only stages the photo into the cropper (see BackgroundCropper) —
   // the actual resize/upload happens once the user confirms a crop in
   // handleCropConfirm, so nobody uploads a photo they haven't previewed.
@@ -103,33 +182,97 @@ export default function BoardCarouselPage({
     if (!currentUserId || uploadingBackground) return;
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert('Photos Access Needed', 'LingoStickers needs access to your photo library to set a board background.');
+      Alert.alert('Photos Access Needed', 'Tabi Stickers needs access to your photo library to set a board background.');
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 1 });
     const asset = !result.canceled ? result.assets[0] : null;
     if (!asset) return;
+    setEditingCrop(null);
+    storedSourceUriRef.current = null;
     setPickedBackgroundAsset({ uri: asset.uri, width: asset.width, height: asset.height });
   };
 
-  // The cropper has already cropped, resized, and compressed the file, so
-  // this just uploads it. Path is keyed by board id (not just user id) since
-  // each board now has its own independent photo.
-  const handleCropConfirm = async (localUri: string) => {
-    if (!currentUserId) return;
+  // Sibling of background_path, derived by convention rather than stored —
+  // exactly as background_path itself is (see 032_board_background_crop.sql).
+  const sourcePath = currentUserId
+    ? `${currentUserId}/board-${board.id}-background-source.jpg`
+    : null;
+
+  // Reopen the editor on the photo already up there. This needs the
+  // *uncropped* source: the file being displayed was cut to the canvas frame,
+  // and an image that exactly covers its frame has no pan range left at all,
+  // so reopening on that would offer nothing to reposition.
+  const handleRepositionBackground = async () => {
+    if (!sourcePath || !board.background_crop || loadingSource) return;
+    setLoadingSource(true);
+    try {
+      const { data, error } = await supabase.storage
+        .from('sticker-images')
+        .createSignedUrl(sourcePath, 3600);
+      if (error || !data) throw error ?? new Error('Could not read the original photo');
+
+      // Re-downloaded rather than cached across opens: it's a throwaway the
+      // OS may evict at any point, and one fetch per reposition is cheaper
+      // than reasoning about a stale copy.
+      const dest = new File(Paths.cache, `board-${board.id}-source.jpg`);
+      if (dest.exists) dest.delete();
+      const downloaded = await File.downloadFileAsync(data.signedUrl, dest);
+
+      const { sw, sh, ...crop } = board.background_crop;
+      storedSourceUriRef.current = downloaded.uri;
+      setEditingCrop(crop);
+      setPickedBackgroundAsset({ uri: downloaded.uri, width: sw, height: sh });
+    } catch (err: any) {
+      Alert.alert("Couldn't open the original photo", err?.message ?? 'Something went wrong.');
+    } finally {
+      setLoadingSource(false);
+    }
+  };
+
+  // Uploads two files: the cropped photo that gets drawn, and the source it
+  // was cut from so the framing stays editable. Paths are keyed by board id
+  // (not just user id) since each board has its own independent photo.
+  const handleCropConfirm = async (result: CropResult) => {
+    if (!currentUserId || !sourcePath) return;
     setPickedBackgroundAsset(null);
+    setEditingCrop(null);
     setUploadingBackground(true);
+    const storedSourceUri = storedSourceUriRef.current;
+    storedSourceUriRef.current = null;
     try {
       const path = `${currentUserId}/board-${board.id}-background.jpg`;
-      const bytes = await new File(localUri).bytes();
+      const bytes = await new File(result.uri).bytes();
       const { error: uploadError } = await supabase.storage
         .from('sticker-images')
         .upload(path, bytes, { contentType: 'image/jpeg', upsert: true });
       if (uploadError) throw uploadError;
 
-      const { error } = await onChangeBackground(board.id, path);
+      // Repositioning without rotating re-crops the source we just
+      // downloaded, so the stored copy is already byte-identical — only its
+      // crop rect moved. Re-uploading it would spend megabytes to write back
+      // exactly what's there.
+      const unchanged = result.source.uri === storedSourceUri;
+      let crop: BackgroundCrop | null = unchanged && board.background_crop
+        ? { ...result.crop, sw: board.background_crop.sw, sh: board.background_crop.sh }
+        : null;
+
+      if (!unchanged) {
+        const source = await shrinkForStorage(result.source);
+        const sourceBytes = await new File(source.uri).bytes();
+        const { error: sourceError } = await supabase.storage
+          .from('sticker-images')
+          .upload(sourcePath, sourceBytes, { contentType: 'image/jpeg', upsert: true });
+        // A missing source costs this board the Reposition option and
+        // nothing else — the background itself is already uploaded and
+        // correct, so it isn't worth failing the whole operation over.
+        crop = sourceError ? null : { ...result.crop, sw: source.width, sh: source.height };
+      }
+
+      const { error } = await onChangeBackground(board.id, path, crop);
       if (error) throw error;
       setBackgroundVersion(v => v + 1);
+      onContentChanged();
     } catch (err: any) {
       Alert.alert("Couldn't set background", err?.message ?? 'Something went wrong.');
     } finally {
@@ -140,7 +283,7 @@ export default function BoardCarouselPage({
   const handleRemoveBackground = () => {
     if (!board.background_path) return;
     Alert.alert(
-      'Remove background',
+      'Remove cover photo',
       'Go back to the default corkboard look?',
       [
         { text: 'Cancel', style: 'cancel' },
@@ -149,8 +292,13 @@ export default function BoardCarouselPage({
           onPress: async () => {
             const path = board.background_path!;
             const { error } = await onChangeBackground(board.id, null);
-            if (error) { Alert.alert("Couldn't remove background", error.message); return; }
-            await supabase.storage.from('sticker-images').remove([path]);
+            if (error) { Alert.alert("Couldn't remove cover photo", error.message); return; }
+            // The source goes with it — it exists only to re-crop this
+            // background, so leaving it behind would orphan a file nothing
+            // can ever reference again.
+            await supabase.storage.from('sticker-images')
+              .remove(sourcePath ? [path, sourcePath] : [path]);
+            onContentChanged();
           },
         },
       ]
@@ -171,31 +319,85 @@ export default function BoardCarouselPage({
     setPreviewDimPct(null);
   }, [board.id, onChangeBackgroundDim]);
 
+  const openMenu = () => {
+    menuAnchorRef.current?.measureInWindow((x, y, _w, h) => {
+      setMenuAnchor({ x, y: y + h });
+      setMenuOpen(true);
+    });
+  };
+
+  // Everything a board can have done *to it*, in one place. Previously each
+  // of these needed its own top-level control, which is why rename had
+  // nowhere to live at all, why autoArrange shipped unreachable, and why
+  // changing the cover photo was an unlabelled 26pt icon floating over the
+  // canvas with "remove" hidden behind a long-press on it.
+  const menuItems: BoardMenuItem[] = [
+    { key: 'rename', label: 'Rename board', icon: Pencil, onPress: () => setRenaming(true) },
+    {
+      key: 'tidy',
+      label: 'Tidy up the layout',
+      icon: Wand2,
+      disabled: items.length === 0,
+      onPress: () => autoArrange(canvasSize),
+    },
+    {
+      key: 'cover',
+      label: board.background_path ? 'Change cover photo' : 'Add a cover photo',
+      icon: ImagePlus,
+      disabled: uploadingBackground,
+      onPress: handlePickBackground,
+    },
+    // Only offered when there's a source to re-crop. A background uploaded
+    // before 032_board_background_crop.sql has none, so it can be replaced
+    // but not repositioned — replacing it once writes a source and the
+    // option appears from then on.
+    ...(board.background_path && board.background_crop ? [{
+      key: 'cover-reposition',
+      label: 'Reposition cover photo',
+      icon: Crop,
+      disabled: loadingSource,
+      onPress: handleRepositionBackground,
+    }] : []),
+    ...(board.background_path ? [{
+      key: 'cover-remove',
+      label: 'Remove cover photo',
+      icon: ImageOff,
+      onPress: handleRemoveBackground,
+    }] : []),
+    { key: 'delete', label: 'Delete board', icon: Trash2, destructive: true, separated: true, onPress: handleDelete },
+  ];
+
   return (
     <View style={styles.page}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={handleDelete} style={styles.iconBtn} hitSlop={8}>
-          <Trash2 size={16} color={colors.inkMid} />
-        </TouchableOpacity>
-        <View style={styles.titleWrap}>
-          <Text style={styles.title} numberOfLines={1}>{board.name}</Text>
-          <Text style={styles.subtitle}>{items.length} sticker{items.length === 1 ? '' : 's'}</Text>
-        </View>
-        <View style={styles.headerActions}>
-          <TouchableOpacity
-            onPress={() => autoArrange(canvasSize)}
-            disabled={items.length === 0}
-            style={[styles.iconBtn, items.length === 0 && styles.iconBtnDisabled]}
-            hitSlop={8}
-          >
-            <Sparkles size={16} color={colors.inkDark} />
+        <View ref={menuAnchorRef} collapsable={false} style={styles.side}>
+          <TouchableOpacity onPress={openMenu} style={styles.iconBtn} hitSlop={8} activeOpacity={0.7}>
+            {uploadingBackground || loadingSource
+              ? <ActivityIndicator size="small" color={colors.inkDark} />
+              : <MoreHorizontal size={18} color={colors.inkDark} />}
           </TouchableOpacity>
-          <TouchableOpacity onPress={() => setPickerOpen(true)} style={styles.iconBtn} hitSlop={8}>
-            <Plus size={18} color={colors.inkDark} />
+        </View>
+
+        {/* The name is the one thing on this screen the user typed, so it's
+            editable where it's displayed rather than somewhere else. */}
+        <TouchableOpacity style={styles.titleWrap} onPress={() => setRenaming(true)} activeOpacity={0.6}>
+          <View style={styles.titleRow}>
+            <Text style={styles.title} numberOfLines={1}>{board.name}</Text>
+            <Pencil size={11} color={colors.inkFaint} />
+          </View>
+          <Text style={styles.subtitle}>{items.length} sticker{items.length === 1 ? '' : 's'}</Text>
+        </TouchableOpacity>
+
+        {/* Labelled, not a bare "+": the rail at the bottom of this same
+            screen has its own "+" that means "new board". Two identical
+            glyphs, two different nouns, one screen. */}
+        <View style={[styles.side, styles.sideRight]}>
+          <TouchableOpacity onPress={() => setPickerOpen(true)} style={styles.addBtn} activeOpacity={0.85}>
+            <Plus size={15} color={colors.white} strokeWidth={2.75} />
+            <Text style={styles.addText}>Add</Text>
           </TouchableOpacity>
         </View>
       </View>
-      <Text style={styles.hint}>Hold and drag to move · drop on the trash to remove</Text>
 
       <View
         style={styles.canvasWrap}
@@ -219,34 +421,34 @@ export default function BoardCarouselPage({
             backgroundVersion={backgroundVersion}
           />
         )}
+
+        {/* box-none so only the button inside actually takes touches — the
+            canvas underneath keeps its own. */}
         {!loading && items.length === 0 && (
-          <View style={styles.empty} pointerEvents="none">
+          <View style={styles.empty} pointerEvents="box-none">
             <View style={styles.emptyIconCircle}>
               <StickerIcon size={22} color={colors.inkDark} />
             </View>
             <Text style={styles.emptyTitle}>Nothing here yet</Text>
-            <Text style={styles.emptySubtitle}>Tap + to add stickers from your collection.</Text>
+            <Text style={styles.emptySubtitle}>Pin stickers from your collection to start this board.</Text>
+            {/* The empty state *is* the button. It used to be
+                pointerEvents="none" text pointing at a control elsewhere,
+                which spends the most teachable moment on a caption. */}
+            <TouchableOpacity style={styles.emptyBtn} onPress={() => setPickerOpen(true)} activeOpacity={0.85}>
+              <Plus size={16} color={colors.white} strokeWidth={2.5} />
+              <Text style={styles.emptyBtnText}>Add stickers</Text>
+            </TouchableOpacity>
           </View>
         )}
 
-        {/* Matches MiniStickerWall's corner cover-photo button — tap to
-            change, long-press to remove — so both places this appears
-            (home preview, individual boards) feel like the same control. */}
-        <TouchableOpacity
-          style={styles.editBackgroundBtn}
-          onPress={handlePickBackground}
-          onLongPress={board.background_path ? handleRemoveBackground : undefined}
-          delayLongPress={400}
-          disabled={uploadingBackground}
-          hitSlop={8}
-          activeOpacity={0.8}
-        >
-          {uploadingBackground ? (
-            <ActivityIndicator size="small" color={colors.inkDark} />
-          ) : (
-            <ImagePlus size={14} color={colors.inkDark} />
-          )}
-        </TouchableOpacity>
+        {dragCoach.visible && (
+          <TouchableOpacity style={styles.coach} onPress={dragCoach.dismiss} activeOpacity={0.9}>
+            <Text style={styles.coachText}>
+              Hold a sticker to drag it. Drop it on the bin to take it off this board — it stays in your collection.
+            </Text>
+            <X size={13} color={colors.inkMid} />
+          </TouchableOpacity>
+        )}
 
         {/* Only meaningful once there's a photo to tint — the default
             corkboard background doesn't use the dim scrim at all. */}
@@ -262,11 +464,30 @@ export default function BoardCarouselPage({
         )}
       </View>
 
-      <StickerDetailView
+      <BoardMenu
+        visible={menuOpen}
+        anchor={menuAnchor}
+        items={menuItems}
+        onClose={() => setMenuOpen(false)}
+      />
+
+      <FieldEditor
+        spec={renaming ? {
+          title: 'Rename board',
+          subtitle: 'Just for you — this is the name on the strip below the canvas.',
+          inputs: [{ key: 'name', value: board.name, placeholder: 'e.g. Tokyo Trip' }],
+        } : null}
+        saving={savingName}
+        onCancel={() => setRenaming(false)}
+        onSave={handleRename}
+      />
+
+      <StudyCard
         sticker={selectedSticker}
         onClose={() => setSelectedSticker(null)}
-        onDelete={() => { setSelectedSticker(null); refetchItems(); }}
+        onDeleted={() => { setSelectedSticker(null); refetchItems(); onContentChanged(); }}
         onUpdate={patchSticker}
+        onRemoveFromBoard={{ boardName: board.name, remove: handleUnpinSelected }}
       />
 
       <StickerPickerModal
@@ -274,6 +495,7 @@ export default function BoardCarouselPage({
         currentUserId={currentUserId}
         title={`Add to ${board.name}`}
         selectedIds={new Set(items.map(i => i.sticker_id))}
+        selectionNoun="on this board"
         onSelect={handlePickSticker}
         onClose={() => setPickerOpen(false)}
       />
@@ -283,11 +505,31 @@ export default function BoardCarouselPage({
         frameWidth={canvasSize.width}
         frameHeight={canvasSize.height}
         maxOutputSide={BACKGROUND_MAX_SIDE}
-        onCancel={() => setPickedBackgroundAsset(null)}
+        initialCrop={editingCrop}
+        onCancel={() => {
+          setPickedBackgroundAsset(null);
+          setEditingCrop(null);
+          storedSourceUriRef.current = null;
+        }}
         onConfirm={handleCropConfirm}
       />
     </View>
   );
+}
+
+// The source is kept for re-cropping, never drawn, so it's stored at
+// SOURCE_MAX_SIDE rather than whatever the camera produced. Fractions are
+// what get persisted alongside it (see CropResult), so shrinking here leaves
+// the recorded framing exactly as valid as it was.
+async function shrinkForStorage(source: { uri: string; width: number; height: number }) {
+  const longSide = Math.max(source.width, source.height);
+  if (longSide <= SOURCE_MAX_SIDE) return source;
+  const ratio = SOURCE_MAX_SIDE / longSide;
+  const rendered = await ImageManipulator.manipulate(source.uri)
+    .resize({ width: Math.round(source.width * ratio), height: Math.round(source.height * ratio) })
+    .renderAsync();
+  const saved = await rendered.saveAsync({ compress: 0.85, format: SaveFormat.JPEG });
+  return { uri: saved.uri, width: rendered.width, height: rendered.height };
 }
 
 const styles = StyleSheet.create({
@@ -295,16 +537,16 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.ms,
     paddingHorizontal: spacing.md,
     paddingTop: spacing.xs,
-    paddingBottom: spacing.xs,
+    paddingBottom: spacing.sm,
   },
+  side: { width: SIDE_SLOT_W, alignItems: 'flex-start' },
+  sideRight: { alignItems: 'flex-end' },
   titleWrap: { flex: 1, alignItems: 'center' },
-  title: { fontSize: 15, fontFamily: fonts.cozy, color: colors.inkDark, textAlign: 'center' },
+  titleRow: { flexDirection: 'row', alignItems: 'center', gap: 5, maxWidth: '100%' },
+  title: { fontSize: 15, fontFamily: fonts.cozy, color: colors.inkDark, textAlign: 'center', flexShrink: 1 },
   subtitle: { fontSize: 10, color: colors.inkFaint, fontWeight: '600', marginTop: 1 },
-  headerActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   iconBtn: {
     width: 36,
     height: 36,
@@ -314,8 +556,18 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     ...shadows.card,
   },
-  iconBtnDisabled: { opacity: 0.4 },
-  hint: { fontSize: 10, color: colors.inkFaint, fontWeight: '600', textAlign: 'center', marginBottom: spacing.sm },
+  addBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    height: 34,
+    paddingHorizontal: spacing.ms,
+    borderRadius: radii.full,
+    backgroundColor: colors.terra,
+    ...shadows.button,
+  },
+  addText: { fontSize: 13, fontFamily: fonts.cozy, color: colors.white },
   canvasWrap: { flex: 1, marginHorizontal: spacing.md, marginBottom: spacing.md },
   loader: { flex: 1 },
   empty: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.xl },
@@ -330,21 +582,34 @@ const styles = StyleSheet.create({
   },
   emptyTitle: { fontSize: 18, fontFamily: fonts.cozy, color: colors.inkDark, marginBottom: 8 },
   emptySubtitle: { fontSize: 13, color: colors.inkFaint, textAlign: 'center', lineHeight: 20 },
-  editBackgroundBtn: {
+  emptyBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: spacing.xs,
+    marginTop: spacing.lg,
+    paddingHorizontal: spacing.lg, paddingVertical: spacing.ms,
+    borderRadius: radii.full, backgroundColor: colors.terra,
+    ...shadows.button,
+  },
+  emptyBtnText: { fontSize: 15, fontFamily: fonts.cozy, color: colors.white },
+  // Floats over the canvas rather than sitting in the header's flow, so
+  // dismissing it doesn't reflow the board underneath.
+  coach: {
     position: 'absolute',
+    top: spacing.sm,
     left: spacing.sm,
-    bottom: spacing.sm,
-    width: 26,
-    height: 26,
-    borderRadius: radii.full,
-    backgroundColor: 'rgba(255,255,255,0.85)',
+    right: spacing.sm,
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.ms,
+    paddingVertical: spacing.sm,
+    borderRadius: radii.md,
+    backgroundColor: 'rgba(255, 253, 244, 0.94)',
     ...shadows.card,
   },
+  coachText: { flex: 1, fontSize: 12, fontWeight: '600', color: colors.inkMid, lineHeight: 17 },
   tintSliderWrap: {
     position: 'absolute',
-    left: spacing.sm + 26 + spacing.xs,
+    left: spacing.sm,
     bottom: spacing.sm,
   },
 });

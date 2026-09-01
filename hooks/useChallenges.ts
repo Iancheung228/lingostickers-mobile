@@ -31,14 +31,14 @@ function useChallengesState() {
     const senderIds = [...new Set(data.map(c => c.sender_id))];
     const { data: profiles } = await supabase
       .from('profiles')
-      .select('id, username')
+      .select('id, username, avatar_path')
       .in('id', senderIds);
 
     const profileMap = new Map((profiles ?? []).map(p => [p.id, p]));
 
     setInbox(data.map(c => ({
       ...c,
-      sender: profileMap.get(c.sender_id) ?? { id: c.sender_id, username: null },
+      sender: profileMap.get(c.sender_id) ?? { id: c.sender_id, username: null, avatar_path: null },
     })));
   }, [userId]);
 
@@ -51,21 +51,24 @@ function useChallengesState() {
       .in('receiver_id', friendIds)
       .eq('status', 'won')
       .order('completed_at', { ascending: false })
-      .limit(30);
+      // Trimmed from 30. This list is a "your challenge landed" notice, not an
+      // archive — a dozen recent ones is all anyone reads, and each row now
+      // carries a thumbnail that has to be signed.
+      .limit(12);
 
     if (!data) return;
 
     const receiverIds = [...new Set(data.map(c => c.receiver_id))];
     const { data: profiles } = await supabase
       .from('profiles')
-      .select('id, username')
+      .select('id, username, avatar_path')
       .in('id', receiverIds);
 
     const profileMap = new Map((profiles ?? []).map(p => [p.id, p]));
 
     setFeed(data.map(c => ({
       ...c,
-      receiver: profileMap.get(c.receiver_id) ?? { id: c.receiver_id, username: null },
+      receiver: profileMap.get(c.receiver_id) ?? { id: c.receiver_id, username: null, avatar_path: null },
     })));
   }, [userId]);
 
@@ -96,7 +99,7 @@ function useChallengesState() {
     return res.data as SubmitAnswerResult;
   }, [fetchInbox]);
 
-  const useHint = useCallback(async (challengeId: string): Promise<SubmitAnswerResult> => {
+  const requestHint = useCallback(async (challengeId: string): Promise<SubmitAnswerResult> => {
     const res = await supabase.functions.invoke('submit-challenge-answer', {
       body: { challenge_id: challengeId, use_hint: true },
     });
@@ -115,17 +118,38 @@ function useChallengesState() {
     return res.data.url as string;
   }, []);
 
+  // Batched form, for a list of rows that each want a thumbnail. One
+  // invocation instead of one per row; the function still authorises each id
+  // separately and simply omits any the caller isn't party to.
+  const getChallengeImageUrls = useCallback(
+    async (challengeIds: string[]): Promise<Record<string, string>> => {
+      if (challengeIds.length === 0) return {};
+      const res = await supabase.functions.invoke('get-challenge-image', {
+        body: { challenge_ids: challengeIds.slice(0, 30) },
+      });
+      if (res.error || !res.data?.urls) return {};
+      return res.data.urls as Record<string, string>;
+    },
+    [],
+  );
+
   return {
     inbox,
     feed,
     loading,
-    pendingCount: inbox.filter(c => c.status === 'pending').length,
+    // Everything in the inbox, not just untouched ones. `fetchInbox` already
+    // filters to pending + active, and an active challenge is one the user
+    // opened and didn't finish — still owed, still worth a badge. Counting
+    // only 'pending' also made the tab badge disagree with the Friends tab's
+    // own "Needs you" count, which reads the whole inbox.
+    pendingCount: inbox.length,
     fetchInbox,
     fetchFeed,
     sendChallenge,
     submitAnswer,
-    useHint,
+    requestHint,
     getChallengeImageUrl,
+    getChallengeImageUrls,
   };
 }
 

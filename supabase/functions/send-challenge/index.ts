@@ -1,5 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { getAcceptedAnswersWithGroq } from '../_shared/vocab.ts';
+import { consumeQuota, errorResponse } from '../_shared/rateLimit.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -58,6 +59,12 @@ Deno.serve(async (req) => {
       .single();
 
     if (!sticker) return json({ error: 'You do not own this sticker' }, 403);
+
+    // ── 2a. Claim quota ──────────────────────────────────────────
+    // After the friendship and ownership checks so a rejected request never
+    // burns a unit, but before the Groq call below, which is the spend this
+    // is protecting. Throws ApiError(429), caught at the bottom.
+    await consumeQuota(admin, senderId, 'send-challenge');
 
     // ── 2b. Snapshot the image (and memory photo, if any) into their own
     // copies ────────────────────────────────────────────────────────────
@@ -160,6 +167,9 @@ Deno.serve(async (req) => {
 
   } catch (err: any) {
     console.error('send-challenge error:', err);
-    return json({ error: err?.message ?? 'Internal server error' }, 500);
+    // errorResponse preserves an ApiError's own status — without it the 429
+    // from consumeQuota would reach the client as a 500, and "you've used
+    // today's challenges" would read as "the server broke".
+    return errorResponse(err, corsHeaders);
   }
 });

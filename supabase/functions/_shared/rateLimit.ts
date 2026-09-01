@@ -17,10 +17,16 @@ import { createClient, type SupabaseClient } from 'https://esm.sh/@supabase/supa
 //
 // Each can be overridden without a code change by setting the matching env var
 // on the function (e.g. `npx supabase secrets set DAILY_LIMIT_CREATE_STICKER=25`).
+// send-challenge belongs here too: it calls Groq once per challenge to build
+// the accepted-answer list. Abuse is already bounded by needing an accepted
+// friendship and an owned sticker, so its bucket is generous — this is here so
+// that no paid endpoint sits outside the cap, not because it is a likely
+// attack surface.
 const DEFAULT_DAILY_LIMITS: Record<string, number> = {
   'create-sticker': 10,
   'translate-word': 30,
   'translate-sentence': 30,
+  'send-challenge': 30,
 };
 
 export type Endpoint = keyof typeof DEFAULT_DAILY_LIMITS;
@@ -110,7 +116,10 @@ function dailyLimit(endpoint: Endpoint): number {
 }
 
 function limitMessage(endpoint: Endpoint, limit: number): string {
-  const noun = endpoint === 'create-sticker' ? 'sticker scans' : 'translations';
+  const noun =
+    endpoint === 'create-sticker' ? 'sticker scans' :
+    endpoint === 'send-challenge' ? 'challenges' :
+    'translations';
   return `Daily limit reached — you've used all ${limit} of today's ${noun}. Try again tomorrow.`;
 }
 

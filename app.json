@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Souvenir",
+    "name": "Tabi Stickers",
     "slug": "lingostickers-mobile",
     "scheme": "lingostickers",
     "version": "1.0.0",
@@ -9,17 +9,17 @@
     "userInterfaceStyle": "light",
     "ios": {
       "bundleIdentifier": "com.iancheung228.lingostickers",
-      "supportsTablet": true,
+      "supportsTablet": false,
       "associatedDomains": ["applinks:tabistickers.com"],
       "infoPlist": {
-        "NSCameraUsageDescription": "LingoStickers uses your camera to scan objects and create vocabulary stickers.",
-        "NSLocationWhenInUseUsageDescription": "LingoStickers can tag where this memory happened, turning your collection into a map of your language journey. This is entirely optional.",
+        "NSCameraUsageDescription": "Tabi Stickers uses your camera to scan objects and create vocabulary stickers.",
+        "NSLocationWhenInUseUsageDescription": "Tabi Stickers can tag where this memory happened, turning your collection into a map of your language journey. This is entirely optional.",
         "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#FAF4EA",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
@@ -46,34 +46,43 @@
     "plugins": [
       "expo-router",
       [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#FAF4EA"
+        }
+      ],
+      [
         "expo-camera",
         {
-          "cameraPermission": "LingoStickers uses your camera to scan objects and create vocabulary stickers."
+          "cameraPermission": "Tabi Stickers uses your camera to scan objects and create vocabulary stickers."
         }
       ],
       [
         "expo-media-library",
         {
-          "savePhotosPermission": "LingoStickers saves your stickers to your photo library so you can share them as chat stickers.",
+          "savePhotosPermission": "Tabi Stickers saves your stickers to your photo library so you can share them as chat stickers.",
           "isAccessMediaLocationEnabled": true
         }
       ],
       [
         "expo-image-picker",
         {
-          "photosPermission": "LingoStickers needs access to your photo library so you can pick a picture to turn into a sticker."
+          "photosPermission": "Tabi Stickers needs access to your photo library so you can pick a picture to turn into a sticker."
         }
       ],
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "LingoStickers can tag where this memory happened, turning your collection into a map of your language journey. This is entirely optional."
+          "locationWhenInUsePermission": "Tabi Stickers can tag where this memory happened, turning your collection into a map of your language journey. This is entirely optional."
         }
       ],
       [
         "expo-audio",
         {
-          "microphonePermission": "LingoStickers uses your microphone to record yourself practicing a word's pronunciation."
+          "microphonePermission": "Tabi Stickers uses your microphone to record yourself practicing a word's pronunciation."
         }
       ],
       [

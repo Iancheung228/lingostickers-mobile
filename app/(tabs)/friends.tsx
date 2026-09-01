@@ -1,173 +1,215 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import {
   View, Text, SectionList, StyleSheet, SafeAreaView,
-  TouchableOpacity, RefreshControl, ActivityIndicator, Alert,
+  TouchableOpacity, RefreshControl, ActivityIndicator,
 } from 'react-native';
 import { useFocusEffect } from 'expo-router';
-import { UserPlus, Send } from 'lucide-react-native';
+import { UserPlus } from 'lucide-react-native';
 import { useAuth } from '@/hooks/useAuth';
 import { useFriends } from '@/hooks/useFriends';
 import { useChallenges } from '@/hooks/useChallenges';
-import ChallengeCard from '@/components/ChallengeCard';
 import FriendSearch from '@/components/FriendSearch';
 import ChallengeScreen from '@/components/ChallengeScreen';
 import ChallengeSuccess from '@/components/ChallengeSuccess';
 import FriendProfile from '@/components/FriendProfile';
-import StickerPickerModal from '@/components/StickerPickerModal';
-import SendChallengeModal from '@/components/SendChallengeModal';
-import { ChallengeWithSender, ChallengeWithReceiver, FriendWithProfile, Sticker } from '@/lib/types';
-import OtterMascot from '@/components/illustrations/OtterMascot';
-import { colors, shadows, radii, spacing, typography, fonts } from '@/constants/theme';
+import FriendRail from '@/components/FriendRail';
+import FriendsEmpty from '@/components/FriendsEmpty';
+import SolvedRow from '@/components/SolvedRow';
+import { FriendRequestRow, ChallengeRow } from '@/components/InboxRow';
+import { ChallengeWithSender, FriendWithProfile } from '@/lib/types';
+import {
+  buildInboxItems, buildSections, subtitleFor, isFirstRun, type Row,
+} from '@/lib/friendsSections';
+import { colors, shadows, radii, spacing, fonts } from '@/constants/theme';
 import { TAB_BAR_CLEARANCE } from '@/constants/tabBar';
+import { enablePushNotifications } from '@/lib/notifications';
+
+// ---------------------------------------------------------------------------
+// Friends.
+//
+// The page is organised around one question — is anything waiting on me? —
+// rather than around the three queries that happen to feed it. Everything
+// actionable is merged into a single group at the top; the friends directory
+// compresses to a rail so it can't push that group off screen; and what used
+// to be called a feed sits underneath as the reading material it actually is.
+//
+// Both sections always render, with resting copy when empty. A page whose
+// shape depends on your data can't be learned, and a section that vanishes
+// takes the evidence that its feature exists with it.
+// ---------------------------------------------------------------------------
 
 export default function FriendsScreen() {
   const { user } = useAuth();
   const { friends, loading: friendsLoading, respondToRequest, refetch: refetchFriends } = useFriends();
-  const { inbox, feed, loading: challengesLoading, fetchInbox, fetchFeed, sendChallenge } = useChallenges();
+  const {
+    inbox, feed, loading: challengesLoading,
+    fetchInbox, fetchFeed, getChallengeImageUrls,
+  } = useChallenges();
 
   const [searchVisible, setSearchVisible] = useState(false);
   const [activeChallenge, setActiveChallenge] = useState<ChallengeWithSender | null>(null);
   const [wonState, setWonState] = useState<{ challenge: ChallengeWithSender; stickerId: string } | null>(null);
   const [selectedFriend, setSelectedFriend] = useState<FriendWithProfile | null>(null);
   const [refreshing, setRefreshing] = useState(false);
-  const [pickerOpen, setPickerOpen] = useState(false);
-  const [challengeSticker, setChallengeSticker] = useState<Sticker | null>(null);
+  const [solvedImages, setSolvedImages] = useState<Record<string, string>>({});
 
-  const handlePickStickerForChallenge = (sticker: Sticker) => {
-    setPickerOpen(false);
-    setChallengeSticker(sticker);
-  };
+  const acceptedFriends = useMemo(() => friends.filter(f => f.status === 'accepted'), [friends]);
+  const pendingReceived = useMemo(
+    () => friends.filter(f => f.status === 'pending' && !f.is_requester),
+    [friends],
+  );
 
-  const handleSendChallenge = async (receiverId: string) => {
-    if (!challengeSticker) return false;
-    const { error } = await sendChallenge(challengeSticker.id, receiverId);
-    if (error) {
-      Alert.alert('Challenge failed', error.message);
-      return false;
+  // `silent` separates the two reasons this runs. A pull-to-refresh drives the
+  // spinner because the user asked for it; arriving on the tab should not, or
+  // every switch back flashes a refresh indicator nobody requested.
+  const refresh = useCallback(async (silent = false) => {
+    if (!silent) setRefreshing(true);
+    try {
+      const friendIds = acceptedFriends.map(f => f.friend.id);
+      await Promise.all([refetchFriends(), fetchInbox(), fetchFeed(friendIds)]);
+    } finally {
+      if (!silent) setRefreshing(false);
     }
-    return true;
-  };
-
-  const acceptedFriends = friends.filter(f => f.status === 'accepted');
-  const pendingReceived = friends.filter(f => f.status === 'pending' && !f.is_requester);
-
-  const refresh = useCallback(async () => {
-    setRefreshing(true);
-    const friendIds = acceptedFriends.map(f => f.friend.id);
-    await Promise.all([refetchFriends(), fetchInbox(), fetchFeed(friendIds)]);
-    setRefreshing(false);
   }, [refetchFriends, fetchInbox, fetchFeed, acceptedFriends]);
 
-  useFocusEffect(useCallback(() => { refresh(); }, []));
+  // Held in a ref because `refresh` is rebuilt whenever the friend list
+  // changes, and useFocusEffect must run the current one. This previously
+  // passed `[]` directly, which captured the very first render's empty friend
+  // list forever — so on every later focus the feed was fetched for a stale
+  // set of ids, and quietly came back empty.
+  const refreshRef = useRef(refresh);
+  refreshRef.current = refresh;
+  useFocusEffect(useCallback(() => { refreshRef.current(true); }, []));
 
-  const sections = [
-    { title: 'Friends', data: acceptedFriends as unknown as (ChallengeWithSender | ChallengeWithReceiver)[] },
-    { title: 'Challenges', data: inbox as (ChallengeWithSender | ChallengeWithReceiver)[] },
-    { title: "Friends' Discoveries", data: feed as (ChallengeWithSender | ChallengeWithReceiver)[] },
-  ];
+  // Thumbnails for the solved rows, in one call rather than one per row.
+  // Keyed off the ids actually present, so it re-runs when the list changes
+  // and not when it merely re-renders.
+  const feedIds = useMemo(() => feed.map(c => c.id).join(','), [feed]);
+  useEffect(() => {
+    const ids = feedIds ? feedIds.split(',') : [];
+    if (ids.length === 0) { setSolvedImages({}); return; }
+    let cancelled = false;
+    getChallengeImageUrls(ids).then(urls => { if (!cancelled) setSolvedImages(urls); });
+    return () => { cancelled = true; };
+  }, [feedIds, getChallengeImageUrls]);
+
+  const inboxItems = useMemo(
+    () => buildInboxItems(pendingReceived, inbox),
+    [pendingReceived, inbox],
+  );
+  const sections = useMemo(() => buildSections(inboxItems, feed), [inboxItems, feed]);
+
+  const loading = friendsLoading || challengesLoading;
+  const hasNobody = isFirstRun(acceptedFriends.length, pendingReceived.length);
+  const subtitle = subtitleFor(acceptedFriends.length);
+
+  // Friends the user owes something to, so the rail can echo the inbox.
+  const awaitingIds = useMemo(
+    () => new Set(inbox.map(c => c.sender.id)),
+    [inbox],
+  );
+
+  // Accepting a request is the point where challenges from this person become
+  // possible, so it is a moment where a notification prompt explains itself.
+  // No-ops if they already answered the system dialog either way.
+  const handleAccept = useCallback(async (friendshipId: string) => {
+    await respondToRequest(friendshipId, 'accepted');
+    if (user?.id) enablePushNotifications(user.id);
+  }, [respondToRequest, user?.id]);
+
+  const renderRow = useCallback((row: Row) => {
+    switch (row.kind) {
+      case 'request':
+        return (
+          <FriendRequestRow
+            username={row.friendship.friend.username}
+            avatarPath={row.friendship.friend.avatar_path}
+            onAccept={() => handleAccept(row.friendship.id)}
+            onDecline={() => respondToRequest(row.friendship.id, 'declined')}
+          />
+        );
+      case 'challenge':
+        return (
+          <ChallengeRow
+            senderName={row.challenge.sender.username}
+            senderAvatarPath={row.challenge.sender.avatar_path}
+            sentAt={row.challenge.sent_at}
+            inProgress={row.challenge.status === 'active'}
+            onPress={() => setActiveChallenge(row.challenge)}
+          />
+        );
+      case 'solved':
+        return (
+          <SolvedRow
+            word={row.challenge.snapshot_word}
+            translation={row.challenge.snapshot_translation}
+            solverName={row.challenge.receiver?.username ?? null}
+            solverAvatarPath={row.challenge.receiver?.avatar_path ?? null}
+            completedAt={row.challenge.completed_at ?? null}
+            imageUrl={solvedImages[row.challenge.id]}
+          />
+        );
+      case 'resting':
+        return <Text style={styles.resting}>{row.text}</Text>;
+    }
+  }, [handleAccept, respondToRequest, solvedImages]);
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.title}>Cozy Harbor</Text>
-        <View style={styles.headerActions}>
-          <TouchableOpacity
-            onPress={() => { if (acceptedFriends.length > 0) setPickerOpen(true); }}
-            style={[styles.sendChallengeBtn, acceptedFriends.length === 0 && styles.sendChallengeBtnDisabled]}
-            disabled={acceptedFriends.length === 0}
-          >
-            <Send size={13} color={colors.white} />
-            <Text style={styles.sendChallengeText}>Challenge</Text>
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => setSearchVisible(true)} style={styles.addBtn} hitSlop={8}>
-            <UserPlus size={20} color={colors.inkMid} />
-          </TouchableOpacity>
+        <View style={styles.headerText}>
+          <Text style={styles.title}>Friends</Text>
+          <Text style={styles.subtitle}>{subtitle}</Text>
         </View>
+        <TouchableOpacity
+          onPress={() => setSearchVisible(true)}
+          style={styles.addBtn}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel="Add a friend"
+        >
+          <UserPlus size={20} color={colors.inkDark} />
+        </TouchableOpacity>
       </View>
 
-      {/* Pending friend requests */}
-      {pendingReceived.length > 0 && (
-        <View style={styles.requestsWrap}>
-          <Text style={styles.sectionLabel}>FRIEND REQUESTS</Text>
-          {pendingReceived.map(f => (
-            <View key={f.id} style={styles.requestRow}>
-              <View style={styles.avatar}>
-                <Text style={styles.avatarText}>{(f.friend.username ?? '?').charAt(0).toUpperCase()}</Text>
-              </View>
-              <Text style={styles.requestName}>{f.friend.username ?? 'Unknown'}</Text>
-              <View style={styles.requestActions}>
-                <TouchableOpacity style={styles.acceptBtn} onPress={() => respondToRequest(f.id, 'accepted')}>
-                  <Text style={styles.acceptText}>Accept</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.declineBtn} onPress={() => respondToRequest(f.id, 'declined')}>
-                  <Text style={styles.declineText}>Decline</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          ))}
-        </View>
-      )}
-
-      {challengesLoading ? (
-        <ActivityIndicator style={{ marginTop: 60 }} color={colors.terra} size="large" />
+      {loading && !refreshing ? (
+        <ActivityIndicator style={styles.loader} color={colors.terra} size="large" />
+      ) : hasNobody ? (
+        <FriendsEmpty onAdd={() => setSearchVisible(true)} />
       ) : (
         <SectionList
           sections={sections}
-          keyExtractor={item => item.id}
+          keyExtractor={item => item.key}
           stickySectionHeadersEnabled={false}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={colors.terra} />}
-          renderSectionHeader={({ section: { title, data } }) =>
-            data.length > 0 ? (
-              <Text style={styles.sectionLabel}>{title.toUpperCase()}</Text>
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={() => refresh()} tintColor={colors.terra} />
+          }
+          ListHeaderComponent={
+            acceptedFriends.length > 0 ? (
+              <FriendRail
+                friends={acceptedFriends}
+                awaitingIds={awaitingIds}
+                onSelect={setSelectedFriend}
+                onAdd={() => setSearchVisible(true)}
+              />
             ) : null
           }
-          renderItem={({ item, section }) => {
-            if (section.title === 'Friends') {
-              const f = item as unknown as FriendWithProfile;
-              return (
-                <TouchableOpacity style={styles.friendRow} onPress={() => setSelectedFriend(f)} activeOpacity={0.7}>
-                  <View style={styles.avatar}>
-                    <Text style={styles.avatarText}>{(f.friend.username ?? '?').charAt(0).toUpperCase()}</Text>
-                  </View>
-                  <Text style={styles.requestName}>{f.friend.username ?? 'Unknown'}</Text>
-                </TouchableOpacity>
-              );
-            }
-            if (section.title === 'Challenges') {
-              const c = item as ChallengeWithSender;
-              return <ChallengeCard challenge={c} onPress={() => setActiveChallenge(c)} />;
-            }
-            const c = item as ChallengeWithReceiver;
-            return (
-              <View style={styles.feedItem}>
-                <Text style={styles.feedText}>
-                  <Text style={styles.feedBold}>{c.receiver?.username ?? 'Friend'}</Text>
-                  {' learned '}
-                  <Text style={styles.feedBold}>{c.snapshot_word}</Text>
-                  {' · '}
-                  <Text style={styles.feedItalic}>{c.snapshot_translation}</Text>
-                </Text>
-              </View>
-            );
-          }}
-          ListEmptyComponent={
-            <View style={styles.empty}>
-              <OtterMascot size={80} variant="small" />
-              <Text style={styles.emptyTitle}>No activity yet</Text>
-              <Text style={styles.emptySubtitle}>
-                Add friends and challenge them with your best stickers!
-              </Text>
+          renderSectionHeader={({ section }) => (
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionLabel}>{section.title.toUpperCase()}</Text>
+              {section.count > 0 && (
+                <View style={styles.countPill}>
+                  <Text style={styles.countText}>{section.count}</Text>
+                </View>
+              )}
             </View>
-          }
+          )}
+          renderItem={({ item }) => renderRow(item)}
           contentContainerStyle={styles.listContent}
         />
       )}
 
-      <FriendSearch
-        visible={searchVisible}
-        onClose={() => setSearchVisible(false)}
-      />
+      <FriendSearch visible={searchVisible} onClose={() => setSearchVisible(false)} />
 
       <ChallengeScreen
         challenge={activeChallenge}
@@ -191,20 +233,6 @@ export default function FriendsScreen() {
         onClose={() => setSelectedFriend(null)}
         onRemoved={refetchFriends}
       />
-
-      <StickerPickerModal
-        visible={pickerOpen}
-        currentUserId={user?.id}
-        onSelect={handlePickStickerForChallenge}
-        onClose={() => setPickerOpen(false)}
-      />
-
-      <SendChallengeModal
-        sticker={challengeSticker}
-        friends={acceptedFriends}
-        onSend={handleSendChallenge}
-        onClose={() => setChallengeSticker(null)}
-      />
     </SafeAreaView>
   );
 }
@@ -217,116 +245,46 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.sm,
-    paddingBottom: spacing.md,
+    paddingBottom: spacing.sm,
   },
-  title: {
-    fontSize: 22,
-    fontFamily: fonts.cozy,
-    color: colors.inkDark,
-    letterSpacing: -0.5,
-  },
-  headerActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  sendChallengeBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    height: 38,
-    paddingHorizontal: spacing.md,
-    borderRadius: radii.full,
-    backgroundColor: colors.terra,
-    ...shadows.card,
-  },
-  sendChallengeBtnDisabled: { opacity: 0.4 },
-  sendChallengeText: { fontSize: 12, fontFamily: fonts.cozyMedium, color: colors.white },
+  headerText: { flex: 1, gap: 1 },
+  title: { fontSize: 24, fontFamily: fonts.cozy, color: colors.inkDark, letterSpacing: -0.5 },
+  subtitle: { fontSize: 12, color: colors.inkLight, fontWeight: '600' },
   addBtn: {
-    width: 38,
-    height: 38,
+    width: 40,
+    height: 40,
     borderRadius: radii.full,
     backgroundColor: colors.card,
     alignItems: 'center',
     justifyContent: 'center',
     ...shadows.card,
   },
-  requestsWrap: { paddingHorizontal: spacing.md, marginBottom: spacing.xs },
-  requestRow: {
+  loader: { marginTop: 60 },
+  sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.card,
-    borderRadius: radii.md,
-    padding: spacing.ms,
-    marginBottom: spacing.sm,
-    borderWidth: 1.5,
-    borderColor: colors.borderLight,
-    ...shadows.card,
-  },
-  avatar: {
-    width: 36,
-    height: 36,
-    borderRadius: radii.full,
-    backgroundColor: colors.terra,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: spacing.sm,
-  },
-  avatarText: { fontSize: 14, fontWeight: '800', color: colors.card },
-  requestName: { flex: 1, fontSize: 15, fontWeight: '700', color: colors.inkDark },
-  requestActions: { flexDirection: 'row', gap: spacing.sm },
-  friendRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.card,
-    borderRadius: radii.md,
-    padding: spacing.ms,
-    marginHorizontal: spacing.md,
-    marginBottom: spacing.sm,
-    borderWidth: 1.5,
-    borderColor: colors.borderLight,
-    ...shadows.card,
-  },
-  acceptBtn: {
-    backgroundColor: colors.sage,
-    borderRadius: radii.sm,
-    paddingHorizontal: spacing.ms,
-    paddingVertical: 6,
-  },
-  acceptText: { color: colors.card, fontWeight: '700', fontSize: 13 },
-  declineBtn: {
-    backgroundColor: colors.errorLight,
-    borderRadius: radii.sm,
-    paddingHorizontal: spacing.ms,
-    paddingVertical: 6,
-  },
-  declineText: { color: colors.error, fontWeight: '700', fontSize: 13 },
-  sectionLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: colors.inkFaint,
-    letterSpacing: 1.5,
+    gap: spacing.sm,
     paddingHorizontal: spacing.md,
     paddingTop: spacing.md,
     paddingBottom: spacing.sm,
   },
-  feedItem: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.ms,
-    backgroundColor: colors.card,
-    marginHorizontal: spacing.md,
-    marginBottom: spacing.sm,
-    borderRadius: radii.md,
-    borderWidth: 1.5,
-    borderColor: colors.borderLight,
-    ...shadows.card,
-  },
-  feedText: { fontSize: 14, color: colors.inkMid, lineHeight: 20 },
-  feedBold: { fontWeight: '700', color: colors.inkDark },
-  feedItalic: { fontStyle: 'italic' },
-  listContent: { paddingBottom: spacing.xxl },
-  empty: {
+  sectionLabel: { fontSize: 11, fontWeight: '800', color: colors.inkFaint, letterSpacing: 1.5 },
+  countPill: {
+    minWidth: 18,
+    height: 18,
+    borderRadius: radii.full,
+    backgroundColor: colors.sageDark,
     alignItems: 'center',
-    paddingTop: spacing.xxl + spacing.lg,
-    paddingHorizontal: spacing.xl,
-    gap: spacing.md,
+    justifyContent: 'center',
+    paddingHorizontal: 5,
   },
-  emptyTitle: { ...typography.h3, textAlign: 'center' },
-  emptySubtitle: { ...typography.body, color: colors.inkLight, textAlign: 'center' },
+  countText: { fontSize: 10, fontWeight: '800', color: colors.white },
+  resting: {
+    fontSize: 13,
+    color: colors.inkFaint,
+    paddingHorizontal: spacing.md,
+    paddingBottom: spacing.sm,
+    lineHeight: 18,
+  },
+  listContent: { paddingBottom: spacing.xxl },
 });

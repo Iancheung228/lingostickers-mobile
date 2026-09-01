@@ -10,6 +10,19 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// The model is asked for one of a fixed set, but it's a language model, so
+// it occasionally answers "Noun." or "a noun" or something off-list. The
+// study card renders this verbatim next to "MEANS", so anything unrecognised
+// becomes null and the card simply drops the qualifier rather than printing
+// a stray sentence fragment in small caps.
+const PARTS_OF_SPEECH = ['noun', 'verb', 'adjective', 'adverb', 'phrase'];
+
+function normalizePartOfSpeech(raw: unknown): string | null {
+  if (typeof raw !== 'string') return null;
+  const cleaned = raw.toLowerCase().replace(/[^a-z]/g, '');
+  return PARTS_OF_SPEECH.includes(cleaned) ? cleaned : null;
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -21,10 +34,33 @@ Deno.serve(async (req) => {
     // so a quota keyed on it would be bypassed with a random UUID.
     const userId = await requireUserId(req);
 
-    const { image, language, memoryImage, lassoPolygon: rawLassoPolygon } = await req.json();
+    const {
+      image,
+      language,
+      memoryImage,
+      lassoPolygon: rawLassoPolygon,
+      precutImagePath: rawPrecutImagePath,
+      contextImage,
+    } = await req.json();
     if (!image) {
       return new Response(
         JSON.stringify({ error: 'Missing image' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // The device already cut this one out (Apple Vision, on-device) and
+    // uploaded the finished PNG itself — see lib/cutout.ts. All that's left
+    // for us is vocabulary and the memory photo.
+    //
+    // The path is attacker-controlled, so it is checked, not trusted: it must
+    // live under this user's own storage folder, which is the same boundary
+    // the bucket's RLS policy enforces. Without this check a client could
+    // point its sticker row at another user's file.
+    const precutImagePath = validatePrecutPath(rawPrecutImagePath, userId);
+    if (rawPrecutImagePath && !precutImagePath) {
+      return new Response(
+        JSON.stringify({ error: 'Invalid image path' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -39,8 +75,14 @@ Deno.serve(async (req) => {
     const lang = resolveLanguage(language);
     const base64Data = image.includes(',') ? image.split(',')[1] : image;
     const imageBytes = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0));
-    const memoryBase64Data: string | undefined = memoryImage
-      ? (memoryImage.includes(',') ? memoryImage.split(',')[1] : memoryImage)
+    // Two different consumers want two different sizes of the wider scene.
+    // Storage wants it big enough to fill a phone screen as the hero
+    // background; Groq only needs enough to describe what's around the object,
+    // and every extra pixel is tokens against a free-tier budget that is what
+    // actually rate-limits this endpoint. The client sends both when it can.
+    const sceneForVision: string | undefined = contextImage ?? memoryImage;
+    const memoryBase64Data: string | undefined = sceneForVision
+      ? (sceneForVision.includes(',') ? sceneForVision.split(',')[1] : sceneForVision)
       : undefined;
     // The user's hand-drawn lasso, in the crop's own pixel coordinates — a
     // stronger signal than automatic background removal (see forceIncludeLasso).
@@ -51,15 +93,49 @@ Deno.serve(async (req) => {
         : null;
 
     // Run vocab identification, background removal, and the memory-photo
-    // upload in parallel
+    // upload in parallel. Background removal is skipped entirely when the
+    // device already did it — that's the whole point of the on-device path.
+    const groqStarted = Date.now();
     const [vocabResult, bgResult, memoryPhoto] = await Promise.all([
-      identifyWithGroq(base64Data, lang, memoryBase64Data),
-      removeBackground(imageBytes),
+      identifyWithGroq(base64Data, lang, memoryBase64Data)
+        .finally(() => console.log(`groq: ${Date.now() - groqStarted}ms`)),
+      precutImagePath
+        ? Promise.resolve({ data: null, status: 'device cutout (skipped)' })
+        : removeBackground(imageBytes),
       uploadMemoryPhoto(supabase, memoryImage, userId),
     ]);
     const { path: memoryPhotoPath, color: memoryPhotoColor } = memoryPhoto;
 
     console.log(`bg removal: ${bgResult.status}`);
+
+    // Device path: the sticker image already exists in storage, styled at full
+    // resolution by the device. Nothing here to decode, composite or encode —
+    // which also keeps this worker well clear of the 2s CPU budget that the
+    // pure-JS pixel pipeline below flirts with.
+    if (precutImagePath) {
+      return new Response(
+        JSON.stringify({
+          language: lang,
+          word: vocabResult.word,
+          translation: vocabResult.translation,
+          reading: vocabResult.reading,
+          sentence: vocabResult.sentence,
+          sentenceTranslation: vocabResult.sentence_translation,
+          sentenceInsight: vocabResult.sentence_insight ?? null,
+          partOfSpeech: normalizePartOfSpeech(vocabResult.part_of_speech),
+          category: vocabResult.category,
+          imagePath: precutImagePath,
+          memoryPhotoPath,
+          memoryPhotoColor,
+          bgIssue: null,
+          bgSource: 'device',
+          scansRemainingToday: quota.remaining,
+          _debug_bgStatus: bgResult.status,
+          _debug_groqMs: Date.now() - groqStarted,
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
     let finalImageBytes: Uint8Array;
     let finalMimeType: string;
@@ -111,15 +187,18 @@ Deno.serve(async (req) => {
         sentence: vocabResult.sentence,
         sentenceTranslation: vocabResult.sentence_translation,
         sentenceInsight: vocabResult.sentence_insight ?? null,
+        partOfSpeech: normalizePartOfSpeech(vocabResult.part_of_speech),
         category: vocabResult.category,
         imagePath,
         memoryPhotoPath,
         memoryPhotoColor,
         bgIssue,
+        bgSource: 'server',
         // Today's remaining allowance, for a "3 scans left" affordance in the
         // UI. Nothing reads it yet.
         scansRemainingToday: quota.remaining,
         _debug_bgStatus: bgResult.status,
+        _debug_groqMs: Date.now() - groqStarted,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
@@ -128,6 +207,24 @@ Deno.serve(async (req) => {
     return errorResponse(err, corsHeaders);
   }
 });
+
+// ---------------------------------------------------------------------------
+// Validate a device-supplied storage path.
+//
+// Returns the path when it is safely this user's own, null otherwise. The
+// checks are deliberately narrow rather than clever: it must sit directly
+// under `{userId}/`, contain no traversal segment, and be a PNG — which is the
+// only thing the on-device path ever produces.
+// ---------------------------------------------------------------------------
+function validatePrecutPath(raw: unknown, userId: string): string | null {
+  if (typeof raw !== 'string' || raw.length === 0 || raw.length > 200) return null;
+  const prefix = `${userId}/`;
+  if (!raw.startsWith(prefix)) return null;
+  const remainder = raw.slice(prefix.length);
+  if (remainder.includes('/') || remainder.includes('..')) return null;
+  if (!remainder.endsWith('.png')) return null;
+  return raw;
+}
 
 // ---------------------------------------------------------------------------
 // Memory photo — the full, uncropped scene the sticker was found in.
@@ -286,7 +383,15 @@ async function removeBackgroundReplicate(imageBytes: Uint8Array): Promise<{ data
       headers: {
         'Authorization': `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
-        'Prefer': 'wait=20',
+        // Fail fast rather than wait it out.
+        //
+        // This used to be wait=20, which was reasonable while the server was
+        // the only way to get a cutout — a slow answer beat none. Now that the
+        // device handles the common case, reaching here already means the scan
+        // is degraded, and a 20s stall followed by the remove.bg fallback put
+        // the worst case near 40 seconds. Better to give up early and let the
+        // fallback have its turn.
+        'Prefer': `wait=${Number(Deno.env.get('REPLICATE_WAIT_SECONDS') ?? '10')}`,
       },
       body: JSON.stringify({ version: versionId, input }),
     });
@@ -298,7 +403,7 @@ async function removeBackgroundReplicate(imageBytes: Uint8Array): Promise<{ data
 
     const prediction = await response.json();
     if (prediction.status !== 'succeeded') {
-      return { data: null, status: `replicate ${prediction.status}: ${prediction.error ?? 'did not complete within 20s'}` };
+      return { data: null, status: `replicate ${prediction.status}: ${prediction.error ?? 'did not complete in time'}` };
     }
 
     const outputUrl = Array.isArray(prediction.output) ? prediction.output[0] : prediction.output;

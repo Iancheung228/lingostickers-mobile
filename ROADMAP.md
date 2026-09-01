@@ -327,10 +327,25 @@ just swapping the `speak()` call for fetching/playing the recorded clip.
 
 ## Appendix — Background Removal Research & Future Work
 
-> Status (as of 2026-06): **Migrated to Replicate (`cjwbw/rembg`) as primary,
-> remove.bg as fallback.** This resolves the 50/month remove.bg cap (see "The
-> problem" below) at ~$0.004/image. This section is kept for the option
-> research/comparison and for the on-device (Option A) future direction.
+> Status (as of 2026-08): **Option A shipped on iOS** — Apple Vision runs the
+> cutout on-device (`modules/subject-cutout/`), and the Replicate/remove.bg
+> chain below is now the *fallback*, taken only when the device declines. See
+> `skills.md` §6 for why the model family mattered more than the model, and
+> `lib/cutout.ts` for the gate that decides when to hand off.
+>
+> The trigger this appendix set — "you're already adding a dev client for some
+> other native feature" — turned out to have been met for a while: the project
+> is pure CNG with `expo-dev-client` installed and EAS as the normal build
+> path, so the prebuild tax this was waiting on was already paid.
+>
+> Android still routes entirely to the server path. ML Kit's Subject
+> Segmentation *does* support per-subject masks (`enableMultipleSubjects`), so
+> the same design transfers when Android ships — the appendix's older claim
+> that it returns one merged mask was wrong.
+>
+> Earlier status (2026-06): migrated to Replicate (`cjwbw/rembg`) as primary,
+> remove.bg as fallback, resolving the 50/month remove.bg cap at ~$0.004/image.
+> This section is kept for the option research/comparison.
 
 ### Current state
 

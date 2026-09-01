@@ -15,7 +15,7 @@ import { TAB_BAR_HEIGHT, TAB_BAR_BOTTOM_MARGIN, TAB_BAR_WIDTH, TAB_BAR_ITEM_WIDT
 function TabIcon({ Icon, focused, badgeCount }: { Icon: LucideIcon; focused: boolean; badgeCount?: number }) {
   return (
     <View style={[styles.iconWrap, focused && styles.iconWrapActive]}>
-      <Icon size={20} color={focused ? colors.sageDark : colors.inkMid} />
+      <Icon size={20} color={focused ? colors.blushDeep : colors.white} strokeWidth={focused ? 2.25 : 2} />
       {!!badgeCount && <Badge count={badgeCount} />}
     </View>
   );
@@ -24,23 +24,28 @@ function TabIcon({ Icon, focused, badgeCount }: { Icon: LucideIcon; focused: boo
 function Badge({ count }: { count: number }) {
   if (count === 0) return null;
   return (
-    <View style={styles.badgeDot}>
+    <View
+      style={styles.badgeDot}
+      accessibilityLabel={`${count} waiting on you`}
+    >
       <Text style={styles.badgeText}>{count > 9 ? '9+' : String(count)}</Text>
     </View>
   );
 }
 
 // Scan is the one action that actually produces stickers — everything else
-// in this bar is just a way to browse what scanning made. Its own solid
-// color makes it read as the bar's one deliberate call to action rather
+// in this bar is just a way to browse what scanning made. Its own deeper
+// rose makes it read as the bar's one deliberate call to action rather
 // than a fifth peer of Collection/Calendar/Wall/Friends, but it sits
-// in-line with the rest of the row instead of floating above it.
+// in-line with the rest of the row instead of floating above it: the tab
+// bar clips its own bounds, so a button that pokes out the top would be
+// cut off rather than raised.
 // Intentionally the same regardless of `focused` — a CTA, not a destination
 // you "arrive at" the way the other four are.
 function ScanTabIcon() {
   return (
     <View style={styles.scanWrap}>
-      <Camera size={22} color={colors.white} strokeWidth={2.25} />
+      <Camera size={23} color={colors.white} strokeWidth={2.25} />
     </View>
   );
 }
@@ -82,7 +87,7 @@ export default function TabLayout() {
           height: TAB_BAR_HEIGHT,
           borderRadius: radii.full,
           borderTopWidth: 0,
-          backgroundColor: colors.card,
+          backgroundColor: colors.blush,
           ...shadows.tab,
         },
         tabBarItemStyle: {
@@ -106,6 +111,7 @@ export default function TabLayout() {
         name="collection"
         options={{
           title: 'Collection',
+          tabBarAccessibilityLabel: 'Collection',
           tabBarIcon: ({ focused }) => <TabIcon Icon={BookOpen} focused={focused} />,
         }}
       />
@@ -113,6 +119,7 @@ export default function TabLayout() {
         name="calendar"
         options={{
           title: 'Calendar',
+          tabBarAccessibilityLabel: 'Calendar',
           tabBarIcon: ({ focused }) => <TabIcon Icon={Calendar} focused={focused} />,
         }}
       />
@@ -120,6 +127,7 @@ export default function TabLayout() {
         name="scan"
         options={{
           title: 'Scan',
+          tabBarAccessibilityLabel: 'Scan a new sticker',
           tabBarIcon: () => <ScanTabIcon />,
           tabBarItemStyle: { width: TAB_BAR_SCAN_ITEM_WIDTH, height: TAB_BAR_HEIGHT },
         }}
@@ -127,7 +135,8 @@ export default function TabLayout() {
       <Tabs.Screen
         name="wall"
         options={{
-          title: 'Wall',
+          title: 'Boards',
+          tabBarAccessibilityLabel: 'Boards',
           tabBarIcon: ({ focused }) => <TabIcon Icon={StickerIcon} focused={focused} />,
         }}
       />
@@ -135,6 +144,7 @@ export default function TabLayout() {
         name="friends"
         options={{
           title: 'Friends',
+          tabBarAccessibilityLabel: 'Friends',
           tabBarIcon: ({ focused }) => (
             <TabIcon Icon={Users} focused={focused} badgeCount={pendingCount + pendingRequestCount} />
           ),
@@ -146,24 +156,26 @@ export default function TabLayout() {
 
 const styles = StyleSheet.create({
   iconWrap: {
-    width: 40,
-    height: 40,
+    width: 42,
+    height: 42,
     borderRadius: radii.full,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  // A plain white disc, not a tinted one — on a rose bar the only reading
+  // that stays unambiguous at a glance is "the lit one is the pale one".
   iconWrapActive: {
-    backgroundColor: colors.sageLight,
+    backgroundColor: colors.white,
   },
   scanWrap: {
-    width: 44,
-    height: 44,
+    width: 50,
+    height: 50,
     borderRadius: radii.full,
-    backgroundColor: colors.rust,
+    backgroundColor: colors.blushDeep,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: colors.rust,
-    shadowOpacity: 0.3,
+    shadowColor: colors.blushDeep,
+    shadowOpacity: 0.35,
     shadowRadius: 6,
     shadowOffset: { width: 0, height: 3 },
     elevation: 4,
@@ -180,7 +192,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 3,
     borderWidth: 1.5,
-    borderColor: colors.card,
+    borderColor: colors.blush,
   },
   badgeText: { color: colors.card, fontSize: 9, fontWeight: '800' },
 });

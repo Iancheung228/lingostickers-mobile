@@ -223,3 +223,76 @@ notifications-related — these are exactly the modules that have shifted
 behavior across recent SDKs (e.g. `expo-notifications` remote push no longer
 works in Expo Go as of SDK 53+, part of why this project is on EAS dev/preview
 builds rather than Expo Go in the first place).
+
+---
+
+## 6. Cutout quality: the model must be *told* what the user meant
+
+**Symptom:** the cutout keeps the wrong object on a cluttered table, or clips a
+multi-coloured subject in half, and no amount of tuning fixes it — you end up
+adding another pixel-space override (`forceIncludeLasso`, `CORE_SHRINK_RATIO`)
+and moving its threshold around forever.
+
+**Root cause:** `cjwbw/rembg` is U²-Net, a **salient object detector**. Its only
+question is "what is the most eye-catching thing in this photo?" There is no
+input for "the thing the user circled". But this app's question is always
+prompted — the user drew a box or traced a lasso around one specific object.
+On a desk with a mug, a notebook and a plant, "most salient" and "what the user
+circled" are frequently different objects, and the model is answering its own
+question correctly. Every awkward thing downstream follows from that mismatch:
+the lasso override exists to repair the answer afterwards, alpha matting was
+switched on partly to widen the band that override acts on, and the 800px cap
+exists because the photo is base64'd through a JSON body.
+
+**Fix pattern:** use a **promptable** model, where the selection is an input
+rather than a correction. Apple Vision's
+`VNGenerateForegroundInstanceMaskRequest` returns a *set of instances*, and you
+choose which ones to keep — so the lasso scores the candidates instead of
+overriding pixels. See `modules/subject-cutout/`. Two consequences worth
+remembering:
+
+- **Segment with context around the selection, not flush to it**
+  (`SEGMENT_CONTEXT_PAD_RATIO`). Vision looks for "noticeable objects", and an
+  object filling its whole frame has nothing to be noticeable *against*. Worse,
+  the containment score is meaningless without padding: crop flush to the box
+  and the tabletop is truncated to exactly the box too, scoring a perfect 1.0
+  for having grabbed the wrong thing.
+- **Keep the gate's thresholds in TypeScript** (`lib/cutout.ts`), not in Swift.
+  They are the part most likely to need tuning against real scans, and a Swift
+  constant costs an EAS build to change where a TS one costs a hot reload.
+
+**Don't** reach for "swap `REPLICATE_MODEL` for a better background remover" as
+the fix. A better salient-object model is still answering the wrong question,
+and it fails on the same photos for the same reason — which also makes it a bad
+*fallback* for the on-device path, since a fallback should fail independently
+of the thing it backs up.
+
+---
+
+## 7. Full-resolution image work in Swift is a memory budget, not a speed one
+
+**Symptom:** an image-processing addition works fine in isolation and then the
+app is killed by the OS mid-scan on a real device — often only on older phones,
+often only when the camera has been open a while.
+
+**Root cause:** planar `Float` buffers are 4 bytes per pixel *per plane*, and
+the textbook form of most filters holds many planes live at once. A guided
+filter written straight from the paper keeps around ten full-resolution
+intermediates; at 1536×2048 that is ~176MB of transient allocation on top of
+the image itself, in an app that is also holding a camera session.
+
+**Fix pattern:** subsample the *coefficients*, not the output. Both passes in
+`MatteRefiner` compute their expensive intermediates at 1/4 scale and upsample
+only the final smooth fields (the guided filter's `a`/`b`, the background
+estimate) before applying them at full resolution — the fast guided filter (He
+& Sun, 2015). Quality barely moves because those fields are smooth by
+construction; memory drops by 16×. Do the arithmetic before picking a
+resolution: `plane_MB = width * height * 4 / 1e6`, times the number of live
+intermediates.
+
+**Also:** vImage has no `vImageBoxConvolve_PlanarF` — box convolution is 8-bit
+only. The float path, `vImageConvolve_PlanarF`, takes an explicit kernel and is
+O(k²) per pixel. A hand-rolled separable sliding-window blur is O(1) per pixel
+and keeps the matte in float; quantising to 8 bits to reach vImage's fast path
+throws away exactly the sub-level precision in the transition band that the
+refinement exists to recover.

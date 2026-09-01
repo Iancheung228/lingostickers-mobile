@@ -6,7 +6,7 @@ import Animated, {
   withDelay, withSequence, withSpring, withTiming,
 } from 'react-native-reanimated';
 import Svg, { Path } from 'react-native-svg';
-import { Check } from 'lucide-react-native';
+import { Check, Scissors } from 'lucide-react-native';
 import { Point, Rect, clampPointToRect } from '@/lib/cropGeometry';
 import { colors, shadows } from '@/constants/theme';
 
@@ -23,6 +23,29 @@ interface LassoOverlayProps {
 const MIN_POINT_DISTANCE = 4;
 const MIN_LOOP_POINTS = 6;
 const BADGE_SIZE = 30;
+const SCISSORS_SIZE = 22;
+
+// How many points back to look when working out which way the cut is heading.
+// Consecutive points are only MIN_POINT_DISTANCE apart, so the angle between
+// any two neighbours is mostly finger jitter; a few points of lookback gives a
+// heading that turns with the stroke instead of twitching along it.
+const HEADING_LOOKBACK = 4;
+
+// Lucide's scissors sit with their blades toward the upper right, so this much
+// is subtracted to bring them level before the stroke's own heading is applied.
+const SCISSORS_REST_ANGLE = -45;
+
+// Direction of travel at the tip, in degrees, or null while there is too
+// little of a stroke to have one.
+function headingAt(points: Point[]): number | null {
+  if (points.length < 2) return null;
+  const tip = points[points.length - 1];
+  const behind = points[Math.max(0, points.length - 1 - HEADING_LOOKBACK)];
+  const dx = tip.x - behind.x;
+  const dy = tip.y - behind.y;
+  if (Math.hypot(dx, dy) < 0.5) return null;
+  return (Math.atan2(dy, dx) * 180) / Math.PI;
+}
 
 const AnimatedPath = Animated.createAnimatedComponent(Path);
 
@@ -131,6 +154,28 @@ export default function LassoOverlay({ bounds, onComplete }: LassoOverlayProps) 
         </Svg>
       </GestureDetector>
 
+      {/* Scissors riding the tip of the cut.
+          Only while drawing — once the loop settles the checkmark badge takes
+          over, and two markers at once would muddle "still cutting" with
+          "done". */}
+      {!settled && points.length >= 2 && (
+        <View
+          pointerEvents="none"
+          style={[
+            styles.scissors,
+            {
+              left: points[points.length - 1].x - SCISSORS_SIZE / 2,
+              top: points[points.length - 1].y - SCISSORS_SIZE / 2,
+              transform: [
+                { rotate: `${(headingAt(points) ?? 0) - SCISSORS_REST_ANGLE}deg` },
+              ],
+            },
+          ]}
+        >
+          <Scissors size={SCISSORS_SIZE} color={colors.inkDark} strokeWidth={2.25} />
+        </View>
+      )}
+
       {badgeCenter && (
         <Animated.View
           pointerEvents="none"
@@ -148,6 +193,19 @@ export default function LassoOverlay({ bounds, onComplete }: LassoOverlayProps) 
 }
 
 const styles = StyleSheet.create({
+  scissors: {
+    position: 'absolute',
+    width: SCISSORS_SIZE,
+    height: SCISSORS_SIZE,
+    alignItems: 'center',
+    justifyContent: 'center',
+    // A soft halo so the blades stay legible over a dark or busy photo without
+    // needing a solid chip behind them, which would hide the line being cut.
+    shadowColor: colors.card,
+    shadowOpacity: 0.9,
+    shadowRadius: 3,
+    shadowOffset: { width: 0, height: 0 },
+  },
   badge: {
     position: 'absolute',
     width: BADGE_SIZE,

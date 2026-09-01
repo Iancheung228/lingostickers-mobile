@@ -7,7 +7,7 @@ import { supabase } from '@/lib/supabase';
 import { Sticker } from '@/lib/types';
 import { useSignedUrls } from '@/hooks/useSignedUrls';
 import StickerCard from '@/components/StickerCard';
-import StickerDetailView from '@/components/StickerDetailView';
+import StudyCard from '@/components/StudyCard';
 import { colors, shadows, radii, spacing, fonts } from '@/constants/theme';
 
 const DATE_FORMAT = new Intl.DateTimeFormat('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
@@ -17,6 +17,7 @@ export default function DayScreen() {
   const { user } = useAuth();
   const [stickers, setStickers] = useState<Sticker[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [selectedSticker, setSelectedSticker] = useState<Sticker | null>(null);
 
   const fetchStickers = useCallback(async () => {
@@ -33,7 +34,12 @@ export default function DayScreen() {
       .gte('discovered_at', dayStart.toISOString())
       .lt('discovered_at', dayEnd.toISOString())
       .order('discovered_at', { ascending: false });
-    if (!error && data) setStickers(data as Sticker[]);
+    if (error) {
+      setLoadError(true);
+    } else if (data) {
+      setLoadError(false);
+      setStickers(data as Sticker[]);
+    }
     setLoading(false);
   }, [user, date]);
 
@@ -59,17 +65,41 @@ export default function DayScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} hitSlop={8}>
+        <TouchableOpacity
+          onPress={() => router.back()}
+          style={styles.backBtn}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
+        >
           <ArrowLeft size={18} color={colors.inkMid} />
         </TouchableOpacity>
         <View>
           <Text style={styles.title}>{formattedDate}</Text>
-          <Text style={styles.subtitle}>{stickers.length} captured</Text>
+          <Text style={styles.subtitle}>
+            {loadError ? "couldn't load this day" : `${stickers.length} captured`}
+          </Text>
         </View>
       </View>
 
       {loading ? (
         <ActivityIndicator style={styles.loader} color={colors.terra} size="large" />
+      ) : loadError ? (
+        <View style={styles.errorWrap}>
+          <Text style={styles.errorTitle}>Couldn&apos;t load this day</Text>
+          <Text style={styles.errorBody}>
+            Nothing has been lost. Check your connection and try again.
+          </Text>
+          <TouchableOpacity
+            style={styles.retryBtn}
+            onPress={fetchStickers}
+            activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel="Try loading this day again"
+          >
+            <Text style={styles.retryText}>Try Again</Text>
+          </TouchableOpacity>
+        </View>
       ) : (
         <FlatList
           data={stickers}
@@ -90,10 +120,10 @@ export default function DayScreen() {
         />
       )}
 
-      <StickerDetailView
+      <StudyCard
         sticker={selectedSticker}
         onClose={() => setSelectedSticker(null)}
-        onDelete={() => { setSelectedSticker(null); fetchStickers(); }}
+        onDeleted={() => { setSelectedSticker(null); fetchStickers(); }}
         onUpdate={patchSticker}
       />
     </SafeAreaView>
@@ -122,6 +152,24 @@ const styles = StyleSheet.create({
   title: { fontSize: 15, fontFamily: fonts.cozy, color: colors.inkDark },
   subtitle: { fontSize: 10, color: colors.inkFaint, fontWeight: '600', marginTop: 1 },
   loader: { flex: 1 },
+  errorWrap: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.xl,
+    gap: spacing.ms,
+  },
+  errorTitle: { fontSize: 17, fontFamily: fonts.cozy, color: colors.inkDark, textAlign: 'center' },
+  errorBody: { fontSize: 14, color: colors.inkLight, textAlign: 'center', lineHeight: 20 },
+  retryBtn: {
+    marginTop: spacing.xs,
+    backgroundColor: colors.terra,
+    borderRadius: radii.lg,
+    paddingVertical: 12,
+    paddingHorizontal: spacing.lg,
+    ...shadows.button,
+  },
+  retryText: { color: colors.white, fontSize: 14, fontWeight: '700', letterSpacing: 0.3 },
   grid: { paddingHorizontal: spacing.md, paddingBottom: spacing.xxl, paddingTop: spacing.sm },
   row: { gap: spacing.sm, marginBottom: spacing.sm },
   cardWrapper: { flex: 1 },

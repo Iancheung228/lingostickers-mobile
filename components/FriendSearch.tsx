@@ -2,7 +2,10 @@ import { useState, useCallback } from 'react';
 import { Modal, View, Text, TextInput, FlatList, TouchableOpacity, StyleSheet, SafeAreaView, ActivityIndicator } from 'react-native';
 import { X, UserPlus, Check } from 'lucide-react-native';
 import { useFriends } from '@/hooks/useFriends';
-import { colors, radii, spacing, fonts } from '@/constants/theme';
+import Avatar from '@/components/Avatar';
+import { colors } from '@/constants/theme';
+import { useAuth } from '@/hooks/useAuth';
+import { enablePushNotifications } from '@/lib/notifications';
 
 interface FriendSearchProps {
   visible: boolean;
@@ -10,6 +13,7 @@ interface FriendSearchProps {
 }
 
 export default function FriendSearch({ visible, onClose }: FriendSearchProps) {
+  const { user } = useAuth();
   const { searchResults, searching, searchUsers, sendFriendRequest, removeFriend, friends } = useFriends();
   const [query, setQuery] = useState('');
   const [sentIds, setSentIds] = useState<Set<string>>(new Set());
@@ -22,13 +26,17 @@ export default function FriendSearch({ visible, onClose }: FriendSearchProps) {
   const handleAdd = useCallback(async (userId: string) => {
     await sendFriendRequest(userId);
     setSentIds(prev => new Set([...prev, userId]));
-  }, [sendFriendRequest]);
+    // The first moment the user is actually waiting on someone else — which
+    // is the only honest reason to ask for notifications. Deliberately after
+    // the request is sent, so the ask never blocks the thing they came for.
+    if (user?.id) enablePushNotifications(user.id);
+  }, [sendFriendRequest, user?.id]);
 
   const pendingReceived = friends.filter(f => f.status === 'pending' && !f.is_requester);
   const pendingSent = friends.filter(f => f.status === 'pending' && f.is_requester);
 
   return (
-    <Modal visible={visible} animationType="slide" presentationStyle="fullScreen">
+    <Modal visible={visible} animationType="slide" presentationStyle="fullScreen" onRequestClose={onClose}>
       <SafeAreaView style={styles.container}>
         <View style={styles.header}>
           <Text style={styles.title}>Add Friend</Text>
@@ -66,10 +74,8 @@ export default function FriendSearch({ visible, onClose }: FriendSearchProps) {
               const sent = sentIds.has(item.id);
               return (
                 <View style={styles.resultRow}>
-                  <View style={styles.avatar}>
-                    <Text style={styles.avatarText}>
-                      {(item.username ?? '?').charAt(0).toUpperCase()}
-                    </Text>
+                  <View style={styles.avatarSlot}>
+                    <Avatar name={item.username} avatarPath={item.avatar_path} size={38} />
                   </View>
                   <Text style={styles.username}>{item.username ?? 'Unknown'}</Text>
                   <TouchableOpacity
@@ -94,10 +100,8 @@ export default function FriendSearch({ visible, onClose }: FriendSearchProps) {
             <Text style={styles.sectionLabel}>FRIEND REQUESTS</Text>
             {pendingReceived.map(f => (
               <View key={f.id} style={styles.resultRow}>
-                <View style={styles.avatar}>
-                  <Text style={styles.avatarText}>
-                    {(f.friend.username ?? '?').charAt(0).toUpperCase()}
-                  </Text>
+                <View style={styles.avatarSlot}>
+                  <Avatar name={f.friend.username} avatarPath={f.friend.avatar_path} size={38} />
                 </View>
                 <Text style={styles.username}>{f.friend.username ?? 'Unknown'}</Text>
                 <Text style={styles.pendingBadge}>Incoming</Text>
@@ -112,10 +116,8 @@ export default function FriendSearch({ visible, onClose }: FriendSearchProps) {
             <Text style={styles.sectionLabel}>SENT REQUESTS</Text>
             {pendingSent.map(f => (
               <View key={f.id} style={styles.resultRow}>
-                <View style={styles.avatar}>
-                  <Text style={styles.avatarText}>
-                    {(f.friend.username ?? '?').charAt(0).toUpperCase()}
-                  </Text>
+                <View style={styles.avatarSlot}>
+                  <Avatar name={f.friend.username} avatarPath={f.friend.avatar_path} size={38} />
                 </View>
                 <Text style={styles.username}>{f.friend.username ?? 'Unknown'}</Text>
                 <TouchableOpacity style={styles.cancelButton} onPress={() => removeFriend(f.id)}>
@@ -183,16 +185,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.borderLight,
   },
-  avatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: colors.terra,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-  },
-  avatarText: { fontSize: 15, fontWeight: '800', color: colors.white },
+  avatarSlot: { marginRight: 12 },
   username: { flex: 1, fontSize: 15, fontWeight: '600', color: colors.inkDark },
   addButton: {
     flexDirection: 'row',

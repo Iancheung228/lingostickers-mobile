@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Modal, View, Text, Image, TouchableOpacity, TextInput, StyleSheet, SafeAreaView, ActivityIndicator, Alert, KeyboardAvoidingView, Platform } from 'react-native';
+import { Modal, View, Text, Image, TouchableOpacity, TextInput, StyleSheet, SafeAreaView, ScrollView, ActivityIndicator, Alert, KeyboardAvoidingView, Platform, useWindowDimensions } from 'react-native';
 import { X, Bookmark, Pencil, Volume2, Lightbulb, Info, RotateCcw } from 'lucide-react-native';
 import { StickerDraft } from '@/lib/types';
 import { supabase } from '@/lib/supabase';
@@ -27,12 +27,25 @@ export default function DiscoveryReveal({ draft, onAdd, onDiscard, onRetryExtrac
   const [editingSentence, setEditingSentence] = useState(false);
   const [sentenceInput, setSentenceInput] = useState('');
 
+  // The sticker was a flat 240×240, which is most of a short phone's body
+  // before a single word has been laid out. Capped against both axes so it
+  // gives way to the text rather than pushing it off screen.
+  const { width: winW, height: winH } = useWindowDimensions();
+  const stickerSize = Math.min(240, winW * 0.58, winH * 0.27);
+
   useEffect(() => {
+    // Dry run: show the cutout the device just made, straight off local disk.
+    // It was never uploaded, so there is nothing to sign — this is the whole
+    // point of being able to evaluate the new pipeline without a deploy.
+    if (draft?.localCutoutUri) {
+      setImageUrl(draft.localCutoutUri);
+      return;
+    }
     if (!draft?.imagePath) return;
     supabase.storage.from('sticker-images')
       .createSignedUrl(draft.imagePath, 3600)
       .then(({ data }) => { if (data) setImageUrl(data.signedUrl); });
-  }, [draft?.imagePath]);
+  }, [draft?.imagePath, draft?.localCutoutUri]);
 
   // A fresh discovery — drop any leftover edit state from the previous one.
   useEffect(() => {
@@ -83,9 +96,12 @@ export default function DiscoveryReveal({ draft, onAdd, onDiscard, onRetryExtrac
           </TouchableOpacity>
         </View>
 
-        <View style={styles.body}>
-          <Text style={styles.discoveredLabel}>NEW DISCOVERY FOUND</Text>
-
+        <ScrollView
+          style={styles.bodyScroll}
+          contentContainerStyle={styles.body}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
           {/* Informational, not an error — shown inline rather than as a
               blocking Alert, which used to fire right as the ghost-cutout
               reveal animation started and interrupt it. */}
@@ -96,7 +112,7 @@ export default function DiscoveryReveal({ draft, onAdd, onDiscard, onRetryExtrac
             </View>
           )}
 
-          <View style={styles.stickerFrame}>
+          <View style={[styles.stickerFrame, { width: stickerSize, height: stickerSize }]}>
             {imageUrl ? (
               <Image source={{ uri: imageUrl }} style={styles.image} resizeMode="contain" />
             ) : (
@@ -105,7 +121,14 @@ export default function DiscoveryReveal({ draft, onAdd, onDiscard, onRetryExtrac
           </View>
 
           <View style={styles.wordRow}>
-            <Text style={[styles.word, retranslating && styles.fadedWhileTranslating]}>{draft.word}</Text>
+            <Text
+              style={[styles.word, retranslating && styles.fadedWhileTranslating]}
+              numberOfLines={2}
+              adjustsFontSizeToFit
+              minimumFontScale={0.55}
+            >
+              {draft.word}
+            </Text>
             <TouchableOpacity
               onPress={() => speak(draft.word, draft.language)}
               style={styles.speakButton}
@@ -160,7 +183,7 @@ export default function DiscoveryReveal({ draft, onAdd, onDiscard, onRetryExtrac
               <Text style={styles.insightText}>{draft.sentenceInsight}</Text>
             </View>
           )}
-        </View>
+        </ScrollView>
 
         <View style={styles.actions}>
           <TouchableOpacity style={styles.addButton} onPress={onAdd} disabled={saving}>
@@ -174,10 +197,12 @@ export default function DiscoveryReveal({ draft, onAdd, onDiscard, onRetryExtrac
             )}
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.retryButton} onPress={onRetryExtraction} disabled={saving}>
-            <RotateCcw size={13} color={colors.terra} />
-            <Text style={styles.retryButtonText}>Retry Extraction</Text>
-          </TouchableOpacity>
+          <View style={styles.secondaryActions}>
+            <TouchableOpacity style={styles.retryButton} onPress={onRetryExtraction} disabled={saving}>
+              <RotateCcw size={13} color={colors.terra} />
+              <Text style={styles.retryButtonText}>Retry Extraction</Text>
+            </TouchableOpacity>
+          </View>
 
           <TouchableOpacity style={styles.discardButton} onPress={onDiscard} disabled={saving}>
             <Text style={styles.discardButtonText}>Discard</Text>
@@ -241,13 +266,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  body: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 },
-  discoveredLabel: {
-    fontSize: 10,
-    letterSpacing: 3,
-    color: colors.inkFaint,
-    fontWeight: '700',
-    marginBottom: 24,
+  bodyScroll: { flex: 1 },
+  // flexGrow + centered, on the *content container*: a short discovery still
+  // sits centred exactly as before, while a long one (a word that wraps, a
+  // three-line sentence, an insight) grows the content past the viewport and
+  // scrolls. As a plain flex:1 View this centred and then overflowed out of
+  // both ends at once — RN doesn't clip — so the label collided with the
+  // header while the sentence disappeared under the Add button.
+  body: {
+    flexGrow: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 32,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.lg,
   },
   bgIssueBanner: {
     flexDirection: 'row',
@@ -257,26 +289,25 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingVertical: 8,
     paddingHorizontal: 12,
-    marginTop: -12,
     marginBottom: 20,
     maxWidth: 300,
   },
   bgIssueText: { flex: 1, fontSize: 12, color: colors.sageDark, lineHeight: 16, fontWeight: '600' },
-  stickerFrame: {
-    width: 240,
-    height: 240,
-    marginBottom: 28,
-  },
+  stickerFrame: { marginBottom: 24 },
   image: { width: '100%', height: '100%' },
   wordRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    alignSelf: 'stretch',
     gap: 8,
     marginBottom: 6,
   },
   speakButton: { padding: 4 },
-  word: { fontSize: 40, fontWeight: '800', color: colors.inkDark, textAlign: 'center' },
+  // flexShrink lets a long word give ground to the speaker button instead of
+  // shoving it to the screen edge; adjustsFontSizeToFit (see the Text) then
+  // scales it down rather than wrapping the layout apart.
+  word: { flexShrink: 1, fontSize: 40, fontWeight: '800', color: colors.inkDark, textAlign: 'center' },
   reading: { fontSize: 18, color: colors.inkMid, fontStyle: 'italic', marginBottom: 10, textAlign: 'center' },
   fadedWhileTranslating: { opacity: 0.35 },
   translationRow: {
@@ -322,7 +353,17 @@ const styles = StyleSheet.create({
     maxWidth: 280,
   },
   insightText: { flex: 1, fontSize: 12, color: colors.sageDark, lineHeight: 16 },
-  actions: { paddingHorizontal: 32, paddingBottom: 32, gap: 12 },
+  actions: {
+    paddingHorizontal: 32,
+    paddingTop: spacing.ms,
+    paddingBottom: spacing.lg,
+    gap: 12,
+    // Opaque and bordered so the scrolling content above reads as passing
+    // behind a footer rather than bleeding into the buttons.
+    backgroundColor: colors.sky,
+    borderTopWidth: 1,
+    borderTopColor: colors.borderLight,
+  },
   floatingEditWrap: {
     position: 'absolute',
     left: 0,
@@ -365,6 +406,12 @@ const styles = StyleSheet.create({
     elevation: 6,
   },
   addButtonText: { color: colors.white, fontSize: 16, fontWeight: '800', letterSpacing: 1 },
+  secondaryActions: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: spacing.lg,
+  },
   retryButton: {
     flexDirection: 'row',
     alignItems: 'center',

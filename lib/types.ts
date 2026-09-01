@@ -7,6 +7,10 @@ export type WallBackgroundDim = 'none' | 'light' | 'medium' | 'dark';
 export interface Profile {
   id: string;
   username: string | null;
+  // Storage path of the profile picture in the public `avatars` bucket —
+  // see 030_profile_avatar.sql. Null for anyone who skipped it at sign-up;
+  // Avatar falls back to a tinted initial.
+  avatar_path: string | null;
   target_language: Language;
   wall_display_style: WallDisplayStyle;
   cutout_border_style: CutoutBorderStyle;
@@ -15,6 +19,10 @@ export interface Profile {
   // preview doesn't force a matching change onto any board, or vice versa.
   home_background_path: string | null;
   home_background_dim: WallBackgroundDim;
+  // False until the user first arranges the home mini wall by hand. While
+  // false the panel draws the auto fan of newest + favorites; once true it
+  // draws home_stickers, even when that's empty — see 031_home_wall.sql.
+  home_wall_arranged: boolean;
   created_at: string;
 }
 
@@ -33,6 +41,10 @@ export interface Sticker {
   // bonus word it introduces — see supabase/functions/_shared/vocab.ts.
   // Null for stickers created before this existed.
   sentence_insight: string | null;
+  // "noun", "verb", … — the qualifier on the study card's MEANS row. Null
+  // for stickers created before 028_study_card_review_state.sql, which
+  // render the row without it.
+  part_of_speech: string | null;
   category: Category;
   image_path: string;
   memory_photo_path: string | null;
@@ -58,6 +70,35 @@ export interface Sticker {
   source: 'scan' | 'challenge';
   is_favorite: boolean;
   notes: string | null;
+  // How many times this card has been studied to the end (front flipped to
+  // back), and when that last happened. Together they drive the review
+  // schedule in lib/review.ts — see 028_study_card_review_state.sql.
+  // last_reviewed_at is null until the first review; review_count is 0.
+  review_count: number;
+  last_reviewed_at: string | null;
+  // SM-2 state — see 029_sm2_scheduler.sql and lib/review.ts.
+  // interval_days is 0 for a card that has never been studied.
+  ease_factor: number;
+  interval_days: number;
+  lapses: number;
+}
+
+/// The region of a source photo that's actually on screen. x/y/w/h are
+/// fractions (0-1) of the source, not pixels — see
+/// 032_board_background_crop.sql for why.
+export interface CropRect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+/// A CropRect plus the pixel size of the stored source it refers to, which is
+/// what lets the editor reopen on that source without measuring the file
+/// first. This is the shape persisted in boards.background_crop.
+export interface BackgroundCrop extends CropRect {
+  sw: number;
+  sh: number;
 }
 
 export interface Board {
@@ -67,6 +108,11 @@ export interface Board {
   // Each board has its own independent cover photo — see
   // 025_per_board_background.sql.
   background_path: string | null;
+  // Which part of the *uncropped* source photo background_path was cut from,
+  // so the framing stays editable instead of being baked in at upload time.
+  // Null for backgrounds uploaded before 032_board_background_crop.sql —
+  // those have no stored source, so they can be replaced but not repositioned.
+  background_crop: BackgroundCrop | null;
   // Tint strength as a percent (0-70), via a continuous slider — see
   // 026_board_background_dim_percent.sql. Unlike home_background_dim above,
   // this is NOT the fixed none/light/medium/dark enum.
@@ -87,6 +133,23 @@ export interface BoardStickerWithSticker extends BoardSticker {
   sticker: Sticker;
 }
 
+// One sticker pinned to the home screen's mini wall. Unlike BoardSticker
+// above, x/y are NORMALIZED fractions of the canvas (0-1), not pixels —
+// the same arrangement is drawn at two different sizes. lib/homeWall.ts
+// owns the conversion.
+export interface HomeSticker {
+  user_id: string;
+  sticker_id: string;
+  x: number;
+  y: number;
+  rotation: number;
+  added_at: string;
+}
+
+export interface HomeStickerWithSticker extends HomeSticker {
+  sticker: Sticker;
+}
+
 export type FriendshipStatus = 'pending' | 'accepted' | 'declined';
 
 export interface Friendship {
@@ -98,8 +161,13 @@ export interface Friendship {
   updated_at: string;
 }
 
+// The public face of a person: everything needed to render them in a list,
+// and nothing else. Every screen that shows someone other than the
+// signed-in user reads exactly these three columns.
+export type PersonSummary = Pick<Profile, 'id' | 'username' | 'avatar_path'>;
+
 export interface FriendWithProfile extends Friendship {
-  friend: Pick<Profile, 'id' | 'username'>;
+  friend: PersonSummary;
   is_requester: boolean;
 }
 
@@ -127,11 +195,11 @@ export interface StickerChallenge {
 }
 
 export interface ChallengeWithSender extends StickerChallenge {
-  sender: Pick<Profile, 'id' | 'username'>;
+  sender: PersonSummary;
 }
 
 export interface ChallengeWithReceiver extends StickerChallenge {
-  receiver: Pick<Profile, 'id' | 'username'>;
+  receiver: PersonSummary;
 }
 
 export type SubmitAnswerResult =
@@ -148,11 +216,20 @@ export interface StickerDraft {
   sentence: string;
   sentenceTranslation: string;
   sentenceInsight: string | null;
+  partOfSpeech: string | null;
   category: Category;
   imagePath: string;
   memoryPhotoPath: string | null;
   memoryPhotoColor: string | null;
   bgIssue: { kind: string; message: string } | null;
+  // Which engine produced this cutout. 'device' means Apple Vision cut it out
+  // locally; 'server' means it went through the edge function's background
+  // removal.
+  bgSource: 'device' | 'server';
+  // Set only while CUTOUT_DRY_RUN is on: a local file URI for the cutout the
+  // device produced, shown in place of the saved one so the new pipeline can
+  // be looked at before anything is deployed or stored.
+  localCutoutUri?: string | null;
   discoveredAt: string;
   latitude: number | null;
   longitude: number | null;
