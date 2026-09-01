@@ -114,6 +114,7 @@ function DayIcon({ sticker, size, url }: { sticker: Sticker; size: number; url: 
 export default function CalendarScreen() {
   const { user } = useAuth();
   const [stickers, setStickers] = useState<Sticker[]>([]);
+  const [loadError, setLoadError] = useState(false);
   const [viewedMonth, setViewedMonth] = useState(() => new Date());
   const [mode, setMode] = useState<CalendarMode>('finds');
   const [reviewQueue, setReviewQueue] = useState<Sticker[] | null>(null);
@@ -140,7 +141,12 @@ export default function CalendarScreen() {
       .select('*')
       .eq('user_id', user.id)
       .order('discovered_at', { ascending: false });
-    if (!error && data) setStickers(data as Sticker[]);
+    if (error) {
+      setLoadError(true);
+    } else if (data) {
+      setLoadError(false);
+      setStickers(data as Sticker[]);
+    }
   }, [user]);
 
   useFocusEffect(useCallback(() => { fetchStickers(); }, [fetchStickers]));
@@ -337,9 +343,22 @@ export default function CalendarScreen() {
         <View style={styles.bandRow}>
           <View style={styles.bandTitleWrap}>
             <Text style={styles.title}>The long view</Text>
-            <Text style={styles.horizon}>
-              {dueInSevenDays > 0 ? `${dueInSevenDays} DUE IN 7 DAYS` : 'NOTHING DUE THIS WEEK'}
-            </Text>
+            {/* Doubles as the band's status line: an empty month grid is
+                indistinguishable from a failed fetch otherwise. */}
+            {loadError ? (
+              <TouchableOpacity
+                onPress={fetchStickers}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel="Try loading your calendar again"
+              >
+                <Text style={[styles.horizon, styles.horizonError]}>COULDN&apos;T LOAD · TAP TO RETRY</Text>
+              </TouchableOpacity>
+            ) : (
+              <Text style={styles.horizon}>
+                {dueInSevenDays > 0 ? `${dueInSevenDays} DUE IN 7 DAYS` : 'NOTHING DUE THIS WEEK'}
+              </Text>
+            )}
           </View>
 
           {/* One toggle decides what the grid means, so the two readings of
@@ -497,6 +516,9 @@ const styles = StyleSheet.create({
     color: colors.maroon,
     letterSpacing: 1.4,
   },
+  // Same slot, same metrics — only the colour changes, so a failed load
+  // reads as a state of this line rather than as new furniture appearing.
+  horizonError: { color: colors.error, textDecorationLine: 'underline' },
 
 
   segmented: {

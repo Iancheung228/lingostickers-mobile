@@ -50,6 +50,10 @@ export default function CollectionScreen() {
   const { profile, setHomeBackground, setHomeWallArranged } = useProfile(user?.id);
   const [stickers, setStickers] = useState<Sticker[]>([]);
   const [loading, setLoading] = useState(true);
+  // Distinguishes "you have no stickers" from "we couldn't ask". Without it a
+  // failed fetch left `stickers` empty and the screen cheerfully told someone
+  // with a full collection to go scan their first word.
+  const [loadError, setLoadError] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [activeCategory, setActiveCategory] = useState<'All' | Category>('All');
   const [favoritesOnly, setFavoritesOnly] = useState(false);
@@ -82,7 +86,12 @@ export default function CollectionScreen() {
       .eq('user_id', user.id)
       .order('discovered_at', { ascending: false });
 
-    if (!error && data) setStickers(data as Sticker[]);
+    if (error) {
+      setLoadError(true);
+    } else if (data) {
+      setLoadError(false);
+      setStickers(data as Sticker[]);
+    }
     setLoading(false);
     setRefreshing(false);
   }, [user]);
@@ -342,6 +351,12 @@ export default function CollectionScreen() {
         ListEmptyComponent={
           loading ? (
             <ActivityIndicator style={styles.loader} color={colors.terra} size="large" />
+          ) : loadError ? (
+            <EmptyState
+              title="Couldn't load your collection"
+              subtitle="Nothing has been lost — we just couldn't reach the server. Check your connection and try again."
+              onRetry={fetchStickers}
+            />
           ) : (
             <EmptyState
               title={isSearching ? `No matches for "${searchQuery.trim()}"` : 'No stickers yet'}
@@ -418,11 +433,22 @@ export default function CollectionScreen() {
   );
 }
 
-function EmptyState({ title, subtitle }: { title: string; subtitle: string }) {
+function EmptyState({ title, subtitle, onRetry }: { title: string; subtitle: string; onRetry?: () => void }) {
   return (
     <View style={styles.empty}>
       <Text style={styles.emptyTitle}>{title}</Text>
       <Text style={styles.emptySubtitle}>{subtitle}</Text>
+      {onRetry && (
+        <TouchableOpacity
+          style={styles.retryBtn}
+          onPress={onRetry}
+          activeOpacity={0.85}
+          accessibilityRole="button"
+          accessibilityLabel="Try loading your collection again"
+        >
+          <Text style={styles.retryText}>Try Again</Text>
+        </TouchableOpacity>
+      )}
     </View>
   );
 }
@@ -517,6 +543,14 @@ const styles = StyleSheet.create({
   },
   emptyTitle: { ...typography.h3, textAlign: 'center' },
   emptySubtitle: { ...typography.body, textAlign: 'center', color: colors.inkLight },
+  retryBtn: {
+    backgroundColor: colors.terra,
+    borderRadius: radii.lg,
+    paddingVertical: 12,
+    paddingHorizontal: spacing.lg,
+    ...shadows.button,
+  },
+  retryText: { color: colors.white, fontSize: 14, fontWeight: '700', letterSpacing: 0.3 },
 
   modalOverlay: {
     flex: 1,

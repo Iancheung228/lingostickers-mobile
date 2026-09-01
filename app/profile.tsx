@@ -1,14 +1,20 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView, ScrollView, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView, ScrollView, ActivityIndicator, Alert, Linking } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
-import { ArrowLeft, Camera, LogOut, BookOpen, Heart, Check, Trash2 } from 'lucide-react-native';
+import { ArrowLeft, Camera, LogOut, BookOpen, Heart, Check, Trash2, Shield, ExternalLink } from 'lucide-react-native';
 import { useAuth } from '@/hooks/useAuth';
 import { useProfile } from '@/hooks/useProfile';
 import { supabase } from '@/lib/supabase';
 import { Language, Sticker, WallDisplayStyle, CutoutBorderStyle } from '@/lib/types';
 import { pickAvatarImage } from '@/lib/avatars';
+import { isLocalCutoutAvailable } from '@/lib/cutout';
 import Avatar from '@/components/Avatar';
 import { colors, shadows, radii, spacing, fonts } from '@/constants/theme';
+
+// Published at the apex domain and linked from App Store Connect too. In
+// the app because the Profile screen is where a person — and a reviewer —
+// looks for it.
+const PRIVACY_URL = 'https://tabistickers.com/privacy.html';
 
 const LANGUAGES: { code: Language; native: string; label: string }[] = [
   { code: 'fr', native: 'Français', label: 'French' },
@@ -35,6 +41,9 @@ export default function ProfileScreen() {
   } = useProfile(user?.id);
   const [stickers, setStickers] = useState<Sticker[]>([]);
   const [loading, setLoading] = useState(true);
+  // The stat cards and the welcome note both quote a sticker count. A failed
+  // fetch would otherwise report a confident, wrong "0 captured".
+  const [loadError, setLoadError] = useState(false);
   const [updatingLanguage, setUpdatingLanguage] = useState<Language | null>(null);
   const [updatingWallStyle, setUpdatingWallStyle] = useState<WallDisplayStyle | null>(null);
   const [updatingBorderStyle, setUpdatingBorderStyle] = useState<CutoutBorderStyle | null>(null);
@@ -47,11 +56,20 @@ export default function ProfileScreen() {
       .from('stickers')
       .select('*')
       .eq('user_id', user.id);
-    if (!error && data) setStickers(data as Sticker[]);
+    if (error) {
+      setLoadError(true);
+    } else if (data) {
+      setLoadError(false);
+      setStickers(data as Sticker[]);
+    }
     setLoading(false);
   }, [user]);
 
   useFocusEffect(useCallback(() => { fetchStickers(); }, [fetchStickers]));
+
+  // Whether Apple Vision segmentation is available on this phone. Fixed for
+  // the life of the process, so it is read once rather than per render.
+  const onDevice = useMemo(() => isLocalCutoutAvailable(), []);
 
   const favoriteCount = useMemo(() => stickers.filter(s => s.is_favorite).length, [stickers]);
   const username = profile?.username ?? 'Explorer';
@@ -177,14 +195,14 @@ export default function ProfileScreen() {
               <View style={styles.statCard}>
                 <BookOpen size={16} color={colors.terraDark} />
                 <View>
-                  <Text style={styles.statValue}>{stickers.length}</Text>
+                  <Text style={styles.statValue}>{loadError ? '—' : stickers.length}</Text>
                   <Text style={styles.statLabel}>Captured</Text>
                 </View>
               </View>
               <View style={styles.statCard}>
                 <Heart size={16} color={colors.error} />
                 <View>
-                  <Text style={styles.statValue}>{favoriteCount}</Text>
+                  <Text style={styles.statValue}>{loadError ? '—' : favoriteCount}</Text>
                   <Text style={styles.statLabel}>Favorites</Text>
                 </View>
               </View>
@@ -192,8 +210,9 @@ export default function ProfileScreen() {
 
             <View style={styles.note}>
               <Text style={styles.noteText}>
-                Welcome back to your cozy corner! You've captured {stickers.length} watercolor
-                {' '}memor{stickers.length === 1 ? 'y' : 'ies'} so far. Keep it up! 🌸
+                {loadError
+                  ? "We couldn't reach your collection just now, so the counts above are blank. Nothing has been lost — pull back and open this again once you're online."
+                  : `Welcome back to your cozy corner! You've captured ${stickers.length} watercolor memor${stickers.length === 1 ? 'y' : 'ies'} so far. Keep it up! 🌸`}
               </Text>
             </View>
           </View>
@@ -292,16 +311,40 @@ export default function ProfileScreen() {
           {/* Info */}
           <Text style={styles.sectionLabel}>ABOUT</Text>
           <View style={styles.card}>
+            {/* This row used to read "Background removal online" beside a
+                hardcoded green ONLINE pill — a status indicator that could
+                never report anything but healthy, and which stopped being
+                true the day cutouts moved onto the device. It now reports
+                what is actually the case on this phone. */}
             <View style={styles.infoRow}>
               <Camera size={16} color={colors.terraDark} />
               <View style={styles.infoTextWrap}>
-                <Text style={styles.infoTitle}>Scanner Engine</Text>
-                <Text style={styles.infoSubtitle}>Background removal online</Text>
+                <Text style={styles.infoTitle}>Scanner</Text>
+                <Text style={styles.infoSubtitle}>
+                  {onDevice
+                    ? 'Cuts out stickers on this device'
+                    : 'Cuts out stickers in the cloud'}
+                </Text>
               </View>
-              <View style={styles.onlineBadge}>
-                <Text style={styles.onlineBadgeText}>ONLINE</Text>
+              <View style={styles.engineBadge}>
+                <Text style={styles.engineBadgeText}>{onDevice ? 'ON DEVICE' : 'CLOUD'}</Text>
               </View>
             </View>
+
+            <TouchableOpacity
+              style={[styles.infoRow, styles.rowDivider]}
+              onPress={() => Linking.openURL(PRIVACY_URL)}
+              activeOpacity={0.7}
+              accessibilityRole="link"
+              accessibilityLabel="Open the privacy policy"
+            >
+              <Shield size={16} color={colors.terraDark} />
+              <View style={styles.infoTextWrap}>
+                <Text style={styles.infoTitle}>Privacy Policy</Text>
+                <Text style={styles.infoSubtitle}>What we collect, and why</Text>
+              </View>
+              <ExternalLink size={14} color={colors.inkFaint} />
+            </TouchableOpacity>
           </View>
 
           {/* Logout */}
@@ -455,13 +498,13 @@ const styles = StyleSheet.create({
   infoTextWrap: { flex: 1 },
   infoTitle: { fontSize: 13, fontWeight: '700', color: colors.inkDark },
   infoSubtitle: { fontSize: 10, color: colors.inkFaint, marginTop: 2 },
-  onlineBadge: {
-    backgroundColor: colors.successLight,
+  engineBadge: {
+    backgroundColor: colors.sageLight,
     borderRadius: radii.full,
     paddingHorizontal: spacing.sm,
     paddingVertical: 3,
   },
-  onlineBadgeText: { fontSize: 9, fontWeight: '800', color: colors.success },
+  engineBadgeText: { fontSize: 9, fontWeight: '800', color: colors.sageDark },
 
   logoutButton: {
     flexDirection: 'row',
