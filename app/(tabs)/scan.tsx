@@ -28,6 +28,7 @@ import DiscoveryReveal from '@/components/DiscoveryReveal';
 import PhotoExtractor, { ExtractResult, renderWholePhotoExtract } from '@/components/PhotoExtractor';
 import ScanProgress, { ScanStage } from '@/components/ScanProgress';
 import GhostCutoutReveal from '@/components/GhostCutoutReveal';
+import { debugLog, debugWarn } from '@/lib/debug';
 
 // The photo a scan is working from, and — for live captures only — the moment
 // and raw sensor frame the shutter caught. Named so the direct-capture path can
@@ -231,7 +232,7 @@ export default function ScanScreen() {
     }
     if (data.error) throw new Error(data.error);
     lastGroqMsRef.current = typeof data._debug_groqMs === 'number' ? data._debug_groqMs : null;
-    console.log('[scan] edge fn debug:', data._debug_bgStatus, `groq ${lastGroqMsRef.current}ms`);
+    debugLog('[scan] edge fn debug:', data._debug_bgStatus, `groq ${lastGroqMsRef.current}ms`);
 
     setDraft({
       language: data.language === 'ja' || data.language === 'yue' ? data.language : 'fr',
@@ -421,7 +422,7 @@ export default function ScanScreen() {
           // scan or a second billed vocabulary call. #3 removes the wait
           // properly instead, by rendering the cutout from local disk the
           // moment it exists and letting the upload finish in the background.
-          console.warn('[scan] cutout upload failed, falling back to server', uploadErr?.message);
+          debugWarn('[scan] cutout upload failed, falling back to server', uploadErr?.message);
           trackEvent('cutout_upload_failed', { reason: String(uploadErr?.message ?? 'unknown') });
         }
       }
@@ -438,7 +439,7 @@ export default function ScanScreen() {
           precutImagePath,
         });
         const serverMs = Date.now() - submitStarted;
-        console.log(
+        debugLog(
           `[scan] memory-photo ${memoryMs}ms ‖ cutout ${cutoutMs}ms · create-sticker ${serverMs}ms` +
             ` (groq ${lastGroqMsRef.current ?? '?'}ms)` +
             (CUTOUT_DRY_RUN ? ' (includes rembg — dry run runs both pipelines)' : ''),
@@ -450,7 +451,7 @@ export default function ScanScreen() {
         // collect it, so collect it here.
         if (precutImagePath) {
           supabase.storage.from('sticker-images').remove([precutImagePath]).then(({ error }) => {
-            if (error) console.warn('Failed to clean up unused cutout', error);
+            if (error) debugWarn('Failed to clean up unused cutout', error);
           });
         }
         throw submitErr;
@@ -464,7 +465,7 @@ export default function ScanScreen() {
       if (staleDraft) {
         const stalePaths = [staleDraft.imagePath, ...(staleDraft.memoryPhotoPath ? [staleDraft.memoryPhotoPath] : [])];
         supabase.storage.from('sticker-images').remove(stalePaths).then(({ error }) => {
-          if (error) console.warn('Failed to clean up previous extraction attempt', error);
+          if (error) debugWarn('Failed to clean up previous extraction attempt', error);
         });
       }
 
@@ -594,7 +595,7 @@ export default function ScanScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert('Photos Access Needed', 'LingoStickers needs access to your photo library to import a picture.');
+      Alert.alert('Photos Access Needed', 'Tabi Stickers needs access to your photo library to import a picture.');
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -753,7 +754,7 @@ export default function ScanScreen() {
       <SafeAreaView style={styles.permissionContainer}>
         <Text style={styles.permissionTitle}>Camera Access Needed</Text>
         <Text style={styles.permissionSubtitle}>
-          LingoStickers needs your camera to identify objects and create stickers.
+          Tabi Stickers needs your camera to identify objects and create stickers.
         </Text>
         <TouchableOpacity style={styles.permissionButton} onPress={requestPermission}>
           <Text style={styles.permissionButtonText}>Grant Permission</Text>

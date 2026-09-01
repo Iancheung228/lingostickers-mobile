@@ -57,7 +57,7 @@ export default function SignInScreen() {
           {/* Hero */}
           <View style={styles.hero}>
             <Text style={styles.eyebrow}>WELCOME BACK</Text>
-            <Text style={styles.title}>Lingo</Text>
+            <Text style={styles.title}>Tabi Stickers</Text>
             <Text style={styles.tagline}>Learn words from the world around you.</Text>
           </View>
 
@@ -124,7 +124,7 @@ export default function SignInScreen() {
             <Link href="/(auth)/sign-up" asChild>
               <TouchableOpacity style={styles.linkButton}>
                 <Text style={styles.linkText}>
-                  Don't have an account?{'  '}
+                  Don&apos;t have an account?{'  '}
                   <Text style={styles.linkAccent}>Sign Up</Text>
                 </Text>
               </TouchableOpacity>
@@ -157,10 +157,12 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   title: {
-    fontSize: 44,
+    fontSize: 38,
     fontFamily: fonts.cozy,
     color: colors.inkDark,
     letterSpacing: -1,
+    textAlign: 'center',
+    paddingHorizontal: spacing.md,
   },
   tagline: {
     ...typography.body,

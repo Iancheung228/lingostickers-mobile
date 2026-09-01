@@ -182,7 +182,7 @@ export default function BoardCarouselPage({
     if (!currentUserId || uploadingBackground) return;
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert('Photos Access Needed', 'LingoStickers needs access to your photo library to set a board background.');
+      Alert.alert('Photos Access Needed', 'Tabi Stickers needs access to your photo library to set a board background.');
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 1 });

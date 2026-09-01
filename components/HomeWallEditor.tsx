@@ -107,7 +107,7 @@ export default function HomeWallEditor({
     if (!userId || uploadingBackground) return;
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert('Photos Access Needed', 'LingoStickers needs access to your photo library to set a cover photo.');
+      Alert.alert('Photos Access Needed', 'Tabi Stickers needs access to your photo library to set a cover photo.');
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 1 });

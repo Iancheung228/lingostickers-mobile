@@ -38,7 +38,7 @@ export async function pickAvatarImage(): Promise<{ uri: string } | null> {
   if (status !== 'granted') {
     Alert.alert(
       'Photos Access Needed',
-      'LingoStickers needs access to your photo library to set a profile picture.'
+      'Tabi Stickers needs access to your photo library to set a profile picture.'
     );
     return null;
   }

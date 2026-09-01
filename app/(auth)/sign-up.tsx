@@ -79,7 +79,7 @@ export default function SignUpScreen() {
     setLoading(false);
 
     if (data?.session) {
-      setMessage({ type: 'success', text: 'Account created! Welcome to Lingo.' });
+      setMessage({ type: 'success', text: 'Account created! Welcome to Tabi Stickers.' });
       return;
     }
     router.replace({ pathname: '/(auth)/check-email', params: { email: email.trim() } });
@@ -98,7 +98,7 @@ export default function SignUpScreen() {
         >
           <View style={styles.hero}>
             <Text style={styles.eyebrow}>CREATE ACCOUNT</Text>
-            <Text style={styles.title}>Lingo</Text>
+            <Text style={styles.title}>Tabi Stickers</Text>
             <Text style={styles.tagline}>Create your collection</Text>
           </View>
 
@@ -224,10 +224,12 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   title: {
-    fontSize: 40,
+    fontSize: 36,
     fontFamily: fonts.cozy,
     color: colors.inkDark,
     letterSpacing: -1,
+    textAlign: 'center',
+    paddingHorizontal: spacing.md,
   },
   tagline: {
     ...typography.body,

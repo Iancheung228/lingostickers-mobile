@@ -34,7 +34,7 @@ export default function AuthIntro({ children }: AuthIntroProps) {
       </Animated.View>
       {introVisible && (
         <Animated.View style={[styles.intro, { opacity: introOpacity }]} pointerEvents="none">
-          <Text style={styles.wordmark}>Lingo</Text>
+          <Text style={styles.wordmark}>Tabi Stickers</Text>
         </Animated.View>
       )}
     </View>
