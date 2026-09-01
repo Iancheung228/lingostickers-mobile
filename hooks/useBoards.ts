@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { BackgroundCrop, Board, BoardStickerWithSticker } from '@/lib/types';
 import { computeAutoLayout } from '@/lib/boardLayout';
+import { debugWarn } from '@/lib/debug';
 
 export function useBoards(userId: string | undefined) {
   const [boards, setBoards] = useState<Board[]>([]);
@@ -203,7 +204,7 @@ export function useBoardStickers(boardId: string | undefined) {
     if (!boardId) return;
     setItems(prev => prev.map(i => i.sticker_id === stickerId ? { ...i, x, y } : i));
     supabase.from('board_stickers').update({ x, y }).eq('board_id', boardId).eq('sticker_id', stickerId)
-      .then(({ error }) => { if (error) console.warn('Failed to save board sticker position', error); });
+      .then(({ error }) => { if (error) debugWarn('Failed to save board sticker position', error); });
   }, [boardId]);
 
   return { items, loading, addSticker, removeSticker, updatePosition, autoArrange, refetch: fetchItems };

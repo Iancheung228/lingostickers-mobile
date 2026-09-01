@@ -47,7 +47,7 @@ export default function NewBoardSheet({ visible, onCancel, onCreate }: NewBoardS
         <View style={styles.sheet}>
           <View style={styles.grabber} />
           <Text style={styles.title}>New board</Text>
-          <Text style={styles.subtitle}>Give it a name — you'll pick stickers next.</Text>
+          <Text style={styles.subtitle}>Give it a name — you&apos;ll pick stickers next.</Text>
 
           <TextInput
             autoFocus

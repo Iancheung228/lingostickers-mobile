@@ -7,6 +7,7 @@ import { Link } from 'expo-router';
 import { useAuth } from '@/hooks/useAuth';
 import CozyBackground from '@/components/CozyBackground';
 import { colors, shadows, radii, spacing, typography, fonts } from '@/constants/theme';
+import { debugWarn } from '@/lib/debug';
 
 export default function ForgotPasswordScreen() {
   const { resetPasswordForEmail, verifyRecoveryOtp } = useAuth();
@@ -25,7 +26,7 @@ export default function ForgotPasswordScreen() {
     setLoading(true);
     const { error } = await resetPasswordForEmail(email.trim());
     setLoading(false);
-    if (error) console.warn('resetPasswordForEmail error:', error.message);
+    if (error) debugWarn('resetPasswordForEmail error:', error.message);
     setSent(true);
   };
 

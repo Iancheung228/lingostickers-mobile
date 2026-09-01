@@ -13,6 +13,7 @@ import CropBoxOverlay from './CropBoxOverlay';
 import LassoOverlay from './LassoOverlay';
 import { Rect, Point, computeContainRect, boxToImageCrop, boundingBoxOfPoints, polygonFillRatio, padBox } from '@/lib/cropGeometry';
 import { colors, radii, spacing, fonts } from '@/constants/theme';
+import { debugLog } from '@/lib/debug';
 
 interface PhotoExtractorProps {
   imageUri: string | null;
@@ -310,7 +311,7 @@ export default function PhotoExtractor({ imageUri, imageWidth, imageHeight, onCl
         projectInto(p, segmentCrop, segmentScale),
       );
 
-      console.log(`[scan] crop+render ${Date.now() - prepStarted}ms (upload jpeg + ${segmentWidth}×${segmentHeight} segment jpeg)`);
+      debugLog(`[scan] crop+render ${Date.now() - prepStarted}ms (upload jpeg + ${segmentWidth}×${segmentHeight} segment jpeg)`);
 
       // The same selection, expressed against the original photo rather than
       // the crop — the projection is just "no crop offset, no rescale".
@@ -372,9 +373,9 @@ export default function PhotoExtractor({ imageUri, imageWidth, imageHeight, onCl
             source={{ uri: imageUri }}
             style={styles.photo}
             resizeMode="contain"
-            onLoadStart={() => console.log('[PhotoExtractor] load start', imageUri)}
-            onLoad={(e) => console.log('[PhotoExtractor] loaded', e.nativeEvent.source)}
-            onError={(e) => console.log('[PhotoExtractor] error', imageUri, JSON.stringify(e.nativeEvent))}
+            onLoadStart={() => debugLog('[PhotoExtractor] load start', imageUri)}
+            onLoad={(e) => debugLog('[PhotoExtractor] loaded', e.nativeEvent.source)}
+            onError={(e) => debugLog('[PhotoExtractor] error', imageUri, JSON.stringify(e.nativeEvent))}
           />
           {displayRect.width > 0 && mode === 'box' && (
             <CropBoxOverlay box={box} startBox={startBox} displayRect={displayRect} />

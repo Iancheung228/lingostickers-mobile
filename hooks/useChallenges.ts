@@ -99,7 +99,7 @@ function useChallengesState() {
     return res.data as SubmitAnswerResult;
   }, [fetchInbox]);
 
-  const useHint = useCallback(async (challengeId: string): Promise<SubmitAnswerResult> => {
+  const requestHint = useCallback(async (challengeId: string): Promise<SubmitAnswerResult> => {
     const res = await supabase.functions.invoke('submit-challenge-answer', {
       body: { challenge_id: challengeId, use_hint: true },
     });
@@ -147,7 +147,7 @@ function useChallengesState() {
     fetchFeed,
     sendChallenge,
     submitAnswer,
-    useHint,
+    requestHint,
     getChallengeImageUrl,
     getChallengeImageUrls,
   };

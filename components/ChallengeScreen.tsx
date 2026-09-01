@@ -31,7 +31,7 @@ export default function ChallengeScreen({ challenge, onClose, onWin }: Challenge
   const [firstLetter, setFirstLetter] = useState<string | null>(null);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const shakeX = useSharedValue(0);
-  const { submitAnswer, useHint, getChallengeImageUrl } = useChallenges();
+  const { submitAnswer, requestHint, getChallengeImageUrl } = useChallenges();
 
   useEffect(() => {
     if (!challenge) {
@@ -85,7 +85,7 @@ export default function ChallengeScreen({ challenge, onClose, onWin }: Challenge
     if (!challenge || hintUsed || submitting) return;
     setSubmitting(true);
     try {
-      const result = await useHint(challenge.id);
+      const result = await requestHint(challenge.id);
       if (result.outcome === 'hint') {
         setFirstLetter(result.first_letter);
         setHintUsed(true);

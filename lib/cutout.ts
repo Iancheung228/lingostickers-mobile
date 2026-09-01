@@ -4,6 +4,7 @@ import { cutout, isAvailable, type CutoutResult } from '@/modules/subject-cutout
 import { trackEvent } from '@/lib/analytics';
 import { supabase } from '@/lib/supabase';
 import type { Point } from '@/lib/cropGeometry';
+import { debugLog } from '@/lib/debug';
 
 export type { CutoutResult } from '@/modules/subject-cutout';
 
@@ -114,7 +115,7 @@ export async function attemptLocalCutout(params: LocalCutoutRequest): Promise<Lo
   const attempts: string[] = [];
 
   const finish = (result: CutoutResult, via?: CutoutVia): LocalResult => {
-    console.log(`[cutout] passes: ${attempts.join(' → ')}`);
+    debugLog(`[cutout] passes: ${attempts.join(' → ')}`);
     reportCutout(result, kind, via, attempts);
     return { ...result, ...(via ? { via } : {}), attempts: [...attempts] };
   };
@@ -248,7 +249,7 @@ export async function uploadCutout(uri: string, path: string): Promise<UploadOut
 
   // Size and duration together: a slow upload is either a fat file or a slow
   // link, and the fix is different for each.
-  console.log(`[cutout] upload ${megabytes.toFixed(2)}MB in ${ms}ms`);
+  debugLog(`[cutout] upload ${megabytes.toFixed(2)}MB in ${ms}ms`);
 
   if (error) throw new Error(`Cutout upload failed: ${error.message}`);
 
@@ -347,7 +348,7 @@ function reportCutout(result: CutoutResult, kind: SelectionKind, via?: CutoutVia
   // way it did.
   const mode = (CUTOUT_DRY_RUN ? 'dry-run' : 'device') + (via ? ` (${via})` : '');
   if (result.ok) {
-    console.log(
+    debugLog(
       `[cutout] ${mode} · ${kind} · ${result.selectedCount}/${result.instanceCount} instances · ` +
         `containment ${result.containment.toFixed(2)} coverage ${result.coverage.toFixed(2)} · ` +
         `${result.workingWidth}×${result.workingHeight} · total ${result.durationMs}ms ` +
@@ -355,7 +356,7 @@ function reportCutout(result: CutoutResult, kind: SelectionKind, via?: CutoutVia
         `style ${result.styleMs} png ${result.encodeMs})`,
     );
   } else {
-    console.log(
+    debugLog(
       `[cutout] escalated · ${kind} · ${result.reason}` +
         (result.detail ? ` (${result.detail})` : '') +
         ` · instances ${result.instanceCount ?? 0}` +
