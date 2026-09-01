@@ -390,13 +390,23 @@ export default function CalendarScreen() {
         {/* ── Month grid card ── */}
         <View style={styles.gridCard}>
           <View style={styles.monthNav}>
-            <TouchableOpacity onPress={() => commitMonth(-1)} hitSlop={12}>
+            <TouchableOpacity
+              onPress={() => commitMonth(-1)}
+              hitSlop={12}
+              accessibilityRole="button"
+              accessibilityLabel="Previous month"
+            >
               <ChevronLeft size={16} color={colors.inkDark} />
             </TouchableOpacity>
             <Text style={styles.monthLabel}>
               {MONTH_FORMAT.format(viewedMonth).toUpperCase()} {viewedMonth.getFullYear()}
             </Text>
-            <TouchableOpacity onPress={() => commitMonth(1)} hitSlop={12}>
+            <TouchableOpacity
+              onPress={() => commitMonth(1)}
+              hitSlop={12}
+              accessibilityRole="button"
+              accessibilityLabel="Next month"
+            >
               <ChevronRight size={16} color={colors.inkDark} />
             </TouchableOpacity>
           </View>

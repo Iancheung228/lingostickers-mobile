@@ -34,10 +34,20 @@ export default function HomeHeader({
       <View style={styles.metaRow}>
         <Text style={styles.metaText}>{today}</Text>
         <View style={styles.metaRight}>
-          <TouchableOpacity onPress={onSearch} hitSlop={10}>
+          <TouchableOpacity
+            onPress={onSearch}
+            hitSlop={10}
+            accessibilityRole="button"
+            accessibilityLabel="Search your collection"
+          >
             <Search size={15} color={colors.maroon} />
           </TouchableOpacity>
-          <TouchableOpacity onPress={onSettings} hitSlop={10}>
+          <TouchableOpacity
+            onPress={onSettings}
+            hitSlop={10}
+            accessibilityRole="button"
+            accessibilityLabel="Open your profile and settings"
+          >
             <Settings size={15} color={colors.maroon} />
           </TouchableOpacity>
           <Text style={styles.metaText}>GOAL {goal}</Text>

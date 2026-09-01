@@ -163,7 +163,13 @@ export default function ProfileScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} hitSlop={8}>
+        <TouchableOpacity
+          onPress={() => router.back()}
+          style={styles.backBtn}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
+        >
           <ArrowLeft size={18} color={colors.inkMid} />
         </TouchableOpacity>
         <Text style={styles.title}>My Profile</Text>
@@ -177,7 +183,13 @@ export default function ProfileScreen() {
           {/* Cozy panel with user card + stats */}
           <View style={styles.panel}>
             <View style={styles.userCard}>
-              <TouchableOpacity onPress={handleAvatarPress} activeOpacity={0.8} disabled={!profile}>
+              <TouchableOpacity
+                onPress={handleAvatarPress}
+                activeOpacity={0.8}
+                disabled={!profile}
+                accessibilityRole="button"
+                accessibilityLabel={profile?.avatar_path ? 'Change or remove your profile picture' : 'Add a profile picture'}
+              >
                 <Avatar name={username} avatarPath={profile?.avatar_path} size={52} />
                 <View style={styles.avatarBadge}>
                   {savingAvatar
@@ -358,6 +370,8 @@ export default function ProfileScreen() {
             style={styles.deleteAccountButton}
             onPress={handleDeleteAccount}
             disabled={deletingAccount}
+            accessibilityRole="button"
+            accessibilityLabel="Delete your account permanently"
           >
             {deletingAccount ? (
               <ActivityIndicator size="small" color={colors.error} />

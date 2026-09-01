@@ -103,7 +103,7 @@ export default function ChallengeScreen({ challenge, onClose, onWin }: Challenge
   const blanked = blankWord(challenge.snapshot_sentence, challenge.snapshot_word);
 
   return (
-    <Modal visible={!!challenge} animationType="slide" presentationStyle="fullScreen">
+    <Modal visible={!!challenge} animationType="slide" presentationStyle="fullScreen" onRequestClose={onClose}>
       <SafeAreaView style={styles.container}>
         {/* Header */}
         <View style={styles.header}>

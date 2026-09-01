@@ -27,7 +27,7 @@ export default function ChapterDetailView({ chapter, onClose, onSelectSticker, o
   if (!chapter) return null;
 
   return (
-    <Modal visible animationType="slide" presentationStyle="fullScreen">
+    <Modal visible animationType="slide" presentationStyle="fullScreen" onRequestClose={onClose}>
       <SafeAreaView style={styles.container}>
         <View style={styles.header}>
           <TouchableOpacity onPress={onClose} style={styles.closeButton}>

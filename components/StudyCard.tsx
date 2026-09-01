@@ -523,13 +523,25 @@ export default function StudyCard({
     <Modal visible animationType="slide" onRequestClose={onClose} presentationStyle="fullScreen">
       <View style={[styles.screen, { paddingTop: insets.top + spacing.sm, paddingBottom: insets.bottom + spacing.md }]}>
         <View style={styles.topBar}>
-          <TouchableOpacity onPress={onClose} style={styles.topBtn} hitSlop={10}>
+          <TouchableOpacity
+            onPress={onClose}
+            style={styles.topBtn}
+            hitSlop={10}
+            accessibilityRole="button"
+            accessibilityLabel="Close this card"
+          >
             <X size={20} color={colors.inkDark} />
           </TouchableOpacity>
           {!!progress && (
             <Text style={styles.progress}>{progress.index + 1} / {progress.total}</Text>
           )}
-          <TouchableOpacity onPress={handleDelete} style={styles.topBtn} hitSlop={10}>
+          <TouchableOpacity
+            onPress={handleDelete}
+            style={styles.topBtn}
+            hitSlop={10}
+            accessibilityRole="button"
+            accessibilityLabel="Delete this sticker"
+          >
             <Trash2 size={18} color={colors.error} />
           </TouchableOpacity>
         </View>

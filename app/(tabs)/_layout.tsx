@@ -24,7 +24,10 @@ function TabIcon({ Icon, focused, badgeCount }: { Icon: LucideIcon; focused: boo
 function Badge({ count }: { count: number }) {
   if (count === 0) return null;
   return (
-    <View style={styles.badgeDot}>
+    <View
+      style={styles.badgeDot}
+      accessibilityLabel={`${count} waiting on you`}
+    >
       <Text style={styles.badgeText}>{count > 9 ? '9+' : String(count)}</Text>
     </View>
   );
@@ -108,6 +111,7 @@ export default function TabLayout() {
         name="collection"
         options={{
           title: 'Collection',
+          tabBarAccessibilityLabel: 'Collection',
           tabBarIcon: ({ focused }) => <TabIcon Icon={BookOpen} focused={focused} />,
         }}
       />
@@ -115,6 +119,7 @@ export default function TabLayout() {
         name="calendar"
         options={{
           title: 'Calendar',
+          tabBarAccessibilityLabel: 'Calendar',
           tabBarIcon: ({ focused }) => <TabIcon Icon={Calendar} focused={focused} />,
         }}
       />
@@ -122,6 +127,7 @@ export default function TabLayout() {
         name="scan"
         options={{
           title: 'Scan',
+          tabBarAccessibilityLabel: 'Scan a new sticker',
           tabBarIcon: () => <ScanTabIcon />,
           tabBarItemStyle: { width: TAB_BAR_SCAN_ITEM_WIDTH, height: TAB_BAR_HEIGHT },
         }}
@@ -130,6 +136,7 @@ export default function TabLayout() {
         name="wall"
         options={{
           title: 'Boards',
+          tabBarAccessibilityLabel: 'Boards',
           tabBarIcon: ({ focused }) => <TabIcon Icon={StickerIcon} focused={focused} />,
         }}
       />
@@ -137,6 +144,7 @@ export default function TabLayout() {
         name="friends"
         options={{
           title: 'Friends',
+          tabBarAccessibilityLabel: 'Friends',
           tabBarIcon: ({ focused }) => (
             <TabIcon Icon={Users} focused={focused} badgeCount={pendingCount + pendingRequestCount} />
           ),

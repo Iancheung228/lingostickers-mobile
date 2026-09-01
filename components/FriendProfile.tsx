@@ -73,7 +73,7 @@ export default function FriendProfile({ friend, currentUserId, onClose, onRemove
   });
 
   return (
-    <Modal visible={!!friend} animationType="slide" presentationStyle="pageSheet">
+    <Modal visible={!!friend} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
       <SafeAreaView style={styles.container}>
         <View style={styles.header}>
           <Text style={styles.title} numberOfLines={1}>{friend.friend.username ?? 'Friend'}</Text>

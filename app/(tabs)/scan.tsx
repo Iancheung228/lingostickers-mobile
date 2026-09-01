@@ -829,6 +829,9 @@ export default function ScanScreen() {
           <TouchableOpacity
             style={styles.sideBtn}
             onPress={handleImportPhoto}
+            accessibilityRole="button"
+            accessibilityLabel="Import a photo from your library"
+            accessibilityState={{ disabled: processing || capturing }}
             disabled={processing || capturing}
             activeOpacity={0.7}
           >
@@ -842,6 +845,9 @@ export default function ScanScreen() {
           <TouchableOpacity
             style={[styles.captureButton, (processing || capturing) && styles.captureButtonDisabled]}
             onPress={handleCapture}
+            accessibilityRole="button"
+            accessibilityLabel="Scan what the camera is pointing at"
+            accessibilityState={{ disabled: processing || capturing, busy: processing || capturing }}
             disabled={processing || capturing}
           >
             <View style={styles.captureRing}>
@@ -853,6 +859,9 @@ export default function ScanScreen() {
           <TouchableOpacity
             style={styles.sideBtn}
             onPress={handleToggleTorch}
+            accessibilityRole="button"
+            accessibilityLabel={torchOn ? 'Turn the flash off' : 'Turn the flash on'}
+            accessibilityState={{ selected: torchOn }}
             activeOpacity={0.7}
           >
             <View style={[styles.sideBtnCircle, torchOn && styles.sideBtnCircleActive]}>

@@ -48,7 +48,7 @@ export default function SendChallengeModal({ sticker, friends, onSend, onClose }
   };
 
   return (
-    <Modal visible={!!sticker} animationType="slide" presentationStyle="pageSheet">
+    <Modal visible={!!sticker} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
       <SafeAreaView style={styles.container}>
         <View style={styles.header}>
           <Text style={styles.title}>Challenge a Friend</Text>

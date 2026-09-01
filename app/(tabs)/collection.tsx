@@ -314,19 +314,24 @@ export default function CollectionScreen() {
           <TouchableOpacity
             style={[styles.iconBtnSmall, sortMode !== 'newest' && styles.iconBtnSmallSortActive]}
             onPress={cycleSort}
+            accessibilityRole="button"
+            accessibilityLabel={`Sort: ${SORT_LABELS[sortMode]}. Tap to change, hold for all options.`}
             onLongPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
               setSortMenuVisible(true);
             }}
             delayLongPress={350}
-            hitSlop={6}
+            hitSlop={8}
           >
             <ArrowUpDown size={14} color={sortMode !== 'newest' ? colors.inkDark : colors.inkMid} />
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.iconBtnSmall, favoritesOnly && styles.iconBtnSmallFavActive]}
             onPress={() => setFavoritesOnly(f => !f)}
-            hitSlop={6}
+            accessibilityRole="button"
+            accessibilityLabel={favoritesOnly ? 'Showing favourites only. Tap to show all.' : 'Show favourites only'}
+            accessibilityState={{ selected: favoritesOnly }}
+            hitSlop={8}
           >
             <Heart size={14} color={favoritesOnly ? colors.white : colors.error} fill={favoritesOnly ? colors.white : 'transparent'} />
           </TouchableOpacity>

@@ -36,7 +36,7 @@ export default function FriendSearch({ visible, onClose }: FriendSearchProps) {
   const pendingSent = friends.filter(f => f.status === 'pending' && f.is_requester);
 
   return (
-    <Modal visible={visible} animationType="slide" presentationStyle="fullScreen">
+    <Modal visible={visible} animationType="slide" presentationStyle="fullScreen" onRequestClose={onClose}>
       <SafeAreaView style={styles.container}>
         <View style={styles.header}>
           <Text style={styles.title}>Add Friend</Text>

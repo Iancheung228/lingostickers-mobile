@@ -8,6 +8,7 @@ import { Fraunces_600SemiBold, Fraunces_700Bold } from '@expo-google-fonts/fraun
 import { KosugiMaru_400Regular } from '@expo-google-fonts/kosugi-maru';
 import { JetBrainsMono_500Medium, JetBrainsMono_700Bold } from '@expo-google-fonts/jetbrains-mono';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { StatusBar } from 'expo-status-bar';
 import * as Notifications from 'expo-notifications';
 import { useAuth, AuthProvider } from '@/hooks/useAuth';
 import { FriendsProvider } from '@/hooks/useFriends';
@@ -153,13 +154,19 @@ function RootLayout() {
   if (!fontsSettled) return null;
 
   return (
-    <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="index" />
-      <Stack.Screen name="(auth)" />
-      <Stack.Screen name="(tabs)" />
-      <Stack.Screen name="profile" options={{ presentation: 'card' }} />
-      <Stack.Screen name="day/[date]" options={{ presentation: 'card' }} />
-    </Stack>
+    <>
+      {/* app.json pins userInterfaceStyle to light, and every ground in the
+          palette — cream, white, the rose band — is light. Saying so
+          explicitly beats inheriting whatever the platform defaults to. */}
+      <StatusBar style="dark" />
+      <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="index" />
+        <Stack.Screen name="(auth)" />
+        <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="profile" options={{ presentation: 'card' }} />
+        <Stack.Screen name="day/[date]" options={{ presentation: 'card' }} />
+      </Stack>
+    </>
   );
 }
 
