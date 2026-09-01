@@ -22,6 +22,7 @@ import {
 } from '@/lib/friendsSections';
 import { colors, shadows, radii, spacing, fonts } from '@/constants/theme';
 import { TAB_BAR_CLEARANCE } from '@/constants/tabBar';
+import { enablePushNotifications } from '@/lib/notifications';
 
 // ---------------------------------------------------------------------------
 // Friends.
@@ -108,6 +109,14 @@ export default function FriendsScreen() {
     [inbox],
   );
 
+  // Accepting a request is the point where challenges from this person become
+  // possible, so it is a moment where a notification prompt explains itself.
+  // No-ops if they already answered the system dialog either way.
+  const handleAccept = useCallback(async (friendshipId: string) => {
+    await respondToRequest(friendshipId, 'accepted');
+    if (user?.id) enablePushNotifications(user.id);
+  }, [respondToRequest, user?.id]);
+
   const renderRow = useCallback((row: Row) => {
     switch (row.kind) {
       case 'request':
@@ -115,7 +124,7 @@ export default function FriendsScreen() {
           <FriendRequestRow
             username={row.friendship.friend.username}
             avatarPath={row.friendship.friend.avatar_path}
-            onAccept={() => respondToRequest(row.friendship.id, 'accepted')}
+            onAccept={() => handleAccept(row.friendship.id)}
             onDecline={() => respondToRequest(row.friendship.id, 'declined')}
           />
         );
@@ -143,7 +152,7 @@ export default function FriendsScreen() {
       case 'resting':
         return <Text style={styles.resting}>{row.text}</Text>;
     }
-  }, [respondToRequest, solvedImages]);
+  }, [handleAccept, respondToRequest, solvedImages]);
 
   return (
     <SafeAreaView style={styles.container}>

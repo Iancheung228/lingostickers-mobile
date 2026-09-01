@@ -4,6 +4,8 @@ import { X, UserPlus, Check } from 'lucide-react-native';
 import { useFriends } from '@/hooks/useFriends';
 import Avatar from '@/components/Avatar';
 import { colors } from '@/constants/theme';
+import { useAuth } from '@/hooks/useAuth';
+import { enablePushNotifications } from '@/lib/notifications';
 
 interface FriendSearchProps {
   visible: boolean;
@@ -11,6 +13,7 @@ interface FriendSearchProps {
 }
 
 export default function FriendSearch({ visible, onClose }: FriendSearchProps) {
+  const { user } = useAuth();
   const { searchResults, searching, searchUsers, sendFriendRequest, removeFriend, friends } = useFriends();
   const [query, setQuery] = useState('');
   const [sentIds, setSentIds] = useState<Set<string>>(new Set());
@@ -23,7 +26,11 @@ export default function FriendSearch({ visible, onClose }: FriendSearchProps) {
   const handleAdd = useCallback(async (userId: string) => {
     await sendFriendRequest(userId);
     setSentIds(prev => new Set([...prev, userId]));
-  }, [sendFriendRequest]);
+    // The first moment the user is actually waiting on someone else — which
+    // is the only honest reason to ask for notifications. Deliberately after
+    // the request is sent, so the ask never blocks the thing they came for.
+    if (user?.id) enablePushNotifications(user.id);
+  }, [sendFriendRequest, user?.id]);
 
   const pendingReceived = friends.filter(f => f.status === 'pending' && !f.is_requester);
   const pendingSent = friends.filter(f => f.status === 'pending' && f.is_requester);
