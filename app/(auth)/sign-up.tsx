@@ -3,9 +3,14 @@ import {
   View, Text, TextInput, TouchableOpacity,
   StyleSheet, KeyboardAvoidingView, Platform, ActivityIndicator, ScrollView,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { Link, useRouter } from 'expo-router';
+import { Camera } from 'lucide-react-native';
 import { useAuth } from '@/hooks/useAuth';
 import { useUsernameAvailability } from '@/hooks/useUsernameAvailability';
+import { supabase } from '@/lib/supabase';
+import { pickAvatarImage, uploadAvatar } from '@/lib/avatars';
+import { stashPendingAvatar, clearPendingAvatar } from '@/lib/pendingAvatar';
 import AuthIntro from '@/components/AuthIntro';
 import { colors, typography, shadows, radii, spacing, fonts } from '@/constants/theme';
 
@@ -25,6 +30,10 @@ export default function SignUpScreen() {
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  // Local file URI only. There is no session yet at this point, and storage
+  // writes are gated on auth.uid() matching the folder — so the photo can't
+  // go anywhere until the account is real. See handleSignUp.
+  const [avatarUri, setAvatarUri] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: 'error' | 'success'; text: string } | null>(null);
   const usernameAvailability = useUsernameAvailability(username);
@@ -35,16 +44,40 @@ export default function SignUpScreen() {
     password.length >= 6 &&
     usernameAvailability !== 'taken';
 
+  const handlePickAvatar = async () => {
+    const picked = await pickAvatarImage();
+    if (picked) setAvatarUri(picked.uri);
+  };
+
   const handleSignUp = async () => {
     if (!isFormValid) return;
     setMessage(null);
     setLoading(true);
     const { data, error } = await signUp(email.trim(), password, username.trim());
-    setLoading(false);
     if (error) {
+      setLoading(false);
       setMessage({ type: 'error', text: friendlySignUpError(error.message) });
       return;
     }
+
+    // Two ways out, depending on whether email confirmation is required.
+    // With a session in hand the picture can go up right now; without one the
+    // account doesn't exist yet, so it's parked and uploaded on the first
+    // launch that does have a session (see lib/pendingAvatar.ts). Either way
+    // a failed picture must never fail the sign-up — the account is made.
+    if (avatarUri && data?.session?.user) {
+      try {
+        const path = await uploadAvatar(data.session.user.id, avatarUri);
+        await supabase.from('profiles').update({ avatar_path: path }).eq('id', data.session.user.id);
+        await clearPendingAvatar();
+      } catch {
+        await stashPendingAvatar(avatarUri);
+      }
+    } else if (avatarUri) {
+      await stashPendingAvatar(avatarUri);
+    }
+    setLoading(false);
+
     if (data?.session) {
       setMessage({ type: 'success', text: 'Account created! Welcome to Lingo.' });
       return;
@@ -83,6 +116,26 @@ export default function SignUpScreen() {
                 </Text>
               </View>
             )}
+
+            {/* Asked for before anything else, because it's the one field
+                people answer with a face rather than a keyboard — and the one
+                that makes a friend recognisable everywhere else in the app.
+                Optional: skipping it just leaves the tinted initial. */}
+            <View style={styles.avatarBlock}>
+              <TouchableOpacity onPress={handlePickAvatar} activeOpacity={0.8} style={styles.avatarButton}>
+                {avatarUri ? (
+                  <Image source={{ uri: avatarUri }} contentFit="cover" style={styles.avatarImage} />
+                ) : (
+                  <Camera size={22} color={colors.terra} />
+                )}
+                <View style={styles.avatarBadge}>
+                  <Camera size={11} color={colors.white} />
+                </View>
+              </TouchableOpacity>
+              <Text style={styles.avatarHint}>
+                {avatarUri ? 'Tap to change your photo' : 'Add a profile picture (optional)'}
+              </Text>
+            </View>
 
             <TextInput
               style={styles.input}
@@ -189,6 +242,34 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
   },
+  avatarBlock: { alignItems: 'center', gap: 6, marginBottom: spacing.md },
+  avatarButton: {
+    width: 84,
+    height: 84,
+    borderRadius: radii.full,
+    backgroundColor: colors.sky,
+    borderWidth: 2,
+    borderColor: colors.border,
+    borderStyle: 'dashed',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'visible',
+  },
+  avatarImage: { width: '100%', height: '100%', borderRadius: radii.full },
+  avatarBadge: {
+    position: 'absolute',
+    right: -2,
+    bottom: -2,
+    width: 24,
+    height: 24,
+    borderRadius: radii.full,
+    backgroundColor: colors.terra,
+    borderWidth: 2,
+    borderColor: colors.card,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarHint: { fontSize: 12, fontWeight: '600', color: colors.inkLight },
   input: {
     backgroundColor: colors.sky,
     borderRadius: radii.md,

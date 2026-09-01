@@ -1,6 +1,5 @@
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { UserPlus } from 'lucide-react-native';
-import OtterMascot from '@/components/illustrations/OtterMascot';
 import { colors, radii, spacing, typography, shadows } from '@/constants/theme';
 
 // ---------------------------------------------------------------------------
@@ -23,7 +22,6 @@ interface FriendsEmptyProps {
 export default function FriendsEmpty({ onAdd }: FriendsEmptyProps) {
   return (
     <View style={styles.wrap}>
-      <OtterMascot size={92} variant="small" />
       <Text style={styles.title}>Learn alongside someone</Text>
       <Text style={styles.body}>
         Add a friend to send each other stickers as challenges — guess their word,

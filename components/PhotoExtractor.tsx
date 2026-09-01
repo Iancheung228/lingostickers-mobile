@@ -96,6 +96,68 @@ const SEGMENT_CONTEXT_PAD_RATIO = 0.28;
 // memory graph.
 const SEGMENT_MAX_WIDTH = 1600;
 
+/**
+ * Builds the ExtractResult this screen would produce for an untouched,
+ * full-frame box — the selection a user expresses by opening the extractor
+ * and tapping Extract without moving anything.
+ *
+ * The live-capture path uses this to skip the box/lasso step altogether:
+ * aiming the camera at something already *is* the selection, so asking the
+ * user to confirm a box around the whole frame afterwards only adds a step.
+ * The segmenter reads a full-frame selection as "no preference expressed"
+ * and picks the dominant object rather than unioning everything it finds —
+ * see UNSPECIFIC_SELECTION_RATIO in SubjectSegmenter.
+ *
+ * Deliberately lives here, beside handleExtract, so the two paths share one
+ * definition of the upload and segmentation render sizes instead of drifting
+ * apart the first time either is tuned.
+ */
+export async function renderWholePhotoExtract(
+  uri: string,
+  width: number,
+  height: number,
+): Promise<ExtractResult> {
+  const corners = (w: number, h: number): Point[] => [
+    { x: 0, y: 0 }, { x: w, y: 0 }, { x: w, y: h }, { x: 0, y: h },
+  ];
+
+  const uploadContext = ImageManipulator.manipulate(uri);
+  const uploadRendered = await (width > MAX_UPLOAD_WIDTH
+    ? uploadContext.resize({ width: MAX_UPLOAD_WIDTH }).renderAsync()
+    : uploadContext.renderAsync());
+  const upload = await uploadRendered.saveAsync({
+    compress: 0.9, format: SaveFormat.JPEG, base64: true,
+  });
+  if (!upload.base64) throw new Error('Failed to process image');
+
+  // No context padding to add here — the selection is already the whole
+  // frame, so there is nothing outside it to pad with.
+  const segmentNeedsResize = width > SEGMENT_MAX_WIDTH;
+  const segmentContext = ImageManipulator.manipulate(uri);
+  const segmentRendered = await (segmentNeedsResize
+    ? segmentContext.resize({ width: SEGMENT_MAX_WIDTH }).renderAsync()
+    : segmentContext.renderAsync());
+  const segment = await segmentRendered.saveAsync({ compress: 0.95, format: SaveFormat.JPEG });
+
+  const segmentScale = segmentNeedsResize ? SEGMENT_MAX_WIDTH / width : 1;
+  const segmentWidth = Math.round(width * segmentScale);
+  const segmentHeight = Math.round(height * segmentScale);
+
+  return {
+    base64: upload.base64,
+    uri: upload.uri,
+    segmentUri: segment.uri,
+    segmentWidth,
+    segmentHeight,
+    selectionPolygon: corners(segmentWidth, segmentHeight),
+    selectionKind: 'box',
+    fullUri: uri,
+    fullWidth: width,
+    fullHeight: height,
+    fullSelectionPolygon: corners(width, height),
+  };
+}
+
 export default function PhotoExtractor({ imageUri, imageWidth, imageHeight, onClose, onExtract, processing, stage, usingServerCutout }: PhotoExtractorProps) {
   const [mode, setMode] = useState<ToolMode>('box');
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });

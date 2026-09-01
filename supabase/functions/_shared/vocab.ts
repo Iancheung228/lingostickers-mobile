@@ -26,6 +26,7 @@ const LANGUAGE_SCHEMAS: Record<Language, LanguageSchema> = {
     schemaDescription: `{
   "word": "the object name in French with article (e.g. Le Café, La Pomme, Le Chien)",
   "translation": "English translation (e.g. Coffee, Apple, Dog)",
+  "part_of_speech": "the headword's part of speech in lowercase English, one of exactly: noun, verb, adjective, adverb, phrase",
   "reading": "phonetic spelling of the French word in English (e.g. luh ka-fay, la pum, luh she-en)",
   "sentence": "a short, natural French sentence about this object, grounded in the SPECIFIC real details of the scene it was photographed in — not a generic placement sentence",
   "sentence_translation": "English translation of the sentence",
@@ -38,6 +39,7 @@ const LANGUAGE_SCHEMAS: Record<Language, LanguageSchema> = {
     schemaDescription: `{
   "word": "the object name in Japanese, written naturally with kanji/katakana/hiragana as appropriate (e.g. コーヒー, りんご, 犬)",
   "translation": "English translation (e.g. Coffee, Apple, Dog)",
+  "part_of_speech": "the headword's part of speech in lowercase English, one of exactly: noun, verb, adjective, adverb, phrase",
   "reading": "romaji reading of the Japanese word, using macrons for long vowels (e.g. kōhī, ringo, inu)",
   "sentence": "a short, natural Japanese sentence about this object, grounded in the SPECIFIC real details of the scene it was photographed in — not a generic placement sentence",
   "sentence_translation": "English translation of the sentence",
@@ -50,6 +52,7 @@ const LANGUAGE_SCHEMAS: Record<Language, LanguageSchema> = {
     schemaDescription: `{
   "word": "the object name in Cantonese, written in Traditional Chinese characters as used in Hong Kong (e.g. 咖啡, 蘋果, 狗)",
   "translation": "English translation (e.g. Coffee, Apple, Dog)",
+  "part_of_speech": "the headword's part of speech in lowercase English, one of exactly: noun, verb, adjective, adverb, phrase",
   "reading": "Jyutping romanization of the Cantonese word, with tone numbers (e.g. gaa3 fe1, ping4 gwo2, gau2)",
   "sentence": "a short, natural Cantonese sentence (written in Traditional Chinese characters, colloquial Cantonese grammar/vocabulary — not Standard Written Chinese) about this object, grounded in the SPECIFIC real details of the scene it was photographed in — not a generic placement sentence",
   "sentence_translation": "English translation of the sentence",

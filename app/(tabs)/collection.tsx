@@ -1,35 +1,29 @@
 import { useState, useCallback, useMemo } from 'react';
 import {
   View, Text, TextInput, FlatList, StyleSheet, TouchableOpacity,
-  RefreshControl, SafeAreaView, ScrollView, ActivityIndicator, Modal, Pressable,
+  RefreshControl, ScrollView, ActivityIndicator, Modal, Pressable,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { useFocusEffect, router } from 'expo-router';
-import { Settings, Heart, ArrowUpDown, Check, Search, X } from 'lucide-react-native';
+import { Heart, ArrowUpDown, Check, Search, X } from 'lucide-react-native';
 import { useAuth } from '@/hooks/useAuth';
 import { useProfile } from '@/hooks/useProfile';
 import { supabase } from '@/lib/supabase';
-import { Sticker, Category } from '@/lib/types';
-import { buildChapters, Chapter } from '@/lib/chapters';
+import { Sticker, Category, Language } from '@/lib/types';
 import { useSignedUrls } from '@/hooks/useSignedUrls';
+import { useStickerAuthors } from '@/hooks/useStickerAuthors';
 import StickerCard from '@/components/StickerCard';
-import StickerDetailView from '@/components/StickerDetailView';
-import ChapterCard from '@/components/ChapterCard';
-import ChapterDetailView from '@/components/ChapterDetailView';
+import StudyCard from '@/components/StudyCard';
 import MiniStickerWall from '@/components/MiniStickerWall';
-import OtterMascot from '@/components/illustrations/OtterMascot';
+import HomeHeader from '@/components/HomeHeader';
+import DueTodayRail from '@/components/DueTodayRail';
+import LatestStickers, { MAX_ROWS as LATEST_FEED_ROWS } from '@/components/LatestStickers';
+import { DAILY_GOAL, DUE_PREVIEW, dueToday, findsToday, reviewMinutes } from '@/lib/review';
+import StudySessionHost from '@/components/StudySessionHost';
 import { colors, shadows, radii, spacing, typography, fonts } from '@/constants/theme';
 import { TAB_BAR_CLEARANCE } from '@/constants/tabBar';
 
 const CATEGORIES: Array<'All' | Category> = ['All', 'Kitchen', 'Animals', 'Study', 'Nature', 'Other'];
-
-const VIEW_MODES = [
-  { key: 'grid',       label: 'Grid'       },
-  { key: 'story',      label: 'Story'      },
-  { key: 'challenges', label: 'Challenges' },
-] as const;
-
-type ViewMode = typeof VIEW_MODES[number]['key'];
 
 // 'newest'/'oldest' sort by discovered_at (when the memory happened —
 // backdated to the photo's own date on import). 'recentlyAdded' sorts by
@@ -39,21 +33,21 @@ type ViewMode = typeof VIEW_MODES[number]['key'];
 type SortMode = 'newest' | 'oldest' | 'recentlyAdded';
 const SORT_CYCLE: SortMode[] = ['newest', 'oldest', 'recentlyAdded'];
 const SORT_LABELS: Record<SortMode, string> = {
-  newest: 'Newest first',
+  newest: 'Latest first',
   oldest: 'Oldest first',
   recentlyAdded: 'Recently added',
 };
 
-function getGreeting() {
-  const h = new Date().getHours();
-  if (h < 12) return 'Good morning';
-  if (h < 18) return 'Good afternoon';
-  return 'Good evening';
-}
+// The wall card lifts up into the rose band rather than sitting below it,
+// so the band and the card read as one masthead. HomeHeader reserves the
+// matching space at its own bottom edge — deep enough that the two overlap
+// by most of the card's mount, which is what keeps the masthead compact
+// enough to leave the Latest stickers feed on screen.
+const WALL_OVERLAP = 56;
 
 export default function CollectionScreen() {
   const { user } = useAuth();
-  const { profile, setHomeBackground } = useProfile(user?.id);
+  const { profile, setHomeBackground, setHomeWallArranged } = useProfile(user?.id);
   const [stickers, setStickers] = useState<Sticker[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -62,15 +56,19 @@ export default function CollectionScreen() {
   const [sortMode, setSortMode] = useState<SortMode>('newest');
   const [sortMenuVisible, setSortMenuVisible] = useState(false);
   const [selectedSticker, setSelectedSticker] = useState<Sticker | null>(null);
-  const [viewMode, setViewMode] = useState<ViewMode>('grid');
-  const [openChapter, setOpenChapter] = useState<Chapter | null>(null);
   const [searchActive, setSearchActive] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  // A review session is just the due queue plus a cursor into it: closing
+  // the detail view advances to the next card instead of dismissing, so
+  // "Review all" is a real flip-through built out of the screen we already
+  // have rather than a second full-screen viewer.
+  const [reviewQueue, setReviewQueue] = useState<Sticker[] | null>(null);
+  // null = every language. Only offered when the collection actually holds
+  // more than one — interleaving two languages in one session is genuinely
+  // disorienting, but a filter for a state you can't be in is just clutter.
+  const [langFilter, setLangFilter] = useState<Language | null>(null);
 
-  const openSearch = () => {
-    setSearchActive(true);
-    if (viewMode !== 'grid') setViewMode('grid');
-  };
+  const openSearch = () => setSearchActive(true);
   const closeSearch = () => {
     setSearchActive(false);
     setSearchQuery('');
@@ -118,28 +116,39 @@ export default function CollectionScreen() {
   const trimmedQuery = searchQuery.trim().toLowerCase();
   const isSearching = searchActive && trimmedQuery.length > 0;
 
-  let filtered = viewMode === 'challenges'
-    ? stickers.filter(s => s.source === 'challenge')
-    : isSearching
-      ? stickers.filter(s =>
-          s.word.toLowerCase().includes(trimmedQuery) ||
-          s.translation.toLowerCase().includes(trimmedQuery) ||
-          s.reading.toLowerCase().includes(trimmedQuery) ||
-          (s.notes?.toLowerCase().includes(trimmedQuery) ?? false)
-        )
-      : activeCategory === 'All'
-        ? stickers
-        : stickers.filter(s => s.category === activeCategory);
-  if (viewMode === 'grid' && favoritesOnly) filtered = filtered.filter(s => s.is_favorite);
-  if (viewMode === 'grid' || viewMode === 'challenges') {
-    const field = sortMode === 'recentlyAdded' ? 'created_at' : 'discovered_at';
-    filtered = [...filtered].sort((a, b) => {
-      const diff = new Date(a[field]).getTime() - new Date(b[field]).getTime();
-      return sortMode === 'oldest' ? diff : -diff;
-    });
-  }
+  // Sorted first, then filtered — the "Latest stickers" feed shows the whole
+  // collection in the chosen order while the grid below shows the filtered
+  // slice of it, and both have to agree about what "latest" means.
+  const sortField = sortMode === 'recentlyAdded' ? 'created_at' : 'discovered_at';
+  const sorted = useMemo(() => [...stickers].sort((a, b) => {
+    const diff = new Date(a[sortField]).getTime() - new Date(b[sortField]).getTime();
+    return sortMode === 'oldest' ? diff : -diff;
+  }), [stickers, sortField, sortMode]);
 
-  const chapters = useMemo(() => buildChapters(stickers), [stickers]);
+  let filtered = isSearching
+    ? sorted.filter(s =>
+        s.word.toLowerCase().includes(trimmedQuery) ||
+        s.translation.toLowerCase().includes(trimmedQuery) ||
+        s.reading.toLowerCase().includes(trimmedQuery) ||
+        (s.notes?.toLowerCase().includes(trimmedQuery) ?? false)
+      )
+    : activeCategory === 'All'
+      ? sorted
+      : sorted.filter(s => s.category === activeCategory);
+  if (favoritesOnly) filtered = filtered.filter(s => s.is_favorite);
+
+  // Recomputed only when the collection changes, not on every render — it
+  // reads the clock, and a queue that reshuffled mid-scroll would be worse
+  // than one that's a few minutes stale.
+  const due = useMemo(
+    () => dueToday(stickers, { language: langFilter ?? undefined }),
+    [stickers, langFilter]
+  );
+  const languages = useMemo(
+    () => Array.from(new Set(stickers.map(s => s.language))),
+    [stickers]
+  );
+  const foundToday = useMemo(() => findsToday(stickers), [stickers]);
 
   // Two-tier signing: a small, fast batch for the images the grid/story list
   // actually renders first (comfortably covers the FlatList's initial
@@ -153,8 +162,15 @@ export default function CollectionScreen() {
   // afterward without blocking anything.
   const PRIORITY_COUNT = 24;
   const priorityUrls = useSignedUrls(useMemo(
-    () => filtered.slice(0, PRIORITY_COUNT).map(s => s.image_path),
-    [filtered]
+    // The due rail and the Latest feed both paint above the grid, so their
+    // images belong in the fast batch even though they aren't drawn from
+    // `filtered` — otherwise the first thing on screen is the last to load.
+    () => [
+      ...due.slice(0, DUE_PREVIEW).map(s => s.image_path),
+      ...sorted.slice(0, LATEST_FEED_ROWS).map(s => s.image_path),
+      ...filtered.slice(0, PRIORITY_COUNT).map(s => s.image_path),
+    ],
+    [due, sorted, filtered]
   ));
   const deferredUrls = useSignedUrls(useMemo(() => [
     ...filtered.slice(PRIORITY_COUNT).map(s => s.image_path),
@@ -166,45 +182,71 @@ export default function CollectionScreen() {
     [priorityUrls, deferredUrls]
   );
 
-  const username = profile?.username ?? 'Explorer';
+  // Whose face goes on each due card: yours, or the friend who sent you the
+  // challenge you won it off.
+  const getAuthor = useStickerAuthors(stickers, profile);
 
-  return (
-    <SafeAreaView style={styles.safeArea}>
-      {/* ── Header ── */}
-      <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{username[0]?.toUpperCase() ?? 'E'}</Text>
-          </View>
-          <View>
-            <Text style={styles.greeting}>{getGreeting()},</Text>
-            <Text style={styles.username}>{username}</Text>
-          </View>
-        </View>
-        <View style={styles.headerActions}>
-          <TouchableOpacity onPress={openSearch} style={styles.iconBtn} hitSlop={8}>
-            <Search size={18} color={colors.inkMid} />
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => router.push('/profile')} style={styles.iconBtn} hitSlop={8}>
-            <Settings size={18} color={colors.inkMid} />
-          </TouchableOpacity>
-        </View>
-      </View>
+  const cycleSort = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setSortMode(m => SORT_CYCLE[(SORT_CYCLE.indexOf(m) + 1) % SORT_CYCLE.length]);
+  };
 
-      {/* ── Mini sticker wall preview ── */}
-      <MiniStickerWall
-        stickers={stickers}
-        userId={user?.id}
-        backgroundPath={profile?.home_background_path}
-        backgroundDim="none"
-        onChangeBackground={setHomeBackground}
+  const startReview = () => {
+    if (due.length === 0) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setReviewQueue(due);
+  };
+
+  const listHeader = (
+    <>
+      <HomeHeader
+        foundToday={foundToday}
+        goal={DAILY_GOAL}
+        dueCount={due.length}
+        reviewMinutes={reviewMinutes(due.length)}
+        onStartReview={startReview}
+        onSearch={openSearch}
+        onSettings={() => router.push('/profile')}
       />
 
-      {/* ── View mode segmented control, replaced by a search bar while
-          searching — search only spans Grid's data, so activating it forces
-          viewMode to 'grid' (see openSearch) and there's nothing for this
-          row to switch between. ── */}
-      {searchActive ? (
+      {/* ── Mini sticker wall preview, lifted into the rose band above ── */}
+      <View style={styles.wallLift}>
+        <MiniStickerWall
+          stickers={stickers}
+          userId={user?.id}
+          backgroundPath={profile?.home_background_path}
+          backgroundDim="none"
+          onChangeBackground={setHomeBackground}
+          arranged={profile?.home_wall_arranged ?? false}
+          onArranged={setHomeWallArranged}
+          onPressSticker={setSelectedSticker}
+        />
+      </View>
+
+      <DueTodayRail
+        due={due.slice(0, DUE_PREVIEW)}
+        totalDue={due.length}
+        languages={languages}
+        activeLanguage={langFilter}
+        onSelectLanguage={setLangFilter}
+        getUrl={getUrl}
+        getAuthor={getAuthor}
+        onPressSticker={setSelectedSticker}
+        onReviewAll={startReview}
+      />
+
+      <LatestStickers
+        stickers={sorted}
+        sortLabel={SORT_LABELS[sortMode]}
+        onCycleSort={cycleSort}
+        getUrl={getUrl}
+        onPressSticker={setSelectedSticker}
+      />
+
+      {/* ── Search bar, shown only while searching. There's no view-mode
+          switcher any more — the grid is the only view — so this row simply
+          isn't rendered at rest rather than swapping places with one. ── */}
+      {searchActive && (
         <View style={styles.searchBar}>
           <View style={styles.searchInputWrap}>
             <Search size={14} color={colors.inkFaint} />
@@ -227,154 +269,121 @@ export default function CollectionScreen() {
             <Text style={styles.searchCancel}>Cancel</Text>
           </TouchableOpacity>
         </View>
-      ) : (
-        <View style={styles.segmented}>
-          {VIEW_MODES.map(({ key, label }) => (
-            <TouchableOpacity
-              key={key}
-              style={[styles.seg, viewMode === key && styles.segActive]}
-              onPress={() => setViewMode(key)}
-            >
-              <Text style={[styles.segText, viewMode === key && styles.segTextActive]}>{label}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
       )}
 
-      {/* ── Category filter (grid mode only) — sort/favorites live in the
-          fixed icon cluster beside it rather than scrolling inline, so only
-          one kind of control (category) ever shares the scroll row. While
-          searching, category no longer applies (search spans everything),
-          so the chips are swapped for a result count instead. ── */}
-      {viewMode === 'grid' && (
-        <View style={styles.filterRow}>
-          {isSearching ? (
-            <View style={styles.searchResultsLabelWrap}>
-              <Text style={styles.searchResultsLabel}>
-                {filtered.length} result{filtered.length === 1 ? '' : 's'}
-              </Text>
-            </View>
-          ) : (
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              style={styles.categoryScroll}
-              contentContainerStyle={styles.categoryContent}
-            >
-              {CATEGORIES.map(cat => (
-                <TouchableOpacity
-                  key={cat}
-                  style={[styles.chip, styles.chipAlt, activeCategory === cat && styles.chipAltActive]}
-                  onPress={() => setActiveCategory(cat)}
-                >
-                  <Text style={[styles.chipText, activeCategory === cat && styles.chipTextActive]}>{cat}</Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          )}
-          <View style={styles.iconCluster}>
-            <TouchableOpacity
-              style={[styles.iconBtnSmall, sortMode !== 'newest' && styles.iconBtnSmallSortActive]}
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                setSortMode(m => SORT_CYCLE[(SORT_CYCLE.indexOf(m) + 1) % SORT_CYCLE.length]);
-              }}
-              onLongPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                setSortMenuVisible(true);
-              }}
-              delayLongPress={350}
-              hitSlop={6}
-            >
-              <ArrowUpDown size={14} color={sortMode !== 'newest' ? colors.inkDark : colors.inkMid} />
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.iconBtnSmall, favoritesOnly && styles.iconBtnSmallFavActive]}
-              onPress={() => setFavoritesOnly(f => !f)}
-              hitSlop={6}
-            >
-              <Heart size={14} color={favoritesOnly ? colors.white : colors.error} fill={favoritesOnly ? colors.white : 'transparent'} />
-            </TouchableOpacity>
+      {/* ── Category filter — sort/favorites live in the fixed icon cluster
+          beside it rather than scrolling inline, so only one kind of control
+          (category) ever shares the scroll row. While searching, category no
+          longer applies (search spans everything), so the chips are swapped
+          for a result count instead. ── */}
+      <View style={styles.filterRow}>
+        {isSearching ? (
+          <View style={styles.searchResultsLabelWrap}>
+            <Text style={styles.searchResultsLabel}>
+              {filtered.length} result{filtered.length === 1 ? '' : 's'}
+            </Text>
           </View>
+        ) : (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.categoryScroll}
+            contentContainerStyle={styles.categoryContent}
+          >
+            {CATEGORIES.map(cat => (
+              <TouchableOpacity
+                key={cat}
+                style={[styles.chip, styles.chipAlt, activeCategory === cat && styles.chipAltActive]}
+                onPress={() => setActiveCategory(cat)}
+              >
+                <Text style={[styles.chipText, activeCategory === cat && styles.chipTextActive]}>{cat}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        )}
+        <View style={styles.iconCluster}>
+          <TouchableOpacity
+            style={[styles.iconBtnSmall, sortMode !== 'newest' && styles.iconBtnSmallSortActive]}
+            onPress={cycleSort}
+            onLongPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              setSortMenuVisible(true);
+            }}
+            delayLongPress={350}
+            hitSlop={6}
+          >
+            <ArrowUpDown size={14} color={sortMode !== 'newest' ? colors.inkDark : colors.inkMid} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.iconBtnSmall, favoritesOnly && styles.iconBtnSmallFavActive]}
+            onPress={() => setFavoritesOnly(f => !f)}
+            hitSlop={6}
+          >
+            <Heart size={14} color={favoritesOnly ? colors.white : colors.error} fill={favoritesOnly ? colors.white : 'transparent'} />
+          </TouchableOpacity>
         </View>
-      )}
+      </View>
+    </>
+  );
 
-      {/* ── Content ── */}
-      {loading ? (
-        <ActivityIndicator style={styles.loader} color={colors.terra} size="large" />
-      ) : viewMode === 'grid' || viewMode === 'challenges' ? (
-        filtered.length === 0 ? (
-          <EmptyState
-            title={isSearching
-              ? `No matches for "${searchQuery.trim()}"`
-              : viewMode === 'challenges' ? 'No challenge wins yet' : 'No stickers yet'}
-            subtitle={isSearching
-              ? 'Try a different word, meaning, or note.'
-              : viewMode === 'challenges'
-                ? 'Stickers you win from friend challenges appear here.'
+  return (
+    <View style={styles.screen}>
+      {/* One list for the whole screen: the masthead, the two feature
+          sections and the filter row all ride along as its header, so the
+          rose band scrolls away with the content instead of being pinned
+          above a separately-scrolling grid. */}
+      <FlatList
+        data={loading ? [] : filtered}
+        keyExtractor={s => s.id}
+        numColumns={2}
+        columnWrapperStyle={styles.row}
+        contentContainerStyle={styles.grid}
+        ListHeaderComponent={listHeader}
+        ListEmptyComponent={
+          loading ? (
+            <ActivityIndicator style={styles.loader} color={colors.terra} size="large" />
+          ) : (
+            <EmptyState
+              title={isSearching ? `No matches for "${searchQuery.trim()}"` : 'No stickers yet'}
+              subtitle={isSearching
+                ? 'Try a different word, meaning, or note.'
                 : favoritesOnly
                   ? 'Tap the heart on a sticker to favorite it!'
                   : 'Tap the Scan tab to discover your first word!'}
-          />
-        ) : (
-          <FlatList
-            key={viewMode}
-            data={filtered}
-            keyExtractor={s => s.id}
-            numColumns={2}
-            columnWrapperStyle={styles.row}
-            contentContainerStyle={styles.grid}
-            renderItem={({ item }) => (
-              <View style={styles.cardWrapper}>
-                <StickerCard
-                  sticker={item}
-                  onPress={() => setSelectedSticker(item)}
-                  onToggleFavorite={handleToggleFavorite}
-                  imageUrl={getUrl(item.image_path)}
-                  voiceUrl={getUrl(item.voice_note_path)}
-                />
-              </View>
-            )}
-            refreshControl={
-              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.terra} />
-            }
-          />
-        )
-      ) : viewMode === 'story' ? (
-        chapters.length === 0 ? (
-          <EmptyState title="No stickers yet" subtitle="Tap the Scan tab to discover your first word!" />
-        ) : (
-          <FlatList
-            key="story"
-            data={chapters}
-            keyExtractor={c => c.key}
-            contentContainerStyle={styles.chapterList}
-            renderItem={({ item }) => (
-              <ChapterCard
-                chapter={item}
-                onPress={() => setOpenChapter(item)}
-                imageUrl={getUrl(item.coverSticker.memory_photo_path ?? item.coverSticker.image_path)}
-              />
-            )}
-            refreshControl={
-              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.terra} />
-            }
-          />
-        )
-      ) : null}
-
-      <ChapterDetailView
-        chapter={openChapter}
-        onClose={() => setOpenChapter(null)}
-        onSelectSticker={setSelectedSticker}
-        onToggleFavorite={handleToggleFavorite}
+            />
+          )
+        }
+        renderItem={({ item }) => (
+          <View style={styles.cardWrapper}>
+            <StickerCard
+              sticker={item}
+              onPress={() => setSelectedSticker(item)}
+              onToggleFavorite={handleToggleFavorite}
+              imageUrl={getUrl(item.image_path)}
+              voiceUrl={getUrl(item.voice_note_path)}
+            />
+          </View>
+        )}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.terra} />
+        }
       />
 
-      <StickerDetailView
+      {/* Browsing only. Tapping a sticker from the grid, the feed or the due
+          rail leaves the schedule alone — grading belongs to a session. */}
+      <StudyCard
         sticker={selectedSticker}
+        mode="browse"
         onClose={() => setSelectedSticker(null)}
-        onDelete={() => { setSelectedSticker(null); fetchStickers(); }}
+        onDeleted={() => { setSelectedSticker(null); fetchStickers(); }}
         onUpdate={patchSticker}
+      />
+
+      <StudySessionHost
+        queue={reviewQueue}
+        onExit={() => setReviewQueue(null)}
+        onUpdate={patchSticker}
+        onDeleted={fetchStickers}
       />
 
       <Modal
@@ -405,14 +414,13 @@ export default function CollectionScreen() {
           </Pressable>
         </Pressable>
       </Modal>
-    </SafeAreaView>
+    </View>
   );
 }
 
 function EmptyState({ title, subtitle }: { title: string; subtitle: string }) {
   return (
     <View style={styles.empty}>
-      <OtterMascot size={100} variant="small" />
       <Text style={styles.emptyTitle}>{title}</Text>
       <Text style={styles.emptySubtitle}>{subtitle}</Text>
     </View>
@@ -420,58 +428,20 @@ function EmptyState({ title, subtitle }: { title: string; subtitle: string }) {
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: colors.sky, paddingBottom: TAB_BAR_CLEARANCE },
+  screen: { flex: 1, backgroundColor: colors.sky },
 
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
-    paddingBottom: spacing.sm,
-  },
-  headerLeft: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  headerActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: radii.full,
-    backgroundColor: colors.terra,
-    alignItems: 'center',
-    justifyContent: 'center',
-    ...shadows.card,
-  },
-  avatarText: { color: colors.inkDark, fontSize: 16, fontWeight: '800' },
-  greeting: { fontSize: 12, fontWeight: '500', color: colors.inkLight },
-  username: { fontSize: 16, fontFamily: fonts.cozy, color: colors.inkDark },
-  iconBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: radii.full,
-    backgroundColor: colors.card,
-    alignItems: 'center',
-    justifyContent: 'center',
-    ...shadows.card,
-  },
-
-  segmented: {
-    flexDirection: 'row',
-    marginHorizontal: spacing.lg,
-    marginBottom: spacing.sm,
-    backgroundColor: colors.borderLight,
-    borderRadius: radii.full,
-    padding: 3,
-  },
-  seg: { flex: 1, alignItems: 'center', paddingVertical: 8, borderRadius: radii.full },
-  segActive: { backgroundColor: colors.card, ...shadows.card },
-  segText: { fontSize: 12, fontWeight: '700', color: colors.inkLight },
-  segTextActive: { color: colors.inkDark },
+  // Negative top margin pulls the wall card up over the rose band's own
+  // bottom padding, so the card straddles the seam. It has to sit in its
+  // own wrapper rather than on MiniStickerWall itself — the panel is a
+  // shared component the Wall tab renders flush.
+  wallLift: { marginTop: -WALL_OVERLAP },
 
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
     marginHorizontal: spacing.lg,
+    marginTop: spacing.ms,
     marginBottom: spacing.sm,
   },
   searchInputWrap: {
@@ -493,6 +463,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingLeft: spacing.lg,
+    marginTop: spacing.ms,
     marginBottom: spacing.xs,
   },
   categoryScroll: { flex: 1 },
@@ -527,18 +498,21 @@ const styles = StyleSheet.create({
   chipText: { fontSize: 13, fontWeight: '600', color: colors.inkMid },
   chipTextActive: { color: colors.white },
 
-  loader: { marginTop: spacing.xxl },
+  loader: { marginTop: spacing.xxl, alignSelf: 'center' },
 
-  grid: { paddingHorizontal: spacing.md, paddingBottom: spacing.xxl, paddingTop: spacing.sm },
-  row: { gap: spacing.sm, marginBottom: spacing.sm },
+  // No horizontal *or* top padding here on purpose: contentContainerStyle
+  // wraps the ListHeaderComponent as well as the rows, so an inset put here
+  // would push the full-bleed rose band in from the screen edges and down
+  // from the very top. Both gutters belong to the rows alone.
+  grid: { paddingBottom: TAB_BAR_CLEARANCE + spacing.xl },
+  row: { gap: spacing.sm, marginBottom: spacing.sm, paddingHorizontal: spacing.md, paddingTop: spacing.sm },
   cardWrapper: { flex: 1 },
-  chapterList: { paddingHorizontal: spacing.md, paddingBottom: spacing.xxl, gap: spacing.sm },
 
   empty: {
-    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.xxl,
     gap: spacing.md,
   },
   emptyTitle: { ...typography.h3, textAlign: 'center' },

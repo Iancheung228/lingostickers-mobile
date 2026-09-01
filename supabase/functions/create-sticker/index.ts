@@ -10,6 +10,19 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// The model is asked for one of a fixed set, but it's a language model, so
+// it occasionally answers "Noun." or "a noun" or something off-list. The
+// study card renders this verbatim next to "MEANS", so anything unrecognised
+// becomes null and the card simply drops the qualifier rather than printing
+// a stray sentence fragment in small caps.
+const PARTS_OF_SPEECH = ['noun', 'verb', 'adjective', 'adverb', 'phrase'];
+
+function normalizePartOfSpeech(raw: unknown): string | null {
+  if (typeof raw !== 'string') return null;
+  const cleaned = raw.toLowerCase().replace(/[^a-z]/g, '');
+  return PARTS_OF_SPEECH.includes(cleaned) ? cleaned : null;
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -109,6 +122,7 @@ Deno.serve(async (req) => {
           sentence: vocabResult.sentence,
           sentenceTranslation: vocabResult.sentence_translation,
           sentenceInsight: vocabResult.sentence_insight ?? null,
+          partOfSpeech: normalizePartOfSpeech(vocabResult.part_of_speech),
           category: vocabResult.category,
           imagePath: precutImagePath,
           memoryPhotoPath,
@@ -173,6 +187,7 @@ Deno.serve(async (req) => {
         sentence: vocabResult.sentence,
         sentenceTranslation: vocabResult.sentence_translation,
         sentenceInsight: vocabResult.sentence_insight ?? null,
+        partOfSpeech: normalizePartOfSpeech(vocabResult.part_of_speech),
         category: vocabResult.category,
         imagePath,
         memoryPhotoPath,

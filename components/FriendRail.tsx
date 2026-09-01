@@ -44,6 +44,7 @@ export default function FriendRail({ friends, awaitingIds, onSelect, onAdd }: Fr
         >
           <Avatar
             name={f.friend.username}
+            avatarPath={f.friend.avatar_path}
             size={46}
             highlighted={awaitingIds?.has(f.friend.id)}
           />

@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
+import {
+  View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, ScrollView,
+} from 'react-native';
 import { Link, useLocalSearchParams } from 'expo-router';
 import { useAuth } from '@/hooks/useAuth';
-import CozyBackground from '@/components/CozyBackground';
-import OtterMascot from '@/components/illustrations/OtterMascot';
 import { colors, shadows, radii, spacing, typography, fonts } from '@/constants/theme';
 
 const RESEND_COOLDOWN_SECONDS = 30;
@@ -39,24 +39,35 @@ export default function CheckEmailScreen() {
     startCooldown();
   };
 
+  // Deliberately not wrapped in AuthIntro: the wordmark fade is the app's
+  // first impression, and replaying it one screen later — arrived at by a
+  // replace() from sign-up — would read as a restart rather than a step.
   return (
-    <CozyBackground variant="full">
-      <View style={styles.inner}>
-        <OtterMascot size={120} variant="sleeping" />
+    <View style={styles.flex}>
+      <ScrollView
+        contentContainerStyle={styles.scroll}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Hero */}
+        <View style={styles.hero}>
+          <Text style={styles.eyebrow}>ONE LAST STEP</Text>
+          <Text style={styles.title}>Check your email</Text>
+          <Text style={styles.tagline}>
+            We sent a confirmation link to{'\n'}
+            <Text style={styles.email}>{email}</Text>
+          </Text>
+        </View>
 
-        <Text style={styles.title}>Check Your Email</Text>
-        <Text style={styles.subtitle}>
-          We sent a confirmation link to{'\n'}
-          <Text style={styles.email}>{email}</Text>
-        </Text>
-        <Text style={styles.hint}>Confirm it, then come back and sign in.</Text>
-
+        {/* Card */}
         <View style={styles.card}>
           {message && (
             <View style={styles.messageBox}>
               <Text style={styles.messageText}>{message}</Text>
             </View>
           )}
+
+          <Text style={styles.hint}>Confirm it, then come back and sign in.</Text>
 
           <TouchableOpacity
             style={[styles.button, cooldown > 0 && styles.buttonDisabled]}
@@ -79,45 +90,59 @@ export default function CheckEmailScreen() {
             </TouchableOpacity>
           </Link>
         </View>
-      </View>
-    </CozyBackground>
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  inner: {
-    flex: 1,
+  flex: { flex: 1, backgroundColor: colors.sky },
+  scroll: {
+    flexGrow: 1,
+    justifyContent: 'flex-end',
+    paddingBottom: spacing.xl,
+  },
+  hero: {
     alignItems: 'center',
-    justifyContent: 'center',
+    paddingTop: spacing.xxl + spacing.md,
+    paddingBottom: spacing.lg,
     paddingHorizontal: spacing.lg,
-    gap: spacing.sm,
+    gap: 6,
+  },
+  eyebrow: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.inkFaint,
+    letterSpacing: 2,
+    textTransform: 'uppercase',
   },
   title: {
-    fontSize: 30,
+    fontSize: 36,
     fontFamily: fonts.cozy,
     color: colors.inkDark,
     textAlign: 'center',
-    letterSpacing: -0.5,
+    letterSpacing: -1,
   },
-  subtitle: {
+  tagline: {
     ...typography.body,
     color: colors.inkMid,
     textAlign: 'center',
     lineHeight: 24,
   },
   email: { fontWeight: '700', color: colors.inkDark },
+  card: {
+    marginHorizontal: spacing.lg,
+    backgroundColor: colors.card,
+    borderRadius: radii.lg,
+    padding: spacing.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
   hint: {
     fontSize: 13,
-    color: colors.inkFaint,
+    color: colors.inkLight,
     textAlign: 'center',
-    marginBottom: spacing.sm,
-  },
-  card: {
-    width: '100%',
-    backgroundColor: colors.card,
-    borderRadius: radii.xl,
-    padding: spacing.lg,
-    ...shadows.card,
+    marginBottom: spacing.md,
   },
   button: {
     backgroundColor: colors.terra,

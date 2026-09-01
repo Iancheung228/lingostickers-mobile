@@ -37,13 +37,21 @@ Deno.serve(async (req) => {
     // and have to be cleaned up by hand. list() returns at most 1000 at a
     // time, and since we remove each page before listing again, the next
     // list() call naturally returns whatever's left — no cursor needed.
-    let page = await admin.storage.from('sticker-images').list(user.id, { limit: 1000 });
-    while (page.data && page.data.length > 0) {
-      const paths = page.data.map(f => `${user.id}/${f.name}`);
-      await admin.storage.from('sticker-images').remove(paths);
-      if (page.data.length < 1000) break;
-      page = await admin.storage.from('sticker-images').list(user.id, { limit: 1000 });
+    async function emptyUserFolder(bucket: string) {
+      let page = await admin.storage.from(bucket).list(user.id, { limit: 1000 });
+      while (page.data && page.data.length > 0) {
+        const paths = page.data.map(f => `${user.id}/${f.name}`);
+        await admin.storage.from(bucket).remove(paths);
+        if (page.data.length < 1000) break;
+        page = await admin.storage.from(bucket).list(user.id, { limit: 1000 });
+      }
     }
+
+    await emptyUserFolder('sticker-images');
+    // Avatars live in their own bucket, and that one is public — an orphaned
+    // file here would stay fetchable by anyone holding the URL long after the
+    // account was gone, so it matters more than the private one, not less.
+    await emptyUserFolder('avatars');
 
     const { error: deleteError } = await admin.auth.admin.deleteUser(user.id);
     if (deleteError) return json({ error: deleteError.message }, 500);

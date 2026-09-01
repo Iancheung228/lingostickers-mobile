@@ -7,7 +7,7 @@ import { supabase } from '@/lib/supabase';
 import { Sticker } from '@/lib/types';
 import { useSignedUrls } from '@/hooks/useSignedUrls';
 import StickerCard from '@/components/StickerCard';
-import StickerDetailView from '@/components/StickerDetailView';
+import StudyCard from '@/components/StudyCard';
 import { colors, shadows, radii, spacing, fonts } from '@/constants/theme';
 
 const DATE_FORMAT = new Intl.DateTimeFormat('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
@@ -90,10 +90,10 @@ export default function DayScreen() {
         />
       )}
 
-      <StickerDetailView
+      <StudyCard
         sticker={selectedSticker}
         onClose={() => setSelectedSticker(null)}
-        onDelete={() => { setSelectedSticker(null); fetchStickers(); }}
+        onDeleted={() => { setSelectedSticker(null); fetchStickers(); }}
         onUpdate={patchSticker}
       />
     </SafeAreaView>

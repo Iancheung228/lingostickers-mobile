@@ -6,7 +6,8 @@ import { useAuth } from '@/hooks/useAuth';
 import { useProfile } from '@/hooks/useProfile';
 import { supabase } from '@/lib/supabase';
 import { Language, Sticker, WallDisplayStyle, CutoutBorderStyle } from '@/lib/types';
-import OtterMascot from '@/components/illustrations/OtterMascot';
+import { pickAvatarImage } from '@/lib/avatars';
+import Avatar from '@/components/Avatar';
 import { colors, shadows, radii, spacing, fonts } from '@/constants/theme';
 
 const LANGUAGES: { code: Language; native: string; label: string }[] = [
@@ -28,13 +29,17 @@ const CUTOUT_BORDER_STYLES: { code: CutoutBorderStyle; label: string; subtitle: 
 
 export default function ProfileScreen() {
   const { user, signOut, deleteAccount } = useAuth();
-  const { profile, setTargetLanguage, setWallDisplayStyle, setCutoutBorderStyle } = useProfile(user?.id);
+  const {
+    profile, setTargetLanguage, setWallDisplayStyle, setCutoutBorderStyle,
+    setAvatar, removeAvatar,
+  } = useProfile(user?.id);
   const [stickers, setStickers] = useState<Sticker[]>([]);
   const [loading, setLoading] = useState(true);
   const [updatingLanguage, setUpdatingLanguage] = useState<Language | null>(null);
   const [updatingWallStyle, setUpdatingWallStyle] = useState<WallDisplayStyle | null>(null);
   const [updatingBorderStyle, setUpdatingBorderStyle] = useState<CutoutBorderStyle | null>(null);
   const [deletingAccount, setDeletingAccount] = useState(false);
+  const [savingAvatar, setSavingAvatar] = useState(false);
 
   const fetchStickers = useCallback(async () => {
     if (!user) return;
@@ -73,6 +78,31 @@ export default function ProfileScreen() {
     const { error } = await setCutoutBorderStyle(style);
     setUpdatingBorderStyle(null);
     if (error) Alert.alert("Couldn't update", error.message);
+  };
+
+  const handleChangeAvatar = async () => {
+    if (savingAvatar) return;
+    const picked = await pickAvatarImage();
+    if (!picked) return;
+    setSavingAvatar(true);
+    const { error } = await setAvatar(picked.uri);
+    setSavingAvatar(false);
+    if (error) Alert.alert("Couldn't update your photo", error.message);
+  };
+
+  const handleAvatarPress = () => {
+    if (!profile?.avatar_path) { handleChangeAvatar(); return; }
+    Alert.alert('Profile picture', undefined, [
+      { text: 'Choose a new photo', onPress: handleChangeAvatar },
+      {
+        text: 'Remove photo', style: 'destructive',
+        onPress: async () => {
+          const { error } = await removeAvatar();
+          if (error) Alert.alert("Couldn't remove your photo", error.message);
+        },
+      },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
   };
 
   const handleLogout = () => {
@@ -129,9 +159,14 @@ export default function ProfileScreen() {
           {/* Cozy panel with user card + stats */}
           <View style={styles.panel}>
             <View style={styles.userCard}>
-              <View style={styles.avatar}>
-                <Text style={styles.avatarText}>{username[0]?.toUpperCase() ?? 'E'}</Text>
-              </View>
+              <TouchableOpacity onPress={handleAvatarPress} activeOpacity={0.8} disabled={!profile}>
+                <Avatar name={username} avatarPath={profile?.avatar_path} size={52} />
+                <View style={styles.avatarBadge}>
+                  {savingAvatar
+                    ? <ActivityIndicator size="small" color={colors.white} />
+                    : <Camera size={11} color={colors.white} />}
+                </View>
+              </TouchableOpacity>
               <View style={styles.userInfo}>
                 <Text style={styles.username} numberOfLines={1}>{username}</Text>
                 <Text style={styles.email} numberOfLines={1}>{user?.email}</Text>
@@ -155,16 +190,11 @@ export default function ProfileScreen() {
               </View>
             </View>
 
-            <View style={styles.dialogueRow}>
-              <View style={styles.dialogueAvatar}>
-                <OtterMascot size={30} variant="small" />
-              </View>
-              <View style={styles.dialogueBubble}>
-                <Text style={styles.dialogueText}>
-                  Welcome back to your cozy corner! You've captured {stickers.length} watercolor
-                  {' '}memor{stickers.length === 1 ? 'y' : 'ies'} so far. Keep it up! 🌸
-                </Text>
-              </View>
+            <View style={styles.note}>
+              <Text style={styles.noteText}>
+                Welcome back to your cozy corner! You've captured {stickers.length} watercolor
+                {' '}memor{stickers.length === 1 ? 'y' : 'ies'} so far. Keep it up! 🌸
+              </Text>
             </View>
           </View>
 
@@ -343,15 +373,19 @@ const styles = StyleSheet.create({
     padding: spacing.ms,
     ...shadows.card,
   },
-  avatar: {
-    width: 52,
-    height: 52,
+  avatarBadge: {
+    position: 'absolute',
+    right: -2,
+    bottom: -2,
+    width: 20,
+    height: 20,
     borderRadius: radii.full,
     backgroundColor: colors.terra,
+    borderWidth: 2,
+    borderColor: colors.card,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  avatarText: { fontSize: 22, fontWeight: '800', color: colors.inkDark },
   userInfo: { flex: 1 },
   username: { fontSize: 15, fontFamily: fonts.cozy, color: colors.inkDark },
   email: { fontSize: 11, fontFamily: fonts.mono, color: colors.inkFaint, marginTop: 2 },
@@ -370,24 +404,12 @@ const styles = StyleSheet.create({
   statValue: { fontSize: 16, fontFamily: fonts.mono, fontWeight: '700', color: colors.inkDark },
   statLabel: { fontSize: 9, fontWeight: '700', color: colors.inkFaint },
 
-  dialogueRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm },
-  dialogueAvatar: {
-    width: 34,
-    height: 34,
-    borderRadius: radii.full,
-    backgroundColor: colors.card,
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
-  },
-  dialogueBubble: {
-    flex: 1,
+  note: {
     backgroundColor: 'rgba(255,255,255,0.55)',
     borderRadius: radii.lg,
-    borderTopLeftRadius: radii.xs,
     padding: spacing.ms,
   },
-  dialogueText: { fontSize: 11, fontWeight: '500', color: colors.inkDark, lineHeight: 16 },
+  noteText: { fontSize: 11, fontWeight: '500', color: colors.inkDark, lineHeight: 16 },
 
   sectionLabel: {
     fontSize: 10,

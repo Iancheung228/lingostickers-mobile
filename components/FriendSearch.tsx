@@ -68,7 +68,7 @@ export default function FriendSearch({ visible, onClose }: FriendSearchProps) {
               return (
                 <View style={styles.resultRow}>
                   <View style={styles.avatarSlot}>
-                    <Avatar name={item.username} size={38} />
+                    <Avatar name={item.username} avatarPath={item.avatar_path} size={38} />
                   </View>
                   <Text style={styles.username}>{item.username ?? 'Unknown'}</Text>
                   <TouchableOpacity
@@ -94,7 +94,7 @@ export default function FriendSearch({ visible, onClose }: FriendSearchProps) {
             {pendingReceived.map(f => (
               <View key={f.id} style={styles.resultRow}>
                 <View style={styles.avatarSlot}>
-                  <Avatar name={f.friend.username} size={38} />
+                  <Avatar name={f.friend.username} avatarPath={f.friend.avatar_path} size={38} />
                 </View>
                 <Text style={styles.username}>{f.friend.username ?? 'Unknown'}</Text>
                 <Text style={styles.pendingBadge}>Incoming</Text>
@@ -110,7 +110,7 @@ export default function FriendSearch({ visible, onClose }: FriendSearchProps) {
             {pendingSent.map(f => (
               <View key={f.id} style={styles.resultRow}>
                 <View style={styles.avatarSlot}>
-                  <Avatar name={f.friend.username} size={38} />
+                  <Avatar name={f.friend.username} avatarPath={f.friend.avatar_path} size={38} />
                 </View>
                 <Text style={styles.username}>{f.friend.username ?? 'Unknown'}</Text>
                 <TouchableOpacity style={styles.cancelButton} onPress={() => removeFriend(f.id)}>

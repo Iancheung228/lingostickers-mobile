@@ -2,6 +2,17 @@ import { StyleSheet } from 'react-native';
 import Svg, { Defs, LinearGradient, RadialGradient, Stop, Rect } from 'react-native-svg';
 import { colors } from '@/constants/theme';
 
+// The grain lines are a *texture*, so their thickness has to scale with the
+// surface the way their spacing (a percentage) already does. Left at an
+// absolute `height="1"` they stayed 1pt thick on a 62pt rail thumbnail as
+// well as on a ~467pt board canvas — 10 lines 7.6pt apart instead of 46.7pt
+// apart, i.e. ~6x the ink density, which is why the same component read as a
+// smooth gradient on the canvas and as visible hatching in BoardRail's
+// miniature of that same board. As a percentage it lands at ~0.9pt on the
+// canvas (so the canvas is unchanged) and fades out on the thumbnail —
+// which is exactly what a real texture does when you shrink it.
+const GRAIN_HEIGHT_PCT = 0.2;
+
 // Shared corkboard-ish backdrop used by both the auto chapter wall and
 // custom board canvases, so they read as the same physical "board".
 export default function CorkBackground() {
@@ -24,7 +35,7 @@ export default function CorkBackground() {
           x="0"
           y={`${(i + 0.5) * 10}%`}
           width="100%"
-          height="1"
+          height={`${GRAIN_HEIGHT_PCT}%`}
           fill={colors.skyNight}
           opacity={0.15 + (i % 3) * 0.03}
         />

@@ -114,6 +114,7 @@ export default function FriendsScreen() {
         return (
           <FriendRequestRow
             username={row.friendship.friend.username}
+            avatarPath={row.friendship.friend.avatar_path}
             onAccept={() => respondToRequest(row.friendship.id, 'accepted')}
             onDecline={() => respondToRequest(row.friendship.id, 'declined')}
           />
@@ -122,6 +123,7 @@ export default function FriendsScreen() {
         return (
           <ChallengeRow
             senderName={row.challenge.sender.username}
+            senderAvatarPath={row.challenge.sender.avatar_path}
             sentAt={row.challenge.sent_at}
             inProgress={row.challenge.status === 'active'}
             onPress={() => setActiveChallenge(row.challenge)}
@@ -133,6 +135,7 @@ export default function FriendsScreen() {
             word={row.challenge.snapshot_word}
             translation={row.challenge.snapshot_translation}
             solverName={row.challenge.receiver?.username ?? null}
+            solverAvatarPath={row.challenge.receiver?.avatar_path ?? null}
             completedAt={row.challenge.completed_at ?? null}
             imageUrl={solvedImages[row.challenge.id]}
           />

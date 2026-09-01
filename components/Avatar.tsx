@@ -1,4 +1,6 @@
 import { View, Text, StyleSheet } from 'react-native';
+import { Image } from 'expo-image';
+import { avatarUrl } from '@/lib/avatars';
 import { colors, radii } from '@/constants/theme';
 
 // ---------------------------------------------------------------------------
@@ -8,9 +10,12 @@ import { colors, radii } from '@/constants/theme';
 // requests block, ChallengeCard and FriendProfile — each with its own size and
 // its own idea of the initial. Same person, four appearances.
 //
-// The tint is derived from the name rather than fixed, so people stay visually
-// distinguishable in a list where every avatar is otherwise an identical blue
-// circle with a letter in it.
+// It draws the person's uploaded profile picture when they have one, and falls
+// back to a tinted initial when they don't. The fallback isn't a placeholder
+// to be designed away: a picture is optional at sign-up, and plenty of people
+// will never set one. The tint is derived from the name rather than fixed, so
+// those people stay visually distinguishable in a list where every avatar is
+// otherwise an identical circle with a letter in it.
 // ---------------------------------------------------------------------------
 const TINTS = [
   colors.terra,
@@ -37,13 +42,19 @@ function tintFor(name: string | null | undefined): string {
 
 interface AvatarProps {
   name: string | null | undefined;
+  /// Storage path of the person's profile picture (profiles.avatar_path).
+  /// Null/undefined — which is also what every call site that hasn't been
+  /// given one yet passes — renders the initial instead.
+  avatarPath?: string | null;
   size?: number;
   /// Draws a ring around it — used in the rail to mark someone with something
   /// waiting from them.
   highlighted?: boolean;
 }
 
-export default function Avatar({ name, size = 36, highlighted }: AvatarProps) {
+export default function Avatar({ name, avatarPath, size = 36, highlighted }: AvatarProps) {
+  const uri = avatarUrl(avatarPath);
+
   return (
     <View
       style={[
@@ -57,13 +68,26 @@ export default function Avatar({ name, size = 36, highlighted }: AvatarProps) {
         highlighted && styles.highlighted,
       ]}
     >
-      <Text style={[styles.initial, { fontSize: size * 0.4 }]}>{initialOf(name)}</Text>
+      {uri ? (
+        // The URL carries the upload timestamp in its filename, so it changes
+        // whenever the picture does — caching it hard is safe, and it means a
+        // friend's face is instant on every screen after the first.
+        <Image
+          source={{ uri }}
+          cachePolicy="memory-disk"
+          contentFit="cover"
+          transition={120}
+          style={StyleSheet.absoluteFill}
+        />
+      ) : (
+        <Text style={[styles.initial, { fontSize: size * 0.4 }]}>{initialOf(name)}</Text>
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  base: { alignItems: 'center', justifyContent: 'center' },
+  base: { alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
   highlighted: { borderWidth: 2, borderColor: colors.sageDark },
   initial: { fontWeight: '800', color: colors.inkDark },
 });

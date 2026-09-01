@@ -1,50 +1,64 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, useWindowDimensions } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from 'expo-router';
-import { Sticker as StickerIcon } from 'lucide-react-native';
+import { Plus, Sticker as StickerIcon } from 'lucide-react-native';
 import { useAuth } from '@/hooks/useAuth';
 import { useProfile } from '@/hooks/useProfile';
-import { useBoards } from '@/hooks/useBoards';
+import { useBoards, useBoardPreviews } from '@/hooks/useBoards';
 import { Board } from '@/lib/types';
 import BoardCarouselPage from '@/components/BoardCarouselPage';
-import CreateBoardCard from '@/components/CreateBoardCard';
-import { colors, spacing, fonts } from '@/constants/theme';
+import BoardRail from '@/components/BoardRail';
+import NewBoardSheet from '@/components/NewBoardSheet';
+import { colors, spacing, fonts, radii, shadows } from '@/constants/theme';
 import { TAB_BAR_CLEARANCE } from '@/constants/tabBar';
-
-const CREATE_PAGE_ID = '__create__';
-type PageItem = Board | { id: typeof CREATE_PAGE_ID };
 
 export default function WallScreen() {
   const { user } = useAuth();
   const { profile, refetch: refetchProfile } = useProfile(user?.id);
-  const { boards, createBoard, deleteBoard, setBoardBackground, setBoardBackgroundDim } = useBoards(user?.id);
+  const { boards, createBoard, deleteBoard, renameBoard, setBoardBackground, setBoardBackgroundDim } = useBoards(user?.id);
+  const { previews, refetch: refetchPreviews } = useBoardPreviews(user?.id);
   const { width: screenWidth } = useWindowDimensions();
   const insets = useSafeAreaInsets();
-  const listRef = useRef<FlatList<PageItem>>(null);
+  const listRef = useRef<FlatList<Board>>(null);
   const [pageIndex, setPageIndex] = useState(0);
   const [dragging, setDragging] = useState(false);
+  const [sheetOpen, setSheetOpen] = useState(false);
   const [justCreatedId, setJustCreatedId] = useState<string | null>(null);
   // A horizontal FlatList's own outer frame resolves flex:1 fine, but each
   // rendered page (a row item) doesn't automatically stretch to that frame's
   // height — without a real height, the board canvas's flex:1 chain inside
-  // it can measure taller than what's actually reserved above the floating
-  // tab bar, letting it overlap the bar. Measuring the list's frame directly
-  // and pinning every page to that height closes the gap.
+  // it can measure taller than what's actually reserved above the rail and
+  // the floating tab bar. Measuring the list's frame directly and pinning
+  // every page to that height closes the gap.
   const [listHeight, setListHeight] = useState(0);
 
-  useFocusEffect(useCallback(() => { refetchProfile(); }, [refetchProfile]));
+  useFocusEffect(useCallback(() => {
+    refetchProfile();
+    refetchPreviews();
+  }, [refetchProfile, refetchPreviews]));
 
-  const pages: PageItem[] = [...boards, { id: CREATE_PAGE_ID }];
+  const goToPage = (index: number) => {
+    // Set the index directly rather than waiting for the scroll to settle:
+    // a programmatic scroll doesn't reliably fire onMomentumScrollEnd, and
+    // the rail should light up the tapped board instantly either way.
+    setPageIndex(index);
+    listRef.current?.scrollToIndex({ index, animated: true });
+  };
 
-  // A newly created board lands at the front (useBoards prepends it) —
-  // jump the carousel there so the user lands on the board they just named
-  // instead of staying on the trailing "create" page.
+  // A newly created board lands at the front (useBoards prepends it) — jump
+  // the carousel there so the user lands on the board they just named.
   useEffect(() => {
     if (justCreatedId && boards.length > 0 && boards[0].id === justCreatedId) {
-      listRef.current?.scrollToIndex({ index: 0, animated: true });
+      goToPage(0);
     }
   }, [justCreatedId, boards]);
+
+  // Deleting the last board leaves pageIndex pointing past the end, which
+  // would light up nothing in the rail and leave the carousel blank.
+  useEffect(() => {
+    if (boards.length > 0 && pageIndex > boards.length - 1) goToPage(boards.length - 1);
+  }, [boards.length, pageIndex]);
 
   const handleCreateBoard = async (name: string) => {
     const { error, board } = await createBoard(name);
@@ -53,88 +67,103 @@ export default function WallScreen() {
   };
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top, paddingBottom: insets.bottom + TAB_BAR_CLEARANCE }]}>
-      <View style={styles.header}>
-        <View style={styles.titleRow}>
-          <StickerIcon size={13} color={colors.inkDark} />
-          <Text style={styles.title}>My Boards</Text>
+    <View style={[styles.container, { paddingTop: insets.top + spacing.sm, paddingBottom: insets.bottom + TAB_BAR_CLEARANCE }]}>
+      {boards.length === 0 ? (
+        <View style={styles.empty}>
+          <View style={styles.emptyIconCircle}>
+            <StickerIcon size={22} color={colors.inkDark} />
+          </View>
+          <Text style={styles.emptyTitle}>No boards yet</Text>
+          <Text style={styles.emptySubtitle}>
+            A board is a wall you arrange yourself — pin any stickers from your collection onto it.
+          </Text>
+          <TouchableOpacity style={styles.emptyBtn} onPress={() => setSheetOpen(true)} activeOpacity={0.85}>
+            <Plus size={16} color={colors.white} strokeWidth={2.5} />
+            <Text style={styles.emptyBtnText}>New board</Text>
+          </TouchableOpacity>
         </View>
-        <Text style={styles.subtitle}>Swipe to explore</Text>
-      </View>
-
-      <FlatList
-        ref={listRef}
-        style={styles.list}
-        onLayout={(e) => setListHeight(e.nativeEvent.layout.height)}
-        data={pages}
-        keyExtractor={p => p.id}
-        horizontal
-        pagingEnabled
-        scrollEnabled={!dragging}
-        showsHorizontalScrollIndicator={false}
-        decelerationRate="fast"
-        getItemLayout={(_, index) => ({ length: screenWidth, offset: screenWidth * index, index })}
-        onMomentumScrollEnd={(e) => {
-          setPageIndex(Math.round(e.nativeEvent.contentOffset.x / screenWidth));
-        }}
-        renderItem={({ item }) => (
-          <View style={{ width: screenWidth, height: listHeight || undefined }}>
-            {item.id === CREATE_PAGE_ID ? (
-              <CreateBoardCard onCreate={handleCreateBoard} />
-            ) : (
+      ) : (
+        <FlatList
+          ref={listRef}
+          style={styles.list}
+          onLayout={(e) => setListHeight(e.nativeEvent.layout.height)}
+          data={boards}
+          keyExtractor={b => b.id}
+          horizontal
+          pagingEnabled
+          scrollEnabled={!dragging}
+          showsHorizontalScrollIndicator={false}
+          decelerationRate="fast"
+          getItemLayout={(_, index) => ({ length: screenWidth, offset: screenWidth * index, index })}
+          onMomentumScrollEnd={(e) => {
+            setPageIndex(Math.round(e.nativeEvent.contentOffset.x / screenWidth));
+          }}
+          // Every page is mounted at once, so `isActive` below is the only
+          // thing that tells a page it's the one being looked at.
+          extraData={pageIndex}
+          renderItem={({ item, index }) => (
+            <View style={{ width: screenWidth, height: listHeight || undefined }}>
               <BoardCarouselPage
-                board={item as Board}
+                board={item}
                 currentUserId={user?.id}
                 displayStyle={profile?.wall_display_style ?? 'framed'}
                 borderStyle={profile?.cutout_border_style ?? 'shadow'}
+                isActive={index === pageIndex}
                 onDeleteBoard={deleteBoard}
+                onRenameBoard={renameBoard}
                 onChangeBackground={setBoardBackground}
                 onChangeBackgroundDim={setBoardBackgroundDim}
                 onDragStateChange={setDragging}
+                onContentChanged={refetchPreviews}
                 autoOpenPicker={item.id === justCreatedId}
                 onAutoOpenHandled={() => setJustCreatedId(null)}
               />
-            )}
-          </View>
-        )}
+            </View>
+          )}
+        />
+      )}
+
+      <BoardRail
+        boards={boards}
+        previews={previews}
+        activeIndex={pageIndex}
+        onSelect={goToPage}
+        onCreate={() => setSheetOpen(true)}
       />
 
-      {pages.length > 1 && (
-        <View style={styles.dots}>
-          {pages.map((p, i) => (
-            <View
-              key={p.id}
-              style={[
-                styles.dot,
-                p.id === CREATE_PAGE_ID && styles.dotCreate,
-                i === pageIndex && styles.dotActive,
-              ]}
-            />
-          ))}
-        </View>
-      )}
+      <NewBoardSheet
+        visible={sheetOpen}
+        onCancel={() => setSheetOpen(false)}
+        onCreate={handleCreateBoard}
+      />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.sky },
-  header: {
-    alignItems: 'center',
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.md,
-  },
   // flex:1 here plus the explicit `height: listHeight` on each rendered page
   // (see onLayout above) is what keeps the board canvas's flex:1 chain from
-  // resolving taller than the space actually reserved above the floating
-  // tab bar.
+  // resolving taller than the space actually reserved above the rail.
   list: { flex: 1 },
-  titleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
-  title: { fontSize: 15, fontFamily: fonts.cozy, color: colors.inkDark },
-  subtitle: { fontSize: 10, color: colors.inkFaint, fontWeight: '600', marginTop: 1 },
-  dots: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 6, marginBottom: spacing.sm },
-  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.borderLight },
-  dotCreate: { borderRadius: 2, backgroundColor: colors.sageLight },
-  dotActive: { backgroundColor: colors.terra, width: 16 },
+  empty: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.xl },
+  emptyIconCircle: {
+    width: 52, height: 52,
+    borderRadius: radii.full,
+    backgroundColor: colors.cardAlt,
+    alignItems: 'center', justifyContent: 'center',
+    marginBottom: spacing.sm,
+  },
+  emptyTitle: { fontSize: 18, fontFamily: fonts.cozy, color: colors.inkDark, marginBottom: 8 },
+  emptySubtitle: {
+    fontSize: 13, color: colors.inkFaint, textAlign: 'center', lineHeight: 20,
+    marginBottom: spacing.lg,
+  },
+  emptyBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: spacing.xs,
+    paddingHorizontal: spacing.lg, paddingVertical: spacing.ms,
+    borderRadius: radii.full, backgroundColor: colors.terra,
+    ...shadows.button,
+  },
+  emptyBtnText: { fontSize: 15, fontFamily: fonts.cozy, color: colors.white },
 });

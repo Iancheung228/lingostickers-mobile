@@ -31,14 +31,14 @@ function useChallengesState() {
     const senderIds = [...new Set(data.map(c => c.sender_id))];
     const { data: profiles } = await supabase
       .from('profiles')
-      .select('id, username')
+      .select('id, username, avatar_path')
       .in('id', senderIds);
 
     const profileMap = new Map((profiles ?? []).map(p => [p.id, p]));
 
     setInbox(data.map(c => ({
       ...c,
-      sender: profileMap.get(c.sender_id) ?? { id: c.sender_id, username: null },
+      sender: profileMap.get(c.sender_id) ?? { id: c.sender_id, username: null, avatar_path: null },
     })));
   }, [userId]);
 
@@ -61,14 +61,14 @@ function useChallengesState() {
     const receiverIds = [...new Set(data.map(c => c.receiver_id))];
     const { data: profiles } = await supabase
       .from('profiles')
-      .select('id, username')
+      .select('id, username, avatar_path')
       .in('id', receiverIds);
 
     const profileMap = new Map((profiles ?? []).map(p => [p.id, p]));
 
     setFeed(data.map(c => ({
       ...c,
-      receiver: profileMap.get(c.receiver_id) ?? { id: c.receiver_id, username: null },
+      receiver: profileMap.get(c.receiver_id) ?? { id: c.receiver_id, username: null, avatar_path: null },
     })));
   }, [userId]);
 

@@ -13,6 +13,7 @@ import { FriendsProvider } from '@/hooks/useFriends';
 import { ChallengesProvider } from '@/hooks/useChallenges';
 import { configureNotificationHandler, registerPushToken } from '@/lib/notifications';
 import { handleAuthDeepLink } from '@/lib/deepLinks';
+import { flushPendingAvatar } from '@/lib/pendingAvatar';
 import { initAnalytics, trackEvent } from '@/lib/analytics';
 
 SplashScreen.preventAutoHideAsync();
@@ -89,6 +90,10 @@ function RootLayout() {
     if (!session?.user?.id) return;
 
     registerPushToken(session.user.id);
+    // A profile picture picked during sign-up couldn't be uploaded then —
+    // there was no session to authorize the write. This is the first moment
+    // there is one. No-ops for everyone else.
+    flushPendingAvatar(session.user.id);
 
     responseListener.current = Notifications.addNotificationResponseReceivedListener((response) => {
       const data = response.notification.request.content.data as Record<string, unknown>;

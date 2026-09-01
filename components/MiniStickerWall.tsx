@@ -1,20 +1,19 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ActivityIndicator,
-  LayoutChangeEvent, Animated, Alert,
+  Animated, useWindowDimensions,
 } from 'react-native';
-import { router } from 'expo-router';
+import { useFocusEffect } from 'expo-router';
 import * as Haptics from 'expo-haptics';
-import * as ImagePicker from 'expo-image-picker';
-import { File } from 'expo-file-system';
-import { ImagePlus } from 'lucide-react-native';
+import { Pencil } from 'lucide-react-native';
 import { Sticker, WallBackgroundDim } from '@/lib/types';
-import { supabase } from '@/lib/supabase';
 import { useSignedUrls } from '@/hooks/useSignedUrls';
+import { useHomeWall } from '@/hooks/useHomeWall';
 import { seededRandom } from '@/lib/seededRandom';
+import { homeCanvasSize, homeTileFraction, HOME_WALL_HEIGHT, HOME_WALL_INSET } from '@/lib/homeWall';
 import WallBackground from '@/components/WallBackground';
-import CutoutSticker from '@/components/CutoutSticker';
-import BackgroundCropper from '@/components/BackgroundCropper';
+import HomeWallTile from '@/components/HomeWallTile';
+import HomeWallEditor from '@/components/HomeWallEditor';
 import { colors, radii, fonts, spacing, shadows } from '@/constants/theme';
 
 interface MiniStickerWallProps {
@@ -23,29 +22,34 @@ interface MiniStickerWallProps {
   backgroundPath?: string | null;
   backgroundDim?: WallBackgroundDim;
   onChangeBackground: (path: string | null) => Promise<{ error: Error | null }>;
+  // False until the user first arranges the wall by hand; until then the
+  // panel shows the auto fan below. Flipped through the profile hook (the
+  // single owner of that row) rather than from inside this component.
+  arranged: boolean;
+  onArranged: () => Promise<{ error: Error | null }>;
+  // Opens the sticker's detail sheet. Tapping a sticker used to jump to
+  // another tab entirely, which is not what tapping a sticker means
+  // anywhere else in the app.
+  onPressSticker: (sticker: Sticker) => void;
 }
 
-// Enough to read as "a wall" without crowding a compact home-screen panel —
-// past this the fan below starts overlapping tiles too heavily to tell them
-// apart.
+// How many the auto fan shows before the user has arranged anything.
 const PREVIEW_COUNT = 6;
-const PANEL_HEIGHT = 160;
-const BASE_TILE = 64;
-const HOME_BACKGROUND_MAX_SIDE = 1600;
-const TAPE_COLORS = [colors.skyNight + 'CC', colors.sageLight + 'EE', colors.terraLight + 'EE'];
 const NEW_WINDOW_MS = 24 * 60 * 60 * 1000;
+const BASE_TILE = 72;
 
-// A short, wide preview panel doesn't suit the multi-row masonry pack used
-// on the full Wall/Board screens (lib/boardLayout.ts) — with only ~6 photos
-// in a strip this wide, that algorithm's left-packed last row reads
-// lopsided. Instead: a single-row "fan of photos" spreading out from the
-// newest capture at center — front-most, largest, least rotated — which
-// reads as "here's what you just added" rather than a random scatter.
+// ── The auto fan: what an un-arranged wall looks like ────────────────────
+//
+// Kept, rather than starting everyone at an empty canvas, because a brand
+// new user has nothing to arrange yet and "here's what you just captured"
+// is a better first thing to see than a blank board and a chore. The first
+// time the user opens the editor, whatever's in this fan is seeded as their
+// real arrangement (useHomeWall.seedFrom), so the hand-off is invisible.
+
 function fanSlots(n: number): number[] {
   if (n === 0) return [];
-  // Center-out sequence: 0, +1, -1, +2, -2, ... — the newest sticker (i=0)
-  // always lands at slot 0 (front and center); older ones alternate out to
-  // either side.
+  // Center-out: 0, +1, -1, +2, -2, … — the newest sticker always lands at
+  // slot 0 (front and center), older ones alternate out to either side.
   const seq: number[] = [0];
   let k = 1;
   while (seq.length < n) {
@@ -56,10 +60,9 @@ function fanSlots(n: number): number[] {
   return seq;
 }
 
-// "Most fav or recent": the newest capture always anchors the center, the
-// rest of the fan is a blend of your favorites and your latest additions
-// (deduped) rather than a strict recency list — favoriting something is a
-// direct way to make it show up here.
+// "Most fav or recent": the newest capture anchors the center, the rest is
+// a blend of favorites and latest additions — favoriting is a direct way to
+// make something show up here.
 function pickPreview(stickers: Sticker[]): Sticker[] {
   if (stickers.length === 0) return [];
   const [hero, ...rest] = stickers;
@@ -70,26 +73,20 @@ function pickPreview(stickers: Sticker[]): Sticker[] {
   return [hero, ...favorites, ...recents.slice(0, fillCount)];
 }
 
-function MiniTile({
-  sticker, slot, canvasWidth, canvasHeight, isHero, heroScale, opacity, url,
+function FanTile({
+  sticker, slot, canvasWidth, canvasHeight, isHero, heroScale, opacity, url, onPress,
 }: {
   sticker: Sticker; slot: number; canvasWidth: number; canvasHeight: number;
-  isHero: boolean; heroScale: Animated.Value; opacity: Animated.Value; url: string | null;
+  isHero: boolean; heroScale: Animated.Value; opacity: Animated.Value;
+  url: string | null; onPress: () => void;
 }) {
   const scale = Math.max(0.7, 1.15 - Math.abs(slot) * 0.09);
   const size = BASE_TILE * scale;
-  // Systematic fan rotation (by slot) plus a small per-sticker jitter, so
-  // tiles read as individually pinned rather than mechanically arranged.
   const jitter = (seededRandom(sticker.id, 5) * 2 - 1) * 4;
   const rotation = slot * 6 + jitter;
-  const tapeColor = TAPE_COLORS[Math.floor(seededRandom(sticker.id, 6) * TAPE_COLORS.length)];
-  const tapeRotation = (seededRandom(sticker.id, 7) * 2 - 1) * 16;
-  const centerX = canvasWidth / 2;
-  const centerY = canvasHeight / 2;
   const spread = Math.min(BASE_TILE * 0.62, (canvasWidth / 2 - size / 2) / 3.2);
-
-  const x = centerX + slot * spread - size / 2;
-  const y = centerY + Math.abs(slot) * 5 - size / 2;
+  const x = canvasWidth / 2 + slot * spread - size / 2;
+  const y = canvasHeight / 2 + Math.abs(slot) * 5 - size / 2;
   const isFresh = Date.now() - new Date(sticker.created_at).getTime() < NEW_WINDOW_MS;
 
   return (
@@ -97,25 +94,16 @@ function MiniTile({
       style={[
         styles.tile,
         {
-          left: x,
-          top: y,
-          width: size,
-          height: size,
+          left: x, top: y, width: size, height: size,
           zIndex: 10 - Math.abs(slot),
           opacity,
-          transform: [
-            { rotate: `${rotation}deg` },
-            { scale: isHero ? heroScale : 1 },
-          ],
+          transform: [{ rotate: `${rotation}deg` }, { scale: isHero ? heroScale : 1 }],
         },
       ]}
     >
-      <View style={[styles.tape, { backgroundColor: tapeColor, transform: [{ rotate: `${tapeRotation}deg` }] }]} />
-      {url ? (
-        <CutoutSticker uri={url} cacheKey={sticker.image_path} borderStyle="outline" />
-      ) : (
-        <ActivityIndicator size="small" color={colors.terra} style={styles.tileLoader} />
-      )}
+      <TouchableOpacity style={StyleSheet.absoluteFill} onPress={onPress} activeOpacity={0.85}>
+        <HomeWallTile sticker={sticker} size={size} url={url} />
+      </TouchableOpacity>
       {isHero && isFresh && (
         <View style={styles.newBadge}>
           <Text style={styles.newBadgeText}>✨ new</Text>
@@ -126,13 +114,13 @@ function MiniTile({
 }
 
 // Owns the entrance stagger + hero "breathing" idle animation. Keyed by the
-// caller on the joined preview ids, so it fully remounts (fresh Animated
-// values, replayed entrance) only when the actual set of stickers shown
-// changes — not on every unrelated re-render of the parent screen.
+// caller on the joined preview ids, so it fully remounts only when the set
+// of stickers shown actually changes — not on every unrelated re-render.
 function TileFan({
-  preview, slots, canvasWidth, canvasHeight, urls,
+  preview, slots, canvasWidth, canvasHeight, urls, onPressSticker,
 }: {
-  preview: Sticker[]; slots: number[]; canvasWidth: number; canvasHeight: number; urls: Map<string, string>;
+  preview: Sticker[]; slots: number[]; canvasWidth: number; canvasHeight: number;
+  urls: Map<string, string>; onPressSticker: (s: Sticker) => void;
 }) {
   const opacities = useRef(preview.map(() => new Animated.Value(0))).current;
   const heroScale = useRef(new Animated.Value(1)).current;
@@ -156,7 +144,7 @@ function TileFan({
   return (
     <>
       {preview.map((sticker, i) => (
-        <MiniTile
+        <FanTile
           key={sticker.id}
           sticker={sticker}
           slot={slots[i]}
@@ -166,6 +154,7 @@ function TileFan({
           heroScale={heroScale}
           opacity={opacities[i]}
           url={urls.get(sticker.image_path) ?? null}
+          onPress={() => onPressSticker(sticker)}
         />
       ))}
     </>
@@ -174,158 +163,173 @@ function TileFan({
 
 export default function MiniStickerWall({
   stickers, userId, backgroundPath, backgroundDim, onChangeBackground,
+  arranged, onArranged, onPressSticker,
 }: MiniStickerWallProps) {
-  const [canvasWidth, setCanvasWidth] = useState(0);
-  const [uploadingBackground, setUploadingBackground] = useState(false);
-  const [pickedAsset, setPickedAsset] = useState<{ uri: string; width: number; height: number } | null>(null);
-  // home_background_path is a fixed filename (see handleCropConfirm) so it
-  // reads identically before and after a re-upload — bump this alongside it
-  // so WallBackground actually re-fetches a fresh signed URL instead of
-  // silently keeping the old photo on screen. See WallBackground.tsx.
+  const { width: screenWidth } = useWindowDimensions();
+  const canvas = useMemo(() => homeCanvasSize(screenWidth), [screenWidth]);
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [seeding, setSeeding] = useState(false);
+  // home_background_path is a fixed filename so it reads identically before
+  // and after a re-upload — bump this alongside it so WallBackground
+  // actually re-fetches a fresh signed URL. See WallBackground.tsx.
   const [backgroundVersion, setBackgroundVersion] = useState(0);
+
+  // Mounted here, once, and handed to the editor as props — two call sites
+  // of this hook would each fetch their own copy and diverge the moment one
+  // of them mutated (skills.md #1).
+  const wall = useHomeWall(userId);
+
+  // Deleting a sticker from the collection cascades its home_stickers row
+  // away in the database, but this component has no way to hear about that
+  // — the delete happens over on the grid. Two belts: re-read on focus, and
+  // never render a pin whose sticker isn't in the collection the parent
+  // just fetched, so a delete on this same screen takes effect immediately
+  // rather than leaving a tile pointing at nothing.
+  useFocusEffect(useCallback(() => { wall.refetch(); }, [wall.refetch]));
+
+  const items = useMemo(() => {
+    if (stickers.length === 0) return wall.items; // still loading — don't blank the wall
+    const live = new Set(stickers.map(s => s.id));
+    return wall.items.filter(i => live.has(i.sticker_id));
+  }, [wall.items, stickers]);
+
   const preview = useMemo(() => pickPreview(stickers), [stickers]);
   const slots = fanSlots(preview.length);
   const previewKey = preview.map(s => s.id).join(',');
-  // One batched sign request for the whole fan instead of each tile minting
-  // its own — see hooks/useSignedUrls.ts.
-  const previewUrls = useSignedUrls(useMemo(() => preview.map(s => s.image_path), [previewKey]));
+  // One batched sign request for whichever set is on screen, rather than
+  // each tile minting its own — see hooks/useSignedUrls.ts.
+  const shownPaths = useMemo(
+    () => (arranged ? items.map(i => i.sticker.image_path) : preview.map(s => s.image_path)),
+    [arranged, items, previewKey]
+  );
+  const urls = useSignedUrls(shownPaths);
 
-  const onLayout = (e: LayoutChangeEvent) => setCanvasWidth(e.nativeEvent.layout.width);
-
-  const handlePress = () => {
+  const openEditor = async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    router.push('/(tabs)/wall');
-  };
-
-  // Picking only stages the photo into the cropper (see BackgroundCropper) —
-  // the actual resize/upload happens once the user confirms a crop in
-  // handleCropConfirm, so nobody uploads a photo they haven't previewed.
-  const handlePickBackground = async () => {
-    if (!userId || uploadingBackground) return;
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('Photos Access Needed', 'LingoStickers needs access to your photo library to set a cover photo.');
-      return;
+    // First open: adopt whatever the fan is currently showing as the
+    // starting arrangement, and only then flip the profile flag — if the
+    // seed insert fails we stay on the fan rather than dropping the user
+    // onto a wall that lost everything it had on it.
+    if (!arranged && !seeding) {
+      setSeeding(true);
+      const { error } = await wall.seedFrom(preview.map(s => s.id), canvas.aspect);
+      setSeeding(false);
+      if (error) return;
+      const { error: flagError } = await onArranged();
+      if (flagError) return;
     }
-    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 1 });
-    const asset = !result.canceled ? result.assets[0] : null;
-    if (!asset) return;
-    setPickedAsset({ uri: asset.uri, width: asset.width, height: asset.height });
+    setEditorOpen(true);
   };
 
-  // Mirrors the full Wall tab's own background upload (app/profile.tsx) but
-  // writes to home_background_path instead of wall_background_path — the
-  // two are deliberately independent so personalizing this preview doesn't
-  // also change the real Wall tab, or vice versa. The cropper has already
-  // cropped, resized, and compressed the file, so this just uploads it.
-  const handleCropConfirm = async (localUri: string) => {
-    if (!userId) return;
-    setPickedAsset(null);
-    setUploadingBackground(true);
-    try {
-      // Fixed filename + upsert so re-uploading just replaces the old photo
-      // rather than accumulating orphaned files under the user's folder.
-      const path = `${userId}/home-background.jpg`;
-      const bytes = await new File(localUri).bytes();
-      const { error: uploadError } = await supabase.storage
-        .from('sticker-images')
-        .upload(path, bytes, { contentType: 'image/jpeg', upsert: true });
-      if (uploadError) throw uploadError;
-
-      const { error } = await onChangeBackground(path);
-      if (error) throw error;
-      setBackgroundVersion(v => v + 1);
-    } catch (err: any) {
-      Alert.alert("Couldn't set cover photo", err?.message ?? 'Something went wrong.');
-    } finally {
-      setUploadingBackground(false);
-    }
-  };
-
-  const handleRemoveBackground = () => {
-    if (!backgroundPath) return;
-    Alert.alert(
-      'Remove cover photo',
-      'Go back to the default corkboard look?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Remove', style: 'destructive',
-          onPress: async () => {
-            const path = backgroundPath;
-            const { error } = await onChangeBackground(null);
-            if (error) { Alert.alert("Couldn't remove cover photo", error.message); return; }
-            await supabase.storage.from('sticker-images').remove([path]);
-          },
-        },
-      ]
-    );
-  };
+  const showEmpty = arranged ? items.length === 0 : preview.length === 0;
 
   return (
-    <TouchableOpacity
-      activeOpacity={0.9}
-      style={styles.panel}
-      onLayout={onLayout}
-      onPress={handlePress}
-    >
-      <WallBackground path={backgroundPath} dim={backgroundDim} version={backgroundVersion} />
-      {preview.length === 0 ? (
-        <View style={styles.emptyWrap}>
-          <Text style={styles.emptyText}>Your wall is empty — scan something to start filling it in!</Text>
-        </View>
-      ) : (
-        canvasWidth > 0 && (
-          <TileFan key={previewKey} preview={preview} slots={slots} canvasWidth={canvasWidth} canvasHeight={PANEL_HEIGHT} urls={previewUrls} />
-        )
-      )}
-      <View style={styles.label}>
-        <Text style={styles.labelText}>Your Wall →</Text>
-      </View>
+    <>
+      <View style={styles.panel}>
+        <WallBackground path={backgroundPath} dim={backgroundDim} version={backgroundVersion} />
 
-      {!!userId && (
-        <TouchableOpacity
-          style={styles.editBtn}
-          onPress={handlePickBackground}
-          onLongPress={backgroundPath ? handleRemoveBackground : undefined}
-          delayLongPress={400}
-          hitSlop={8}
-          activeOpacity={0.8}
-        >
-          {uploadingBackground ? (
+        {showEmpty ? (
+          <View style={styles.emptyWrap}>
+            <Text style={styles.emptyText}>
+              {stickers.length === 0
+                ? 'Your wall is empty — scan something to start filling it in!'
+                : 'Nothing pinned yet — tap Arrange to put stickers up.'}
+            </Text>
+          </View>
+        ) : arranged ? (
+          items.map(item => {
+            const side = homeTileFraction(item.sticker_id) * canvas.width;
+            return (
+              <TouchableOpacity
+                key={item.sticker_id}
+                style={[
+                  styles.tile,
+                  {
+                    left: item.x * canvas.width,
+                    top: item.y * canvas.height,
+                    width: side,
+                    height: side,
+                    transform: [{ rotate: `${item.rotation}deg` }],
+                  },
+                ]}
+                activeOpacity={0.85}
+                onPress={() => onPressSticker(item.sticker)}
+              >
+                <HomeWallTile
+                  sticker={item.sticker}
+                  size={side}
+                  url={urls.get(item.sticker.image_path) ?? null}
+                />
+              </TouchableOpacity>
+            );
+          })
+        ) : (
+          canvas.width > 0 && (
+            <TileFan
+              key={previewKey}
+              preview={preview}
+              slots={slots}
+              canvasWidth={canvas.width}
+              canvasHeight={canvas.height}
+              urls={urls}
+              onPressSticker={onPressSticker}
+            />
+          )
+        )}
+
+        {/* The one control on the panel now. It used to sit next to a
+            cover-photo button and a whole-panel tap target that both went
+            somewhere else; the cover photo moved inside the editor (it's an
+            arranging decision), and the Boards tab is already reachable
+            from the tab bar and doesn't need a second door here. */}
+        <TouchableOpacity style={styles.arrangeBtn} onPress={openEditor} activeOpacity={0.85} disabled={seeding}>
+          {seeding ? (
             <ActivityIndicator size="small" color={colors.inkDark} />
           ) : (
-            <ImagePlus size={14} color={colors.inkDark} />
+            <Pencil size={12} color={colors.inkDark} />
           )}
+          <Text style={styles.arrangeText}>Arrange</Text>
         </TouchableOpacity>
-      )}
+      </View>
 
-      <BackgroundCropper
-        asset={pickedAsset}
-        frameWidth={canvasWidth}
-        frameHeight={PANEL_HEIGHT}
-        maxOutputSide={HOME_BACKGROUND_MAX_SIDE}
-        onCancel={() => setPickedAsset(null)}
-        onConfirm={handleCropConfirm}
+      <HomeWallEditor
+        visible={editorOpen}
+        onClose={() => setEditorOpen(false)}
+        userId={userId}
+        stickers={stickers}
+        items={items}
+        onAdd={wall.addSticker}
+        onRemove={wall.removeSticker}
+        onMove={wall.moveSticker}
+        onTidy={wall.tidy}
+        backgroundPath={backgroundPath}
+        backgroundDim={backgroundDim}
+        backgroundVersion={backgroundVersion}
+        onChangeBackground={onChangeBackground}
+        onBackgroundUploaded={() => setBackgroundVersion(v => v + 1)}
       />
-    </TouchableOpacity>
+    </>
   );
 }
 
 const styles = StyleSheet.create({
   panel: {
-    marginHorizontal: spacing.md,
+    marginHorizontal: HOME_WALL_INSET,
     marginBottom: spacing.sm,
-    height: PANEL_HEIGHT,
+    height: HOME_WALL_HEIGHT,
     borderRadius: radii.xl,
+    // The white mount is what lets the panel sit half-over the home
+    // screen's rose band and still read as one card rather than a hole
+    // punched in the band. The editor wears the same mount.
+    borderWidth: 5,
+    borderColor: colors.white,
     overflow: 'hidden',
     ...shadows.card,
   },
-  // No card/background here on purpose — just the sticker's own cutout PNG
-  // (CutoutSticker), so the panel shows photos "floating" on the board
-  // rather than boxed in white index cards. Android ignores PNG alpha for
-  // shadow shape, so elevation is dropped there (matches BoardCanvas.tsx's
-  // cutout tiles) — the shadow only really shows on iOS.
+  // No card behind a tile on purpose — just the sticker's own cutout PNG,
+  // so the panel shows photos floating on the board rather than boxed in
+  // white index cards. Android ignores PNG alpha for shadow shape, so
+  // elevation is dropped there (matches BoardCanvas's cutout tiles).
   tile: {
     position: 'absolute',
     shadowColor: colors.inkDark,
@@ -333,16 +337,6 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     shadowOffset: { width: 0, height: 2 },
     elevation: 0,
-  },
-  tileLoader: { flex: 1 },
-  tape: {
-    position: 'absolute',
-    top: -8,
-    left: '50%',
-    marginLeft: -14,
-    width: 28,
-    height: 11,
-    borderRadius: 2,
   },
   newBadge: {
     position: 'absolute',
@@ -352,6 +346,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 5,
     paddingVertical: 2,
     borderRadius: radii.full,
+    zIndex: 3,
     ...shadows.card,
   },
   newBadgeText: { fontSize: 8, fontFamily: fonts.mono, fontWeight: '700', color: colors.inkDark },
@@ -362,26 +357,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xl,
   },
   emptyText: { fontSize: 13, fontWeight: '600', color: colors.inkDark, textAlign: 'center', opacity: 0.8 },
-  label: {
-    position: 'absolute',
-    right: spacing.ms,
-    bottom: spacing.sm,
-    backgroundColor: 'rgba(255,255,255,0.75)',
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 3,
-    borderRadius: radii.full,
-  },
-  labelText: { fontSize: 10, fontFamily: fonts.mono, fontWeight: '700', color: colors.inkDark },
-  editBtn: {
+  arrangeBtn: {
     position: 'absolute',
     left: spacing.sm,
     bottom: spacing.sm,
-    width: 26,
-    height: 26,
-    borderRadius: radii.full,
-    backgroundColor: 'rgba(255,255,255,0.85)',
+    zIndex: 20,
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    gap: 5,
+    backgroundColor: 'rgba(255,255,255,0.92)',
+    paddingLeft: spacing.ms,
+    paddingRight: spacing.md,
+    paddingVertical: 7,
+    borderRadius: radii.full,
     ...shadows.card,
   },
+  arrangeText: { fontSize: 12, fontWeight: '700', color: colors.inkDark },
 });

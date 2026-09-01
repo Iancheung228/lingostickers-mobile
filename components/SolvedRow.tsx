@@ -23,6 +23,7 @@ interface SolvedRowProps {
   word: string;
   translation: string;
   solverName: string | null;
+  solverAvatarPath: string | null;
   completedAt: string | null;
   /// Signed URL for the snapshot, resolved in a batch by the parent. Undefined
   /// while it is still in flight.
@@ -30,7 +31,7 @@ interface SolvedRowProps {
 }
 
 export default function SolvedRow({
-  word, translation, solverName, completedAt, imageUrl,
+  word, translation, solverName, solverAvatarPath, completedAt, imageUrl,
 }: SolvedRowProps) {
   return (
     <View style={styles.row}>
@@ -56,7 +57,7 @@ export default function SolvedRow({
       </View>
 
       <View style={styles.solver}>
-        <Avatar name={solverName} size={22} />
+        <Avatar name={solverName} avatarPath={solverAvatarPath} size={22} />
         <Text style={styles.solverText} numberOfLines={1}>
           {solverName ?? 'a friend'} solved it
         </Text>

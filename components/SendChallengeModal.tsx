@@ -82,7 +82,7 @@ export default function SendChallengeModal({ sticker, friends, onSend, onClose }
               return (
                 <View style={styles.friendRow}>
                   <View style={styles.avatarSlot}>
-                    <Avatar name={item.friend.username} size={38} />
+                    <Avatar name={item.friend.username} avatarPath={item.friend.avatar_path} size={38} />
                   </View>
                   <Text style={styles.username}>{item.friend.username ?? 'Friend'}</Text>
                   <TouchableOpacity

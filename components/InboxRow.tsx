@@ -20,15 +20,16 @@ import { colors, radii, spacing, shadows } from '@/constants/theme';
 
 interface FriendRequestRowProps {
   username: string | null;
+  avatarPath: string | null;
   onAccept: () => void;
   onDecline: () => void;
 }
 
-export function FriendRequestRow({ username, onAccept, onDecline }: FriendRequestRowProps) {
+export function FriendRequestRow({ username, avatarPath, onAccept, onDecline }: FriendRequestRowProps) {
   const name = username ?? 'Someone';
   return (
     <View style={styles.row}>
-      <Avatar name={username} size={38} />
+      <Avatar name={username} avatarPath={avatarPath} size={38} />
       <View style={styles.body}>
         <Text style={styles.line} numberOfLines={2}>
           <Text style={styles.strong}>{name}</Text> wants to be friends
@@ -60,13 +61,14 @@ export function FriendRequestRow({ username, onAccept, onDecline }: FriendReques
 
 interface ChallengeRowProps {
   senderName: string | null;
+  senderAvatarPath: string | null;
   sentAt: string;
   /// 'active' means they've already opened it and are part-way through.
   inProgress: boolean;
   onPress: () => void;
 }
 
-export function ChallengeRow({ senderName, sentAt, inProgress, onPress }: ChallengeRowProps) {
+export function ChallengeRow({ senderName, senderAvatarPath, sentAt, inProgress, onPress }: ChallengeRowProps) {
   const name = senderName ?? 'A friend';
   return (
     <TouchableOpacity
@@ -76,7 +78,7 @@ export function ChallengeRow({ senderName, sentAt, inProgress, onPress }: Challe
       accessibilityRole="button"
       accessibilityLabel={`Play the challenge from ${name}`}
     >
-      <Avatar name={senderName} size={38} />
+      <Avatar name={senderName} avatarPath={senderAvatarPath} size={38} />
       <View style={styles.body}>
         {/* The word itself is deliberately not shown — it is the answer. */}
         <Text style={styles.line} numberOfLines={1}>

@@ -83,7 +83,7 @@ export default function FriendProfile({ friend, currentUserId, onClose, onRemove
         </View>
 
         <View style={styles.body}>
-          <Avatar name={friend.friend.username} size={72} />
+          <Avatar name={friend.friend.username} avatarPath={friend.friend.avatar_path} size={72} />
           <Text style={styles.username}>{friend.friend.username ?? 'Unknown'}</Text>
           <Text style={styles.since}>Friends since {friendsSince}</Text>
 

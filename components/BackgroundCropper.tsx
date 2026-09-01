@@ -4,12 +4,26 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { useSharedValue, useAnimatedStyle } from 'react-native-reanimated';
 import { X, Check, RotateCw } from 'lucide-react-native';
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
+import { CropRect } from '@/lib/types';
 import { colors, radii, spacing, fonts, shadows } from '@/constants/theme';
 
-interface PickedAsset {
+export interface PickedAsset {
   uri: string;
   width: number;
   height: number;
+}
+
+export interface CropResult {
+  /// The cropped, resized JPEG — what actually gets drawn as the background.
+  uri: string;
+  /// The image that crop was taken out of, after any rotation applied here.
+  /// A caller that stores this alongside the crop keeps the framing editable
+  /// instead of baking it in; one that ignores it gets the old destructive
+  /// behaviour, which is still correct for a caller that doesn't offer
+  /// repositioning.
+  source: PickedAsset;
+  /// Which region of `source` the crop took, in fractions of it.
+  crop: CropRect;
 }
 
 interface BackgroundCropperProps {
@@ -17,8 +31,13 @@ interface BackgroundCropperProps {
   frameWidth: number;
   frameHeight: number;
   maxOutputSide: number;
+  /// Framing to reopen on, when `asset` is a source being re-edited rather
+  /// than a photo just picked. Applies only to `asset` itself — rotating
+  /// produces a different image, at which point the saved region no longer
+  /// refers to anything and a centred fit is the honest starting point.
+  initialCrop?: CropRect | null;
   onCancel: () => void;
-  onConfirm: (localUri: string) => void;
+  onConfirm: (result: CropResult) => void;
 }
 
 const MAX_ZOOM = 4;
@@ -42,7 +61,7 @@ function clampTranslate(value: number, displayedSize: number, frameSize: number)
 // visible in the (small, wide) home panel rather than uploading blind and
 // hoping the auto-crop picked a sensible region.
 export default function BackgroundCropper({
-  asset, frameWidth, frameHeight, maxOutputSide, onCancel, onConfirm,
+  asset, frameWidth, frameHeight, maxOutputSide, initialCrop, onCancel, onConfirm,
 }: BackgroundCropperProps) {
   const [working, setWorking] = useState<PickedAsset | null>(asset);
   const [rotating, setRotating] = useState(false);
@@ -68,6 +87,21 @@ export default function BackgroundCropper({
     baseScale.value = bs;
     workingWidth.value = working.width;
     workingHeight.value = working.height;
+
+    // Reopening a saved framing: the stored rect is in fractions of this
+    // source, so turn it back into the zoom and offset that put exactly that
+    // region in the frame. Guarded on the uri because a rotation replaces
+    // `working` with a different image entirely.
+    if (initialCrop && working.uri === asset?.uri) {
+      const visibleWidth = initialCrop.w * working.width;
+      const restored = visibleWidth > 0 ? frameWidth / visibleWidth : bs;
+      scale.value = clamp(restored / bs, 1, MAX_ZOOM);
+      const eff = bs * scale.value;
+      translateX.value = clampTranslate(-initialCrop.x * working.width * eff, working.width * eff, frameWidth);
+      translateY.value = clampTranslate(-initialCrop.y * working.height * eff, working.height * eff, frameHeight);
+      return;
+    }
+
     scale.value = 1;
     translateX.value = (frameWidth - working.width * bs) / 2;
     translateY.value = (frameHeight - working.height * bs) / 2;
@@ -148,7 +182,18 @@ export default function BackgroundCropper({
 
       const rendered = await context.renderAsync();
       const saved = await rendered.saveAsync({ compress: 0.75, format: SaveFormat.JPEG });
-      onConfirm(saved.uri);
+      onConfirm({
+        uri: saved.uri,
+        source: working,
+        // Fractions of the source rather than the pixel rect just used, so
+        // the record survives the source being stored at a smaller size.
+        crop: {
+          x: originX / working.width,
+          y: originY / working.height,
+          w: cropW / working.width,
+          h: cropH / working.height,
+        },
+      });
     } catch (err: any) {
       Alert.alert("Couldn't crop photo", err?.message ?? 'Something went wrong.');
     } finally {
