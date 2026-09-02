@@ -1,20 +1,27 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView, ScrollView, ActivityIndicator, Alert, Linking } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
-import { ArrowLeft, Camera, LogOut, BookOpen, Heart, Check, Trash2, Shield, ExternalLink } from 'lucide-react-native';
+import { ArrowLeft, Camera, LogOut, BookOpen, Heart, Check, Trash2, Shield, ExternalLink, Ban, Mail } from 'lucide-react-native';
 import { useAuth } from '@/hooks/useAuth';
 import { useProfile } from '@/hooks/useProfile';
 import { supabase } from '@/lib/supabase';
 import { Language, Sticker, WallDisplayStyle, CutoutBorderStyle } from '@/lib/types';
+import { useFriends } from '@/hooks/useFriends';
 import { pickAvatarImage } from '@/lib/avatars';
 import { isLocalCutoutAvailable } from '@/lib/cutout';
 import Avatar from '@/components/Avatar';
+import BlockedAccounts from '@/components/BlockedAccounts';
 import { colors, shadows, radii, spacing, fonts } from '@/constants/theme';
 
 // Published at the apex domain and linked from App Store Connect too. In
 // the app because the Profile screen is where a person — and a reviewer —
 // looks for it.
 const PRIVACY_URL = 'https://tabistickers.com/privacy.html';
+
+// Guideline 1.2 asks for published contact information alongside the report
+// and block controls, so it sits in the same section as them rather than only
+// inside the privacy policy.
+const SUPPORT_EMAIL = 'iancheung228@gmail.com';
 
 const LANGUAGES: { code: Language; native: string; label: string }[] = [
   { code: 'fr', native: 'Français', label: 'French' },
@@ -49,6 +56,8 @@ export default function ProfileScreen() {
   const [updatingBorderStyle, setUpdatingBorderStyle] = useState<CutoutBorderStyle | null>(null);
   const [deletingAccount, setDeletingAccount] = useState(false);
   const [savingAvatar, setSavingAvatar] = useState(false);
+  const [blockedOpen, setBlockedOpen] = useState(false);
+  const { blocked } = useFriends();
 
   const fetchStickers = useCallback(async () => {
     if (!user) return;
@@ -320,6 +329,51 @@ export default function ProfileScreen() {
             </>
           )}
 
+          {/* Safety — the controls Guideline 1.2 asks for, gathered in one
+              place so they can be found by someone who needs them in a hurry
+              and by a reviewer looking for them specifically. Reporting and
+              blocking themselves live where the person is (a friend's profile,
+              a challenge, an incoming request); this section is where you
+              review what you've done and how to reach a human. */}
+          <Text style={styles.sectionLabel}>SAFETY</Text>
+          <View style={styles.card}>
+            <TouchableOpacity
+              style={styles.infoRow}
+              onPress={() => setBlockedOpen(true)}
+              activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel="Manage blocked accounts"
+            >
+              <Ban size={16} color={colors.terraDark} />
+              <View style={styles.infoTextWrap}>
+                <Text style={styles.infoTitle}>Blocked accounts</Text>
+                <Text style={styles.infoSubtitle}>
+                  {blocked.length === 0
+                    ? 'Nobody is blocked'
+                    : `${blocked.length} ${blocked.length === 1 ? 'person' : 'people'} blocked`}
+                </Text>
+              </View>
+              <Text style={styles.rowChevron}>›</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.infoRow, styles.rowDivider]}
+              onPress={() => Linking.openURL(
+                `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent('Tabi Stickers — report a problem')}`,
+              )}
+              activeOpacity={0.7}
+              accessibilityRole="link"
+              accessibilityLabel="Email us about a problem"
+            >
+              <Mail size={16} color={colors.terraDark} />
+              <View style={styles.infoTextWrap}>
+                <Text style={styles.infoTitle}>Report a problem</Text>
+                <Text style={styles.infoSubtitle}>{SUPPORT_EMAIL}</Text>
+              </View>
+              <ExternalLink size={14} color={colors.inkFaint} />
+            </TouchableOpacity>
+          </View>
+
           {/* Info */}
           <Text style={styles.sectionLabel}>ABOUT</Text>
           <View style={styles.card}>
@@ -384,6 +438,8 @@ export default function ProfileScreen() {
           </TouchableOpacity>
         </ScrollView>
       )}
+
+      <BlockedAccounts visible={blockedOpen} onClose={() => setBlockedOpen(false)} />
     </SafeAreaView>
   );
 }
@@ -512,6 +568,7 @@ const styles = StyleSheet.create({
   infoTextWrap: { flex: 1 },
   infoTitle: { fontSize: 13, fontWeight: '700', color: colors.inkDark },
   infoSubtitle: { fontSize: 10, color: colors.inkFaint, marginTop: 2 },
+  rowChevron: { fontSize: 20, color: colors.inkFaint, lineHeight: 20 },
   engineBadge: {
     backgroundColor: colors.sageLight,
     borderRadius: radii.full,

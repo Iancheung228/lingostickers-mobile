@@ -1,7 +1,7 @@
 import { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import {
   View, Text, SectionList, StyleSheet, SafeAreaView,
-  TouchableOpacity, RefreshControl, ActivityIndicator,
+  TouchableOpacity, RefreshControl, ActivityIndicator, Alert,
 } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { UserPlus } from 'lucide-react-native';
@@ -15,8 +15,9 @@ import FriendProfile from '@/components/FriendProfile';
 import FriendRail from '@/components/FriendRail';
 import FriendsEmpty from '@/components/FriendsEmpty';
 import SolvedRow from '@/components/SolvedRow';
+import ReportSheet from '@/components/ReportSheet';
 import { FriendRequestRow, ChallengeRow } from '@/components/InboxRow';
-import { ChallengeWithSender, FriendWithProfile } from '@/lib/types';
+import { ChallengeWithSender, FriendWithProfile, PersonSummary } from '@/lib/types';
 import {
   buildInboxItems, buildSections, subtitleFor, isFirstRun, type Row,
 } from '@/lib/friendsSections';
@@ -40,7 +41,10 @@ import { enablePushNotifications } from '@/lib/notifications';
 
 export default function FriendsScreen() {
   const { user } = useAuth();
-  const { friends, loading: friendsLoading, respondToRequest, refetch: refetchFriends } = useFriends();
+  const {
+    friends, loading: friendsLoading, respondToRequest,
+    blockUser, refetch: refetchFriends,
+  } = useFriends();
   const {
     inbox, feed, loading: challengesLoading,
     fetchInbox, fetchFeed, getChallengeImageUrls,
@@ -52,6 +56,9 @@ export default function FriendsScreen() {
   const [selectedFriend, setSelectedFriend] = useState<FriendWithProfile | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [solvedImages, setSolvedImages] = useState<Record<string, string>>({});
+  // The person a pending request's "⋯" was opened against, held so the report
+  // sheet knows who it is about. Null when the sheet is closed.
+  const [reportTarget, setReportTarget] = useState<PersonSummary | null>(null);
 
   const acceptedFriends = useMemo(() => friends.filter(f => f.status === 'accepted'), [friends]);
   const pendingReceived = useMemo(
@@ -117,6 +124,29 @@ export default function FriendsScreen() {
     if (user?.id) enablePushNotifications(user.id);
   }, [respondToRequest, user?.id]);
 
+  // An unanswered request is the only way a stranger reaches you, so the
+  // safety controls have to be reachable before you decide. Blocking here
+  // also disposes of the request itself — the trigger in migration 034 deletes
+  // the friendship row, so there is nothing left to answer.
+  const handleFlagRequest = useCallback((person: PersonSummary) => {
+    const name = person.username ?? 'this person';
+    Alert.alert(
+      name,
+      'This person sent you a friend request.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Report', onPress: () => setReportTarget(person) },
+        {
+          text: 'Block', style: 'destructive',
+          onPress: async () => {
+            const { error } = await blockUser(person.id);
+            if (error) Alert.alert("Couldn't block", error.message);
+          },
+        },
+      ],
+    );
+  }, [blockUser]);
+
   const renderRow = useCallback((row: Row) => {
     switch (row.kind) {
       case 'request':
@@ -126,6 +156,7 @@ export default function FriendsScreen() {
             avatarPath={row.friendship.friend.avatar_path}
             onAccept={() => handleAccept(row.friendship.id)}
             onDecline={() => respondToRequest(row.friendship.id, 'declined')}
+            onFlag={() => handleFlagRequest(row.friendship.friend)}
           />
         );
       case 'challenge':
@@ -152,7 +183,7 @@ export default function FriendsScreen() {
       case 'resting':
         return <Text style={styles.resting}>{row.text}</Text>;
     }
-  }, [handleAccept, respondToRequest, solvedImages]);
+  }, [handleAccept, respondToRequest, handleFlagRequest, solvedImages]);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -232,6 +263,19 @@ export default function FriendsScreen() {
         currentUserId={user?.id}
         onClose={() => setSelectedFriend(null)}
         onRemoved={refetchFriends}
+      />
+
+      <ReportSheet
+        visible={!!reportTarget}
+        reporterId={user?.id}
+        reportedUserId={reportTarget?.id}
+        reportedName={reportTarget?.username ?? null}
+        onBlock={async () => {
+          if (!reportTarget) return;
+          const { error } = await blockUser(reportTarget.id);
+          if (error) Alert.alert("Couldn't block", error.message);
+        }}
+        onClose={() => setReportTarget(null)}
       />
     </SafeAreaView>
   );

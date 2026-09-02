@@ -1,0 +1,47 @@
+-- ============================================================
+-- Tabi Stickers — Take the moderation functions away from `anon`
+-- ============================================================
+-- 034 tried to lock these two down with
+--
+--   REVOKE ALL ON FUNCTION ... FROM PUBLIC;
+--   GRANT EXECUTE ON FUNCTION ... TO authenticated;
+--
+-- and that is not enough on Supabase. The platform's own ALTER DEFAULT
+-- PRIVILEGES grants EXECUTE on new functions in `public` to `anon` and
+-- `authenticated` *explicitly*, and revoking from the PUBLIC pseudo-role does
+-- not remove an explicit grant to a named role. Verified against the live
+-- project with the anon key and no session, immediately after 034:
+--
+--   POST /rest/v1/rpc/is_blocked_pair {"a":"…0000","b":"…0001"}  -> 200 false
+--   POST /rest/v1/rpc/search_profiles {"q":"ab"}                 -> 200 []
+--   POST /rest/v1/rpc/no_such_function                           -> 404
+--
+-- The 404 on a name that does not exist is what makes the two 200s
+-- conclusive: those functions really were executing as `anon`, not being
+-- rejected before dispatch.
+--
+-- `search_profiles` was harmless in practice — its own `auth.uid() IS NOT
+-- NULL` guard returns an empty set to a caller with no session. But
+-- `is_blocked_pair` is SECURITY DEFINER and takes two user ids, so any
+-- unauthenticated caller holding a pair of UUIDs could ask whether those two
+-- people have blocked each other and get a straight answer. That is a fact
+-- about two users that neither of them published, and one of them may have
+-- gone out of their way to keep quiet.
+--
+-- WHY `authenticated` KEEPS EXECUTE ON is_blocked_pair
+--
+-- It is not called by the client. It is called from inside the RLS policies
+-- on friendships and sticker_challenges, and a policy expression is evaluated
+-- as the querying role — so `authenticated` genuinely needs EXECUTE here or
+-- every friend-list read starts failing with "permission denied for function
+-- is_blocked_pair". Revoking it from `authenticated` too would look tidier and
+-- would break the app.
+
+REVOKE EXECUTE ON FUNCTION public.is_blocked_pair(UUID, UUID) FROM anon;
+REVOKE EXECUTE ON FUNCTION public.search_profiles(TEXT) FROM anon;
+
+-- ============================================================
+-- After applying, re-run the two probes above with the anon key. Both must
+-- come back HTTP 404 (PostgREST cannot see a function the role may not
+-- execute), not 200.
+-- ============================================================

@@ -235,3 +235,19 @@ export interface StickerDraft {
   longitude: number | null;
   locationLabel: string | null;
 }
+
+// ---------------------------------------------------------------------------
+// Moderation — see migration 034 and lib/moderation.ts.
+// ---------------------------------------------------------------------------
+
+// A block is directional and lives independently of any friendship, so it is
+// its own row rather than a friendships.status value. `blocked` carries the
+// profile so the manage-blocked list can name who you blocked.
+export interface BlockedUser {
+  id: string;
+  blocked_id: string;
+  created_at: string;
+  blocked: PersonSummary;
+}
+
+export type ReportReason = 'sexual' | 'violent' | 'hateful' | 'harassment' | 'spam' | 'other';

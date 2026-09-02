@@ -4,10 +4,13 @@ import {
   SafeAreaView, Image, ActivityIndicator, Alert, KeyboardAvoidingView, Platform, ScrollView,
 } from 'react-native';
 import Animated, { useSharedValue, useAnimatedStyle, withSequence, withTiming } from 'react-native-reanimated';
-import { BookOpen, MessageCircle, X } from 'lucide-react-native';
+import { BookOpen, MessageCircle, X, Flag } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { ChallengeWithSender, Language } from '@/lib/types';
 import { useChallenges } from '@/hooks/useChallenges';
+import { useFriends } from '@/hooks/useFriends';
+import { useAuth } from '@/hooks/useAuth';
+import ReportSheet from '@/components/ReportSheet';
 import { colors, radii, spacing, fonts } from '@/constants/theme';
 
 const LANGUAGE_LABELS: Record<Language, string> = { fr: 'French', ja: 'Japanese', yue: 'Cantonese' };
@@ -30,8 +33,11 @@ export default function ChallengeScreen({ challenge, onClose, onWin }: Challenge
   const [hintUsed, setHintUsed] = useState(false);
   const [firstLetter, setFirstLetter] = useState<string | null>(null);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [reportOpen, setReportOpen] = useState(false);
   const shakeX = useSharedValue(0);
   const { submitAnswer, requestHint, getChallengeImageUrl } = useChallenges();
+  const { blockUser } = useFriends();
+  const { user } = useAuth();
 
   useEffect(() => {
     if (!challenge) {
@@ -98,22 +104,51 @@ export default function ChallengeScreen({ challenge, onClose, onWin }: Challenge
     }
   };
 
+  // Blocking from here closes the challenge as well: the picture that prompted
+  // it is on screen, and leaving the user staring at it after they asked never
+  // to hear from this person again would be absurd.
+  const handleBlockFromChallenge = async () => {
+    if (!challenge) return;
+    const { error } = await blockUser(challenge.sender.id);
+    if (error) { Alert.alert("Couldn't block", error.message); return; }
+    onClose();
+  };
+
   if (!challenge) return null;
 
   const blanked = blankWord(challenge.snapshot_sentence, challenge.snapshot_word);
+  const senderName = challenge.sender.username ?? 'this person';
 
   return (
     <Modal visible={!!challenge} animationType="slide" presentationStyle="fullScreen" onRequestClose={onClose}>
       <SafeAreaView style={styles.container}>
         {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity onPress={onClose} hitSlop={8}>
+          <TouchableOpacity
+            onPress={onClose}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Close this challenge"
+          >
             <X size={22} color={colors.inkDark} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Challenge</Text>
-          {attemptsUsed > 0 && (
-            <Text style={styles.attemptsText}>{attemptsUsed} {attemptsUsed === 1 ? 'try' : 'tries'}</Text>
-          )}
+          <View style={styles.headerRight}>
+            {attemptsUsed > 0 && (
+              <Text style={styles.attemptsText}>{attemptsUsed} {attemptsUsed === 1 ? 'try' : 'tries'}</Text>
+            )}
+            {/* The picture on this screen came from another person's camera.
+                This is the only place it is ever shown full-size, so it is the
+                place a report has to be reachable from. */}
+            <TouchableOpacity
+              onPress={() => setReportOpen(true)}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel={`Report this challenge from ${senderName}`}
+            >
+              <Flag size={17} color={colors.inkLight} />
+            </TouchableOpacity>
+          </View>
         </View>
 
         <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
@@ -185,6 +220,16 @@ export default function ChallengeScreen({ challenge, onClose, onWin }: Challenge
         </ScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>
+
+      <ReportSheet
+        visible={reportOpen}
+        reporterId={user?.id}
+        reportedUserId={challenge.sender.id}
+        reportedName={challenge.sender.username}
+        challengeId={challenge.id}
+        onBlock={handleBlockFromChallenge}
+        onClose={() => setReportOpen(false)}
+      />
     </Modal>
   );
 }
@@ -201,6 +246,7 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
   },
   headerTitle: { fontSize: 16, fontWeight: '700', color: colors.inkDark },
+  headerRight: { flexDirection: 'row', alignItems: 'center', gap: spacing.ms },
   attemptsText: { fontSize: 12, fontWeight: '600', color: colors.inkFaint },
   stickerWrap: { alignItems: 'center', paddingVertical: 16 },
   stickerImage: { width: 200, height: 200 },

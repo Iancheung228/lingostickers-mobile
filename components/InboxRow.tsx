@@ -1,5 +1,5 @@
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import { Check, X, Play } from 'lucide-react-native';
+import { Check, X, Play, MoreHorizontal } from 'lucide-react-native';
 import Avatar from '@/components/Avatar';
 import { timeAgo } from '@/lib/relativeTime';
 import { colors, radii, spacing, shadows } from '@/constants/theme';
@@ -23,9 +23,14 @@ interface FriendRequestRowProps {
   avatarPath: string | null;
   onAccept: () => void;
   onDecline: () => void;
+  /// Opens the report/block options. An unanswered request from a stranger is
+  /// the one place someone can reach you without your consent, so the safety
+  /// controls have to be here and not only on a friend's profile — by the time
+  /// FriendProfile is reachable you have already accepted them.
+  onFlag: () => void;
 }
 
-export function FriendRequestRow({ username, avatarPath, onAccept, onDecline }: FriendRequestRowProps) {
+export function FriendRequestRow({ username, avatarPath, onAccept, onDecline, onFlag }: FriendRequestRowProps) {
   const name = username ?? 'Someone';
   return (
     <View style={styles.row}>
@@ -36,6 +41,15 @@ export function FriendRequestRow({ username, avatarPath, onAccept, onDecline }: 
         </Text>
       </View>
       <View style={styles.actions}>
+        <TouchableOpacity
+          style={[styles.iconBtn, styles.more]}
+          onPress={onFlag}
+          accessibilityRole="button"
+          accessibilityLabel={`Report or block ${name}`}
+          hitSlop={6}
+        >
+          <MoreHorizontal size={16} color={colors.inkLight} strokeWidth={2.5} />
+        </TouchableOpacity>
         <TouchableOpacity
           style={[styles.iconBtn, styles.accept]}
           onPress={onAccept}
@@ -126,6 +140,9 @@ const styles = StyleSheet.create({
   },
   accept: { backgroundColor: colors.sageDark },
   decline: { backgroundColor: colors.cardAlt },
+  // Quieter than the two answers it sits beside: this is the escape hatch, not
+  // a third thing being asked of the user.
+  more: { backgroundColor: colors.transparent },
   playBtn: {
     flexDirection: 'row',
     alignItems: 'center',

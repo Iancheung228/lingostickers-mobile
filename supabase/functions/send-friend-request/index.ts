@@ -46,6 +46,27 @@ Deno.serve(async (req) => {
 
     if (!addressee) return json({ error: 'User not found' }, 404);
 
+    // ── 1b. Refuse if either side has blocked the other ───────────
+    // A BEFORE INSERT trigger on friendships enforces this too (migration
+    // 034 §4) and is the real guarantee, since this function runs with the
+    // service role and bypasses RLS. But the trigger's exception surfaces as
+    // a 500, so the check is repeated here to produce something a person can
+    // read.
+    //
+    // Deliberately vague, and deliberately the same message in both
+    // directions: telling someone "X has blocked you" turns a block into a
+    // notification, which is exactly what the person who blocked them was
+    // trying to avoid.
+    const { data: blocks } = await admin
+      .from('user_blocks')
+      .select('id')
+      .or(`and(blocker_id.eq.${requesterId},blocked_id.eq.${addressee_id}),and(blocker_id.eq.${addressee_id},blocked_id.eq.${requesterId})`)
+      .limit(1);
+
+    if (blocks && blocks.length > 0) {
+      return json({ error: "This request can't be sent." }, 403);
+    }
+
     // ── 2. Prevent duplicate pair (either direction) ──────────────
     const { data: existing } = await admin
       .from('friendships')

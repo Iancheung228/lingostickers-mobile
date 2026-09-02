@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
 import { Modal, View, Text, TouchableOpacity, StyleSheet, SafeAreaView, Alert, ActivityIndicator } from 'react-native';
-import { X, Send, UserX } from 'lucide-react-native';
+import { X, Send, UserX, Flag, Ban } from 'lucide-react-native';
 import { FriendWithProfile, Sticker } from '@/lib/types';
 import { supabase } from '@/lib/supabase';
 import { useFriends } from '@/hooks/useFriends';
 import { useChallenges } from '@/hooks/useChallenges';
 import StickerPickerModal from '@/components/StickerPickerModal';
+import ReportSheet from '@/components/ReportSheet';
 import Avatar from '@/components/Avatar';
 import { colors } from '@/constants/theme';
 
@@ -17,9 +18,10 @@ interface FriendProfileProps {
 }
 
 export default function FriendProfile({ friend, currentUserId, onClose, onRemoved }: FriendProfileProps) {
-  const { removeFriend } = useFriends();
+  const { removeFriend, blockUser } = useFriends();
   const { sendChallenge } = useChallenges();
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
   const [sending, setSending] = useState(false);
   const [exchangeCount, setExchangeCount] = useState<number | null>(null);
 
@@ -63,6 +65,31 @@ export default function FriendProfile({ friend, currentUserId, onClose, onRemove
           },
         },
       ]
+    );
+  };
+
+  // Blocking is the strong version of removing: it also stops them coming
+  // back. The confirm spells out what actually happens, because "block" means
+  // slightly different things in different apps and the user should not have
+  // to guess which one this is.
+  const handleBlock = () => {
+    if (!friend) return;
+    const name = friend.friend.username ?? 'this person';
+    Alert.alert(
+      `Block ${name}?`,
+      `They won't be able to send you challenges or friend requests, and you'll stop seeing each other. You'll no longer be friends. You can undo this in Profile → Blocked accounts.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Block', style: 'destructive',
+          onPress: async () => {
+            const { error } = await blockUser(friend.friend.id);
+            if (error) { Alert.alert("Couldn't block", error.message); return; }
+            onRemoved();
+            onClose();
+          },
+        },
+      ],
     );
   };
 
@@ -115,10 +142,39 @@ export default function FriendProfile({ friend, currentUserId, onClose, onRemove
               )}
           </TouchableOpacity>
 
-          <TouchableOpacity style={[styles.actionButton, styles.removeButton]} onPress={handleRemove}>
+          <TouchableOpacity
+            style={[styles.actionButton, styles.removeButton]}
+            onPress={handleRemove}
+            accessibilityRole="button"
+            accessibilityLabel={`Remove ${friend.friend.username ?? 'this friend'} from your friends`}
+          >
             <UserX size={16} color={colors.error} />
             <Text style={styles.removeButtonText}>Remove Friend</Text>
           </TouchableOpacity>
+
+          {/* Safety controls sit below the friendly actions and are visually
+              quieter than them — present and findable without turning a
+              friend's profile into a page about suspicion. */}
+          <View style={styles.safetyRow}>
+            <TouchableOpacity
+              style={styles.safetyButton}
+              onPress={() => setReportOpen(true)}
+              accessibilityRole="button"
+              accessibilityLabel={`Report ${friend.friend.username ?? 'this person'}`}
+            >
+              <Flag size={14} color={colors.inkLight} />
+              <Text style={styles.safetyText}>Report</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.safetyButton}
+              onPress={handleBlock}
+              accessibilityRole="button"
+              accessibilityLabel={`Block ${friend.friend.username ?? 'this person'}`}
+            >
+              <Ban size={14} color={colors.inkLight} />
+              <Text style={styles.safetyText}>Block</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </SafeAreaView>
 
@@ -127,6 +183,15 @@ export default function FriendProfile({ friend, currentUserId, onClose, onRemove
         currentUserId={currentUserId}
         onSelect={handleSelectSticker}
         onClose={() => setPickerOpen(false)}
+      />
+
+      <ReportSheet
+        visible={reportOpen}
+        reporterId={currentUserId}
+        reportedUserId={friend.friend.id}
+        reportedName={friend.friend.username}
+        onBlock={handleBlock}
+        onClose={() => setReportOpen(false)}
       />
     </Modal>
   );
@@ -172,4 +237,13 @@ const styles = StyleSheet.create({
   challengeButtonText: { color: colors.white, fontSize: 15, fontWeight: '700' },
   removeButton: { backgroundColor: colors.errorLight },
   removeButtonText: { color: colors.error, fontSize: 15, fontWeight: '700' },
+  safetyRow: { flexDirection: 'row', gap: 24, marginTop: 4 },
+  safetyButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+  },
+  safetyText: { color: colors.inkLight, fontSize: 13, fontWeight: '600' },
 });

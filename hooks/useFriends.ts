@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useCallback, useEffect, ReactNode, createElement } from 'react';
 import { supabase } from '@/lib/supabase';
-import { FriendWithProfile, PersonSummary } from '@/lib/types';
+import { BlockedUser, FriendWithProfile, PersonSummary } from '@/lib/types';
 import { useAuth } from '@/hooks/useAuth';
 
 function useFriendsState() {
@@ -10,6 +10,11 @@ function useFriendsState() {
   const [loading, setLoading] = useState(true);
   const [searchResults, setSearchResults] = useState<PersonSummary[]>([]);
   const [searching, setSearching] = useState(false);
+  // Blocks live here, next to the friend graph, because blocking is the one
+  // action that changes both at once — the trigger in migration 034 severs the
+  // friendship, so a block that didn't also refresh this list would leave the
+  // rail showing someone who is no longer a friend.
+  const [blocked, setBlocked] = useState<BlockedUser[]>([]);
 
   const fetchFriends = useCallback(async () => {
     if (!userId) { setFriends([]); setLoading(false); return; }
@@ -48,7 +53,37 @@ function useFriendsState() {
     setLoading(false);
   }, [userId]);
 
+  const fetchBlocked = useCallback(async () => {
+    if (!userId) { setBlocked([]); return; }
+
+    const { data, error } = await supabase
+      .from('user_blocks')
+      .select('id, blocked_id, created_at')
+      .eq('blocker_id', userId)
+      .order('created_at', { ascending: false });
+
+    // A failed read leaves the previous list alone rather than reporting an
+    // empty one — "you have blocked nobody" is a claim, and we couldn't ask.
+    if (error || !data) return;
+    if (data.length === 0) { setBlocked([]); return; }
+
+    // Blocking does not hide the blocked person's *profile* from the blocker —
+    // only their content. That is on purpose: you have to be able to read the
+    // name of the person you blocked in order to unblock them.
+    const { data: profiles } = await supabase
+      .from('profiles')
+      .select('id, username, avatar_path')
+      .in('id', data.map(b => b.blocked_id));
+
+    const profileMap = new Map((profiles ?? []).map(p => [p.id, p]));
+    setBlocked(data.map(b => ({
+      ...b,
+      blocked: profileMap.get(b.blocked_id) ?? { id: b.blocked_id, username: null, avatar_path: null },
+    })));
+  }, [userId]);
+
   useEffect(() => { fetchFriends(); }, [fetchFriends]);
+  useEffect(() => { fetchBlocked(); }, [fetchBlocked]);
 
   const searchUsers = useCallback(async (query: string) => {
     if (!userId || query.trim().length < 2) { setSearchResults([]); return; }
@@ -57,14 +92,15 @@ function useFriendsState() {
     const existingIds = new Set(friends.map(f => f.friend.id));
     existingIds.add(userId);
 
-    const { data } = await supabase
-      .from('profiles')
-      .select('id, username, avatar_path')
-      .ilike('username', `${query.trim()}%`)
-      .neq('id', userId)
-      .limit(10);
+    // Goes through the search_profiles RPC rather than querying `profiles`
+    // directly. A client-side query can only exclude the blocks *you* made —
+    // it cannot see a block made against you, so someone who blocked you would
+    // still appear here with a working Add button that then failed at the
+    // trigger. The RPC applies the same both-directions predicate the RLS
+    // policies use. See migration 034 §6.
+    const { data } = await supabase.rpc('search_profiles', { q: query.trim() });
 
-    setSearchResults((data ?? []).filter(p => !existingIds.has(p.id)));
+    setSearchResults((data ?? []).filter((p: PersonSummary) => !existingIds.has(p.id)));
     setSearching(false);
   }, [userId, friends]);
 
@@ -98,6 +134,46 @@ function useFriendsState() {
     return { error };
   }, [fetchFriends]);
 
+  /**
+   * Block someone. This is the strong version of removeFriend: the row here is
+   * what stops them coming back.
+   *
+   * Only the insert is done from the client. Severing the friendship and
+   * withdrawing challenges still in flight happen in a database trigger, so
+   * they are atomic with the block — see migration 034 §3. Both lists are
+   * refetched afterwards because both changed.
+   */
+  const blockUser = useCallback(async (blockedId: string) => {
+    if (!userId) return { error: new Error('Not signed in') };
+
+    const { error } = await supabase
+      .from('user_blocks')
+      .insert({ blocker_id: userId, blocked_id: blockedId });
+
+    // Blocking twice is not an error worth surfacing — the end state the user
+    // asked for is the end state they have.
+    if (error && !error.message.includes('duplicate key')) return { error };
+
+    await Promise.all([fetchFriends(), fetchBlocked()]);
+    return { error: null };
+  }, [userId, fetchFriends, fetchBlocked]);
+
+  /**
+   * Lift a block. Deliberately does NOT restore the friendship the block
+   * severed — unblocking means "you may contact me again", not "we are friends
+   * again", and silently re-friending someone you had blocked would be a
+   * surprise in the wrong direction.
+   */
+  const unblockUser = useCallback(async (blockId: string) => {
+    const { error } = await supabase
+      .from('user_blocks')
+      .delete()
+      .eq('id', blockId);
+
+    if (!error) await fetchBlocked();
+    return { error };
+  }, [fetchBlocked]);
+
   return {
     friends,
     loading,
@@ -107,6 +183,10 @@ function useFriendsState() {
     sendFriendRequest,
     respondToRequest,
     removeFriend,
+    blocked,
+    blockUser,
+    unblockUser,
+    refetchBlocked: fetchBlocked,
     refetch: fetchFriends,
   };
 }
