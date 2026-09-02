@@ -4,7 +4,7 @@ import { X, Bookmark, Pencil, Volume2, Lightbulb, Info, RotateCcw } from 'lucide
 import { StickerDraft } from '@/lib/types';
 import { supabase } from '@/lib/supabase';
 import { speak, stopSpeaking } from '@/lib/speech';
-import { colors, radii, spacing, fonts, shadows } from '@/constants/theme';
+import { colors, spacing, shadows } from '@/constants/theme';
 
 interface DiscoveryRevealProps {
   draft: StickerDraft | null;
@@ -86,12 +86,21 @@ export default function DiscoveryReveal({ draft, onAdd, onDiscard, onRetryExtrac
     });
   };
 
+  // onRequestClose is the Android back gesture. Routed to onDiscard, which
+  // confirms first — this screen holds a result that cost ~10-20s and a real
+  // API call to produce, so back must not silently bin it.
   return (
-    <Modal visible animationType="slide" presentationStyle="fullScreen">
+    <Modal visible animationType="slide" presentationStyle="fullScreen" onRequestClose={onDiscard}>
       <SafeAreaView style={styles.container}>
         <View style={styles.header}>
           <Text style={styles.headerTitle}>New Discovery</Text>
-          <TouchableOpacity onPress={onDiscard} style={styles.closeButton} disabled={saving}>
+          <TouchableOpacity
+            onPress={onDiscard}
+            style={styles.closeButton}
+            disabled={saving}
+            accessibilityRole="button"
+            accessibilityLabel="Discard this discovery"
+          >
             <X size={24} color={colors.inkDark} />
           </TouchableOpacity>
         </View>
@@ -133,6 +142,8 @@ export default function DiscoveryReveal({ draft, onAdd, onDiscard, onRetryExtrac
               onPress={() => speak(draft.word, draft.language)}
               style={styles.speakButton}
               hitSlop={10}
+              accessibilityRole="button"
+              accessibilityLabel={`Hear ${draft.word} pronounced`}
             >
               <Volume2 size={20} color={colors.terra} />
             </TouchableOpacity>

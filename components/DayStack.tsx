@@ -52,7 +52,7 @@ function StackThumb({
     >
       {url ? (
         displayStyle === 'cutout' && borderStyle === 'outline' ? (
-          <CutoutSticker uri={url} borderStyle="outline" />
+          <CutoutSticker uri={url} cacheKey={sticker.image_path} borderStyle="outline" />
         ) : (
           <Image source={{ uri: url }} style={styles.image} resizeMode="contain" />
         )

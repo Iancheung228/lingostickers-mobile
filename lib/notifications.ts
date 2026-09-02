@@ -6,7 +6,11 @@ import { debugWarn } from './debug';
 export function configureNotificationHandler() {
   Notifications.setNotificationHandler({
     handleNotification: async () => ({
-      shouldShowAlert: true,
+      // shouldShowAlert is deprecated in SDK 54 and split into the two flags
+      // below — a banner over the current screen, and an entry in the
+      // notification list. Both were already set, so dropping it changes
+      // nothing today; it just stops us relying on a key the SDK has said it
+      // is done with.
       shouldPlaySound: true,
       shouldSetBadge: true,
       shouldShowBanner: true,

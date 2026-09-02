@@ -11,15 +11,16 @@ import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
 import { File } from 'expo-file-system';
 import { Check, ImagePlus, Trash2, Wand2, X } from 'lucide-react-native';
-import { Sticker, HomeStickerWithSticker, WallBackgroundDim } from '@/lib/types';
+import { CutoutBorderStyle, Sticker, HomeStickerWithSticker, WallBackgroundDim } from '@/lib/types';
 import { supabase } from '@/lib/supabase';
 import { useSignedUrls } from '@/hooks/useSignedUrls';
 import { homeCanvasSize, homeTileFraction, maxPlacement, HOME_WALL_CAP } from '@/lib/homeWall';
+import { alertPermissionDenied } from '@/lib/permissions';
 import WallBackground from '@/components/WallBackground';
 import BackgroundCropper, { CropResult } from '@/components/BackgroundCropper';
 import CutoutSticker from '@/components/CutoutSticker';
 import HomeWallTile from '@/components/HomeWallTile';
-import { colors, radii, fonts, spacing, shadows } from '@/constants/theme';
+import { colors, radii, fonts, spacing, shadows, wordFontFor } from '@/constants/theme';
 
 const HOME_BACKGROUND_MAX_SIDE = 1600;
 const TRASH_SIZE = 52;
@@ -28,6 +29,9 @@ const TRAY_TILE = 62;
 
 interface HomeWallEditorProps {
   visible: boolean;
+  // Must match what the home panel draws, or arranging shows you one thing
+  // and the wall you were arranging shows another.
+  borderStyle: CutoutBorderStyle;
   onClose: () => void;
   userId: string | undefined;
   // The whole collection, to pick from. Passed in rather than re-queried:
@@ -46,7 +50,7 @@ interface HomeWallEditorProps {
 }
 
 export default function HomeWallEditor({
-  visible, onClose, userId, stickers, items,
+  visible, onClose, userId, stickers, items, borderStyle,
   onAdd, onRemove, onMove, onTidy,
   backgroundPath, backgroundDim, backgroundVersion, onChangeBackground, onBackgroundUploaded,
 }: HomeWallEditorProps) {
@@ -105,9 +109,13 @@ export default function HomeWallEditor({
   // happens on confirm, so nobody uploads a photo they haven't previewed.
   const handlePickBackground = async () => {
     if (!userId || uploadingBackground) return;
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('Photos Access Needed', 'Tabi Stickers needs access to your photo library to set a cover photo.');
+    const { granted, canAskAgain } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!granted) {
+      alertPermissionDenied(
+        'Photos Access Needed',
+        'Tabi Stickers needs access to your photo library to set a cover photo.',
+        canAskAgain
+      );
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 1 });
@@ -195,6 +203,7 @@ export default function HomeWallEditor({
                   dragActive={dragActive}
                   hoverTrash={hoverTrash}
                   trashBounds={trashBounds}
+                  borderStyle={borderStyle}
                 />
               ))}
 
@@ -246,7 +255,14 @@ export default function HomeWallEditor({
             {/* Used to be a hidden long-press on the panel's corner button,
                 which is not a thing anyone finds on purpose. */}
             {!!backgroundPath && (
-              <TouchableOpacity style={styles.toolIconBtn} onPress={handleRemoveBackground} activeOpacity={0.85} hitSlop={8}>
+              <TouchableOpacity
+                style={styles.toolIconBtn}
+                onPress={handleRemoveBackground}
+                activeOpacity={0.85}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel="Remove the cover photo"
+              >
                 <X size={14} color={colors.inkDark} />
               </TouchableOpacity>
             )}
@@ -280,7 +296,7 @@ export default function HomeWallEditor({
                   >
                     <View style={styles.trayImage}>
                       {url ? (
-                        <CutoutSticker uri={url} cacheKey={item.image_path} borderStyle="none" />
+                        <CutoutSticker uri={url} cacheKey={item.image_path} borderStyle={borderStyle} />
                       ) : (
                         <ActivityIndicator size="small" color={colors.terra} />
                       )}
@@ -290,7 +306,7 @@ export default function HomeWallEditor({
                         <Check size={11} color={colors.white} strokeWidth={3} />
                       </View>
                     )}
-                    <Text style={styles.trayWord} numberOfLines={1}>{item.word}</Text>
+                    <Text style={[styles.trayWord, { fontFamily: wordFontFor(item.language) }]} numberOfLines={1}>{item.word}</Text>
                   </TouchableOpacity>
                 );
               }}
@@ -317,9 +333,10 @@ function clamp(value: number, min: number, max: number) {
 }
 
 function DraggableTile({
-  item, canvas, url, onMove, onRemove, dragActive, hoverTrash, trashBounds,
+  item, canvas, url, onMove, onRemove, dragActive, hoverTrash, trashBounds, borderStyle,
 }: {
   item: HomeStickerWithSticker;
+  borderStyle: CutoutBorderStyle;
   canvas: { width: number; height: number; aspect: number };
   url: string | null;
   onMove: (stickerId: string, x: number, y: number) => void;
@@ -411,7 +428,7 @@ function DraggableTile({
   return (
     <GestureDetector gesture={pan}>
       <Animated.View style={[styles.tile, animatedStyle, { width: side, height: side }]}>
-        <HomeWallTile sticker={item.sticker} size={side} url={url} showWord />
+        <HomeWallTile sticker={item.sticker} size={side} url={url} showWord borderStyle={borderStyle} />
       </Animated.View>
     </GestureDetector>
   );
@@ -534,7 +551,7 @@ const styles = StyleSheet.create({
     borderColor: colors.sky,
   },
   trayWord: {
-    fontSize: 9, fontFamily: fonts.jp, color: colors.inkMid,
+    fontSize: 9, color: colors.inkMid,
     marginTop: 4, textAlign: 'center', width: '100%',
   },
 });

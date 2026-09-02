@@ -1,3 +1,5 @@
+import { Platform } from 'react-native';
+
 // Dusty-rose / warm-cream palette (blush redesign, Aug 2026). Every hex
 // below is sampled from the reference mockup, so the token *names* are the
 // ones the whole app already imports — only their values moved. That's
@@ -72,10 +74,42 @@ export const colors = {
 export const fonts = {
   cozy:       'Fraunces_700Bold',    // headings, buttons — warm serif display voice
   cozyMedium: 'Fraunces_600SemiBold',
-  jp:         'KosugiMaru_400Regular', // Japanese word display
   mono:       'JetBrainsMono_500Medium', // romaji, stats, technical labels
   monoBold:   'JetBrainsMono_700Bold', // minimal-calendar month heading
 };
+
+// ---------------------------------------------------------------------------
+// The face a headword is set in, which depends on the language it is in.
+//
+// There used to be one `fonts.jp` — Kosugi Maru — applied to every headword in
+// every language. Kosugi Maru is a *Japanese* font: 7,525 codepoints, and
+// parsing its cmap directly says it covers 0 of 19 common French accented
+// characters and is missing 哋嘅咗嚟啲喺冇 (the particles that make written
+// Cantonese Cantonese) along with 咖啡 and 貓. Japanese was 15/15, which is why
+// this went unnoticed — and French is the DEFAULT language for a new account,
+// so the default experience was a headword rendered half in Fraunces and half
+// in whatever the OS substituted per missing glyph.
+//
+// Bundling real CJK instead is not the answer: a single Noto Sans HK weight is
+// ~8 MB against ~116 KB for a Latin one. The system already ships both faces,
+// correctly hinted, so name them and delete the 3.57 MB download.
+//
+//   fr  → Fraunces, verified 25/25 on the French accent set
+//   ja  → Hiragino Sans, the iOS system Japanese face
+//   yue → PingFang HK, which matters beyond coverage: it carries Hong Kong
+//         glyph forms rather than the mainland or Japanese variants of the
+//         same codepoints, so 骨 and 直 look the way a Hong Kong reader
+//         expects them to.
+//
+// Android returns undefined on purpose. There is no PingFang there, and naming
+// a font the platform does not have gets you the default face with no CJK
+// fallback at all — whereas letting it choose gets Noto CJK, which ships with
+// the OS. Undefined is the better answer, not the absent one.
+export function wordFontFor(language: string): string | undefined {
+  if (language === 'fr') return fonts.cozy;
+  if (Platform.OS !== 'ios') return undefined;
+  return language === 'yue' ? 'PingFang HK' : 'Hiragino Sans';
+}
 
 export const typography = {
   display:  { fontSize: 40, fontFamily: fonts.cozy, letterSpacing: -1, color: colors.inkDark },

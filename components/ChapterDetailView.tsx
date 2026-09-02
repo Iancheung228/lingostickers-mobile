@@ -30,7 +30,12 @@ export default function ChapterDetailView({ chapter, onClose, onSelectSticker, o
     <Modal visible animationType="slide" presentationStyle="fullScreen" onRequestClose={onClose}>
       <SafeAreaView style={styles.container}>
         <View style={styles.header}>
-          <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+          <TouchableOpacity
+            onPress={onClose}
+            style={styles.closeButton}
+            accessibilityRole="button"
+            accessibilityLabel="Close this chapter"
+          >
             <X size={22} color={colors.inkDark} />
           </TouchableOpacity>
           <Text style={styles.headerTitle} numberOfLines={1}>{chapter.title}</Text>

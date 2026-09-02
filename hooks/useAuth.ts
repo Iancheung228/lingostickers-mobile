@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect, ReactNode, createElement } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
+import type { Language } from '@/lib/types';
 import { getFunctionErrorMessage } from '@/lib/functionError';
 
 function useAuthState() {
@@ -30,11 +31,21 @@ function useAuthState() {
 
   const clearPasswordRecovery = () => setIsPasswordRecovery(false);
 
-  const signUp = async (email: string, password: string, username: string) => {
+  // `target_language` rides along in the same metadata as `username` and is
+  // read by the handle_new_user trigger (migration 039), so the profile row is
+  // right the first time. Doing it as a follow-up UPDATE instead would fail
+  // whenever email confirmation is on — there is no session yet at that point
+  // — and would leave the choice parked on the device until first launch.
+  const signUp = async (
+    email: string,
+    password: string,
+    username: string,
+    targetLanguage: Language,
+  ) => {
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
-      options: { data: { username } },
+      options: { data: { username, target_language: targetLanguage } },
     });
     return { data, error };
   };

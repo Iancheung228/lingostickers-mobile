@@ -6,7 +6,7 @@ import {
 import { useFocusEffect } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { Pencil } from 'lucide-react-native';
-import { Sticker, WallBackgroundDim } from '@/lib/types';
+import { CutoutBorderStyle, Sticker, WallBackgroundDim } from '@/lib/types';
 import { useSignedUrls } from '@/hooks/useSignedUrls';
 import { useHomeWall } from '@/hooks/useHomeWall';
 import { seededRandom } from '@/lib/seededRandom';
@@ -31,6 +31,7 @@ interface MiniStickerWallProps {
   // another tab entirely, which is not what tapping a sticker means
   // anywhere else in the app.
   onPressSticker: (sticker: Sticker) => void;
+  borderStyle: CutoutBorderStyle;
 }
 
 // How many the auto fan shows before the user has arranged anything.
@@ -74,11 +75,11 @@ function pickPreview(stickers: Sticker[]): Sticker[] {
 }
 
 function FanTile({
-  sticker, slot, canvasWidth, canvasHeight, isHero, heroScale, opacity, url, onPress,
+  sticker, slot, canvasWidth, canvasHeight, isHero, heroScale, opacity, url, onPress, borderStyle,
 }: {
   sticker: Sticker; slot: number; canvasWidth: number; canvasHeight: number;
   isHero: boolean; heroScale: Animated.Value; opacity: Animated.Value;
-  url: string | null; onPress: () => void;
+  url: string | null; onPress: () => void; borderStyle: CutoutBorderStyle;
 }) {
   const scale = Math.max(0.7, 1.15 - Math.abs(slot) * 0.09);
   const size = BASE_TILE * scale;
@@ -102,7 +103,7 @@ function FanTile({
       ]}
     >
       <TouchableOpacity style={StyleSheet.absoluteFill} onPress={onPress} activeOpacity={0.85}>
-        <HomeWallTile sticker={sticker} size={size} url={url} />
+        <HomeWallTile sticker={sticker} size={size} url={url} borderStyle={borderStyle} />
       </TouchableOpacity>
       {isHero && isFresh && (
         <View style={styles.newBadge}>
@@ -117,10 +118,11 @@ function FanTile({
 // caller on the joined preview ids, so it fully remounts only when the set
 // of stickers shown actually changes — not on every unrelated re-render.
 function TileFan({
-  preview, slots, canvasWidth, canvasHeight, urls, onPressSticker,
+  preview, slots, canvasWidth, canvasHeight, urls, onPressSticker, borderStyle,
 }: {
   preview: Sticker[]; slots: number[]; canvasWidth: number; canvasHeight: number;
   urls: Map<string, string>; onPressSticker: (s: Sticker) => void;
+  borderStyle: CutoutBorderStyle;
 }) {
   const opacities = useRef(preview.map(() => new Animated.Value(0))).current;
   const heroScale = useRef(new Animated.Value(1)).current;
@@ -155,6 +157,7 @@ function TileFan({
           opacity={opacities[i]}
           url={urls.get(sticker.image_path) ?? null}
           onPress={() => onPressSticker(sticker)}
+          borderStyle={borderStyle}
         />
       ))}
     </>
@@ -163,7 +166,7 @@ function TileFan({
 
 export default function MiniStickerWall({
   stickers, userId, backgroundPath, backgroundDim, onChangeBackground,
-  arranged, onArranged, onPressSticker,
+  arranged, onArranged, onPressSticker, borderStyle,
 }: MiniStickerWallProps) {
   const { width: screenWidth } = useWindowDimensions();
   const canvas = useMemo(() => homeCanvasSize(screenWidth), [screenWidth]);
@@ -259,6 +262,7 @@ export default function MiniStickerWall({
                   sticker={item.sticker}
                   size={side}
                   url={urls.get(item.sticker.image_path) ?? null}
+                  borderStyle={borderStyle}
                 />
               </TouchableOpacity>
             );
@@ -273,6 +277,7 @@ export default function MiniStickerWall({
               canvasHeight={canvas.height}
               urls={urls}
               onPressSticker={onPressSticker}
+              borderStyle={borderStyle}
             />
           )
         )}
@@ -293,6 +298,7 @@ export default function MiniStickerWall({
       </View>
 
       <HomeWallEditor
+        borderStyle={borderStyle}
         visible={editorOpen}
         onClose={() => setEditorOpen(false)}
         userId={userId}

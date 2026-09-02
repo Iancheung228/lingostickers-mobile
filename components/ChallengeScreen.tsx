@@ -11,7 +11,7 @@ import { useChallenges } from '@/hooks/useChallenges';
 import { useFriends } from '@/hooks/useFriends';
 import { useAuth } from '@/hooks/useAuth';
 import ReportSheet from '@/components/ReportSheet';
-import { colors, radii, spacing, fonts } from '@/constants/theme';
+import { colors, spacing } from '@/constants/theme';
 
 const LANGUAGE_LABELS: Record<Language, string> = { fr: 'French', ja: 'Japanese', yue: 'Cantonese' };
 

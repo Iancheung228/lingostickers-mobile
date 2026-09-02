@@ -221,6 +221,7 @@ export default function CollectionScreen() {
       {/* ── Mini sticker wall preview, lifted into the rose band above ── */}
       <View style={styles.wallLift}>
         <MiniStickerWall
+          borderStyle={profile?.cutout_border_style ?? 'shadow'}
           stickers={stickers}
           userId={user?.id}
           backgroundPath={profile?.home_background_path}
@@ -269,7 +270,12 @@ export default function CollectionScreen() {
               returnKeyType="search"
             />
             {searchQuery.length > 0 && (
-              <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={8}>
+              <TouchableOpacity
+                onPress={() => setSearchQuery('')}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel="Clear the search box"
+              >
                 <X size={14} color={colors.inkFaint} />
               </TouchableOpacity>
             )}

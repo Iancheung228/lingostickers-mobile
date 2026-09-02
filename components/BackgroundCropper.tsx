@@ -204,14 +204,29 @@ export default function BackgroundCropper({
   const busy = rotating || confirming;
 
   return (
-    <Modal visible={!!asset} animationType="fade" transparent>
+    <Modal visible={!!asset} animationType="fade" transparent onRequestClose={busy ? undefined : onCancel}>
       <View style={styles.overlay}>
         <View style={styles.header}>
-          <TouchableOpacity style={styles.headerBtn} onPress={onCancel} disabled={busy} hitSlop={8}>
+          <TouchableOpacity
+            style={styles.headerBtn}
+            onPress={onCancel}
+            disabled={busy}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Cancel without changing the cover photo"
+          >
             <X size={20} color={colors.white} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Adjust cover photo</Text>
-          <TouchableOpacity style={styles.headerBtn} onPress={handleConfirm} disabled={busy} hitSlop={8}>
+          <TouchableOpacity
+            style={styles.headerBtn}
+            onPress={handleConfirm}
+            disabled={busy}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Use this crop as the cover photo"
+            accessibilityState={{ disabled: busy, busy }}
+          >
             {confirming ? <ActivityIndicator size="small" color={colors.white} /> : <Check size={20} color={colors.white} />}
           </TouchableOpacity>
         </View>

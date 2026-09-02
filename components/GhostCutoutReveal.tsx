@@ -5,7 +5,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { supabase } from '@/lib/supabase';
-import { colors, radii, spacing, fonts } from '@/constants/theme';
+import { colors } from '@/constants/theme';
 
 interface GhostCutoutRevealProps {
   // The rectangular crop that was sent off for extraction — shown first so
@@ -55,8 +55,11 @@ export default function GhostCutoutReveal({ croppedUri, imagePath, onComplete }:
     opacity: progress.value,
   }));
 
+  // Back skips the flourish rather than doing nothing: this screen is a
+  // transition that hands off to DiscoveryReveal when it finishes, so
+  // completing early is the honest response to "get on with it".
   return (
-    <Modal visible animationType="fade" presentationStyle="fullScreen">
+    <Modal visible animationType="fade" presentationStyle="fullScreen" onRequestClose={onComplete}>
       <SafeAreaView style={styles.container}>
         <View style={styles.stage}>
           <Animated.Image source={{ uri: croppedUri }} style={[styles.image, ghostStyle]} resizeMode="contain" />

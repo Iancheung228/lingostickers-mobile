@@ -52,7 +52,12 @@ export default function SendChallengeModal({ sticker, friends, onSend, onClose }
       <SafeAreaView style={styles.container}>
         <View style={styles.header}>
           <Text style={styles.title}>Challenge a Friend</Text>
-          <TouchableOpacity onPress={onClose} hitSlop={8}>
+          <TouchableOpacity
+            onPress={onClose}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Close without sending a challenge"
+          >
             <X size={22} color={colors.inkDark} />
           </TouchableOpacity>
         </View>

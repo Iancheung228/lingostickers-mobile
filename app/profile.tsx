@@ -11,7 +11,7 @@ import { pickAvatarImage } from '@/lib/avatars';
 import { isLocalCutoutAvailable } from '@/lib/cutout';
 import Avatar from '@/components/Avatar';
 import BlockedAccounts from '@/components/BlockedAccounts';
-import { colors, shadows, radii, spacing, fonts } from '@/constants/theme';
+import { colors, shadows, radii, spacing, fonts, wordFontFor } from '@/constants/theme';
 
 // Published at the apex domain and linked from App Store Connect too. In
 // the app because the Profile screen is where a person — and a reviewer —
@@ -34,10 +34,21 @@ const WALL_DISPLAY_STYLES: { code: WallDisplayStyle; label: string; subtitle: st
   { code: 'cutout', label: 'Cutout only', subtitle: 'Just the sticker shape, no card behind it' },
 ];
 
+// These describe what the setting ACTUALLY does, which is not what they used
+// to say. Every sticker gets a thin white edge baked into its PNG at the
+// moment it is cut out — on the device in StickerStyler.swift, and on the
+// server in create-sticker — and nothing here can remove it, because by the
+// time the app is drawing the sticker the border is already pixels. So the old
+// "no outline" and "just the bare cutout, completely flat" were both promising
+// something the app cannot deliver, and "White outline" was quietly stacking a
+// second border on top of the first.
+//
+// Removing the baked border is a Swift change, which means a native rebuild;
+// until then the honest fix is to describe the three options as what they are.
 const CUTOUT_BORDER_STYLES: { code: CutoutBorderStyle; label: string; subtitle: string }[] = [
-  { code: 'outline', label: 'White outline', subtitle: 'A thick white sticker-style border' },
-  { code: 'shadow', label: 'Shadow', subtitle: 'A soft drop shadow, no outline' },
-  { code: 'none', label: 'No border', subtitle: 'Just the bare cutout, completely flat' },
+  { code: 'outline', label: 'Thick outline', subtitle: 'Widens the white edge into a bold sticker border' },
+  { code: 'shadow', label: 'Shadow', subtitle: 'A soft drop shadow behind the cutout' },
+  { code: 'none', label: 'Flat', subtitle: 'No shadow and no extra border' },
 ];
 
 export default function ProfileScreen() {
@@ -252,7 +263,7 @@ export default function ProfileScreen() {
                   activeOpacity={0.8}
                 >
                   <View>
-                    <Text style={styles.langNative}>{native}</Text>
+                    <Text style={[styles.langNative, { fontFamily: wordFontFor(code) }]}>{native}</Text>
                     <Text style={styles.langLabel}>{label}</Text>
                   </View>
                   {updatingLanguage === code ? (
@@ -326,6 +337,10 @@ export default function ProfileScreen() {
                   );
                 })}
               </View>
+              <Text style={styles.sectionFootnote}>
+                Every sticker keeps the thin white edge it was cut out with — these
+                change what sits on top of it.
+              </Text>
             </>
           )}
 
@@ -546,7 +561,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
   },
   rowDivider: { borderTopWidth: 1, borderTopColor: colors.borderLight },
-  langNative: { fontSize: 16, fontFamily: fonts.jp, color: colors.inkDark },
+  langNative: { fontSize: 16, color: colors.inkDark },
   langLabel: { fontSize: 12, color: colors.inkFaint, marginTop: 2 },
   wallStyleLabel: { fontSize: 14, fontWeight: '700', color: colors.inkDark },
   wallStyleSubtitle: { fontSize: 11, color: colors.inkFaint, marginTop: 2 },
@@ -569,6 +584,10 @@ const styles = StyleSheet.create({
   infoTitle: { fontSize: 13, fontWeight: '700', color: colors.inkDark },
   infoSubtitle: { fontSize: 10, color: colors.inkFaint, marginTop: 2 },
   rowChevron: { fontSize: 20, color: colors.inkFaint, lineHeight: 20 },
+  sectionFootnote: {
+    fontSize: 11, color: colors.inkFaint, lineHeight: 15,
+    marginTop: spacing.sm, marginHorizontal: spacing.xs,
+  },
   engineBadge: {
     backgroundColor: colors.sageLight,
     borderRadius: radii.full,

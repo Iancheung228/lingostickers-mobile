@@ -10,6 +10,7 @@ import { File, Paths } from 'expo-file-system';
 import { useBoardStickers } from '@/hooks/useBoards';
 import { supabase } from '@/lib/supabase';
 import { useCoachMark } from '@/lib/coachMarks';
+import { alertPermissionDenied } from '@/lib/permissions';
 import {
   BackgroundCrop, Board, BoardStickerWithSticker, CropRect, Sticker,
   WallDisplayStyle, CutoutBorderStyle,
@@ -180,9 +181,13 @@ export default function BoardCarouselPage({
   // handleCropConfirm, so nobody uploads a photo they haven't previewed.
   const handlePickBackground = async () => {
     if (!currentUserId || uploadingBackground) return;
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('Photos Access Needed', 'Tabi Stickers needs access to your photo library to set a board background.');
+    const { granted, canAskAgain } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!granted) {
+      alertPermissionDenied(
+        'Photos Access Needed',
+        'Tabi Stickers needs access to your photo library to set a board background.',
+        canAskAgain
+      );
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 1 });
@@ -371,7 +376,14 @@ export default function BoardCarouselPage({
     <View style={styles.page}>
       <View style={styles.header}>
         <View ref={menuAnchorRef} collapsable={false} style={styles.side}>
-          <TouchableOpacity onPress={openMenu} style={styles.iconBtn} hitSlop={8} activeOpacity={0.7}>
+          <TouchableOpacity
+            onPress={openMenu}
+            style={styles.iconBtn}
+            hitSlop={8}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel="Board options"
+          >
             {uploadingBackground || loadingSource
               ? <ActivityIndicator size="small" color={colors.inkDark} />
               : <MoreHorizontal size={18} color={colors.inkDark} />}

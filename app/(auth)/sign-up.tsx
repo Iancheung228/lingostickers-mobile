@@ -12,7 +12,17 @@ import { supabase } from '@/lib/supabase';
 import { pickAvatarImage, uploadAvatar } from '@/lib/avatars';
 import { stashPendingAvatar, clearPendingAvatar } from '@/lib/pendingAvatar';
 import AuthIntro from '@/components/AuthIntro';
-import { colors, typography, shadows, radii, spacing, fonts } from '@/constants/theme';
+import { Language } from '@/lib/types';
+import { colors, typography, shadows, radii, spacing, fonts, wordFontFor } from '@/constants/theme';
+
+// The one question this form asks that isn't a credential. Native name first,
+// English underneath — someone looking for Cantonese scans for 廣東話, not for
+// the eighth word in a sentence about it.
+const LANGUAGE_CHOICES: { code: Language; native: string; label: string }[] = [
+  { code: 'fr',  native: 'Français', label: 'French' },
+  { code: 'ja',  native: '日本語',    label: 'Japanese' },
+  { code: 'yue', native: '廣東話',    label: 'Cantonese' },
+];
 
 function friendlySignUpError(message: string): string {
   if (message.includes('already registered')) {
@@ -34,6 +44,10 @@ export default function SignUpScreen() {
   // writes are gated on auth.uid() matching the folder — so the photo can't
   // go anywhere until the account is real. See handleSignUp.
   const [avatarUri, setAvatarUri] = useState<string | null>(null);
+  // Defaulted rather than left empty: 'fr' is what the column has always
+  // defaulted to, so a pre-selected pill changes nothing for someone who
+  // ignores it, and gives everyone else something to change.
+  const [language, setLanguage] = useState<Language>('fr');
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: 'error' | 'success'; text: string } | null>(null);
   const usernameAvailability = useUsernameAvailability(username);
@@ -53,7 +67,7 @@ export default function SignUpScreen() {
     if (!isFormValid) return;
     setMessage(null);
     setLoading(true);
-    const { data, error } = await signUp(email.trim(), password, username.trim());
+    const { data, error } = await signUp(email.trim(), password, username.trim(), language);
     if (error) {
       setLoading(false);
       setMessage({ type: 'error', text: friendlySignUpError(error.message) });
@@ -122,7 +136,13 @@ export default function SignUpScreen() {
                 that makes a friend recognisable everywhere else in the app.
                 Optional: skipping it just leaves the tinted initial. */}
             <View style={styles.avatarBlock}>
-              <TouchableOpacity onPress={handlePickAvatar} activeOpacity={0.8} style={styles.avatarButton}>
+              <TouchableOpacity
+                onPress={handlePickAvatar}
+                activeOpacity={0.8}
+                style={styles.avatarButton}
+                accessibilityRole="button"
+                accessibilityLabel={avatarUri ? 'Change your profile picture' : 'Add a profile picture'}
+              >
                 {avatarUri ? (
                   <Image source={{ uri: avatarUri }} contentFit="cover" style={styles.avatarImage} />
                 ) : (
@@ -135,6 +155,41 @@ export default function SignUpScreen() {
               <Text style={styles.avatarHint}>
                 {avatarUri ? 'Tap to change your photo' : 'Add a profile picture (optional)'}
               </Text>
+            </View>
+
+            {/* Before the credentials on purpose. This is the only field that
+                decides what the app is *for*, and burying it under the
+                password made it read as a setting rather than the choice it
+                is. */}
+            <Text style={styles.fieldLabel}>I WANT TO LEARN</Text>
+            <View style={styles.langRow}>
+              {LANGUAGE_CHOICES.map(({ code, native, label }) => {
+                const active = language === code;
+                return (
+                  <TouchableOpacity
+                    key={code}
+                    style={[styles.langPill, active && styles.langPillActive]}
+                    onPress={() => setLanguage(code)}
+                    activeOpacity={0.85}
+                    accessibilityRole="radio"
+                    accessibilityState={{ selected: active }}
+                    accessibilityLabel={`Learn ${label}`}
+                  >
+                    <Text
+                      style={[
+                        styles.langPillNative,
+                        { fontFamily: wordFontFor(code) },
+                        active && styles.langPillTextActive,
+                      ]}
+                    >
+                      {native}
+                    </Text>
+                    <Text style={[styles.langPillLabel, active && styles.langPillTextActive]}>
+                      {label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
             </View>
 
             <TextInput
@@ -245,6 +300,26 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   avatarBlock: { alignItems: 'center', gap: 6, marginBottom: spacing.md },
+  fieldLabel: {
+    fontSize: 11, fontWeight: '800', color: colors.inkFaint,
+    letterSpacing: 1.2, marginBottom: spacing.sm,
+  },
+  langRow: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.md },
+  langPill: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: spacing.sm + 2,
+    paddingHorizontal: 4,
+    borderRadius: radii.md,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    backgroundColor: colors.card,
+    gap: 1,
+  },
+  langPillActive: { borderColor: colors.terra, backgroundColor: colors.terraLight },
+  langPillNative: { fontSize: 15, color: colors.inkDark },
+  langPillLabel: { fontSize: 10, fontWeight: '700', color: colors.inkLight },
+  langPillTextActive: { color: colors.terra },
   avatarButton: {
     width: 84,
     height: 84,

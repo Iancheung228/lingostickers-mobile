@@ -10,7 +10,7 @@ import { useSignedUrls } from '@/hooks/useSignedUrls';
 import { getTileSize } from '@/lib/boardLayout';
 import WallBackground from '@/components/WallBackground';
 import CutoutSticker from '@/components/CutoutSticker';
-import { colors, fonts } from '@/constants/theme';
+import { colors, wordFontFor } from '@/constants/theme';
 
 const LONG_PRESS_MS = 400;
 const TRASH_SIZE = 60;
@@ -235,12 +235,24 @@ function CanvasTile({
           // own contrast-guaranteeing chip rather than relying on whatever's
           // underneath — see skills.md wall-legibility note.
           <View style={styles.wordChip}>
-            <Text style={[styles.wordChipText, { fontSize: clamp(tileWidth * 0.115, 9, 12) }]} numberOfLines={1}>
+            <Text
+              style={[styles.wordChipText, {
+                fontSize: clamp(tileWidth * 0.115, 9, 12),
+                fontFamily: wordFontFor(item.sticker.language),
+              }]}
+              numberOfLines={1}
+            >
               {item.sticker.word}
             </Text>
           </View>
         ) : (
-          <Text style={[styles.word, { fontSize: clamp(tileWidth * 0.125, 9, 13) }]} numberOfLines={1}>
+          <Text
+            style={[styles.word, {
+              fontSize: clamp(tileWidth * 0.125, 9, 13),
+              fontFamily: wordFontFor(item.sticker.language),
+            }]}
+            numberOfLines={1}
+          >
             {item.sticker.word}
           </Text>
         )}
@@ -285,7 +297,7 @@ const styles = StyleSheet.create({
   tileCutoutFlat: { shadowOpacity: 0, elevation: 0 },
   imageWrap: { flex: 1, marginBottom: 4 },
   image: { width: '100%', height: '100%' },
-  word: { fontSize: 11, fontFamily: fonts.jp, color: colors.inkDark, textAlign: 'center' },
+  word: { fontSize: 11, color: colors.inkDark, textAlign: 'center' },
   // Frosted label: translucent paper chip + its own shadow, so the word
   // reads at full contrast whether it's sitting over a bright sky photo, a
   // dark night shot, or any other background color the user picks.
@@ -304,5 +316,5 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 1 },
     elevation: 3,
   },
-  wordChipText: { fontFamily: fonts.jp, color: colors.inkDark, textAlign: 'center' },
+  wordChipText: { color: colors.inkDark, textAlign: 'center' },
 });

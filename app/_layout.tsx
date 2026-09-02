@@ -5,7 +5,6 @@ import * as Linking from 'expo-linking';
 import * as SplashScreen from 'expo-splash-screen';
 import { useFonts } from 'expo-font';
 import { Fraunces_600SemiBold, Fraunces_700Bold } from '@expo-google-fonts/fraunces';
-import { KosugiMaru_400Regular } from '@expo-google-fonts/kosugi-maru';
 import { JetBrainsMono_500Medium, JetBrainsMono_700Bold } from '@expo-google-fonts/jetbrains-mono';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { StatusBar } from 'expo-status-bar';
@@ -45,7 +44,9 @@ function RootLayout() {
   const { session, loading, isPasswordRecovery } = useAuth();
   const router = useRouter();
   const segments = useSegments();
-  const responseListener = useRef<Notifications.EventSubscription | null>(null);
+  // Which notification tap has already been routed, so the response the hook
+  // keeps returning is acted on exactly once.
+  const handledNotificationRef = useRef<string | null>(null);
   // `error` matters as much as `loaded`: useFonts never flips loaded to true
   // after a failure, so gating the splash and the tree on loaded alone turns
   // one failed font into a permanently frozen splash screen. Falling back to
@@ -53,7 +54,6 @@ function RootLayout() {
   const [fontsLoaded, fontError] = useFonts({
     Fraunces_600SemiBold,
     Fraunces_700Bold,
-    KosugiMaru_400Regular,
     JetBrainsMono_500Medium,
     JetBrainsMono_700Bold,
   });
@@ -138,18 +138,42 @@ function RootLayout() {
     // there was no session to authorize the write. This is the first moment
     // there is one. No-ops for everyone else.
     flushPendingAvatar(session.user.id);
-
-    responseListener.current = Notifications.addNotificationResponseReceivedListener((response) => {
-      const data = response.notification.request.content.data as Record<string, unknown>;
-      if (data?.type === 'challenge' || data?.type === 'friend_request' || data?.type === 'friend_accepted') {
-        router.push('/(tabs)/friends');
-      }
-    });
-
-    return () => {
-      responseListener.current?.remove();
-    };
   }, [session?.user?.id]);
+
+  // Routing a notification tap to the Friends tab.
+  //
+  // This used to be an addNotificationResponseReceivedListener registered
+  // inside the effect above — i.e. only after Supabase had restored the
+  // session from AsyncStorage. That works for a tap while the app is already
+  // running and silently drops the one that *launched* it: by the time the
+  // listener attaches, the response has already been dispatched. Since every
+  // challenge and friend request arrives by push, the most common way anyone
+  // re-enters this app was the one path that did nothing.
+  //
+  // useLastNotificationResponse is the SDK's answer to exactly that — it
+  // reports the most recent response whenever you get around to asking, so a
+  // cold start is no longer a race. It keeps updating for warm taps too, which
+  // is why the old listener is gone rather than kept alongside it.
+  const lastNotificationResponse = Notifications.useLastNotificationResponse();
+
+  useEffect(() => {
+    // Still gated on the session: routing into (tabs) before the root
+    // redirect below knows the user is signed in would just be bounced back
+    // to sign-in. The response is not lost by waiting — that is the whole
+    // point of reading it from state instead of catching it in flight.
+    if (!session?.user?.id || !lastNotificationResponse) return;
+
+    // The hook returns the same response on every render until a new one
+    // arrives, so without this a re-render mid-session would re-navigate.
+    const responseId = lastNotificationResponse.notification.request.identifier;
+    if (handledNotificationRef.current === responseId) return;
+
+    const data = lastNotificationResponse.notification.request.content.data as Record<string, unknown>;
+    if (data?.type === 'challenge' || data?.type === 'friend_request' || data?.type === 'friend_accepted') {
+      handledNotificationRef.current = responseId;
+      router.push('/(tabs)/friends');
+    }
+  }, [lastNotificationResponse, session?.user?.id]);
 
   if (!fontsSettled) return null;
 

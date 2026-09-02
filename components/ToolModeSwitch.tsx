@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, LayoutChangeEvent } from 'react-native';
 import Animated, { useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import { colors, radii, spacing, fonts } from '@/constants/theme';
+import { colors } from '@/constants/theme';
 
 export type ToolMode = 'box' | 'lasso';
 

@@ -1,6 +1,6 @@
-import { useState, useRef, useCallback, useMemo } from 'react';
+import { useState, useRef, useCallback, useMemo, useEffect } from 'react';
 import {
-  View, Text, TouchableOpacity, StyleSheet, Alert,
+  View, Text, TouchableOpacity, StyleSheet, Alert, Linking, AppState,
   ActivityIndicator, useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -29,6 +29,7 @@ import PhotoExtractor, { ExtractResult, renderWholePhotoExtract } from '@/compon
 import ScanProgress, { ScanStage } from '@/components/ScanProgress';
 import GhostCutoutReveal from '@/components/GhostCutoutReveal';
 import { debugLog, debugWarn } from '@/lib/debug';
+import { alertPermissionDenied } from '@/lib/permissions';
 
 // The photo a scan is working from, and — for live captures only — the moment
 // and raw sensor frame the shutter caught. Named so the direct-capture path can
@@ -40,7 +41,20 @@ export default function ScanScreen() {
   const { user } = useAuth();
   const { profile } = useProfile(user?.id);
   const language = profile?.target_language ?? 'fr';
-  const [permission, requestPermission] = useCameraPermissions();
+  const [permission, requestPermission, getPermission] = useCameraPermissions();
+
+  // Sending someone to Settings only helps if we notice when they come back.
+  // Nothing else here re-reads the permission: `useFocusEffect` won't fire
+  // (the scan tab never lost focus — the Settings app was on top of it), and
+  // the hook only checks on mount. Without this the screen keeps showing
+  // "Open Settings" after the switch has already been flipped, which reads
+  // as the button having failed.
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') getPermission();
+    });
+    return () => sub.remove();
+  }, [getPermission]);
   const [processing, setProcessing] = useState(false);
   // Which stage of the scan is running, and whether step one had to fall back
   // to the server — both purely so the wait can explain itself.
@@ -593,9 +607,13 @@ export default function ScanScreen() {
   const handleImportPhoto = useCallback(async () => {
     if (processing) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('Photos Access Needed', 'Tabi Stickers needs access to your photo library to import a picture.');
+    const { granted, canAskAgain } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!granted) {
+      alertPermissionDenied(
+        'Photos Access Needed',
+        'Tabi Stickers needs access to your photo library to import a picture.',
+        canAskAgain
+      );
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -750,14 +768,28 @@ export default function ScanScreen() {
   if (!permission) return <View style={styles.container} />;
 
   if (!permission.granted) {
+    // Once canAskAgain is false, requestPermission() resolves to denied
+    // without ever showing a dialog — so a "Grant Permission" button here
+    // would be dead, on the one screen that produces every sticker in the
+    // app. Settings is the only way back; send them there instead.
+    const blocked = !permission.canAskAgain;
     return (
       <SafeAreaView style={styles.permissionContainer}>
         <Text style={styles.permissionTitle}>Camera Access Needed</Text>
         <Text style={styles.permissionSubtitle}>
-          Tabi Stickers needs your camera to identify objects and create stickers.
+          {blocked
+            ? 'Camera access is turned off for Tabi Stickers. Turn it back on in Settings to scan objects and create stickers.'
+            : 'Tabi Stickers needs your camera to identify objects and create stickers.'}
         </Text>
-        <TouchableOpacity style={styles.permissionButton} onPress={requestPermission}>
-          <Text style={styles.permissionButtonText}>Grant Permission</Text>
+        <TouchableOpacity
+          style={styles.permissionButton}
+          onPress={blocked ? () => Linking.openSettings() : requestPermission}
+          accessibilityRole="button"
+          accessibilityLabel={blocked ? 'Open Settings' : 'Grant camera permission'}
+        >
+          <Text style={styles.permissionButtonText}>
+            {blocked ? 'Open Settings' : 'Grant Permission'}
+          </Text>
         </TouchableOpacity>
       </SafeAreaView>
     );

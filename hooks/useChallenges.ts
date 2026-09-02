@@ -15,17 +15,27 @@ function useChallengesState() {
   const [inbox, setInbox] = useState<ChallengeWithSender[]>([]);
   const [feed, setFeed] = useState<ChallengeWithReceiver[]>([]);
   const [loading, setLoading] = useState(true);
+  // Distinguishes "nothing is waiting on you" from "we couldn't ask".
+  const [loadError, setLoadError] = useState(false);
 
   const fetchInbox = useCallback(async () => {
     if (!userId) { setInbox([]); return; }
 
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('sticker_challenges')
       .select('*')
       .eq('receiver_id', userId)
       .in('status', ['pending', 'active'])
       .order('sent_at', { ascending: false });
 
+    // A failed fetch used to `return` here, silently leaving the previous
+    // inbox and its tab badge in place — so the badge could keep claiming a
+    // challenge was waiting long after it had been answered elsewhere, and a
+    // first-ever failure showed an empty inbox as though there were none.
+    // collection.tsx and profile.tsx already make this distinction; this is
+    // the same idea, and the badge is why it matters more here.
+    if (error) { setLoadError(true); return; }
+    setLoadError(false);
     if (!data) return;
 
     const senderIds = [...new Set(data.map(c => c.sender_id))];
@@ -45,7 +55,7 @@ function useChallengesState() {
   const fetchFeed = useCallback(async (friendIds: string[]) => {
     if (!userId || friendIds.length === 0) { setFeed([]); return; }
 
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('sticker_challenges')
       .select('*')
       .in('receiver_id', friendIds)
@@ -56,6 +66,8 @@ function useChallengesState() {
       // carries a thumbnail that has to be signed.
       .limit(12);
 
+    if (error) { setLoadError(true); return; }
+    setLoadError(false);
     if (!data) return;
 
     const receiverIds = [...new Set(data.map(c => c.receiver_id))];
@@ -137,6 +149,7 @@ function useChallengesState() {
     inbox,
     feed,
     loading,
+    loadError,
     // Everything in the inbox, not just untouched ones. `fetchInbox` already
     // filters to pending + active, and an active challenge is one the user
     // opened and didn't finish — still owed, still worth a badge. Counting

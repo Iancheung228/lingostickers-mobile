@@ -4,7 +4,7 @@ import { Heart, MapPin, Volume2, Check, Play } from 'lucide-react-native';
 import { Sticker } from '@/lib/types';
 import { speak } from '@/lib/speech';
 import { useTrimmedVoicePlayback } from '@/hooks/useTrimmedVoicePlayback';
-import { colors, shadows, radii, spacing, fonts } from '@/constants/theme';
+import { colors, shadows, radii, spacing, fonts, wordFontFor } from '@/constants/theme';
 
 interface StickerCardProps {
   sticker: Sticker;
@@ -28,6 +28,8 @@ export default function StickerCard({ sticker, onPress, onToggleFavorite, select
         style={styles.speakBtn}
         onPress={(e) => { e.stopPropagation(); speak(sticker.word, sticker.language); }}
         hitSlop={6}
+        accessibilityRole="button"
+        accessibilityLabel={`Hear ${sticker.word} pronounced`}
       >
         <Volume2 size={13} color={colors.inkFaint} />
       </TouchableOpacity>
@@ -39,6 +41,8 @@ export default function StickerCard({ sticker, onPress, onToggleFavorite, select
           style={styles.voiceBtn}
           onPress={(e) => { e.stopPropagation(); playVoice(); }}
           hitSlop={6}
+          accessibilityRole="button"
+          accessibilityLabel={`Play your recording of ${sticker.word}`}
         >
           <Play size={11} color={colors.sageDark} fill={colors.sageDark} />
         </TouchableOpacity>
@@ -55,6 +59,11 @@ export default function StickerCard({ sticker, onPress, onToggleFavorite, select
           style={styles.favoriteBtn}
           onPress={(e) => { e.stopPropagation(); onToggleFavorite(sticker.id); }}
           hitSlop={6}
+          accessibilityRole="button"
+          accessibilityLabel={sticker.is_favorite
+            ? `Remove ${sticker.word} from favorites`
+            : `Add ${sticker.word} to favorites`}
+          accessibilityState={{ selected: !!sticker.is_favorite }}
         >
           <Heart
             size={15}
@@ -78,7 +87,7 @@ export default function StickerCard({ sticker, onPress, onToggleFavorite, select
       </View>
       <View style={styles.label}>
         <View style={styles.wordRow}>
-          <Text style={styles.word} numberOfLines={1}>{sticker.word}</Text>
+          <Text style={[styles.word, { fontFamily: wordFontFor(sticker.language) }]} numberOfLines={1}>{sticker.word}</Text>
           <Text style={styles.reading} numberOfLines={1}>[{sticker.reading}]</Text>
         </View>
         <Text style={styles.translation} numberOfLines={1}>{sticker.translation}</Text>
@@ -168,7 +177,8 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   wordRow: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: spacing.xs },
-  word: { fontSize: 14, fontFamily: fonts.jp, color: colors.inkDark, flexShrink: 1 },
+  // fontFamily comes from the render site — it depends on the sticker's language.
+  word: { fontSize: 14, color: colors.inkDark, flexShrink: 1 },
   reading: { fontSize: 9, fontFamily: fonts.mono, color: colors.inkFaint },
   translation: { fontSize: 12, fontFamily: fonts.cozyMedium, color: colors.inkDark, textTransform: 'capitalize' },
   locationRow: {

@@ -12,7 +12,7 @@ import ScanProgress, { ScanStage } from './ScanProgress';
 import CropBoxOverlay from './CropBoxOverlay';
 import LassoOverlay from './LassoOverlay';
 import { Rect, Point, computeContainRect, boxToImageCrop, boundingBoxOfPoints, polygonFillRatio, padBox } from '@/lib/cropGeometry';
-import { colors, radii, spacing, fonts } from '@/constants/theme';
+import { colors } from '@/constants/theme';
 import { debugLog } from '@/lib/debug';
 
 interface PhotoExtractorProps {
@@ -344,7 +344,7 @@ export default function PhotoExtractor({ imageUri, imageWidth, imageHeight, onCl
   const canExtract = mode === 'box' || lassoReady;
 
   return (
-    <Modal visible animationType="slide" presentationStyle="fullScreen">
+    <Modal visible animationType="slide" presentationStyle="fullScreen" onRequestClose={busy ? undefined : onClose}>
       <SafeAreaView style={styles.container}>
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Extract Sticker</Text>
@@ -352,6 +352,8 @@ export default function PhotoExtractor({ imageUri, imageWidth, imageHeight, onCl
             onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onClose(); }}
             style={styles.closeButton}
             disabled={busy}
+            accessibilityRole="button"
+            accessibilityLabel="Close without extracting a sticker"
           >
             <X size={24} color={colors.inkDark} />
           </TouchableOpacity>

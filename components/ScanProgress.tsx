@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { View, Text, ActivityIndicator, StyleSheet } from 'react-native';
 import { Check } from 'lucide-react-native';
-import { colors, radii, spacing, fonts } from '@/constants/theme';
+import { colors, radii, spacing } from '@/constants/theme';
 
 // ---------------------------------------------------------------------------
 // What the app is doing while the user waits.

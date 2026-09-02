@@ -76,7 +76,9 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "Tabi Stickers can tag where this memory happened, turning your collection into a map of your language journey. This is entirely optional."
+          "locationWhenInUsePermission": "Tabi Stickers can tag where this memory happened, turning your collection into a map of your language journey. This is entirely optional.",
+          "locationAlwaysAndWhenInUsePermission": false,
+          "locationAlwaysPermission": false
         }
       ],
       [

@@ -5,7 +5,7 @@ import { Sticker } from '@/lib/types';
 import { supabase } from '@/lib/supabase';
 import { useSignedUrls } from '@/hooks/useSignedUrls';
 import StickerCard from '@/components/StickerCard';
-import { colors, radii, spacing, fonts } from '@/constants/theme';
+import { colors, spacing } from '@/constants/theme';
 
 interface StickerPickerModalProps {
   visible: boolean;
@@ -64,7 +64,12 @@ export default function StickerPickerModal({
               </Text>
             )}
           </View>
-          <TouchableOpacity onPress={onClose} hitSlop={8}>
+          <TouchableOpacity
+            onPress={onClose}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Close the sticker picker"
+          >
             <X size={22} color={colors.inkDark} />
           </TouchableOpacity>
         </View>

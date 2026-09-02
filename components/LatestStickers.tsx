@@ -4,7 +4,7 @@ import { MapPin, Volume2 } from 'lucide-react-native';
 import { Sticker } from '@/lib/types';
 import { timeAgo } from '@/lib/relativeTime';
 import { useTrimmedVoicePlayback } from '@/hooks/useTrimmedVoicePlayback';
-import { colors, radii, spacing, shadows, fonts } from '@/constants/theme';
+import { colors, radii, spacing, shadows, fonts, wordFontFor } from '@/constants/theme';
 
 interface LatestStickersProps {
   stickers: Sticker[];
@@ -78,7 +78,7 @@ function Row({ sticker, last, imageUrl, voiceUrl, onPress }: {
   // Kosugi Maru only covers the CJK scripts — a French word set in it falls
   // back to a system face mid-list and the row heights jump, so the serif
   // display face carries the Latin-script languages instead.
-  const wordFont = sticker.language === 'fr' ? fonts.cozy : fonts.jp;
+  const wordFont = wordFontFor(sticker.language);
 
   return (
     <TouchableOpacity
@@ -119,6 +119,8 @@ function Row({ sticker, last, imageUrl, voiceUrl, onPress }: {
           style={styles.speakBtn}
           onPress={(e) => { e.stopPropagation(); play(); }}
           hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel={`Play your recording of ${sticker.word}`}
         >
           <Volume2 size={16} color={colors.blushDeep} />
         </TouchableOpacity>

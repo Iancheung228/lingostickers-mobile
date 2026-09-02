@@ -40,7 +40,12 @@ export default function FriendSearch({ visible, onClose }: FriendSearchProps) {
       <SafeAreaView style={styles.container}>
         <View style={styles.header}>
           <Text style={styles.title}>Add Friend</Text>
-          <TouchableOpacity onPress={onClose} hitSlop={8}>
+          <TouchableOpacity
+            onPress={onClose}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Close add friend"
+          >
             <X size={22} color={colors.inkDark} />
           </TouchableOpacity>
         </View>

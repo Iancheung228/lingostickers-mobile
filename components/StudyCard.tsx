@@ -11,7 +11,7 @@ import {
   requestRecordingPermissionsAsync, setAudioModeAsync,
 } from 'expo-audio';
 import { File } from 'expo-file-system';
-import { X, Volume2, HelpCircle, Mic, Play, Trash2, PenLine, PinOff } from 'lucide-react-native';
+import { X, Volume2, HelpCircle, Mic, Play, Trash2, PenLine, PinOff, Download, Share2 } from 'lucide-react-native';
 import { Sticker } from '@/lib/types';
 import { supabase } from '@/lib/supabase';
 import { speak } from '@/lib/speech';
@@ -25,7 +25,9 @@ import { useTrimmedVoicePlayback } from '@/hooks/useTrimmedVoicePlayback';
 import Avatar from '@/components/Avatar';
 import FieldEditor, { EditorSpec } from '@/components/FieldEditor';
 import { getFunctionErrorMessage } from '@/lib/functionError';
-import { colors, radii, spacing, shadows, fonts } from '@/constants/theme';
+import { saveStickerToPhotos, shareSticker } from '@/lib/exportSticker';
+import { alertPermissionDenied } from '@/lib/permissions';
+import { colors, radii, spacing, shadows, fonts, wordFontFor } from '@/constants/theme';
 
 /**
  * 'browse' — just look at the card. Flipping is free: nothing is written, no
@@ -377,9 +379,13 @@ export default function StudyCard({
   // voice note per sticker.
   const handleStartRecording = async () => {
     if (!sticker || uploadingVoice || recorderState.isRecording) return;
-    const { granted } = await requestRecordingPermissionsAsync();
+    const { granted, canAskAgain } = await requestRecordingPermissionsAsync();
     if (!granted) {
-      Alert.alert('Microphone access needed', 'Allow microphone access to record your pronunciation.');
+      alertPermissionDenied(
+        'Microphone access needed',
+        'Tabi Stickers needs your microphone to record your pronunciation.',
+        canAskAgain
+      );
       return;
     }
     pauseVoice();
@@ -426,6 +432,25 @@ export default function StudyCard({
       Alert.alert("Couldn't save recording", err?.message ?? 'Something went wrong.');
     } finally {
       setUploadingVoice(false);
+    }
+  };
+
+  // One at a time, and named rather than a bare boolean: both buttons spin
+  // off the same download, and a second tap while the first is in flight
+  // would fetch the file twice and stack two system sheets.
+  const [exporting, setExporting] = useState<'save' | 'share' | null>(null);
+
+  const runExport = async (kind: 'save' | 'share') => {
+    if (!sticker || exporting) return;
+    setExporting(kind);
+    const ok = kind === 'save'
+      ? await saveStickerToPhotos(sticker)
+      : await shareSticker(sticker);
+    setExporting(null);
+    // Only saving needs a word of confirmation — a file dropped into Photos
+    // leaves no trace on screen, whereas the share sheet was its own receipt.
+    if (ok && kind === 'save') {
+      Alert.alert('Saved to Photos', 'Long-press it in Photos to lift it out as a chat sticker.');
     }
   };
 
@@ -535,15 +560,41 @@ export default function StudyCard({
           {!!progress && (
             <Text style={styles.progress}>{progress.index + 1} / {progress.total}</Text>
           )}
-          <TouchableOpacity
-            onPress={handleDelete}
-            style={styles.topBtn}
-            hitSlop={10}
-            accessibilityRole="button"
-            accessibilityLabel="Delete this sticker"
-          >
-            <Trash2 size={18} color={colors.error} />
-          </TouchableOpacity>
+          <View style={styles.topActions}>
+            <TouchableOpacity
+              onPress={() => runExport('share')}
+              style={styles.topBtn}
+              hitSlop={10}
+              disabled={!!exporting}
+              accessibilityRole="button"
+              accessibilityLabel="Share this sticker"
+            >
+              {exporting === 'share'
+                ? <ActivityIndicator size="small" color={colors.inkDark} />
+                : <Share2 size={18} color={colors.inkDark} />}
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => runExport('save')}
+              style={styles.topBtn}
+              hitSlop={10}
+              disabled={!!exporting}
+              accessibilityRole="button"
+              accessibilityLabel="Save this sticker to your photo library"
+            >
+              {exporting === 'save'
+                ? <ActivityIndicator size="small" color={colors.inkDark} />
+                : <Download size={18} color={colors.inkDark} />}
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={handleDelete}
+              style={styles.topBtn}
+              hitSlop={10}
+              accessibilityRole="button"
+              accessibilityLabel="Delete this sticker"
+            >
+              <Trash2 size={18} color={colors.error} />
+            </TouchableOpacity>
+          </View>
         </View>
 
         <Pressable style={styles.cardArea} onPress={toggleFlip}>
@@ -762,7 +813,7 @@ function BackFace({ sticker, mode, onEditField, imageUrl, voice }: {
       ? 'NEW CARD'
       : `${reviewsDone} REVIEW${reviewsDone === 1 ? '' : 'S'}`;
   const parts = splitAroundWord(sticker.sentence, sticker.word);
-  const wordFont = sticker.language === 'fr' ? fonts.cozy : fonts.jp;
+  const wordFont = wordFontFor(sticker.language);
 
   return (
     <View style={styles.card}>
@@ -785,12 +836,20 @@ function BackFace({ sticker, mode, onEditField, imageUrl, voice }: {
                   style={styles.speakBtn}
                   onPress={() => speak(sticker.word, sticker.language)}
                   hitSlop={8}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Hear ${sticker.word} pronounced`}
                 >
                   <Volume2 size={17} color={colors.white} />
                 </TouchableOpacity>
 
                 {voice.hasTake && !voice.recording && (
-                  <TouchableOpacity style={styles.voiceBtn} onPress={voice.onPlay} hitSlop={8}>
+                  <TouchableOpacity
+                    style={styles.voiceBtn}
+                    onPress={voice.onPlay}
+                    hitSlop={8}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Play your recording of ${sticker.word}`}
+                  >
                     <Play size={14} color={colors.sageDark} fill={colors.sageDark} />
                   </TouchableOpacity>
                 )}
@@ -803,6 +862,9 @@ function BackFace({ sticker, mode, onEditField, imageUrl, voice }: {
                   onPressOut={voice.onStop}
                   disabled={voice.uploading}
                   hitSlop={8}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Hold to record yourself saying ${sticker.word}`}
+                  accessibilityState={{ disabled: voice.uploading, busy: voice.recording }}
                 >
                   {voice.uploading
                     ? <ActivityIndicator size="small" color={colors.terra} />
@@ -915,6 +977,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingBottom: spacing.sm,
   },
+  topActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   topBtn: {
     width: 36, height: 36, borderRadius: radii.full,
     alignItems: 'center', justifyContent: 'center',

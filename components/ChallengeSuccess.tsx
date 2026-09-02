@@ -7,7 +7,7 @@ import { MessageCircle, PartyPopper, RotateCw } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { ChallengeWithSender, Sticker } from '@/lib/types';
 import { supabase } from '@/lib/supabase';
-import { colors, radii, spacing, fonts } from '@/constants/theme';
+import { colors } from '@/constants/theme';
 
 interface ChallengeSuccessProps {
   challenge: ChallengeWithSender | null;

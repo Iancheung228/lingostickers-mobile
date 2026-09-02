@@ -3,7 +3,7 @@ import { StyleSheet } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { SharedValue, useAnimatedStyle } from 'react-native-reanimated';
 import { Rect, Corner, clampBox, resizeBoxFromCorner } from '@/lib/cropGeometry';
-import { colors, radii, spacing, fonts } from '@/constants/theme';
+import { colors } from '@/constants/theme';
 
 interface CropBoxOverlayProps {
   box: SharedValue<Rect>;

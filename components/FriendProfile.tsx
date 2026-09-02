@@ -104,7 +104,12 @@ export default function FriendProfile({ friend, currentUserId, onClose, onRemove
       <SafeAreaView style={styles.container}>
         <View style={styles.header}>
           <Text style={styles.title} numberOfLines={1}>{friend.friend.username ?? 'Friend'}</Text>
-          <TouchableOpacity onPress={onClose} hitSlop={8}>
+          <TouchableOpacity
+            onPress={onClose}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Close this profile"
+          >
             <X size={22} color={colors.inkDark} />
           </TouchableOpacity>
         </View>
