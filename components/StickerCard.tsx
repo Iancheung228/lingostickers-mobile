@@ -180,7 +180,7 @@ const styles = StyleSheet.create({
   // fontFamily comes from the render site — it depends on the sticker's language.
   word: { fontSize: 14, color: colors.inkDark, flexShrink: 1 },
   reading: { fontSize: 9, fontFamily: fonts.mono, color: colors.inkFaint },
-  translation: { fontSize: 12, fontFamily: fonts.cozyMedium, color: colors.inkDark, textTransform: 'capitalize' },
+  translation: { fontSize: 12, fontFamily: fonts.text, color: colors.inkDark, textTransform: 'capitalize' },
   locationRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -190,5 +190,5 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: colors.borderLight,
   },
-  locationText: { fontSize: 9, fontWeight: '500', color: colors.inkFaint, flexShrink: 1 },
+  locationText: { fontSize: 9, fontFamily: fonts.mono, color: colors.inkFaint, flexShrink: 1 },
 });

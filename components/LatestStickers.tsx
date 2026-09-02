@@ -75,9 +75,8 @@ function Row({ sticker, last, imageUrl, voiceUrl, onPress }: {
     voiceUrl, sticker.voice_note_start_ms, sticker.voice_note_end_ms
   );
   const when = timeAgo(sticker.discovered_at);
-  // Kosugi Maru only covers the CJK scripts — a French word set in it falls
-  // back to a system face mid-list and the row heights jump, so the serif
-  // display face carries the Latin-script languages instead.
+  // One helper, in one place — the family a headword needs depends entirely
+  // on which language it is in. See wordFontFor in constants/theme.ts.
   const wordFont = wordFontFor(sticker.language);
 
   return (
@@ -148,8 +147,8 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: spacing.sm,
   },
-  title: { fontSize: 18, fontFamily: fonts.cozy, color: colors.inkDark },
-  sortLabel: { fontSize: 13, fontWeight: '600', color: colors.inkLight },
+  title: { fontSize: 18, fontFamily: fonts.display, color: colors.inkDark },
+  sortLabel: { fontSize: 13, fontFamily: fonts.display, color: colors.inkLight },
 
   row: {
     flexDirection: 'row',
@@ -175,8 +174,8 @@ const styles = StyleSheet.create({
   word: { fontSize: 20, color: colors.inkDark },
   reading: { fontSize: 12, fontFamily: fonts.mono, color: colors.inkLight },
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 2 },
-  meta: { flex: 1, fontSize: 11, color: colors.inkFaint },
-  when: { fontSize: 12, color: colors.inkFaint, fontWeight: '500' },
+  meta: { flex: 1, fontSize: 11, fontFamily: fonts.text, color: colors.inkFaint },
+  when: { fontSize: 12, fontFamily: fonts.text, color: colors.inkFaint},
   speakBtn: {
     width: 34,
     height: 34,

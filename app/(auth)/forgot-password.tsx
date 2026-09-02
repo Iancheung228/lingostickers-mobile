@@ -135,7 +135,7 @@ const styles = StyleSheet.create({
   inner: { flex: 1, justifyContent: 'center', paddingHorizontal: spacing.lg },
   title: {
     fontSize: 34,
-    fontFamily: fonts.cozy,
+    fontFamily: fonts.display,
     color: colors.inkDark,
     textAlign: 'center',
     marginBottom: spacing.sm,
@@ -153,17 +153,7 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     ...shadows.card,
   },
-  input: {
-    backgroundColor: colors.sky,
-    borderRadius: radii.md,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 14,
-    fontSize: 15,
-    color: colors.inkDark,
-    marginBottom: spacing.md,
-    borderWidth: 1.5,
-    borderColor: colors.border,
-  },
+  input: { backgroundColor: colors.sky, borderRadius: radii.md, paddingHorizontal: spacing.md, paddingVertical: 14, fontSize: 15, fontFamily: fonts.text, color: colors.inkDark, marginBottom: spacing.md, borderWidth: 1.5, borderColor: colors.border, },
   button: {
     backgroundColor: colors.terra,
     borderRadius: radii.lg,
@@ -174,7 +164,7 @@ const styles = StyleSheet.create({
     ...shadows.button,
   },
   buttonDisabled: { backgroundColor: colors.terraLight, shadowOpacity: 0, elevation: 0 },
-  buttonText: { color: colors.card, fontSize: 16, fontWeight: '700', letterSpacing: 0.3 },
+  buttonText: { color: colors.card, fontSize: 16, fontFamily: fonts.display, letterSpacing: 0.3 },
   messageBox: {
     borderRadius: radii.md,
     paddingHorizontal: spacing.md,
@@ -184,7 +174,7 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: colors.success,
   },
-  messageText: { fontSize: 14, fontWeight: '600', color: colors.success },
+  messageText: { fontSize: 14, fontFamily: fonts.display, color: colors.success },
   errorBox: {
     borderRadius: radii.md,
     paddingHorizontal: spacing.md,
@@ -194,8 +184,8 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: colors.error,
   },
-  errorText: { fontSize: 14, fontWeight: '600', color: colors.error },
+  errorText: { fontSize: 14, fontFamily: fonts.display, color: colors.error },
   linkButton: { alignItems: 'center' },
-  linkText: { color: colors.inkLight, fontSize: 14 },
-  linkAccent: { color: colors.terra, fontWeight: '700' },
+  linkText: { color: colors.inkLight, fontSize: 14, fontFamily: fonts.text },
+  linkAccent: { color: colors.terra, fontFamily: fonts.display },
 });

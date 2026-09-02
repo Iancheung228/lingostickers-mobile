@@ -491,10 +491,10 @@ const styles = StyleSheet.create({
     borderRadius: radii.full,
     backgroundColor: colors.borderLight,
   },
-  searchInput: { flex: 1, padding: 0, fontSize: 14, color: colors.inkDark },
-  searchCancel: { fontSize: 13, fontWeight: '600', color: colors.inkMid },
+  searchInput: { flex: 1, padding: 0, fontSize: 14, fontFamily: fonts.text, color: colors.inkDark },
+  searchCancel: { fontSize: 13, fontFamily: fonts.display, color: colors.inkMid },
   searchResultsLabelWrap: { flex: 1, justifyContent: 'center', paddingVertical: spacing.xs },
-  searchResultsLabel: { fontSize: 12, fontWeight: '600', color: colors.inkFaint },
+  searchResultsLabel: { fontSize: 12, fontFamily: fonts.display, color: colors.inkFaint },
 
   filterRow: {
     flexDirection: 'row',
@@ -532,7 +532,7 @@ const styles = StyleSheet.create({
   },
   chipAlt: { backgroundColor: colors.card, borderColor: colors.borderLight },
   chipAltActive: { backgroundColor: colors.terra, borderColor: colors.terra },
-  chipText: { fontSize: 13, fontWeight: '600', color: colors.inkMid },
+  chipText: { fontSize: 13, fontFamily: fonts.display, color: colors.inkMid },
   chipTextActive: { color: colors.white },
 
   loader: { marginTop: spacing.xxl, alignSelf: 'center' },
@@ -561,7 +561,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     ...shadows.button,
   },
-  retryText: { color: colors.white, fontSize: 14, fontWeight: '700', letterSpacing: 0.3 },
+  retryText: { color: colors.white, fontSize: 14, fontFamily: fonts.display, letterSpacing: 0.3 },
 
   modalOverlay: {
     flex: 1,
@@ -577,7 +577,7 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     ...shadows.card,
   },
-  sortModalTitle: { fontSize: 16, fontFamily: fonts.cozy, color: colors.inkDark, marginBottom: spacing.sm },
+  sortModalTitle: { fontSize: 16, fontFamily: fonts.display, color: colors.inkDark, marginBottom: spacing.sm },
   sortOption: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -587,6 +587,6 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.borderLight,
   },
   sortOptionLast: { borderBottomWidth: 0 },
-  sortOptionText: { fontSize: 15, fontWeight: '600', color: colors.inkMid },
+  sortOptionText: { fontSize: 15, fontFamily: fonts.display, color: colors.inkMid },
   sortOptionTextActive: { color: colors.terra },
 });

@@ -4,7 +4,7 @@ import { X, Bookmark, Pencil, Volume2, Lightbulb, Info, RotateCcw } from 'lucide
 import { StickerDraft } from '@/lib/types';
 import { supabase } from '@/lib/supabase';
 import { speak, stopSpeaking } from '@/lib/speech';
-import { colors, spacing, shadows } from '@/constants/theme';
+import { colors, spacing, shadows, fonts, wordFontFor, sentenceFontFor } from '@/constants/theme';
 
 interface DiscoveryRevealProps {
   draft: StickerDraft | null;
@@ -131,7 +131,7 @@ export default function DiscoveryReveal({ draft, onAdd, onDiscard, onRetryExtrac
 
           <View style={styles.wordRow}>
             <Text
-              style={[styles.word, retranslating && styles.fadedWhileTranslating]}
+              style={[styles.word, { fontFamily: wordFontFor(draft.language) }, retranslating && styles.fadedWhileTranslating]}
               numberOfLines={2}
               adjustsFontSizeToFit
               minimumFontScale={0.55}
@@ -167,7 +167,7 @@ export default function DiscoveryReveal({ draft, onAdd, onDiscard, onRetryExtrac
           </TouchableOpacity>
 
           {!!draft.sentence && (
-            <Text style={[styles.sentence, retranslatingSentence && styles.fadedWhileTranslating]}>
+            <Text style={[styles.sentence, { fontFamily: sentenceFontFor(draft.language) }, retranslatingSentence && styles.fadedWhileTranslating]}>
               {draft.sentence}
             </Text>
           )}
@@ -229,7 +229,7 @@ export default function DiscoveryReveal({ draft, onAdd, onDiscard, onRetryExtrac
             <View style={styles.floatingEditBar}>
               {editingWord ? (
                 <TextInput
-                  style={styles.floatingEditInput}
+                  style={[styles.floatingEditInput, { fontFamily: wordFontFor(draft.language) }]}
                   value={wordInput}
                   onChangeText={setWordInput}
                   autoFocus
@@ -241,7 +241,7 @@ export default function DiscoveryReveal({ draft, onAdd, onDiscard, onRetryExtrac
                 />
               ) : (
                 <TextInput
-                  style={styles.floatingEditInput}
+                  style={[styles.floatingEditInput, { fontFamily: wordFontFor(draft.language) }]}
                   value={sentenceInput}
                   onChangeText={setSentenceInput}
                   autoFocus
@@ -268,7 +268,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
   },
-  headerTitle: { fontSize: 18, fontWeight: '700', color: colors.inkDark },
+  headerTitle: { fontSize: 18, fontFamily: fonts.display, color: colors.inkDark },
   closeButton: {
     width: 40,
     height: 40,
@@ -303,7 +303,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     maxWidth: 300,
   },
-  bgIssueText: { flex: 1, fontSize: 12, color: colors.sageDark, lineHeight: 16, fontWeight: '600' },
+  bgIssueText: { flex: 1, fontSize: 12, fontFamily: fonts.display, color: colors.sageDark, lineHeight: 16},
   stickerFrame: { marginBottom: 24 },
   image: { width: '100%', height: '100%' },
   wordRow: {
@@ -318,8 +318,10 @@ const styles = StyleSheet.create({
   // flexShrink lets a long word give ground to the speaker button instead of
   // shoving it to the screen edge; adjustsFontSizeToFit (see the Text) then
   // scales it down rather than wrapping the layout apart.
-  word: { flexShrink: 1, fontSize: 40, fontWeight: '800', color: colors.inkDark, textAlign: 'center' },
-  reading: { fontSize: 18, color: colors.inkMid, fontStyle: 'italic', marginBottom: 10, textAlign: 'center' },
+  // fontFamily from the render site — target-language headword.
+  word: { flexShrink: 1, fontSize: 40, color: colors.inkDark, textAlign: 'center' },
+  // Always a Latin romanization, never target script — the mono data role.
+  reading: { fontSize: 18, fontFamily: fonts.mono, color: colors.inkMid, marginBottom: 10, textAlign: 'center' },
   fadedWhileTranslating: { opacity: 0.35 },
   translationRow: {
     flexDirection: 'row',
@@ -328,11 +330,11 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     paddingHorizontal: 4,
   },
-  translation: { fontSize: 13, color: colors.terra, fontWeight: '800', letterSpacing: 3, textAlign: 'center' },
+  translation: { fontSize: 13, fontFamily: fonts.monoBold, color: colors.terra, letterSpacing: 3, textAlign: 'center' },
+  // fontFamily from the render site — target-language sentence.
   sentence: {
     fontSize: 15,
     color: colors.inkDark,
-    fontWeight: '600',
     textAlign: 'center',
     lineHeight: 22,
     marginTop: 20,
@@ -346,12 +348,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
     marginTop: 4,
   },
-  sentenceTranslation: {
-    fontSize: 12,
-    color: colors.inkFaint,
-    fontStyle: 'italic',
-    textAlign: 'center',
-  },
+  sentenceTranslation: { fontSize: 12, fontFamily: fonts.text, color: colors.inkFaint, textAlign: 'center' },
   insightRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -363,7 +360,7 @@ const styles = StyleSheet.create({
     borderTopColor: colors.borderLight,
     maxWidth: 280,
   },
-  insightText: { flex: 1, fontSize: 12, color: colors.sageDark, lineHeight: 16 },
+  insightText: { flex: 1, fontSize: 12, fontFamily: fonts.text, color: colors.sageDark, lineHeight: 16 },
   actions: {
     paddingHorizontal: 32,
     paddingTop: spacing.ms,
@@ -390,10 +387,10 @@ const styles = StyleSheet.create({
     borderTopColor: colors.borderLight,
     ...shadows.card,
   },
+  // fontFamily from the render site — you are editing target-language text.
   floatingEditInput: {
     fontSize: 17,
     color: colors.inkDark,
-    fontWeight: '700',
     textAlign: 'center',
     paddingVertical: 12,
     paddingHorizontal: 18,
@@ -416,7 +413,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 },
     elevation: 6,
   },
-  addButtonText: { color: colors.white, fontSize: 16, fontWeight: '800', letterSpacing: 1 },
+  addButtonText: { color: colors.white, fontSize: 16, fontFamily: fonts.display, letterSpacing: 1 },
   secondaryActions: {
     flexDirection: 'row',
     justifyContent: 'center',
@@ -430,7 +427,7 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingVertical: 10,
   },
-  retryButtonText: { color: colors.terra, fontSize: 13, fontWeight: '700' },
+  retryButtonText: { color: colors.terra, fontSize: 13, fontFamily: fonts.display,},
   discardButton: { alignItems: 'center', paddingVertical: 12 },
-  discardButtonText: { color: colors.inkFaint, fontSize: 14, fontWeight: '600' },
+  discardButtonText: { color: colors.inkFaint, fontSize: 14, fontFamily: fonts.display,},
 });

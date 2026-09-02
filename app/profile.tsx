@@ -12,6 +12,7 @@ import { isLocalCutoutAvailable } from '@/lib/cutout';
 import Avatar from '@/components/Avatar';
 import BlockedAccounts from '@/components/BlockedAccounts';
 import { colors, shadows, radii, spacing, fonts, wordFontFor } from '@/constants/theme';
+import { LANGUAGES } from '@/lib/languages';
 
 // Published at the apex domain and linked from App Store Connect too. In
 // the app because the Profile screen is where a person — and a reviewer —
@@ -22,12 +23,6 @@ const PRIVACY_URL = 'https://tabistickers.com/privacy.html';
 // and block controls, so it sits in the same section as them rather than only
 // inside the privacy policy.
 const SUPPORT_EMAIL = 'iancheung228@gmail.com';
-
-const LANGUAGES: { code: Language; native: string; label: string }[] = [
-  { code: 'fr', native: 'Français', label: 'French' },
-  { code: 'ja', native: '日本語', label: 'Japanese' },
-  { code: 'yue', native: '廣東話', label: 'Cantonese' },
-];
 
 const WALL_DISPLAY_STYLES: { code: WallDisplayStyle; label: string; subtitle: string }[] = [
   { code: 'framed', label: 'Framed', subtitle: 'Stickers sit inside a little photo card' },
@@ -478,7 +473,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     ...shadows.card,
   },
-  title: { fontSize: 15, fontFamily: fonts.cozy, color: colors.inkDark },
+  title: { fontSize: 15, fontFamily: fonts.display, color: colors.inkDark },
   loader: { flex: 1 },
 
   scrollBody: { paddingHorizontal: spacing.md, paddingBottom: spacing.xxl },
@@ -515,7 +510,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   userInfo: { flex: 1 },
-  username: { fontSize: 15, fontFamily: fonts.cozy, color: colors.inkDark },
+  username: { fontSize: 15, fontFamily: fonts.display, color: colors.inkDark },
   email: { fontSize: 11, fontFamily: fonts.mono, color: colors.inkFaint, marginTop: 2 },
 
   statCardsRow: { flexDirection: 'row', gap: spacing.sm },
@@ -529,24 +524,17 @@ const styles = StyleSheet.create({
     padding: spacing.ms,
     ...shadows.card,
   },
-  statValue: { fontSize: 16, fontFamily: fonts.mono, fontWeight: '700', color: colors.inkDark },
-  statLabel: { fontSize: 9, fontWeight: '700', color: colors.inkFaint },
+  statValue: { fontSize: 16, fontFamily: fonts.monoBold, color: colors.inkDark },
+  statLabel: { fontSize: 9, fontFamily: fonts.mono, color: colors.inkFaint },
 
   note: {
     backgroundColor: 'rgba(255,255,255,0.55)',
     borderRadius: radii.lg,
     padding: spacing.ms,
   },
-  noteText: { fontSize: 11, fontWeight: '500', color: colors.inkDark, lineHeight: 16 },
+  noteText: { fontSize: 11, fontFamily: fonts.text, color: colors.inkDark, lineHeight: 16 },
 
-  sectionLabel: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: colors.inkFaint,
-    letterSpacing: 1.2,
-    marginBottom: spacing.sm,
-    paddingLeft: spacing.xs,
-  },
+  sectionLabel: { fontSize: 10, fontFamily: fonts.monoBold, color: colors.inkFaint, letterSpacing: 1.2, marginBottom: spacing.sm, paddingLeft: spacing.xs, },
   card: {
     backgroundColor: colors.card,
     borderRadius: radii.lg,
@@ -562,9 +550,9 @@ const styles = StyleSheet.create({
   },
   rowDivider: { borderTopWidth: 1, borderTopColor: colors.borderLight },
   langNative: { fontSize: 16, color: colors.inkDark },
-  langLabel: { fontSize: 12, color: colors.inkFaint, marginTop: 2 },
-  wallStyleLabel: { fontSize: 14, fontWeight: '700', color: colors.inkDark },
-  wallStyleSubtitle: { fontSize: 11, color: colors.inkFaint, marginTop: 2 },
+  langLabel: { fontSize: 12, fontFamily: fonts.text, color: colors.inkFaint, marginTop: 2 },
+  wallStyleLabel: { fontSize: 14, fontFamily: fonts.display, color: colors.inkDark },
+  wallStyleSubtitle: { fontSize: 11, fontFamily: fonts.text, color: colors.inkFaint, marginTop: 2 },
   activeBadge: {
     width: 22,
     height: 22,
@@ -581,20 +569,17 @@ const styles = StyleSheet.create({
     padding: spacing.md,
   },
   infoTextWrap: { flex: 1 },
-  infoTitle: { fontSize: 13, fontWeight: '700', color: colors.inkDark },
-  infoSubtitle: { fontSize: 10, color: colors.inkFaint, marginTop: 2 },
-  rowChevron: { fontSize: 20, color: colors.inkFaint, lineHeight: 20 },
-  sectionFootnote: {
-    fontSize: 11, color: colors.inkFaint, lineHeight: 15,
-    marginTop: spacing.sm, marginHorizontal: spacing.xs,
-  },
+  infoTitle: { fontSize: 13, fontFamily: fonts.display, color: colors.inkDark },
+  infoSubtitle: { fontSize: 10, fontFamily: fonts.mono, color: colors.inkFaint, marginTop: 2 },
+  rowChevron: { fontSize: 20, fontFamily: fonts.text, color: colors.inkFaint, lineHeight: 20 },
+  sectionFootnote: { fontSize: 11, fontFamily: fonts.text, color: colors.inkFaint, lineHeight: 15, marginTop: spacing.sm, marginHorizontal: spacing.xs, },
   engineBadge: {
     backgroundColor: colors.sageLight,
     borderRadius: radii.full,
     paddingHorizontal: spacing.sm,
     paddingVertical: 3,
   },
-  engineBadgeText: { fontSize: 9, fontWeight: '800', color: colors.sageDark },
+  engineBadgeText: { fontSize: 9, fontFamily: fonts.display, color: colors.sageDark },
 
   logoutButton: {
     flexDirection: 'row',
@@ -606,7 +591,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
     ...shadows.card,
   },
-  logoutText: { fontSize: 14, fontWeight: '700', color: colors.inkFaint },
+  logoutText: { fontSize: 14, fontFamily: fonts.display, color: colors.inkFaint },
 
   deleteAccountButton: {
     flexDirection: 'row',
@@ -616,5 +601,5 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
     marginTop: spacing.sm,
   },
-  deleteAccountText: { fontSize: 13, fontWeight: '700', color: colors.error },
+  deleteAccountText: { fontSize: 13, fontFamily: fonts.display, color: colors.error },
 });

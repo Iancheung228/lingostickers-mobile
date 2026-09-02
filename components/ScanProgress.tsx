@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { View, Text, ActivityIndicator, StyleSheet } from 'react-native';
 import { Check } from 'lucide-react-native';
-import { colors, radii, spacing } from '@/constants/theme';
+import { colors, radii, spacing, fonts } from '@/constants/theme';
 
 // ---------------------------------------------------------------------------
 // What the app is doing while the user waits.
@@ -128,17 +128,11 @@ const styles = StyleSheet.create({
   },
   markerActive: { backgroundColor: colors.terraLight, borderColor: colors.terra },
   markerDone: { backgroundColor: colors.sageDark, borderColor: colors.sageDark },
-  markerIdle: { fontSize: 11, fontWeight: '700', color: colors.inkFaint },
+  markerIdle: { fontSize: 11, fontFamily: fonts.display, color: colors.inkFaint },
   text: { flex: 1, paddingTop: 2 },
-  title: { fontSize: 13, fontWeight: '700', color: colors.inkDark },
+  title: { fontSize: 13, fontFamily: fonts.display, color: colors.inkDark },
   titleDone: { color: colors.inkLight },
   titleIdle: { color: colors.inkFaint },
-  detail: { fontSize: 11, color: colors.inkLight, marginTop: 2, lineHeight: 15 },
-  slowNote: {
-    fontSize: 11,
-    color: colors.sageDark,
-    fontWeight: '600',
-    textAlign: 'center',
-    marginTop: 2,
-  },
+  detail: { fontSize: 11, fontFamily: fonts.text, color: colors.inkLight, marginTop: 2, lineHeight: 15 },
+  slowNote: { fontSize: 11, fontFamily: fonts.display, color: colors.sageDark, textAlign: 'center', marginTop: 2, },
 });

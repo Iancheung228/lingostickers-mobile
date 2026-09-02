@@ -12,6 +12,11 @@ export interface EditableInput {
   value: string;
   placeholder?: string;
   multiline?: boolean;
+  /// Face to type in. Set by the caller, because only the caller knows what
+  /// the field holds: a headword and a sentence are target-language and need
+  /// a face that has those characters, a reading is always Latin
+  /// romanization, and a translation is English. Defaults to the text role.
+  fontFamily?: string;
 }
 
 export interface EditorSpec {
@@ -74,7 +79,11 @@ export default function FieldEditor({ spec, saving, onCancel, onSave }: FieldEdi
                   onChangeText={t => setValues(v => ({ ...v, [input.key]: t }))}
                   placeholder={input.placeholder}
                   placeholderTextColor={colors.inkFaint}
-                  style={[styles.input, input.multiline && styles.inputMultiline]}
+                  style={[
+                    styles.input,
+                    input.multiline && styles.inputMultiline,
+                    !!input.fontFamily && { fontFamily: input.fontFamily },
+                  ]}
                   textAlignVertical={input.multiline ? 'top' : 'center'}
                 />
               </View>
@@ -139,8 +148,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.border,
     marginBottom: spacing.ms,
   },
-  title: { fontSize: 20, fontFamily: fonts.cozy, color: colors.inkDark },
-  subtitle: { fontSize: 13, color: colors.inkLight, lineHeight: 19, marginTop: 2 },
+  title: { fontSize: 20, fontFamily: fonts.display, color: colors.inkDark },
+  subtitle: { fontSize: 13, fontFamily: fonts.text, color: colors.inkLight, lineHeight: 19, marginTop: 2 },
 
   inputBlock: { marginTop: spacing.md, gap: spacing.xs },
   inputLabel: {
@@ -153,6 +162,7 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: colors.borderLight,
     fontSize: 16,
+    fontFamily: fonts.text,
     lineHeight: 22,
     color: colors.inkMid,
   },
@@ -175,19 +185,19 @@ const styles = StyleSheet.create({
   },
   checkboxOn: { backgroundColor: colors.terra, borderColor: colors.terra },
   regenText: { flex: 1, gap: 2 },
-  regenLabel: { fontSize: 14, fontFamily: fonts.cozy, color: colors.inkDark },
-  regenHint: { fontSize: 12, color: colors.inkLight, lineHeight: 17 },
+  regenLabel: { fontSize: 14, fontFamily: fonts.display, color: colors.inkDark },
+  regenHint: { fontSize: 12, fontFamily: fonts.text, color: colors.inkLight, lineHeight: 17 },
 
   actions: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.md },
   cancelBtn: {
     flex: 1, alignItems: 'center', paddingVertical: spacing.ms + 2,
     borderRadius: radii.full, borderWidth: 1.5, borderColor: colors.border,
   },
-  cancelText: { fontSize: 15, fontFamily: fonts.cozy, color: colors.inkMid },
+  cancelText: { fontSize: 15, fontFamily: fonts.display, color: colors.inkMid },
   saveBtn: {
     flex: 2, alignItems: 'center', justifyContent: 'center',
     paddingVertical: spacing.ms + 2,
     borderRadius: radii.full, backgroundColor: colors.terra,
   },
-  saveText: { fontSize: 15, fontFamily: fonts.cozy, color: colors.white },
+  saveText: { fontSize: 15, fontFamily: fonts.display, color: colors.white },
 });

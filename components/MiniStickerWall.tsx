@@ -355,14 +355,14 @@ const styles = StyleSheet.create({
     zIndex: 3,
     ...shadows.card,
   },
-  newBadgeText: { fontSize: 8, fontFamily: fonts.mono, fontWeight: '700', color: colors.inkDark },
+  newBadgeText: { fontSize: 8, fontFamily: fonts.monoBold, color: colors.inkDark },
   emptyWrap: {
     ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: spacing.xl,
   },
-  emptyText: { fontSize: 13, fontWeight: '600', color: colors.inkDark, textAlign: 'center', opacity: 0.8 },
+  emptyText: { fontSize: 13, fontFamily: fonts.display, color: colors.inkDark, textAlign: 'center', opacity: 0.8 },
   arrangeBtn: {
     position: 'absolute',
     left: spacing.sm,
@@ -378,5 +378,5 @@ const styles = StyleSheet.create({
     borderRadius: radii.full,
     ...shadows.card,
   },
-  arrangeText: { fontSize: 12, fontWeight: '700', color: colors.inkDark },
+  arrangeText: { fontSize: 12, fontFamily: fonts.display, color: colors.inkDark },
 });

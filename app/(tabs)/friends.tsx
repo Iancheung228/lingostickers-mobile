@@ -173,6 +173,7 @@ export default function FriendsScreen() {
         return (
           <SolvedRow
             word={row.challenge.snapshot_word}
+            language={row.challenge.snapshot_language}
             translation={row.challenge.snapshot_translation}
             solverName={row.challenge.receiver?.username ?? null}
             solverAvatarPath={row.challenge.receiver?.avatar_path ?? null}
@@ -292,8 +293,8 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.sm,
   },
   headerText: { flex: 1, gap: 1 },
-  title: { fontSize: 24, fontFamily: fonts.cozy, color: colors.inkDark, letterSpacing: -0.5 },
-  subtitle: { fontSize: 12, color: colors.inkLight, fontWeight: '600' },
+  title: { fontSize: 24, fontFamily: fonts.display, color: colors.inkDark, letterSpacing: -0.5 },
+  subtitle: { fontSize: 12, fontFamily: fonts.display, color: colors.inkLight},
   addBtn: {
     width: 40,
     height: 40,
@@ -312,7 +313,7 @@ const styles = StyleSheet.create({
     paddingTop: spacing.md,
     paddingBottom: spacing.sm,
   },
-  sectionLabel: { fontSize: 11, fontWeight: '800', color: colors.inkFaint, letterSpacing: 1.5 },
+  sectionLabel: { fontSize: 11, fontFamily: fonts.monoBold, color: colors.inkFaint, letterSpacing: 1.5 },
   countPill: {
     minWidth: 18,
     height: 18,
@@ -322,13 +323,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 5,
   },
-  countText: { fontSize: 10, fontWeight: '800', color: colors.white },
-  resting: {
-    fontSize: 13,
-    color: colors.inkFaint,
-    paddingHorizontal: spacing.md,
-    paddingBottom: spacing.sm,
-    lineHeight: 18,
-  },
+  countText: { fontSize: 10, fontFamily: fonts.display, color: colors.white },
+  resting: { fontSize: 13, fontFamily: fonts.text, color: colors.inkFaint, paddingHorizontal: spacing.md, paddingBottom: spacing.sm, lineHeight: 18, },
   listContent: { paddingBottom: spacing.xxl },
 });

@@ -27,7 +27,7 @@ import FieldEditor, { EditorSpec } from '@/components/FieldEditor';
 import { getFunctionErrorMessage } from '@/lib/functionError';
 import { saveStickerToPhotos, shareSticker } from '@/lib/exportSticker';
 import { alertPermissionDenied } from '@/lib/permissions';
-import { colors, radii, spacing, shadows, fonts, wordFontFor } from '@/constants/theme';
+import { colors, radii, spacing, shadows, fonts, wordFontFor, sentenceFontFor } from '@/constants/theme';
 
 /**
  * 'browse' — just look at the card. Flipping is free: nothing is written, no
@@ -115,12 +115,12 @@ function editorSpecFor(target: EditTarget, sticker: Sticker): EditorSpec {
       return {
         title: 'The word',
         subtitle: 'As it is written in the target language. Correcting a spelling here changes nothing else on the card.',
-        inputs: [{ key: 'word', label: 'WORD', value: sticker.word }],
+        inputs: [{ key: 'word', label: 'WORD', value: sticker.word, fontFamily: wordFontFor(sticker.language) }],
       };
     case 'reading':
       return {
         title: 'How to say it',
-        inputs: [{ key: 'reading', label: 'READING', value: sticker.reading }],
+        inputs: [{ key: 'reading', label: 'READING', value: sticker.reading, fontFamily: fonts.mono }],
       };
     case 'meaning':
       return {
@@ -140,7 +140,7 @@ function editorSpecFor(target: EditTarget, sticker: Sticker): EditorSpec {
         title: 'In use',
         subtitle: 'The example sentence and its English.',
         inputs: [
-          { key: 'sentence', label: 'SENTENCE', value: sticker.sentence, multiline: true },
+          { key: 'sentence', label: 'SENTENCE', value: sticker.sentence, multiline: true, fontFamily: sentenceFontFor(sticker.language) },
           { key: 'sentence_translation', label: 'IN ENGLISH', value: sticker.sentence_translation, multiline: true },
         ],
       };
@@ -889,11 +889,11 @@ function BackFace({ sticker, mode, onEditField, imageUrl, voice }: {
           </Field>
 
           <Field label="IN USE" last onEdit={onEditField && (() => onEditField('sentence'))}>
-            <Text style={styles.sentence}>
+            <Text style={[styles.sentence, { fontFamily: sentenceFontFor(sticker.language) }]}>
               {parts ? (
                 <>
                   {parts[0]}
-                  <Text style={styles.sentenceWord}>{parts[1]}</Text>
+                  <Text style={[styles.sentenceWord, { fontFamily: wordFontFor(sticker.language) }]}>{parts[1]}</Text>
                   {parts[2]}
                 </>
               ) : sticker.sentence}
@@ -1000,17 +1000,17 @@ const styles = StyleSheet.create({
   // ── front ──
   frontHead: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' },
   frontDate: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  dayNumber: { fontSize: 34, lineHeight: 38, fontFamily: fonts.cozy, color: colors.inkDark },
-  weekday: { fontSize: 15, fontFamily: fonts.cozy, color: colors.inkDark },
+  dayNumber: { fontSize: 34, lineHeight: 38, fontFamily: fonts.display, color: colors.inkDark },
+  weekday: { fontSize: 15, fontFamily: fonts.display, color: colors.inkDark },
   monthYear: { fontSize: 9.5, fontFamily: fonts.mono, color: colors.inkLight, letterSpacing: 1.4 },
   frontAuthor: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   frontAuthorText: { alignItems: 'flex-end' },
-  authorName: { fontSize: 13, fontFamily: fonts.cozy, color: colors.inkDark },
+  authorName: { fontSize: 13, fontFamily: fonts.display, color: colors.inkDark },
   dayCount: { fontSize: 9.5, fontFamily: fonts.mono, color: colors.inkLight, letterSpacing: 1.4 },
 
   frontScroll: { flex: 1, marginTop: spacing.md },
   frontScrollContent: { paddingBottom: spacing.sm },
-  note: { fontSize: 17, lineHeight: 26, color: colors.inkMid },
+  note: { fontSize: 17, fontFamily: fonts.text, lineHeight: 26, color: colors.inkMid },
   notePrompt: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1022,7 +1022,7 @@ const styles = StyleSheet.create({
     borderStyle: 'dashed',
     borderColor: colors.border,
   },
-  notePromptText: { fontSize: 15, color: colors.inkFaint },
+  notePromptText: { fontSize: 15, fontFamily: fonts.text, color: colors.inkFaint },
 
   // Offset left rather than centred, as in the reference: the cutout reads as
   // a photo laid onto the card, not as a framed illustration.
@@ -1046,7 +1046,7 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     paddingVertical: spacing.md,
   },
-  prompt: { flex: 1, fontSize: 20, fontFamily: fonts.cozy, color: colors.inkDark },
+  prompt: { flex: 1, fontSize: 20, fontFamily: fonts.display, color: colors.inkDark },
   hintPill: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1057,7 +1057,7 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: colors.inkDark,
   },
-  hintText: { fontSize: 14, fontFamily: fonts.cozy, color: colors.inkDark },
+  hintText: { fontSize: 14, fontFamily: fonts.display, color: colors.inkDark },
 
   // ── back ──
   backHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
@@ -1078,6 +1078,7 @@ const styles = StyleSheet.create({
     color: colors.inkLight,
     letterSpacing: 1.5,
   },
+  // fontFamily from the render site — target-language headword.
   word: { fontSize: 38, lineHeight: 48, color: colors.inkDark },
   sayItRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm },
   reading: { flex: 1, fontSize: 22, fontFamily: fonts.mono, color: colors.inkDark },
@@ -1101,17 +1102,16 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
   },
   micBtnLive: { backgroundColor: colors.error, borderColor: colors.error },
-  micHint: { fontSize: 11, color: colors.inkFaint, marginTop: spacing.sm },
-  means: { fontSize: 20, color: colors.inkDark, lineHeight: 27 },
+  micHint: { fontSize: 11, fontFamily: fonts.text, color: colors.inkFaint, marginTop: spacing.sm },
+  means: { fontSize: 20, fontFamily: fonts.text, color: colors.inkDark, lineHeight: 27 },
+  // fontFamily from the render site — target-language sentence.
   sentence: { fontSize: 19, lineHeight: 30, color: colors.inkDark },
-  sentenceWord: { fontFamily: fonts.cozy },
-  sentenceTranslation: {
-    fontSize: 15,
-    lineHeight: 22,
-    color: colors.inkLight,
-    fontStyle: 'italic',
-    marginTop: spacing.sm,
-  },
+  // The headword picked out inside the sentence. Family alone can't carry
+  // this: in Japanese and Cantonese the sentence and the word are the same
+  // system face, so the highlight was invisible in two of three languages.
+  // The accent colour is what actually marks it, in all three.
+  sentenceWord: { color: colors.terra },
+  sentenceTranslation: { fontSize: 15, fontFamily: fonts.text, lineHeight: 22, color: colors.inkLight, marginTop: spacing.sm },
 
   // ── shared footer ──
   perforation: {
@@ -1136,7 +1136,7 @@ const styles = StyleSheet.create({
   footerField: { flex: 1, gap: 2 },
   footerFieldRight: { alignItems: 'flex-end' },
   footerLabel: { fontSize: 9.5, fontFamily: fonts.monoBold, color: colors.inkLight, letterSpacing: 1.4 },
-  footerValue: { fontSize: 14, fontFamily: fonts.cozy, color: colors.inkDark },
+  footerValue: { fontSize: 14, fontFamily: fonts.display, color: colors.inkDark },
   footerWhen: { fontSize: 12, fontFamily: fonts.mono, color: colors.inkDark, letterSpacing: 0.5 },
 
   browseFooter: { alignItems: 'center', gap: spacing.sm },
@@ -1153,14 +1153,8 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     maxWidth: '90%',
   },
-  unpinText: { fontSize: 12, fontWeight: '700', color: colors.inkLight, flexShrink: 1 },
-  flipHint: {
-    textAlign: 'center',
-    fontSize: 12,
-    color: colors.inkFaint,
-    paddingTop: spacing.ms,
-    paddingBottom: spacing.xs,
-  },
+  unpinText: { fontSize: 12, fontFamily: fonts.display, color: colors.inkLight, flexShrink: 1 },
+  flipHint: { textAlign: 'center', fontSize: 12, fontFamily: fonts.text, color: colors.inkFaint, paddingTop: spacing.ms, paddingBottom: spacing.xs, },
   progress: { fontSize: 12, fontFamily: fonts.monoBold, color: colors.inkLight, letterSpacing: 1.2 },
 
   gradeRow: { flexDirection: 'row', gap: spacing.sm, paddingTop: spacing.ms },
@@ -1177,7 +1171,7 @@ const styles = StyleSheet.create({
   toneHard:  { backgroundColor: colors.card, borderColor: colors.border },
   toneGood:  { backgroundColor: colors.terraLight, borderColor: colors.terra },
   toneEasy:  { backgroundColor: colors.successLight, borderColor: colors.success },
-  gradeLabel: { fontSize: 14, fontFamily: fonts.cozy, color: colors.inkDark },
+  gradeLabel: { fontSize: 14, fontFamily: fonts.display, color: colors.inkDark },
   gradeLabelOnDark: { color: colors.white },
   gradeWhen: { fontSize: 10, fontFamily: fonts.mono, color: colors.inkLight },
   gradeWhenOnDark: { color: colors.white, opacity: 0.85 },

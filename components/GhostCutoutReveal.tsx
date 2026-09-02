@@ -5,7 +5,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { supabase } from '@/lib/supabase';
-import { colors } from '@/constants/theme';
+import { colors, fonts } from '@/constants/theme';
 
 interface GhostCutoutRevealProps {
   // The rectangular crop that was sent off for extraction — shown first so
@@ -78,5 +78,5 @@ const styles = StyleSheet.create({
   stage: { width: 280, height: 280, alignItems: 'center', justifyContent: 'center' },
   image: { width: '100%', height: '100%' },
   overlay: { position: 'absolute' },
-  label: { marginTop: 28, color: colors.inkMid, fontSize: 14, fontWeight: '600' },
+  label: { marginTop: 28, color: colors.inkMid, fontSize: 14, fontFamily: fonts.display,},
 });

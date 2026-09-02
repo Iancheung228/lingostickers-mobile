@@ -2,7 +2,7 @@ import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Check, X, Play, MoreHorizontal } from 'lucide-react-native';
 import Avatar from '@/components/Avatar';
 import { timeAgo } from '@/lib/relativeTime';
-import { colors, radii, spacing, shadows } from '@/constants/theme';
+import { colors, radii, spacing, shadows, fonts } from '@/constants/theme';
 
 // ---------------------------------------------------------------------------
 // One row for everything that is waiting on the user.
@@ -127,9 +127,9 @@ const styles = StyleSheet.create({
     ...shadows.card,
   },
   body: { flex: 1, gap: 2 },
-  line: { fontSize: 14, color: colors.inkMid, lineHeight: 19 },
-  strong: { fontWeight: '800', color: colors.inkDark },
-  meta: { fontSize: 11, color: colors.inkFaint, fontWeight: '600' },
+  line: { fontSize: 14, fontFamily: fonts.text, color: colors.inkMid, lineHeight: 19 },
+  strong: { fontFamily: fonts.display, color: colors.inkDark },
+  meta: { fontSize: 11, fontFamily: fonts.display, color: colors.inkFaint},
   actions: { flexDirection: 'row', gap: 6 },
   iconBtn: {
     width: 32,
@@ -152,5 +152,5 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.ms,
     paddingVertical: 7,
   },
-  playText: { fontSize: 12, fontWeight: '800', color: colors.inkDark },
+  playText: { fontSize: 12, fontFamily: fonts.display, color: colors.inkDark },
 });

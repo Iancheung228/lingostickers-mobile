@@ -14,15 +14,8 @@ import { stashPendingAvatar, clearPendingAvatar } from '@/lib/pendingAvatar';
 import AuthIntro from '@/components/AuthIntro';
 import { Language } from '@/lib/types';
 import { colors, typography, shadows, radii, spacing, fonts, wordFontFor } from '@/constants/theme';
-
-// The one question this form asks that isn't a credential. Native name first,
-// English underneath — someone looking for Cantonese scans for 廣東話, not for
-// the eighth word in a sentence about it.
-const LANGUAGE_CHOICES: { code: Language; native: string; label: string }[] = [
-  { code: 'fr',  native: 'Français', label: 'French' },
-  { code: 'ja',  native: '日本語',    label: 'Japanese' },
-  { code: 'yue', native: '廣東話',    label: 'Cantonese' },
-];
+// The one question this form asks that isn't a credential.
+import { LANGUAGES as LANGUAGE_CHOICES } from '@/lib/languages';
 
 function friendlySignUpError(message: string): string {
   if (message.includes('already registered')) {
@@ -271,16 +264,10 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.lg,
     gap: 6,
   },
-  eyebrow: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: colors.inkFaint,
-    letterSpacing: 2,
-    textTransform: 'uppercase',
-  },
+  eyebrow: { fontSize: 11, fontFamily: fonts.monoBold, color: colors.inkFaint, letterSpacing: 2, textTransform: 'uppercase', },
   title: {
     fontSize: 36,
-    fontFamily: fonts.cozy,
+    fontFamily: fonts.display,
     color: colors.inkDark,
     letterSpacing: -1,
     textAlign: 'center',
@@ -300,10 +287,7 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   avatarBlock: { alignItems: 'center', gap: 6, marginBottom: spacing.md },
-  fieldLabel: {
-    fontSize: 11, fontWeight: '800', color: colors.inkFaint,
-    letterSpacing: 1.2, marginBottom: spacing.sm,
-  },
+  fieldLabel: { fontSize: 11, fontFamily: fonts.monoBold, color: colors.inkFaint, letterSpacing: 1.2, marginBottom: spacing.sm, },
   langRow: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.md },
   langPill: {
     flex: 1,
@@ -318,7 +302,7 @@ const styles = StyleSheet.create({
   },
   langPillActive: { borderColor: colors.terra, backgroundColor: colors.terraLight },
   langPillNative: { fontSize: 15, color: colors.inkDark },
-  langPillLabel: { fontSize: 10, fontWeight: '700', color: colors.inkLight },
+  langPillLabel: { fontSize: 10, fontFamily: fonts.mono, color: colors.inkLight },
   langPillTextActive: { color: colors.terra },
   avatarButton: {
     width: 84,
@@ -346,26 +330,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  avatarHint: { fontSize: 12, fontWeight: '600', color: colors.inkLight },
-  input: {
-    backgroundColor: colors.sky,
-    borderRadius: radii.md,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 14,
-    fontSize: 15,
-    color: colors.inkDark,
-    marginBottom: spacing.ms,
-    borderWidth: 1.5,
-    borderColor: colors.border,
-  },
-  usernameHint: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: colors.inkFaint,
-    marginTop: -spacing.sm,
-    marginBottom: spacing.sm,
-    marginLeft: spacing.xs,
-  },
+  avatarHint: { fontSize: 12, fontFamily: fonts.display, color: colors.inkLight },
+  input: { backgroundColor: colors.sky, borderRadius: radii.md, paddingHorizontal: spacing.md, paddingVertical: 14, fontSize: 15, fontFamily: fonts.text, color: colors.inkDark, marginBottom: spacing.ms, borderWidth: 1.5, borderColor: colors.border, },
+  usernameHint: { fontSize: 12, fontFamily: fonts.display, color: colors.inkFaint, marginTop: -spacing.sm, marginBottom: spacing.sm, marginLeft: spacing.xs, },
   usernameHintAvailable: { color: colors.success },
   usernameHintTaken: { color: colors.error },
   button: {
@@ -382,10 +349,10 @@ const styles = StyleSheet.create({
     shadowOpacity: 0,
     elevation: 0,
   },
-  buttonText: { color: colors.card, fontSize: 16, fontWeight: '700', letterSpacing: 0.3 },
+  buttonText: { color: colors.card, fontSize: 16, fontFamily: fonts.display, letterSpacing: 0.3 },
   linkButton: { alignItems: 'center' },
-  linkText: { color: colors.inkLight, fontSize: 14 },
-  linkAccent: { color: colors.terra, fontWeight: '700' },
+  linkText: { color: colors.inkLight, fontSize: 14, fontFamily: fonts.text },
+  linkAccent: { color: colors.terra, fontFamily: fonts.display },
   messageBox: {
     borderRadius: radii.md,
     paddingHorizontal: spacing.md,
@@ -395,7 +362,7 @@ const styles = StyleSheet.create({
   },
   messageError: { backgroundColor: colors.errorLight, borderColor: colors.error },
   messageSuccess: { backgroundColor: colors.successLight, borderColor: colors.success },
-  messageText: { fontSize: 14, fontWeight: '600' },
+  messageText: { fontSize: 14, fontFamily: fonts.display,},
   messageErrorText: { color: colors.error },
   messageSuccessText: { color: colors.success },
 });

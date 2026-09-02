@@ -4,8 +4,17 @@ import { Stack, useRouter, useSegments, type ErrorBoundaryProps } from 'expo-rou
 import * as Linking from 'expo-linking';
 import * as SplashScreen from 'expo-splash-screen';
 import { useFonts } from 'expo-font';
-import { Fraunces_600SemiBold, Fraunces_700Bold } from '@expo-google-fonts/fraunces';
-import { JetBrainsMono_500Medium, JetBrainsMono_700Bold } from '@expo-google-fonts/jetbrains-mono';
+// Imported by SUBPATH, not from the package root, and this is load-bearing.
+// Each @expo-google-fonts package's index.js `require()`s every weight it
+// ships at the top level — 14 files for Newsreader, 16 for JetBrains Mono —
+// and Metro does not tree-shake, so a root import registers all 30 as bundled
+// assets. Measured: 3.59 MB of .ttf in the app against the 235 KB actually
+// used. That silently cancelled out the entire size win of dropping Kosugi
+// Maru. The subpath modules export exactly one face each.
+import { Newsreader_400Regular } from '@expo-google-fonts/newsreader/400Regular';
+import { Newsreader_500Medium } from '@expo-google-fonts/newsreader/500Medium';
+import { JetBrainsMono_500Medium } from '@expo-google-fonts/jetbrains-mono/500Medium';
+import { JetBrainsMono_700Bold } from '@expo-google-fonts/jetbrains-mono/700Bold';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { StatusBar } from 'expo-status-bar';
 import * as Notifications from 'expo-notifications';
@@ -52,8 +61,8 @@ function RootLayout() {
   // one failed font into a permanently frozen splash screen. Falling back to
   // system faces is strictly better than never launching.
   const [fontsLoaded, fontError] = useFonts({
-    Fraunces_600SemiBold,
-    Fraunces_700Bold,
+    Newsreader_400Regular,
+    Newsreader_500Medium,
     JetBrainsMono_500Medium,
     JetBrainsMono_700Bold,
   });
@@ -203,7 +212,7 @@ const crashStyles = StyleSheet.create({
     paddingHorizontal: spacing.xl,
     gap: spacing.ms,
   },
-  title: { fontSize: 24, fontFamily: themeFonts.cozy, color: colors.inkDark, textAlign: 'center' },
+  title: { fontSize: 24, fontFamily: themeFonts.display, color: colors.inkDark, textAlign: 'center' },
   body: { ...typography.body, color: colors.inkMid, textAlign: 'center' },
   button: {
     marginTop: spacing.sm,
@@ -212,7 +221,7 @@ const crashStyles = StyleSheet.create({
     paddingVertical: 14,
     paddingHorizontal: spacing.xl,
   },
-  buttonText: { color: colors.white, fontSize: 15, fontWeight: '700', letterSpacing: 0.3 },
+  buttonText: { color: colors.white, fontSize: 15, fontFamily: themeFonts.display, letterSpacing: 0.3 },
   detail: {
     marginTop: spacing.md,
     fontFamily: themeFonts.mono,

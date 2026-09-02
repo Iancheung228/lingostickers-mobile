@@ -12,7 +12,7 @@ import ScanProgress, { ScanStage } from './ScanProgress';
 import CropBoxOverlay from './CropBoxOverlay';
 import LassoOverlay from './LassoOverlay';
 import { Rect, Point, computeContainRect, boxToImageCrop, boundingBoxOfPoints, polygonFillRatio, padBox } from '@/lib/cropGeometry';
-import { colors } from '@/constants/theme';
+import { colors, fonts } from '@/constants/theme';
 import { debugLog } from '@/lib/debug';
 
 interface PhotoExtractorProps {
@@ -425,7 +425,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
   },
-  headerTitle: { fontSize: 18, fontWeight: '700', color: colors.inkDark },
+  headerTitle: { fontSize: 18, fontFamily: fonts.display, color: colors.inkDark },
   closeButton: {
     width: 40,
     height: 40,
@@ -440,7 +440,7 @@ const styles = StyleSheet.create({
     gap: 12,
     alignItems: 'center',
   },
-  modeHint: { color: colors.inkMid, fontSize: 13, fontWeight: '500' },
+  modeHint: { color: colors.inkMid, fontSize: 13, fontFamily: fonts.text,},
   photoArea: { flex: 1, padding: 16 },
   photo: { width: '100%', height: '100%' },
   actions: { paddingHorizontal: 16, paddingBottom: 16, paddingTop: 4 },
@@ -460,5 +460,5 @@ const styles = StyleSheet.create({
   },
   extractButtonDisabled: { opacity: 0.6 },
   progressWrap: { marginTop: 12 },
-  extractButtonText: { color: colors.white, fontSize: 16, fontWeight: '800', letterSpacing: 1 },
+  extractButtonText: { color: colors.white, fontSize: 16, fontFamily: fonts.display, letterSpacing: 1 },
 });

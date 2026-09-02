@@ -3,7 +3,7 @@ import { View, Image, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import { Sticker, WallDisplayStyle, CutoutBorderStyle } from '@/lib/types';
 import { supabase } from '@/lib/supabase';
 import CutoutSticker from '@/components/CutoutSticker';
-import { colors, radii } from '@/constants/theme';
+import { colors, radii, fonts } from '@/constants/theme';
 
 interface DayStackProps {
   stickers: Sticker[];
@@ -124,5 +124,5 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     zIndex: 4,
   },
-  overflowText: { fontSize: 8, fontWeight: '800', color: colors.inkDark },
+  overflowText: { fontSize: 8, fontFamily: fonts.display, color: colors.inkDark },
 });

@@ -108,7 +108,7 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
   },
   countWrap: { flexDirection: 'row', alignItems: 'center', gap: spacing.ms },
-  count: { fontSize: 40, lineHeight: 44, fontFamily: fonts.cozy, color: colors.maroon },
+  count: { fontSize: 40, lineHeight: 44, fontFamily: fonts.display, color: colors.maroon },
   countLabel: {
     fontSize: 10.5,
     lineHeight: 14,
@@ -132,7 +132,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 3 },
     elevation: 4,
   },
-  dueCount: { fontSize: 15, fontFamily: fonts.cozy, color: colors.blushDeep },
+  dueCount: { fontSize: 15, fontFamily: fonts.display, color: colors.blushDeep },
   dueTime: { fontSize: 10, fontFamily: fonts.mono, color: colors.inkLight, marginTop: 1 },
   dueArrow: {
     width: 34,

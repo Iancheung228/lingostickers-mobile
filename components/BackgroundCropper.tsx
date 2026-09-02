@@ -285,7 +285,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  headerTitle: { fontSize: 15, fontFamily: fonts.cozy, color: colors.white },
+  headerTitle: { fontSize: 15, fontFamily: fonts.display, color: colors.white },
   frameWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   frame: {
     borderRadius: radii.xl,
@@ -302,7 +302,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  hint: { marginTop: spacing.md, fontSize: 12, fontWeight: '600', color: 'rgba(255,255,255,0.7)' },
+  hint: { marginTop: spacing.md, fontSize: 12, fontFamily: fonts.display, color: 'rgba(255,255,255,0.7)' },
   footer: { alignItems: 'center', paddingBottom: spacing.xxl, paddingTop: spacing.md },
   rotateBtn: {
     flexDirection: 'row',
@@ -314,5 +314,5 @@ const styles = StyleSheet.create({
     backgroundColor: colors.card,
     ...shadows.card,
   },
-  rotateBtnText: { fontSize: 13, fontWeight: '700', color: colors.inkDark },
+  rotateBtnText: { fontSize: 13, fontFamily: fonts.display, color: colors.inkDark },
 });

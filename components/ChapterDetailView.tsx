@@ -85,7 +85,7 @@ const styles = StyleSheet.create({
     ...shadows.card,
   },
   headerSpacer: { width: 38 },
-  headerTitle: { flex: 1, fontSize: 16, fontFamily: fonts.cozy, color: colors.inkDark, textAlign: 'center' },
+  headerTitle: { flex: 1, fontSize: 16, fontFamily: fonts.display, color: colors.inkDark, textAlign: 'center' },
   grid: { paddingHorizontal: spacing.md, paddingBottom: spacing.xxl, paddingTop: spacing.xs },
   row: { gap: spacing.sm, marginBottom: spacing.sm },
   cardWrapper: { flex: 1 },

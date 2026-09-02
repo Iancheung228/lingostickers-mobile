@@ -110,7 +110,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
   },
-  title: { fontSize: 20, fontFamily: fonts.cozy, color: colors.inkDark },
+  title: { fontSize: 20, fontFamily: fonts.display, color: colors.inkDark },
   list: { paddingHorizontal: spacing.md, paddingBottom: spacing.xxl },
   row: {
     flexDirection: 'row',
@@ -124,7 +124,7 @@ const styles = StyleSheet.create({
     borderColor: colors.borderLight,
     ...shadows.card,
   },
-  name: { flex: 1, fontSize: 15, fontWeight: '600', color: colors.inkDark },
+  name: { flex: 1, fontSize: 15, fontFamily: fonts.display, color: colors.inkDark },
   unblock: {
     backgroundColor: colors.cardAlt,
     borderRadius: radii.full,
@@ -133,7 +133,7 @@ const styles = StyleSheet.create({
     minWidth: 78,
     alignItems: 'center',
   },
-  unblockText: { fontSize: 12, fontWeight: '800', color: colors.inkDark },
+  unblockText: { fontSize: 12, fontFamily: fonts.display, color: colors.inkDark },
   empty: { alignItems: 'center', paddingTop: 72, paddingHorizontal: spacing.xl, gap: spacing.sm },
   emptyTitle: { ...typography.h3, textAlign: 'center' },
   emptyBody: { ...typography.body, textAlign: 'center', color: colors.inkLight },

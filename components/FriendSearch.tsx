@@ -3,7 +3,7 @@ import { Modal, View, Text, TextInput, FlatList, TouchableOpacity, StyleSheet, S
 import { X, UserPlus, Check } from 'lucide-react-native';
 import { useFriends } from '@/hooks/useFriends';
 import Avatar from '@/components/Avatar';
-import { colors } from '@/constants/theme';
+import { colors, fonts } from '@/constants/theme';
 import { useAuth } from '@/hooks/useAuth';
 import { enablePushNotifications } from '@/lib/notifications';
 
@@ -150,35 +150,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 16,
   },
-  title: { fontSize: 22, fontWeight: '800', color: colors.inkDark },
+  title: { fontSize: 22, fontFamily: fonts.display, color: colors.inkDark },
   searchRow: {
     flexDirection: 'row',
     alignItems: 'center',
     marginHorizontal: 16,
     marginBottom: 16,
   },
-  input: {
-    flex: 1,
-    backgroundColor: colors.card,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.borderLight,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 15,
-    color: colors.inkDark,
-  },
+  input: { flex: 1, backgroundColor: colors.card, borderRadius: 12, borderWidth: 1, borderColor: colors.borderLight, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, fontFamily: fonts.text, color: colors.inkDark, },
   spinner: { marginLeft: 10 },
   list: { flex: 1 },
   section: { paddingHorizontal: 16, marginTop: 8 },
-  sectionLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: colors.inkFaint,
-    letterSpacing: 1.5,
-    marginBottom: 10,
-    marginTop: 8,
-  },
+  sectionLabel: { fontSize: 11, fontFamily: fonts.monoBold, color: colors.inkFaint, letterSpacing: 1.5, marginBottom: 10, marginTop: 8, },
   resultRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -191,7 +174,7 @@ const styles = StyleSheet.create({
     borderColor: colors.borderLight,
   },
   avatarSlot: { marginRight: 12 },
-  username: { flex: 1, fontSize: 15, fontWeight: '600', color: colors.inkDark },
+  username: { flex: 1, fontSize: 15, fontFamily: fonts.display, color: colors.inkDark },
   addButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -202,17 +185,8 @@ const styles = StyleSheet.create({
     paddingVertical: 7,
   },
   addButtonSent: { backgroundColor: colors.inkFaint },
-  addText: { color: colors.white, fontWeight: '700', fontSize: 13 },
-  pendingBadge: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: colors.terra,
-    borderWidth: 1,
-    borderColor: colors.terra,
-    borderRadius: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-  },
+  addText: { color: colors.white, fontSize: 13, fontFamily: fonts.display },
+  pendingBadge: { fontSize: 12, fontFamily: fonts.display, color: colors.terra, borderWidth: 1, borderColor: colors.terra, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3, },
   cancelButton: {
     borderRadius: 8,
     borderWidth: 1,
@@ -220,7 +194,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
   },
-  cancelText: { fontSize: 13, fontWeight: '700', color: colors.inkMid },
-  empty: { color: colors.inkFaint, textAlign: 'center', marginTop: 32, fontSize: 14 },
-  hint: { color: colors.inkFaint, textAlign: 'center', marginTop: 48, fontSize: 14, paddingHorizontal: 32 },
+  cancelText: { fontSize: 13, fontFamily: fonts.display, color: colors.inkMid },
+  empty: { color: colors.inkFaint, textAlign: 'center', marginTop: 32, fontSize: 14, fontFamily: fonts.text },
+  hint: { color: colors.inkFaint, textAlign: 'center', marginTop: 48, fontSize: 14, fontFamily: fonts.text, paddingHorizontal: 32 },
 });

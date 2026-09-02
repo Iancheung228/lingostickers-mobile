@@ -6,14 +6,14 @@ import {
 import Animated, { useSharedValue, useAnimatedStyle, withSequence, withTiming } from 'react-native-reanimated';
 import { BookOpen, MessageCircle, X, Flag } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
-import { ChallengeWithSender, Language } from '@/lib/types';
+import { ChallengeWithSender } from '@/lib/types';
 import { useChallenges } from '@/hooks/useChallenges';
 import { useFriends } from '@/hooks/useFriends';
 import { useAuth } from '@/hooks/useAuth';
 import ReportSheet from '@/components/ReportSheet';
-import { colors, spacing } from '@/constants/theme';
+import { colors, spacing, fonts, wordFontFor, sentenceFontFor } from '@/constants/theme';
+import { languageLabel } from '@/lib/languages';
 
-const LANGUAGE_LABELS: Record<Language, string> = { fr: 'French', ja: 'Japanese', yue: 'Cantonese' };
 
 interface ChallengeScreenProps {
   challenge: ChallengeWithSender | null;
@@ -169,7 +169,7 @@ export default function ChallengeScreen({ challenge, onClose, onWin }: Challenge
         {/* Blanked sentence */}
         <View style={styles.sentenceBox}>
           <MessageCircle size={16} color={colors.inkLight} style={styles.sentenceLabel} />
-          <Text style={styles.sentenceText}>{blanked}</Text>
+          <Text style={[styles.sentenceText, { fontFamily: sentenceFontFor(challenge.snapshot_language) }]}>{blanked}</Text>
         </View>
 
         {/* Hints from previous attempts */}
@@ -180,17 +180,17 @@ export default function ChallengeScreen({ challenge, onClose, onWin }: Challenge
         )}
         {firstLetter && (
           <Text style={styles.firstLetterHint}>
-            Starts with: <Text style={styles.firstLetterValue}>{firstLetter.toUpperCase()}</Text>
+            Starts with: <Text style={[styles.firstLetterValue, { fontFamily: wordFontFor(challenge.snapshot_language) }]}>{firstLetter.toUpperCase()}</Text>
           </Text>
         )}
 
         {/* Input */}
         <Animated.View style={[styles.inputWrap, shakeStyle]}>
           <TextInput
-            style={styles.input}
+            style={[styles.input, { fontFamily: wordFontFor(challenge.snapshot_language) }]}
             value={answer}
             onChangeText={setAnswer}
-            placeholder={`Type in ${LANGUAGE_LABELS[challenge.snapshot_language]}...`}
+            placeholder={`Type in ${languageLabel(challenge.snapshot_language)}...`}
             placeholderTextColor={colors.inkFaint}
             autoCapitalize="none"
             autoCorrect={false}
@@ -245,9 +245,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 14,
   },
-  headerTitle: { fontSize: 16, fontWeight: '700', color: colors.inkDark },
+  headerTitle: { fontSize: 16, fontFamily: fonts.display, color: colors.inkDark },
   headerRight: { flexDirection: 'row', alignItems: 'center', gap: spacing.ms },
-  attemptsText: { fontSize: 12, fontWeight: '600', color: colors.inkFaint },
+  attemptsText: { fontSize: 12, fontFamily: fonts.display, color: colors.inkFaint },
   stickerWrap: { alignItems: 'center', paddingVertical: 16 },
   stickerImage: { width: 200, height: 200 },
   stickerPlaceholder: { width: 200, height: 200, backgroundColor: colors.borderLight, borderRadius: 20 },
@@ -264,7 +264,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   definitionLabel: { marginTop: 2 },
-  definitionText: { flex: 1, fontSize: 14, color: colors.inkDark, lineHeight: 20 },
+  definitionText: { flex: 1, fontSize: 14, fontFamily: fonts.text, color: colors.inkDark, lineHeight: 20 },
   sentenceBox: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -278,10 +278,13 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   sentenceLabel: { marginTop: 2 },
-  sentenceText: { flex: 1, fontSize: 14, color: colors.inkMid, lineHeight: 20, fontStyle: 'italic' },
-  letterCountHint: { textAlign: 'center', fontSize: 13, color: colors.inkFaint, marginBottom: 6 },
-  firstLetterHint: { textAlign: 'center', fontSize: 14, color: colors.inkMid, marginBottom: 8 },
-  firstLetterValue: { fontWeight: '800', color: colors.inkDark },
+  // fontFamily comes from the render site — this is the target-language
+  // sentence. No fontStyle either: no italic face is loaded, so iOS would
+  // synthesise a slant, and a slanted Han character is simply wrong.
+  sentenceText: { flex: 1, fontSize: 14, color: colors.inkMid, lineHeight: 20 },
+  letterCountHint: { textAlign: 'center', fontSize: 13, fontFamily: fonts.text, color: colors.inkFaint, marginBottom: 6 },
+  firstLetterHint: { textAlign: 'center', fontSize: 14, fontFamily: fonts.text, color: colors.inkMid, marginBottom: 8 },
+  firstLetterValue: { color: colors.inkDark },
   inputWrap: { marginHorizontal: 20, marginBottom: 12 },
   input: {
     backgroundColor: colors.card,
@@ -302,7 +305,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   submitDisabled: { opacity: 0.5 },
-  submitText: { fontSize: 16, fontWeight: '700', color: colors.white },
+  submitText: { fontSize: 16, fontFamily: fonts.display, color: colors.white },
   hintButton: { alignItems: 'center', paddingVertical: 8 },
-  hintText: { fontSize: 13, color: colors.inkFaint, textDecorationLine: 'underline' },
+  hintText: { fontSize: 13, fontFamily: fonts.text, color: colors.inkFaint, textDecorationLine: 'underline' },
 });

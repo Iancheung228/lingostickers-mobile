@@ -6,12 +6,7 @@ import { ageInDays } from '@/lib/review';
 import { seededRandom } from '@/lib/seededRandom';
 import Avatar from '@/components/Avatar';
 import { colors, radii, spacing, shadows, fonts } from '@/constants/theme';
-
-const LANGUAGE_LABELS: Record<Language, string> = {
-  fr: 'French',
-  ja: 'Japanese',
-  yue: 'Cantonese',
-};
+import { languageLabel } from '@/lib/languages';
 
 interface DueTodayRailProps {
   /// Already sliced for display — `totalDue` is the honest count.
@@ -92,7 +87,7 @@ export default function DueTodayRail({
           {languages.map(l => (
             <LangChip
               key={l}
-              label={LANGUAGE_LABELS[l]}
+              label={languageLabel(l)}
               active={activeLanguage === l}
               onPress={() => onSelectLanguage(l)}
             />
@@ -188,9 +183,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     marginBottom: spacing.ms,
   },
-  title: { fontSize: 19, fontFamily: fonts.cozy, color: colors.inkDark },
+  title: { fontSize: 19, fontFamily: fonts.display, color: colors.inkDark },
   link: { flexDirection: 'row', alignItems: 'center', gap: 2 },
-  linkText: { fontSize: 13, fontWeight: '600', color: colors.inkLight },
+  linkText: { fontSize: 13, fontFamily: fonts.display, color: colors.inkLight },
 
   langRow: { paddingHorizontal: RAIL_GUTTER, gap: spacing.sm, paddingBottom: spacing.ms },
   langChip: {
@@ -202,14 +197,9 @@ const styles = StyleSheet.create({
     borderColor: colors.borderLight,
   },
   langChipActive: { backgroundColor: colors.terra, borderColor: colors.terra },
-  langChipText: { fontSize: 12, fontWeight: '600', color: colors.inkMid },
+  langChipText: { fontSize: 12, fontFamily: fonts.display, color: colors.inkMid },
   langChipTextActive: { color: colors.white },
-  empty: {
-    paddingHorizontal: RAIL_GUTTER,
-    paddingBottom: spacing.sm,
-    fontSize: 13,
-    color: colors.inkFaint,
-  },
+  empty: { paddingHorizontal: RAIL_GUTTER, paddingBottom: spacing.sm, fontSize: 13, fontFamily: fonts.text, color: colors.inkFaint, },
 
   rail: { paddingHorizontal: RAIL_GUTTER, gap: CARD_GAP, paddingBottom: spacing.xs },
   card: {
@@ -221,10 +211,10 @@ const styles = StyleSheet.create({
   },
   cardHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   cardHeadText: { flex: 1 },
-  cardDay: { fontSize: 14, fontFamily: fonts.cozy, color: colors.inkDark },
+  cardDay: { fontSize: 14, fontFamily: fonts.display, color: colors.inkDark },
   cardAge: { fontSize: 9, fontFamily: fonts.mono, color: colors.inkFaint, letterSpacing: 1 },
 
-  cardBody: { fontSize: 12.5, color: colors.inkMid, lineHeight: 16, minHeight: 32 },
+  cardBody: { fontSize: 12.5, fontFamily: fonts.text, color: colors.inkMid, lineHeight: 16, minHeight: 32 },
 
   well: {
     height: 62,

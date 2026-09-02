@@ -6,7 +6,7 @@ import type { LucideIcon } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useChallenges } from '@/hooks/useChallenges';
 import { useFriends } from '@/hooks/useFriends';
-import { colors, shadows, radii } from '@/constants/theme';
+import { colors, shadows, radii, fonts } from '@/constants/theme';
 import { TAB_BAR_HEIGHT, TAB_BAR_BOTTOM_MARGIN, TAB_BAR_WIDTH, TAB_BAR_ITEM_WIDTH, TAB_BAR_SCAN_ITEM_WIDTH } from '@/constants/tabBar';
 
 // Every tab gets the same treatment: a dark, legible icon by default, and a
@@ -194,5 +194,5 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: colors.blush,
   },
-  badgeText: { color: colors.card, fontSize: 9, fontWeight: '800' },
+  badgeText: { color: colors.card, fontSize: 9, fontFamily: fonts.display,},
 });

@@ -208,16 +208,9 @@ const styles = StyleSheet.create({
   // anything softer reads as a rendering artifact instead of a selection.
   thumbActive: { borderColor: colors.terra },
   emptyThumb: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center' },
-  emptyThumbText: { fontSize: 16, fontFamily: fonts.cozy, color: colors.white, opacity: 0.7 },
-  label: {
-    height: LABEL_H,
-    marginTop: spacing.xs,
-    fontSize: 10,
-    fontWeight: '600',
-    color: colors.inkLight,
-    textAlign: 'center',
-  },
-  labelActive: { color: colors.inkDark, fontWeight: '800' },
+  emptyThumbText: { fontSize: 16, fontFamily: fonts.display, color: colors.white, opacity: 0.7 },
+  label: { height: LABEL_H, marginTop: spacing.xs, fontSize: 10, fontFamily: fonts.mono, color: colors.inkLight, textAlign: 'center', },
+  labelActive: { color: colors.inkDark, fontFamily: fonts.monoBold },
   createThumb: {
     width: TILE_W,
     height: TILE_H,
@@ -229,12 +222,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  createLabel: {
-    height: LABEL_H,
-    marginTop: spacing.xs,
-    fontSize: 10,
-    fontWeight: '700',
-    color: colors.terra,
-    textAlign: 'center',
-  },
+  createLabel: { height: LABEL_H, marginTop: spacing.xs, fontSize: 10, fontFamily: fonts.mono, color: colors.terra, textAlign: 'center', },
 });

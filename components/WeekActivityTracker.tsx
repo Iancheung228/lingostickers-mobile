@@ -111,7 +111,7 @@ const styles = StyleSheet.create({
   legend: { flexDirection: 'row', alignItems: 'center', gap: spacing.ms },
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   dot: { width: 7, height: 7, borderRadius: radii.full },
-  legendText: { fontSize: 11, fontFamily: fonts.cozy, color: colors.inkFaint },
+  legendText: { fontSize: 11, fontFamily: fonts.display, color: colors.inkFaint },
   legendTextActive: { color: colors.inkDark },
 
   // The two series are different hues rather than two tints of the rose: a

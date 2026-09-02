@@ -81,8 +81,8 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
     marginBottom: spacing.md,
   },
-  title: { fontSize: 22, fontFamily: fonts.cozy, color: colors.inkDark },
-  subtitle: { fontSize: 14, color: colors.inkLight, marginTop: 2 },
+  title: { fontSize: 22, fontFamily: fonts.display, color: colors.inkDark },
+  subtitle: { fontSize: 14, fontFamily: fonts.text, color: colors.inkLight, marginTop: 2 },
 
   stats: {
     flexDirection: 'row',
@@ -93,7 +93,7 @@ const styles = StyleSheet.create({
   },
   stat: { flex: 1, alignItems: 'center', gap: 2 },
   statValueRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  statValue: { fontSize: 26, fontFamily: fonts.cozy, color: colors.inkDark },
+  statValue: { fontSize: 26, fontFamily: fonts.display, color: colors.inkDark },
   statValueMuted: { color: colors.inkLight },
   statLabel: { fontSize: 11, fontFamily: fonts.mono, color: colors.inkFaint, letterSpacing: 1 },
   divider: { width: 1, height: 34, backgroundColor: colors.borderLight },
@@ -105,5 +105,5 @@ const styles = StyleSheet.create({
     borderRadius: radii.full,
     backgroundColor: colors.terra,
   },
-  doneText: { fontSize: 16, fontFamily: fonts.cozy, color: colors.white },
+  doneText: { fontSize: 16, fontFamily: fonts.display, color: colors.white },
 });

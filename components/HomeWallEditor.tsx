@@ -446,8 +446,8 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   headerText: { flex: 1 },
-  title: { fontSize: 20, fontFamily: fonts.cozy, color: colors.inkDark },
-  subtitle: { fontSize: 11, fontWeight: '600', color: colors.inkLight, marginTop: 3 },
+  title: { fontSize: 20, fontFamily: fonts.display, color: colors.inkDark },
+  subtitle: { fontSize: 11, fontFamily: fonts.display, color: colors.inkLight, marginTop: 3 },
   subtitleFull: { color: colors.terra },
   doneBtn: {
     paddingHorizontal: spacing.lg,
@@ -456,7 +456,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.terra,
     ...shadows.button,
   },
-  doneText: { fontSize: 14, fontFamily: fonts.cozy, color: colors.white },
+  doneText: { fontSize: 14, fontFamily: fonts.display, color: colors.white },
 
   canvasWrap: { alignItems: 'center' },
   // The same white mount the home panel wears, so this reads as that panel
@@ -474,7 +474,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: spacing.xl,
   },
-  canvasEmptyText: { fontSize: 13, fontWeight: '600', color: colors.inkDark, textAlign: 'center', opacity: 0.85 },
+  canvasEmptyText: { fontSize: 13, fontFamily: fonts.display, color: colors.inkDark, textAlign: 'center', opacity: 0.85 },
   tile: {
     position: 'absolute',
     shadowColor: colors.inkDark,
@@ -521,14 +521,10 @@ const styles = StyleSheet.create({
     backgroundColor: colors.card,
     ...shadows.card,
   },
-  toolText: { fontSize: 12, fontWeight: '700', color: colors.inkDark },
+  toolText: { fontSize: 12, fontFamily: fonts.display, color: colors.inkDark },
 
-  trayLabel: {
-    fontSize: 12, fontWeight: '700', color: colors.inkLight,
-    paddingHorizontal: spacing.lg, paddingTop: spacing.md, paddingBottom: spacing.sm,
-    letterSpacing: 0.3,
-  },
-  trayEmpty: { color: colors.inkFaint, fontSize: 13, paddingHorizontal: spacing.lg },
+  trayLabel: { fontSize: 12, fontFamily: fonts.display, color: colors.inkLight, paddingHorizontal: spacing.lg, paddingTop: spacing.md, paddingBottom: spacing.sm, letterSpacing: 0.3, },
+  trayEmpty: { color: colors.inkFaint, fontSize: 13, fontFamily: fonts.text, paddingHorizontal: spacing.lg },
   tray: { paddingHorizontal: spacing.lg, gap: spacing.sm, paddingBottom: spacing.md },
   trayItem: { width: TRAY_TILE, alignItems: 'center' },
   trayItemPlaced: { opacity: 1 },

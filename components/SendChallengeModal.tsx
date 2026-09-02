@@ -4,7 +4,7 @@ import { X, Check } from 'lucide-react-native';
 import { Sticker, FriendWithProfile } from '@/lib/types';
 import { supabase } from '@/lib/supabase';
 import Avatar from '@/components/Avatar';
-import { colors } from '@/constants/theme';
+import { colors, fonts, wordFontFor } from '@/constants/theme';
 
 interface SendChallengeModalProps {
   sticker: Sticker | null;
@@ -68,7 +68,7 @@ export default function SendChallengeModal({ sticker, friends, onSend, onClose }
             {imageUrl
               ? <Image source={{ uri: imageUrl }} style={styles.stickerImage} resizeMode="contain" />
               : <View style={styles.stickerPlaceholder} />}
-            <Text style={styles.word}>{sticker.word}</Text>
+            <Text style={[styles.word, { fontFamily: wordFontFor(sticker.language) }]}>{sticker.word}</Text>
             <Text style={styles.translation}>{sticker.translation}</Text>
           </View>
         )}
@@ -120,22 +120,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 16,
   },
-  title: { fontSize: 20, fontWeight: '800', color: colors.inkDark },
+  title: { fontSize: 20, fontFamily: fonts.display, color: colors.inkDark },
   preview: { alignItems: 'center', paddingVertical: 20, borderBottomWidth: 1, borderBottomColor: colors.borderLight },
   stickerImage: { width: 120, height: 120, marginBottom: 10 },
   stickerPlaceholder: { width: 120, height: 120, backgroundColor: colors.borderLight, borderRadius: 16, marginBottom: 10 },
-  word: { fontSize: 22, fontWeight: '800', color: colors.inkDark, marginBottom: 4 },
-  translation: { fontSize: 14, color: colors.inkMid },
-  sectionLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: colors.inkFaint,
-    letterSpacing: 1.5,
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 10,
-  },
-  empty: { color: colors.inkFaint, textAlign: 'center', marginTop: 40, fontSize: 14, paddingHorizontal: 32 },
+  // fontFamily from the render site — target-language headword.
+  word: { fontSize: 22, color: colors.inkDark, marginBottom: 4 },
+  translation: { fontSize: 14, fontFamily: fonts.text, color: colors.inkMid },
+  sectionLabel: { fontSize: 11, fontFamily: fonts.monoBold, color: colors.inkFaint, letterSpacing: 1.5, paddingHorizontal: 20, paddingTop: 16, paddingBottom: 10, },
+  empty: { color: colors.inkFaint, textAlign: 'center', marginTop: 40, fontSize: 14, fontFamily: fonts.text, paddingHorizontal: 32 },
   friendRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -148,7 +141,7 @@ const styles = StyleSheet.create({
     borderColor: colors.borderLight,
   },
   avatarSlot: { marginRight: 12 },
-  username: { flex: 1, fontSize: 15, fontWeight: '600', color: colors.inkDark },
+  username: { flex: 1, fontSize: 15, fontFamily: fonts.display, color: colors.inkDark },
   sendButton: {
     backgroundColor: colors.terra,
     borderRadius: 8,
@@ -158,5 +151,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   sendButtonSent: { backgroundColor: colors.inkFaint },
-  sendText: { color: colors.white, fontWeight: '700', fontSize: 14 },
+  sendText: { color: colors.white, fontSize: 14, fontFamily: fonts.display },
 });

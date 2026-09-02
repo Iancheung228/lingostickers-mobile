@@ -1,6 +1,6 @@
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { UserPlus } from 'lucide-react-native';
-import { colors, radii, spacing, typography, shadows } from '@/constants/theme';
+import { colors, radii, spacing, typography, shadows, fonts } from '@/constants/theme';
 
 // ---------------------------------------------------------------------------
 // First run: you have no friends yet.
@@ -65,5 +65,5 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs,
     ...shadows.card,
   },
-  ctaText: { fontSize: 15, fontWeight: '800', color: colors.inkDark },
+  ctaText: { fontSize: 15, fontFamily: fonts.display, color: colors.inkDark },
 });

@@ -511,7 +511,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 27,
     lineHeight: 34,
-    fontFamily: fonts.cozy,
+    fontFamily: fonts.display,
     color: colors.maroon,
     letterSpacing: -0.4,
   },
@@ -539,7 +539,7 @@ const styles = StyleSheet.create({
   },
   segment: { paddingHorizontal: spacing.ms, paddingVertical: 9, borderRadius: radii.full },
   segmentActive: { backgroundColor: colors.white },
-  segmentText: { fontSize: 12, fontFamily: fonts.cozy, color: colors.maroon },
+  segmentText: { fontSize: 12, fontFamily: fonts.display, color: colors.maroon },
   segmentTextActive: { color: colors.blushDeep },
 
   findDot: {
@@ -589,7 +589,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 3 },
     elevation: 3,
   },
-  dueRingText: { fontSize: 13, fontFamily: fonts.cozy, color: colors.blushDeep },
+  dueRingText: { fontSize: 13, fontFamily: fonts.display, color: colors.blushDeep },
   dueRingTextToday: { color: colors.white },
 
   reviewCta: {
@@ -604,7 +604,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.blushDeep,
     ...shadows.card,
   },
-  reviewCtaText: { fontSize: 16, fontFamily: fonts.cozy, color: colors.white },
+  reviewCtaText: { fontSize: 16, fontFamily: fonts.display, color: colors.white },
 
   weekdayRow: { flexDirection: 'row', marginBottom: 8 },
   weekdayCell: { flex: 1, alignItems: 'center' },

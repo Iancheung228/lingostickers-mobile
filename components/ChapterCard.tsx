@@ -63,6 +63,6 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
     backgroundColor: 'rgba(28,73,102,0.55)',
   },
-  title: { color: colors.white, fontSize: 16, fontFamily: fonts.cozy },
-  subtitle: { color: 'rgba(255,255,255,0.75)', fontSize: 12, fontStyle: 'italic', marginTop: 2 },
+  title: { color: colors.white, fontSize: 16, fontFamily: fonts.display },
+  subtitle: { color: 'rgba(255,255,255,0.75)', fontSize: 12, fontFamily: fonts.text, marginTop: 2 },
 });

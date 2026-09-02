@@ -4,7 +4,7 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { Contrast } from 'lucide-react-native';
-import { colors, radii, shadows } from '@/constants/theme';
+import { colors, radii, shadows, fonts } from '@/constants/theme';
 
 interface BackgroundDimSliderProps {
   // Last-committed percent (0-maxPct) — re-synced from outside whenever it
@@ -135,5 +135,5 @@ const styles = StyleSheet.create({
     borderColor: colors.terra,
     ...shadows.card,
   },
-  pctText: { fontSize: 10, fontWeight: '700', color: colors.inkDark, minWidth: 24 },
+  pctText: { fontSize: 10, fontFamily: fonts.display, color: colors.inkDark, minWidth: 24 },
 });

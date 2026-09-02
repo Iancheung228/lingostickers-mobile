@@ -557,8 +557,8 @@ const styles = StyleSheet.create({
   sideRight: { alignItems: 'flex-end' },
   titleWrap: { flex: 1, alignItems: 'center' },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: 5, maxWidth: '100%' },
-  title: { fontSize: 15, fontFamily: fonts.cozy, color: colors.inkDark, textAlign: 'center', flexShrink: 1 },
-  subtitle: { fontSize: 10, color: colors.inkFaint, fontWeight: '600', marginTop: 1 },
+  title: { fontSize: 15, fontFamily: fonts.display, color: colors.inkDark, textAlign: 'center', flexShrink: 1 },
+  subtitle: { fontSize: 10, fontFamily: fonts.mono, color: colors.inkFaint, marginTop: 1 },
   iconBtn: {
     width: 36,
     height: 36,
@@ -579,7 +579,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.terra,
     ...shadows.button,
   },
-  addText: { fontSize: 13, fontFamily: fonts.cozy, color: colors.white },
+  addText: { fontSize: 13, fontFamily: fonts.display, color: colors.white },
   canvasWrap: { flex: 1, marginHorizontal: spacing.md, marginBottom: spacing.md },
   loader: { flex: 1 },
   empty: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.xl },
@@ -592,8 +592,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: spacing.sm,
   },
-  emptyTitle: { fontSize: 18, fontFamily: fonts.cozy, color: colors.inkDark, marginBottom: 8 },
-  emptySubtitle: { fontSize: 13, color: colors.inkFaint, textAlign: 'center', lineHeight: 20 },
+  emptyTitle: { fontSize: 18, fontFamily: fonts.display, color: colors.inkDark, marginBottom: 8 },
+  emptySubtitle: { fontSize: 13, fontFamily: fonts.text, color: colors.inkFaint, textAlign: 'center', lineHeight: 20 },
   emptyBtn: {
     flexDirection: 'row', alignItems: 'center', gap: spacing.xs,
     marginTop: spacing.lg,
@@ -601,7 +601,7 @@ const styles = StyleSheet.create({
     borderRadius: radii.full, backgroundColor: colors.terra,
     ...shadows.button,
   },
-  emptyBtnText: { fontSize: 15, fontFamily: fonts.cozy, color: colors.white },
+  emptyBtnText: { fontSize: 15, fontFamily: fonts.display, color: colors.white },
   // Floats over the canvas rather than sitting in the header's flow, so
   // dismissing it doesn't reflow the board underneath.
   coach: {
@@ -618,7 +618,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 253, 244, 0.94)',
     ...shadows.card,
   },
-  coachText: { flex: 1, fontSize: 12, fontWeight: '600', color: colors.inkMid, lineHeight: 17 },
+  coachText: { flex: 1, fontSize: 12, fontFamily: fonts.display, color: colors.inkMid, lineHeight: 17 },
   tintSliderWrap: {
     position: 'absolute',
     left: spacing.sm,

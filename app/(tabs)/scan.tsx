@@ -14,7 +14,7 @@ import Animated, {
 import { ImagePlus, Zap, ZapOff } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useAuth } from '@/hooks/useAuth';
-import { colors, shadows, radii, spacing } from '@/constants/theme';
+import { colors, shadows, radii, spacing, fonts } from '@/constants/theme';
 import { TAB_BAR_CLEARANCE } from '@/constants/tabBar';
 import { useProfile } from '@/hooks/useProfile';
 import { supabase } from '@/lib/supabase';
@@ -974,19 +974,8 @@ const styles = StyleSheet.create({
     paddingTop: spacing.lg,
     paddingBottom: spacing.sm,
   },
-  prompt: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: colors.inkDark,
-    letterSpacing: -0.3,
-    fontStyle: 'italic',
-  },
-  promptSub: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: colors.terra,
-    marginTop: 2,
-  },
+  prompt: { fontSize: 20, fontFamily: fonts.display, color: colors.inkDark, letterSpacing: -0.3 },
+  promptSub: { fontSize: 13, fontFamily: fonts.text, color: colors.terra, marginTop: 2, },
 
   cameraArea: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   cameraFrame: {
@@ -1028,7 +1017,7 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: radii.full,
   },
-  zoomPillText: { color: colors.white, fontSize: 12, fontWeight: '700' },
+  zoomPillText: { color: colors.white, fontSize: 12, fontFamily: fonts.display,},
 
   processingOverlay: {
     ...StyleSheet.absoluteFillObject,
@@ -1044,7 +1033,7 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.lg,
     gap: spacing.md,
   },
-  hint: { color: colors.inkLight, fontSize: 13, fontWeight: '500' },
+  hint: { color: colors.inkLight, fontSize: 13, fontFamily: fonts.text,},
   scanProgressWrap: { alignSelf: 'stretch', paddingHorizontal: spacing.lg },
 
   captureRow: {
@@ -1071,7 +1060,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.sageLight,
   },
   sideBtnCircleDisabled: { opacity: 0.45 },
-  sideBtnLabel: { fontSize: 11, fontWeight: '600', color: colors.inkLight },
+  sideBtnLabel: { fontSize: 11, fontFamily: fonts.display, color: colors.inkLight },
   sideBtnLabelActive: { color: colors.sageDark },
 
   captureButton: {
@@ -1110,20 +1099,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xl,
     paddingBottom: TAB_BAR_CLEARANCE,
   },
-  permissionTitle: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: colors.inkDark,
-    marginBottom: spacing.sm,
-    textAlign: 'center',
-  },
-  permissionSubtitle: {
-    fontSize: 14,
-    color: colors.inkLight,
-    textAlign: 'center',
-    lineHeight: 22,
-    marginBottom: spacing.xl,
-  },
+  permissionTitle: { fontSize: 22, fontFamily: fonts.display, color: colors.inkDark, marginBottom: spacing.sm, textAlign: 'center', },
+  permissionSubtitle: { fontSize: 14, fontFamily: fonts.text, color: colors.inkLight, textAlign: 'center', lineHeight: 22, marginBottom: spacing.xl, },
   permissionButton: {
     backgroundColor: colors.terra,
     borderRadius: radii.lg,
@@ -1131,5 +1108,5 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xl,
     ...shadows.button,
   },
-  permissionButtonText: { color: colors.card, fontSize: 16, fontWeight: '700' },
+  permissionButtonText: { color: colors.card, fontSize: 16, fontFamily: fonts.display,},
 });

@@ -125,5 +125,5 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs,
     paddingTop: spacing.ms,
   },
-  label: { fontSize: 14, fontFamily: fonts.cozyMedium, letterSpacing: 0.1 },
+  label: { fontSize: 14, fontFamily: fonts.text, letterSpacing: 0.1 },
 });

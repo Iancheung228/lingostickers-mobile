@@ -8,7 +8,7 @@ import { useChallenges } from '@/hooks/useChallenges';
 import StickerPickerModal from '@/components/StickerPickerModal';
 import ReportSheet from '@/components/ReportSheet';
 import Avatar from '@/components/Avatar';
-import { colors } from '@/constants/theme';
+import { colors, fonts } from '@/constants/theme';
 
 interface FriendProfileProps {
   friend: FriendWithProfile | null;
@@ -211,10 +211,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 16,
   },
-  title: { fontSize: 20, fontWeight: '800', color: colors.inkDark },
+  title: { fontSize: 20, fontFamily: fonts.display, color: colors.inkDark },
   body: { flex: 1, alignItems: 'center', paddingTop: 12, paddingHorizontal: 32 },
-  username: { fontSize: 22, fontWeight: '800', color: colors.inkDark, marginBottom: 4 },
-  since: { fontSize: 13, color: colors.inkFaint, marginBottom: 24 },
+  username: { fontSize: 22, fontFamily: fonts.display, color: colors.inkDark, marginBottom: 4 },
+  since: { fontSize: 13, fontFamily: fonts.text, color: colors.inkFaint, marginBottom: 24 },
   statBox: {
     alignItems: 'center',
     backgroundColor: colors.card,
@@ -226,8 +226,8 @@ const styles = StyleSheet.create({
     marginBottom: 32,
     minWidth: 160,
   },
-  statCount: { fontSize: 28, fontWeight: '800', color: colors.inkDark },
-  statLabel: { fontSize: 12, color: colors.inkFaint, marginTop: 2 },
+  statCount: { fontSize: 28, fontFamily: fonts.display, color: colors.inkDark },
+  statLabel: { fontSize: 12, fontFamily: fonts.text, color: colors.inkFaint, marginTop: 2 },
   actionButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -239,9 +239,9 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   challengeButton: { backgroundColor: colors.terra },
-  challengeButtonText: { color: colors.white, fontSize: 15, fontWeight: '700' },
+  challengeButtonText: { color: colors.white, fontSize: 15, fontFamily: fonts.display,},
   removeButton: { backgroundColor: colors.errorLight },
-  removeButtonText: { color: colors.error, fontSize: 15, fontWeight: '700' },
+  removeButtonText: { color: colors.error, fontSize: 15, fontFamily: fonts.display,},
   safetyRow: { flexDirection: 'row', gap: 24, marginTop: 4 },
   safetyButton: {
     flexDirection: 'row',
@@ -250,5 +250,5 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 8,
   },
-  safetyText: { color: colors.inkLight, fontSize: 13, fontWeight: '600' },
+  safetyText: { color: colors.inkLight, fontSize: 13, fontFamily: fonts.display,},
 });
