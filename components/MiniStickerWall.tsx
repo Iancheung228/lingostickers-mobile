@@ -102,7 +102,16 @@ function FanTile({
         },
       ]}
     >
-      <TouchableOpacity style={StyleSheet.absoluteFill} onPress={onPress} activeOpacity={0.85}>
+      {/* The wall is a pile of cutouts with no text on it at all, so without
+          a label every tile is an anonymous image to a screen reader — and
+          the wall is one of the two main ways into a card. */}
+      <TouchableOpacity
+        style={StyleSheet.absoluteFill}
+        onPress={onPress}
+        activeOpacity={0.85}
+        accessibilityRole="button"
+        accessibilityLabel={`${sticker.word} — ${sticker.translation}`}
+      >
         <HomeWallTile sticker={sticker} size={size} url={url} borderStyle={borderStyle} />
       </TouchableOpacity>
       {isHero && isFresh && (
@@ -257,6 +266,8 @@ export default function MiniStickerWall({
                 ]}
                 activeOpacity={0.85}
                 onPress={() => onPressSticker(item.sticker)}
+                accessibilityRole="button"
+                accessibilityLabel={`${item.sticker.word} — ${item.sticker.translation}`}
               >
                 <HomeWallTile
                   sticker={item.sticker}
@@ -287,7 +298,15 @@ export default function MiniStickerWall({
             somewhere else; the cover photo moved inside the editor (it's an
             arranging decision), and the Boards tab is already reachable
             from the tab bar and doesn't need a second door here. */}
-        <TouchableOpacity style={styles.arrangeBtn} onPress={openEditor} activeOpacity={0.85} disabled={seeding}>
+        <TouchableOpacity
+          style={styles.arrangeBtn}
+          onPress={openEditor}
+          activeOpacity={0.85}
+          disabled={seeding}
+          accessibilityRole="button"
+          accessibilityLabel="Arrange your wall"
+          accessibilityState={{ disabled: seeding, busy: seeding }}
+        >
           {seeding ? (
             <ActivityIndicator size="small" color={colors.inkDark} />
           ) : (

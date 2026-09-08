@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Modal, View, Text, TextInput, TouchableOpacity, StyleSheet,
   SafeAreaView, Image, ActivityIndicator, Alert, KeyboardAvoidingView, Platform, ScrollView,
@@ -33,11 +33,34 @@ export default function ChallengeScreen({ challenge, onClose, onWin }: Challenge
   const [hintUsed, setHintUsed] = useState(false);
   const [firstLetter, setFirstLetter] = useState<string | null>(null);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [imageFailed, setImageFailed] = useState(false);
+  // Read inside an async continuation, where `challenge` would be whatever it
+  // was when that call started.
+  const challengeIdRef = useRef(challenge?.id);
+  challengeIdRef.current = challenge?.id;
   const [reportOpen, setReportOpen] = useState(false);
   const shakeX = useSharedValue(0);
   const { submitAnswer, requestHint, getChallengeImageUrl } = useChallenges();
   const { blockUser } = useFriends();
   const { user } = useAuth();
+
+  // The sticker photo *is* the question — without it there is nothing to name.
+  // A failed fetch used to leave exactly the blank grey box that a slow one
+  // does, forever, with no way to ask again.
+  //
+  // The id is captured and re-checked on the way out: opening one challenge,
+  // closing it and opening another is fast enough to overlap two fetches, and
+  // the loser must not paint its picture onto the winner's question.
+  const loadImage = useCallback(async () => {
+    const id = challenge?.id;
+    if (!id) return;
+    setImageFailed(false);
+    setImageUrl(null);
+    const url = await getChallengeImageUrl(id).catch(() => null);
+    if (challengeIdRef.current !== id) return;
+    if (url) setImageUrl(url);
+    else setImageFailed(true);
+  }, [challenge?.id, getChallengeImageUrl]);
 
   useEffect(() => {
     if (!challenge) {
@@ -46,13 +69,13 @@ export default function ChallengeScreen({ challenge, onClose, onWin }: Challenge
       setHintUsed(false);
       setFirstLetter(null);
       setImageUrl(null);
+      setImageFailed(false);
       return;
     }
     setAttemptsUsed(challenge.attempts_used);
     setHintUsed(challenge.hint_used);
-
-    getChallengeImageUrl(challenge.id).then(setImageUrl);
-  }, [challenge?.id]);
+    loadImage();
+  }, [challenge?.id, loadImage]);
 
   const shakeStyle = useAnimatedStyle(() => ({ transform: [{ translateX: shakeX.value }] }));
 
@@ -80,8 +103,10 @@ export default function ChallengeScreen({ challenge, onClose, onWin }: Challenge
         setAttemptsUsed(result.attempts_used);
         setAnswer('');
       }
-    } catch {
-      Alert.alert('Error', 'Something went wrong. Please try again.');
+    } catch (err: any) {
+      // The edge function says useful things ("this challenge has already been
+      // answered", "you're out of attempts"); the hook now unwraps them.
+      Alert.alert("Couldn't check that", err?.message ?? 'Something went wrong. Please try again.');
     } finally {
       setSubmitting(false);
     }
@@ -97,8 +122,8 @@ export default function ChallengeScreen({ challenge, onClose, onWin }: Challenge
         setHintUsed(true);
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       }
-    } catch {
-      Alert.alert('Error', 'Could not load hint.');
+    } catch (err: any) {
+      Alert.alert("Couldn't get the hint", err?.message ?? 'Please try again.');
     } finally {
       setSubmitting(false);
     }
@@ -126,7 +151,7 @@ export default function ChallengeScreen({ challenge, onClose, onWin }: Challenge
         <View style={styles.header}>
           <TouchableOpacity
             onPress={onClose}
-            hitSlop={8}
+            hitSlop={12}
             accessibilityRole="button"
             accessibilityLabel="Close this challenge"
           >
@@ -142,7 +167,7 @@ export default function ChallengeScreen({ challenge, onClose, onWin }: Challenge
                 place a report has to be reachable from. */}
             <TouchableOpacity
               onPress={() => setReportOpen(true)}
-              hitSlop={8}
+              hitSlop={14}
               accessibilityRole="button"
               accessibilityLabel={`Report this challenge from ${senderName}`}
             >
@@ -155,9 +180,25 @@ export default function ChallengeScreen({ challenge, onClose, onWin }: Challenge
         <ScrollView contentContainerStyle={styles.scrollBody} keyboardShouldPersistTaps="handled">
         {/* Sticker */}
         <View style={styles.stickerWrap}>
-          {imageUrl
-            ? <Image source={{ uri: imageUrl }} style={styles.stickerImage} resizeMode="contain" />
-            : <View style={styles.stickerPlaceholder} />}
+          {imageUrl ? (
+            <Image source={{ uri: imageUrl }} style={styles.stickerImage} resizeMode="contain" />
+          ) : imageFailed ? (
+            <View style={styles.stickerPlaceholder}>
+              <Text style={styles.imageErrorText}>Couldn&apos;t load the picture</Text>
+              <TouchableOpacity
+                style={styles.imageRetryBtn}
+                onPress={loadImage}
+                accessibilityRole="button"
+                accessibilityLabel="Try loading the picture again"
+              >
+                <Text style={styles.imageRetryText}>Try again</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <View style={styles.stickerPlaceholder}>
+              <ActivityIndicator color={colors.terra} />
+            </View>
+          )}
         </View>
 
         {/* Definition */}
@@ -250,7 +291,23 @@ const styles = StyleSheet.create({
   attemptsText: { fontSize: 12, fontFamily: fonts.display, color: colors.inkFaint },
   stickerWrap: { alignItems: 'center', paddingVertical: 16 },
   stickerImage: { width: 200, height: 200 },
-  stickerPlaceholder: { width: 200, height: 200, backgroundColor: colors.borderLight, borderRadius: 20 },
+  stickerPlaceholder: {
+    width: 200, height: 200,
+    backgroundColor: colors.borderLight,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.md,
+  },
+  imageErrorText: { fontSize: 13, fontFamily: fonts.text, color: colors.inkMid, textAlign: 'center' },
+  imageRetryBtn: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: 999,
+    backgroundColor: colors.card,
+  },
+  imageRetryText: { fontSize: 13, fontFamily: fonts.display, color: colors.terra },
   definitionBox: {
     flexDirection: 'row',
     alignItems: 'flex-start',

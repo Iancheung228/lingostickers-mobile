@@ -296,3 +296,168 @@ O(k²) per pixel. A hand-rolled separable sliding-window blur is O(1) per pixel
 and keeps the matte in float; quantising to 8 bits to reach vImage's fast path
 throws away exactly the sub-level precision in the transition band that the
 refinement exists to recover.
+
+---
+
+## 8. A sheet's chrome is a promise — honour it, or don't draw it
+
+**Symptom:** "the only way out of this form is the Cancel button." Reported as
+the form feeling *trapping*, not as a missing feature — people had already
+tried two other ways out before complaining.
+
+**Root cause:** `FieldEditor` had the complete visual vocabulary of a
+dismissible bottom sheet — rounded top corners, a grabber, a dimmed scrim —
+and implemented none of the gestures that vocabulary announces. The grabber
+was a **false affordance**: a control that looks draggable and isn't. Users
+don't read a sheet's source; they read its edges, and a grabber says "pull me"
+as plainly as a door handle says "pull". Every one of those looks costs
+nothing to draw and sets an expectation that silently fails.
+
+**Fix pattern:** dismissal is not one button, it's a **set of equivalent
+exits**, and they must all route through a single guard so which one you reach
+for never changes what happens to your work. `components/BottomSheet.tsx` owns
+the chrome and the gestures; the owner owns the policy:
+
+- Exits wired: scrim tap, drag-down (distance **or** velocity — distance alone
+  ignores a quick flick, velocity alone ignores a slow deliberate pull),
+  Android back, `onAccessibilityEscape`, and the Cancel button. Keep the
+  button; it is the discoverable and screen-reader-reachable one.
+- The shell **asks** (`onRequestClose`) rather than closes, and the owner
+  answers with `close()` or `settle()` on the ref. That split is the whole
+  point: it leaves room for an unsaved-changes prompt between the gesture and
+  the exit. Easy dismissal without a dirty check just converts "trapped" into
+  "lost my edits".
+- Exit on the **save** path too, or the success route snaps away while the
+  cancel route glides — that inconsistency reads as breakage. A sheet whose
+  owner unmounts it must mirror the prop it renders from, so it can outlive
+  that prop by one animation.
+
+**Two traps this cost time on, both worth checking in any new sheet:**
+- **A React ref is not visible to a worklet.** A `closing` flag guarding the
+  pan handlers must be a `useSharedValue`; a `useRef` is captured by value
+  when the worklet is built, so the UI thread reads a frozen `false` forever
+  and a mid-exit drag still moves the sheet.
+- **Compare specs by key, not identity.** `BoardCarouselPage` builds its
+  editor spec inline in JSX, so the object is new on every parent render.
+  Anything keyed on identity either re-seeds the draft on every keystroke's
+  re-render (wiping what you typed) or loops. `keyOf()` in `FieldEditor.tsx`.
+
+**Also:** gestures inside an RN `Modal` need their own `GestureHandlerRootView`
+— the one in `app/_layout.tsx` is outside the modal's view hierarchy.
+
+**Sheets on `presentationStyle="pageSheet"` already get swipe-to-dismiss from
+iOS and need none of this.** It's the `transparent` + `animationType="slide"`
+sheets that draw the chrome themselves and must therefore honour it themselves.
+
+---
+
+## 9. Two actions on one surface need two shapes — and `hitSlop` is a budget
+
+**Symptom:** "the card says tap it to flip and it doesn't", "I hit play and it
+recorded over my take", "I meant to accept and it declined". Reported as the
+control being *wrong*, never as the user having missed — because from the
+outside a mis-aimed tap and a broken button are the same event.
+
+**Root cause, two of them, and they compound:**
+
+1. **The larger action swallowed the smaller one.** `StudyCard`'s back face
+   made each whole field an edit target, so on a card whose four fields fill
+   the face, "tap the card to go back" was true only in the gutters between
+   them. The footer went on saying it anyway. The rule that came out of it:
+   when one surface carries two actions, the *rarer, more specific* one gets a
+   drawn control and the *common, ambient* one keeps the background. Editing a
+   field is rare and deliberate; flipping is what you do on every card.
+
+2. **Neighbouring `hitSlop` rectangles overlapped.** `hitSlop` doesn't shrink
+   with the gap it grows into, so `gap: 8` with `hitSlop={8}` on both sides
+   puts 8pt of each button *inside* its neighbour, and which one you get is
+   decided by z-order rather than by where you aimed. This was live in three
+   places: `StickerCard`'s speak/play pair, `InboxRow`'s accept/decline, and
+   `StudyCard`'s speak/play/mic row — the last two being pairs whose two
+   outcomes are opposites.
+
+**Fix pattern:**
+- Treat `hitSlop` as **anisotropic**: generous where nothing is adjacent
+  (usually vertical), and *at most half the gap* where something is. Pass an
+  object, not a number, wherever a control has a horizontal neighbour.
+- The arithmetic to run on any row of buttons: `gap >= left_slop +
+  right_slop`. If it fails, either widen the gap or narrow the slop — a 36pt
+  target you can actually hit beats a 48pt one that overlaps its neighbour.
+- A control that is the *only* way into something must be **drawn as a
+  control**. A bare 13pt glyph beside a label reads as decoration; the same
+  glyph in a bordered 28pt disc with `hitSlop` out to 48 reads as a button and
+  hits like one. Small-and-aimable is a visual decision plus a touch decision,
+  not one decision.
+- Say out loud what each region does before shipping it, then check the copy
+  on screen still matches. "Tap the card to go back" was the bug report.
+
+**Where the boundaries live now:** `Field`/`FrontFace` in `StudyCard.tsx`
+(pencil edits, everything else flips), `StickerCard.tsx`, `InboxRow.tsx`.
+
+---
+
+## 10. An exit the OS performs can't be vetoed — so make it non-destructive
+
+**Symptom:** a swipe-down on a `pageSheet` throws away what you typed, and
+there is no obvious place to put a confirmation.
+
+**Root cause:** `presentationStyle="pageSheet"` gets iOS's own swipe-to-dismiss
+(entry #8's happy path) — but RN surfaces it only as `onRequestClose`, which
+fires *after* the sheet has already gone. There is no `isModalInPresentation`
+binding, so the "are you sure?" that a Cancel button can show has nowhere to
+run. `ReportSheet` cleared its answers on open, which meant an accidental
+swipe silently binned a half-written report.
+
+**Fix pattern:** stop trying to guard the exit and make the exit cheap.
+Keep the draft keyed to its *subject* rather than to the sheet's visibility,
+and clear it only when the subject changes or the work is actually submitted —
+so reopening on the same person hands back exactly what was typed. Same shape
+as `FieldEditor`'s `keyOf()` in #8: what re-seeds a form is a change of
+subject, never a change of mounting.
+
+**The related trap:** `onBlur` is not a "the user finished" signal. `DiscoveryReveal`'s
+inline editor cancelled on blur, and blur is fired by tapping *anything* —
+including "Add to Collection", which then saved the card with the correction
+thrown away. An edit should be resolved only by controls that say they resolve
+it (a tick, a cross, a scrim tap), and those resolvers must be idempotent,
+because a tap on one of them fires the blur of another.
+
+---
+
+## 11. A box you type into is a race, and a form is a chain
+
+**Symptom:** "I typed the whole username and the wrong people came up." Or,
+quieter and more common: signing in takes a minute because nothing autofills
+and the return key does nothing.
+
+**Root cause — three separate omissions that all look like polish and aren't:**
+
+1. **No debounce, no ordering.** `searchUsers` fired one RPC per keystroke and
+   wrote whatever came back. Replies are not guaranteed to arrive in the order
+   they were sent, so the reply for `mi` landing after the reply for `michael`
+   overwrote the right answer with a stale one. Debouncing alone does *not*
+   fix this — it only makes it rarer.
+2. **No `textContentType` / `autoComplete`.** These are what let iOS Keychain
+   and Android autofill offer a saved login, generate a strong password on a
+   sign-up field (`newPassword`), or put an emailed code on the keyboard's
+   suggestion bar (`oneTimeCode`). Without them the user retypes, from memory,
+   credentials they have never typed on that device.
+3. **No `returnKeyType` chain.** Every return key closed the keyboard over the
+   field the user was about to fill in, instead of handing over to it.
+
+**Fix pattern:**
+- Every debounced fetch takes a ticket (`const seq = ++seqRef.current`) and
+  drops its own reply if it is no longer holding the current one. Clear the
+  timer on unmount.
+- Every text field declares what it holds. Every field but the last says
+  `returnKeyType="next"` + `submitBehavior="submit"` and focuses the next ref;
+  the last one submits.
+- A password field is `components/PasswordField.tsx` — one implementation with
+  a reveal toggle, rather than four bare `secureTextEntry` boxes. It lifts the
+  caller's margin onto its wrapper, because otherwise the caller's
+  `marginBottom` sits inside the wrapper and centres the eye half a gap low.
+
+**And the general one behind all three:** a screen that only ever gets tested
+by the person who wrote it gets tested by someone who knows the password, the
+username and the field order. Every one of these was invisible from the
+inside.

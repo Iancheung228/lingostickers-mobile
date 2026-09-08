@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Modal, View, Text, TouchableOpacity, StyleSheet, SafeAreaView, Image } from 'react-native';
+import { Modal, View, Text, TouchableOpacity, StyleSheet, SafeAreaView, Image, Pressable } from 'react-native';
 import Animated, {
   useSharedValue, useAnimatedStyle, withSequence, withTiming, withDelay, interpolate, Easing,
 } from 'react-native-reanimated';
@@ -94,8 +94,17 @@ export default function ChallengeSuccess({ challenge, wonStickerId, onClose }: C
 
   return (
     <Modal visible={!!challenge} animationType="fade" transparent onRequestClose={onClose}>
-      <View style={styles.overlay}>
-        <SafeAreaView style={styles.sheet}>
+      {/* Rounded top corners, anchored to the bottom, over a dimmed backdrop:
+          this is drawn as a bottom sheet, so tapping away from it has to close
+          it. Drawing the vocabulary and honouring none of it is what made the
+          field editor feel trapping — see skills.md #8. */}
+      <Pressable
+        style={styles.overlay}
+        onPress={onClose}
+        accessibilityRole="button"
+        accessibilityLabel="Close"
+      >
+        <SafeAreaView style={styles.sheet} onStartShouldSetResponder={() => true}>
           <PartyPopper size={36} color={colors.sage} style={styles.emoji} />
           <Text style={styles.title}>You got it!</Text>
           <Text style={styles.subtitle}>
@@ -108,6 +117,10 @@ export default function ChallengeSuccess({ challenge, wonStickerId, onClose }: C
               onPress={handleFlip}
               activeOpacity={sticker?.memory_photo_path ? 0.85 : 1}
               disabled={!sticker?.memory_photo_path}
+              accessibilityRole={sticker?.memory_photo_path ? 'button' : 'image'}
+              accessibilityLabel={sticker?.memory_photo_path
+                ? `The sticker you just won — tap to see the photo it came from`
+                : 'The sticker you just won'}
             >
               <Animated.View style={[styles.face, frontFaceStyle]}>
                 {imageUrl
@@ -150,7 +163,7 @@ export default function ChallengeSuccess({ challenge, wonStickerId, onClose }: C
             <Text style={styles.doneText}>Done</Text>
           </TouchableOpacity>
         </SafeAreaView>
-      </View>
+      </Pressable>
     </Modal>
   );
 }

@@ -1,6 +1,7 @@
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ChevronRight, Search, Settings } from 'lucide-react-native';
+import { ChevronRight, Search } from 'lucide-react-native';
+import SettingsButton from '@/components/SettingsButton';
 import { colors, radii, spacing, fonts } from '@/constants/theme';
 
 interface HomeHeaderProps {
@@ -10,7 +11,6 @@ interface HomeHeaderProps {
   reviewMinutes: number;
   onStartReview: () => void;
   onSearch: () => void;
-  onSettings: () => void;
 }
 
 // The rose band at the top of the home screen. It runs edge-to-edge and up
@@ -22,7 +22,7 @@ interface HomeHeaderProps {
 // rose-brown is only a couple of steps darker than the band itself and
 // washes out completely against it.
 export default function HomeHeader({
-  foundToday, goal, dueCount, reviewMinutes, onStartReview, onSearch, onSettings,
+  foundToday, goal, dueCount, reviewMinutes, onStartReview, onSearch,
 }: HomeHeaderProps) {
   const insets = useSafeAreaInsets();
   const today = new Date()
@@ -33,24 +33,28 @@ export default function HomeHeader({
     <View style={[styles.band, { paddingTop: insets.top + spacing.xs }]}>
       <View style={styles.metaRow}>
         <Text style={styles.metaText}>{today}</Text>
+        {/* Settings sits last, hard against the right edge — the same slot
+            it occupies on every other screen, so it's findable without
+            looking. That's why GOAL moved ahead of the icons. */}
         <View style={styles.metaRight}>
+          <Text style={styles.metaText}>GOAL {goal}</Text>
+          {/* 15pt glyphs 12pt apart: the slop has to stop at the midpoint of
+              that gap or these two become one ambiguous target. Vertically
+              there is nothing to collide with, so it reaches much further. */}
           <TouchableOpacity
             onPress={onSearch}
-            hitSlop={10}
+            hitSlop={{ top: 14, bottom: 14, left: 14, right: 6 }}
             accessibilityRole="button"
             accessibilityLabel="Search your collection"
           >
             <Search size={15} color={colors.maroon} />
           </TouchableOpacity>
-          <TouchableOpacity
-            onPress={onSettings}
-            hitSlop={10}
-            accessibilityRole="button"
-            accessibilityLabel="Open your profile and settings"
-          >
-            <Settings size={15} color={colors.maroon} />
-          </TouchableOpacity>
-          <Text style={styles.metaText}>GOAL {goal}</Text>
+          <SettingsButton
+            variant="bare"
+            size={15}
+            color={colors.maroon}
+            hitSlop={{ top: 14, bottom: 14, left: 6, right: 14 }}
+          />
         </View>
       </View>
 
@@ -66,7 +70,13 @@ export default function HomeHeader({
         </View>
 
         {dueCount > 0 && (
-          <TouchableOpacity style={styles.duePill} onPress={onStartReview} activeOpacity={0.85}>
+          <TouchableOpacity
+            style={styles.duePill}
+            onPress={onStartReview}
+            activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel={`Start reviewing — ${dueCount} card${dueCount === 1 ? '' : 's'} due, about ${reviewMinutes} minutes`}
+          >
             <View>
               <Text style={styles.dueCount}>{dueCount} due</Text>
               <Text style={styles.dueTime}>{reviewMinutes} min</Text>

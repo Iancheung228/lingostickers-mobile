@@ -27,7 +27,7 @@ export default function StickerCard({ sticker, onPress, onToggleFavorite, select
       <TouchableOpacity
         style={styles.speakBtn}
         onPress={(e) => { e.stopPropagation(); speak(sticker.word, sticker.language); }}
-        hitSlop={6}
+        hitSlop={{ top: 10, bottom: 10, left: 8, right: 3 }}
         accessibilityRole="button"
         accessibilityLabel={`Hear ${sticker.word} pronounced`}
       >
@@ -40,7 +40,7 @@ export default function StickerCard({ sticker, onPress, onToggleFavorite, select
         <TouchableOpacity
           style={styles.voiceBtn}
           onPress={(e) => { e.stopPropagation(); playVoice(); }}
-          hitSlop={6}
+          hitSlop={{ top: 10, bottom: 10, left: 3, right: 10 }}
           accessibilityRole="button"
           accessibilityLabel={`Play your recording of ${sticker.word}`}
         >
@@ -58,7 +58,7 @@ export default function StickerCard({ sticker, onPress, onToggleFavorite, select
         <TouchableOpacity
           style={styles.favoriteBtn}
           onPress={(e) => { e.stopPropagation(); onToggleFavorite(sticker.id); }}
-          hitSlop={6}
+          hitSlop={10}
           accessibilityRole="button"
           accessibilityLabel={sticker.is_favorite
             ? `Remove ${sticker.word} from favorites`
@@ -126,13 +126,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  // The two audio buttons are 6pt apart, and used to be 24pt wide with 6pt of
+  // hitSlop on every side — which put the "hear it spoken" rect four points
+  // *inside* the "play my recording" rect. Two adjacent controls whose touch
+  // areas overlap can only be hit reliably by one of them, and which one you
+  // get is decided by z-order rather than by where you aimed. They are wider
+  // now, and their slop is generous vertically (where there is nothing to
+  // collide with) and tight horizontally (where there is).
   speakBtn: {
     position: 'absolute',
     top: spacing.sm,
     left: spacing.sm,
     zIndex: 2,
-    width: 24,
-    height: 24,
+    width: 28,
+    height: 28,
     borderRadius: radii.full,
     backgroundColor: colors.sky,
     alignItems: 'center',
@@ -141,10 +148,10 @@ const styles = StyleSheet.create({
   voiceBtn: {
     position: 'absolute',
     top: spacing.sm,
-    left: spacing.sm + 28,
+    left: spacing.sm + 34,
     zIndex: 2,
-    width: 24,
-    height: 24,
+    width: 28,
+    height: 28,
     borderRadius: radii.full,
     backgroundColor: colors.sageLight,
     alignItems: 'center',
@@ -155,8 +162,8 @@ const styles = StyleSheet.create({
     top: spacing.sm,
     right: spacing.sm,
     zIndex: 2,
-    width: 24,
-    height: 24,
+    width: 28,
+    height: 28,
     borderRadius: radii.full,
     alignItems: 'center',
     justifyContent: 'center',

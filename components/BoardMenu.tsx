@@ -33,6 +33,11 @@ interface BoardMenuProps {
 
 const MENU_WIDTH = 232;
 const SCREEN_MARGIN = spacing.sm;
+// Used only to keep the popover on screen — see the clamp below. Close enough
+// to the real row height (icon + label inside `styles.row`'s padding) that a
+// menu opened from low down lands fully visible instead of a few points off.
+const ROW_HEIGHT = 42;
+const CARD_PADDING = spacing.xs * 2;
 
 // A popover, not a bottom sheet. The board-level actions it holds (rename,
 // tidy up, cover photo, delete) are *about* the thing directly under the
@@ -41,7 +46,7 @@ const SCREEN_MARGIN = spacing.sm;
 // used to need its own top-level control, which is why board rename had
 // nowhere to live and autoArrange shipped with no way to call it.
 export default function BoardMenu({ visible, anchor, items, onClose }: BoardMenuProps) {
-  const { width: screenWidth } = useWindowDimensions();
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   // Running an item's action while this Modal is still dismissing leaves a
   // second Modal (rename sheet, image picker) fighting the first for the
   // presentation slot on iOS — it silently never appears. Hold the action
@@ -65,6 +70,15 @@ export default function BoardMenu({ visible, anchor, items, onClose }: BoardMenu
     Math.max(anchor.x, SCREEN_MARGIN),
     screenWidth - MENU_WIDTH - SCREEN_MARGIN,
   );
+  // Only the horizontal axis was clamped. Every caller happens to anchor this
+  // near the top of the screen today, so the bottom edge never showed — but a
+  // popover that silently runs off the screen when someone anchors it lower is
+  // a trap laid for the next caller, not a bug that has to happen first.
+  const menuHeight = items.length * ROW_HEIGHT + CARD_PADDING;
+  const top = Math.max(
+    SCREEN_MARGIN,
+    Math.min(anchor.y + spacing.xs, screenHeight - menuHeight - SCREEN_MARGIN),
+  );
 
   return (
     <Modal
@@ -77,7 +91,7 @@ export default function BoardMenu({ visible, anchor, items, onClose }: BoardMenu
       <Pressable style={styles.backdrop} onPress={onClose}>
         {/* Swallows taps on the card itself so choosing an item doesn't also
             fire the backdrop's dismiss underneath it. */}
-        <Pressable style={[styles.card, { left, top: anchor.y + spacing.xs }]} onPress={() => {}}>
+        <Pressable style={[styles.card, { left, top }]} onPress={() => {}}>
           {items.map(item => {
             const Icon = item.icon;
             const tint = item.disabled
@@ -90,6 +104,9 @@ export default function BoardMenu({ visible, anchor, items, onClose }: BoardMenu
                 onPress={() => run(item)}
                 disabled={item.disabled}
                 activeOpacity={0.6}
+                accessibilityRole="button"
+                accessibilityLabel={item.label}
+                accessibilityState={{ disabled: !!item.disabled }}
               >
                 <Icon size={16} color={tint} />
                 <Text style={[styles.label, { color: tint }]}>{item.label}</Text>

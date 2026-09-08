@@ -23,6 +23,7 @@ import { MAX_DIM_PCT } from '@/components/WallBackground';
 import FieldEditor from '@/components/FieldEditor';
 import StudyCard from '@/components/StudyCard';
 import StickerPickerModal from '@/components/StickerPickerModal';
+import SettingsButton from '@/components/SettingsButton';
 import { colors, shadows, radii, spacing, fonts } from '@/constants/theme';
 
 // Long side capped so a full-res photo library import doesn't balloon
@@ -38,8 +39,9 @@ const SOURCE_MAX_SIDE = 2048;
 
 // Both header side slots are pinned to this, so the title between them is
 // centred on the *screen* rather than merely on the leftover space. It's the
-// width of the widest thing either slot holds (the "+ Add" pill).
-const SIDE_SLOT_W = 78;
+// width of the widest thing either slot holds — the "+ Add" pill, plus the
+// settings gear that sits to its right on every screen in the app.
+const SIDE_SLOT_W = 104;
 
 interface BoardCarouselPageProps {
   board: Board;
@@ -392,7 +394,13 @@ export default function BoardCarouselPage({
 
         {/* The name is the one thing on this screen the user typed, so it's
             editable where it's displayed rather than somewhere else. */}
-        <TouchableOpacity style={styles.titleWrap} onPress={() => setRenaming(true)} activeOpacity={0.6}>
+        <TouchableOpacity
+          style={styles.titleWrap}
+          onPress={() => setRenaming(true)}
+          activeOpacity={0.6}
+          accessibilityRole="button"
+          accessibilityLabel={`Rename the board “${board.name}”`}
+        >
           <View style={styles.titleRow}>
             <Text style={styles.title} numberOfLines={1}>{board.name}</Text>
             <Pencil size={11} color={colors.inkFaint} />
@@ -404,10 +412,20 @@ export default function BoardCarouselPage({
             screen has its own "+" that means "new board". Two identical
             glyphs, two different nouns, one screen. */}
         <View style={[styles.side, styles.sideRight]}>
-          <TouchableOpacity onPress={() => setPickerOpen(true)} style={styles.addBtn} activeOpacity={0.85}>
+          <TouchableOpacity
+            onPress={() => setPickerOpen(true)}
+            style={styles.addBtn}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 4 }}
+            activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel="Add stickers to this board"
+          >
             <Plus size={15} color={colors.white} strokeWidth={2.75} />
             <Text style={styles.addText}>Add</Text>
           </TouchableOpacity>
+          {/* Bare, not a disc: this row already carries two solid buttons,
+              and a third would read as a third thing to do here. */}
+          <SettingsButton variant="bare" hitSlop={{ top: 10, bottom: 10, left: 4, right: 12 }} />
         </View>
       </View>
 
@@ -554,7 +572,7 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.sm,
   },
   side: { width: SIDE_SLOT_W, alignItems: 'flex-start' },
-  sideRight: { alignItems: 'flex-end' },
+  sideRight: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: spacing.sm },
   titleWrap: { flex: 1, alignItems: 'center' },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: 5, maxWidth: '100%' },
   title: { fontSize: 15, fontFamily: fonts.display, color: colors.inkDark, textAlign: 'center', flexShrink: 1 },

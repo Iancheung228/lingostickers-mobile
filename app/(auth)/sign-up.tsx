@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity,
   StyleSheet, KeyboardAvoidingView, Platform, ActivityIndicator, ScrollView,
@@ -12,6 +12,7 @@ import { supabase } from '@/lib/supabase';
 import { pickAvatarImage, uploadAvatar } from '@/lib/avatars';
 import { stashPendingAvatar, clearPendingAvatar } from '@/lib/pendingAvatar';
 import AuthIntro from '@/components/AuthIntro';
+import PasswordField from '@/components/PasswordField';
 import { Language } from '@/lib/types';
 import { colors, typography, shadows, radii, spacing, fonts, wordFontFor } from '@/constants/theme';
 // The one question this form asks that isn't a credential.
@@ -43,6 +44,11 @@ export default function SignUpScreen() {
   const [language, setLanguage] = useState<Language>('fr');
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: 'error' | 'success'; text: string } | null>(null);
+  // Three fields in a row, so each return key hands on to the next and the
+  // last one submits — rather than every one of them just closing the
+  // keyboard over the field you were about to fill in.
+  const emailRef = useRef<TextInput>(null);
+  const passwordRef = useRef<TextInput>(null);
   const usernameAvailability = useUsernameAvailability(username);
 
   const isFormValid =
@@ -111,10 +117,14 @@ export default function SignUpScreen() {
 
           <View style={styles.card}>
             {message && (
-              <View style={[
-                styles.messageBox,
-                message.type === 'error' ? styles.messageError : styles.messageSuccess,
-              ]}>
+              <View
+                style={[
+                  styles.messageBox,
+                  message.type === 'error' ? styles.messageError : styles.messageSuccess,
+                ]}
+                accessibilityRole={message.type === 'error' ? 'alert' : undefined}
+                accessibilityLiveRegion="polite"
+              >
                 <Text style={[
                   styles.messageText,
                   message.type === 'error' ? styles.messageErrorText : styles.messageSuccessText,
@@ -192,6 +202,12 @@ export default function SignUpScreen() {
               value={username}
               onChangeText={setUsername}
               autoCapitalize="none"
+              autoCorrect={false}
+              textContentType="nickname"
+              autoComplete="username-new"
+              returnKeyType="next"
+              submitBehavior="submit"
+              onSubmitEditing={() => emailRef.current?.focus()}
             />
             {usernameAvailability !== 'idle' && (
               <Text style={[
@@ -206,21 +222,34 @@ export default function SignUpScreen() {
             )}
 
             <TextInput
+              ref={emailRef}
               style={styles.input}
               placeholder="Email"
               placeholderTextColor={colors.inkFaint}
               value={email}
               onChangeText={setEmail}
               autoCapitalize="none"
+              autoCorrect={false}
               keyboardType="email-address"
+              textContentType="emailAddress"
+              autoComplete="email"
+              returnKeyType="next"
+              submitBehavior="submit"
+              onSubmitEditing={() => passwordRef.current?.focus()}
             />
-            <TextInput
+            {/* `newPassword` is what makes iOS offer to generate and save a
+                strong one here rather than treating it as a login box. */}
+            <PasswordField
+              ref={passwordRef}
               style={styles.input}
               placeholder="Password (min 6 characters)"
               placeholderTextColor={colors.inkFaint}
               value={password}
               onChangeText={setPassword}
-              secureTextEntry
+              textContentType="newPassword"
+              autoComplete="new-password"
+              returnKeyType="go"
+              onSubmitEditing={handleSignUp}
             />
 
             <TouchableOpacity

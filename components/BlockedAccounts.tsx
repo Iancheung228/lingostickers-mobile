@@ -53,7 +53,7 @@ export default function BlockedAccounts({ visible, onClose }: BlockedAccountsPro
           <Text style={styles.title}>Blocked accounts</Text>
           <TouchableOpacity
             onPress={onClose}
-            hitSlop={8}
+            hitSlop={12}
             accessibilityRole="button"
             accessibilityLabel="Close blocked accounts"
           >

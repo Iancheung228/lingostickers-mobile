@@ -106,7 +106,12 @@ function useChallengesState() {
     const res = await supabase.functions.invoke('submit-challenge-answer', {
       body: { challenge_id: challengeId, answer },
     });
-    if (res.error) throw res.error;
+    // Unwrapped here rather than at the screen: a raw FunctionsHttpError
+    // stringifies to "Edge Function returned a non-2xx status code", which is
+    // what the challenge screen ended up showing for every failure — see
+    // skills.md #3. The function's own message ("this challenge has already
+    // been answered") is the one worth reading.
+    if (res.error) throw new Error(await getFunctionErrorMessage(res.error));
     fetchInbox();
     return res.data as SubmitAnswerResult;
   }, [fetchInbox]);
@@ -115,7 +120,7 @@ function useChallengesState() {
     const res = await supabase.functions.invoke('submit-challenge-answer', {
       body: { challenge_id: challengeId, use_hint: true },
     });
-    if (res.error) throw res.error;
+    if (res.error) throw new Error(await getFunctionErrorMessage(res.error));
     return res.data as SubmitAnswerResult;
   }, []);
 

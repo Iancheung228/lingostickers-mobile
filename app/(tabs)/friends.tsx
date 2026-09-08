@@ -21,6 +21,7 @@ import { ChallengeWithSender, FriendWithProfile, PersonSummary } from '@/lib/typ
 import {
   buildInboxItems, buildSections, subtitleFor, isFirstRun, type Row,
 } from '@/lib/friendsSections';
+import SettingsButton from '@/components/SettingsButton';
 import { colors, shadows, radii, spacing, fonts } from '@/constants/theme';
 import { TAB_BAR_CLEARANCE } from '@/constants/tabBar';
 import { enablePushNotifications } from '@/lib/notifications';
@@ -193,15 +194,18 @@ export default function FriendsScreen() {
           <Text style={styles.title}>Friends</Text>
           <Text style={styles.subtitle}>{subtitle}</Text>
         </View>
-        <TouchableOpacity
-          onPress={() => setSearchVisible(true)}
-          style={styles.addBtn}
-          hitSlop={8}
-          accessibilityRole="button"
-          accessibilityLabel="Add a friend"
-        >
-          <UserPlus size={20} color={colors.inkDark} />
-        </TouchableOpacity>
+        <View style={styles.headerActions}>
+          <TouchableOpacity
+            onPress={() => setSearchVisible(true)}
+            style={styles.addBtn}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 4 }}
+            accessibilityRole="button"
+            accessibilityLabel="Add a friend"
+          >
+            <UserPlus size={20} color={colors.inkDark} />
+          </TouchableOpacity>
+          <SettingsButton hitSlop={{ top: 10, bottom: 10, left: 4, right: 10 }} />
+        </View>
       </View>
 
       {loading && !refreshing ? (
@@ -293,6 +297,7 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.sm,
   },
   headerText: { flex: 1, gap: 1 },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   title: { fontSize: 24, fontFamily: fonts.display, color: colors.inkDark, letterSpacing: -0.5 },
   subtitle: { fontSize: 12, fontFamily: fonts.display, color: colors.inkLight},
   addBtn: {

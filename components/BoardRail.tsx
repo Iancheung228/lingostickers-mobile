@@ -114,7 +114,17 @@ function BoardTile({
   const paths = preview?.paths ?? [];
 
   return (
-    <TouchableOpacity style={styles.tile} onPress={onPress} activeOpacity={0.85}>
+    <TouchableOpacity
+      style={styles.tile}
+      onPress={onPress}
+      activeOpacity={0.85}
+      accessibilityRole="button"
+      // The tile is mostly a picture of the board; without this a screen
+      // reader gets the name and no hint that it is the thing to press, nor
+      // which one is already open.
+      accessibilityLabel={`Open the board “${board.name}”`}
+      accessibilityState={{ selected: active }}
+    >
       <View style={[styles.thumb, active && styles.thumbActive]}>
         {/* The exact component the real canvas draws itself with, handed the
             URL this strip already signed in its own batch — not a copy of it.
@@ -168,7 +178,13 @@ function BoardTile({
 
 function CreateTile({ onPress }: { onPress: () => void }) {
   return (
-    <TouchableOpacity style={styles.tile} onPress={onPress} activeOpacity={0.85}>
+    <TouchableOpacity
+      style={styles.tile}
+      onPress={onPress}
+      activeOpacity={0.85}
+      accessibilityRole="button"
+      accessibilityLabel="Create a new board"
+    >
       <View style={styles.createThumb}>
         <Plus size={20} color={colors.terra} strokeWidth={2.5} />
       </View>

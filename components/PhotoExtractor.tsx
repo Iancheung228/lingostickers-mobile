@@ -351,6 +351,7 @@ export default function PhotoExtractor({ imageUri, imageWidth, imageHeight, onCl
           <TouchableOpacity
             onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onClose(); }}
             style={styles.closeButton}
+            hitSlop={8}
             disabled={busy}
             accessibilityRole="button"
             accessibilityLabel="Close without extracting a sticker"

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity,
   StyleSheet, KeyboardAvoidingView, Platform, ActivityIndicator,
@@ -6,6 +6,7 @@ import {
 import { Link, useRouter, useLocalSearchParams } from 'expo-router';
 import { useAuth } from '@/hooks/useAuth';
 import CozyBackground from '@/components/CozyBackground';
+import PasswordField from '@/components/PasswordField';
 import { colors, shadows, radii, spacing, typography, fonts } from '@/constants/theme';
 
 export default function ResetPasswordScreen() {
@@ -18,8 +19,15 @@ export default function ResetPasswordScreen() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
+  const confirmRef = useRef<TextInput>(null);
+
   const isFormValid =
     password.length >= 6 && confirmPassword.length >= 6 && password === confirmPassword;
+  // The button is disabled until the two match, which on its own is a dead
+  // control with no stated reason — the one thing more frustrating than an
+  // error is a button that just doesn't respond. Only shown once the second
+  // field has enough characters to be a real attempt rather than mid-typing.
+  const mismatch = confirmPassword.length >= 6 && password !== confirmPassword;
 
   const handleUpdate = async () => {
     if (!isFormValid) return;
@@ -86,27 +94,41 @@ export default function ResetPasswordScreen() {
           <Text style={styles.subtitle}>Choose a new password for your account</Text>
 
           <View style={styles.card}>
-            <TextInput
+            <PasswordField
               style={styles.input}
               placeholder="New password (min 6 characters)"
               placeholderTextColor={colors.inkFaint}
               value={password}
               onChangeText={setPassword}
-              secureTextEntry
               editable={!success}
+              textContentType="newPassword"
+              autoComplete="new-password"
+              returnKeyType="next"
+              submitBehavior="submit"
+              onSubmitEditing={() => confirmRef.current?.focus()}
             />
-            <TextInput
+            <PasswordField
+              ref={confirmRef}
               style={styles.input}
               placeholder="Confirm new password"
               placeholderTextColor={colors.inkFaint}
               value={confirmPassword}
               onChangeText={setConfirmPassword}
-              secureTextEntry
               editable={!success}
+              textContentType="newPassword"
+              autoComplete="new-password"
+              returnKeyType="go"
+              onSubmitEditing={handleUpdate}
             />
 
+            {mismatch && (
+              <Text style={styles.mismatchHint} accessibilityLiveRegion="polite">
+                Those two don&apos;t match yet.
+              </Text>
+            )}
+
             {error && (
-              <View style={styles.errorBox}>
+              <View style={styles.errorBox} accessibilityRole="alert" accessibilityLiveRegion="polite">
                 <Text style={styles.errorText}>{error}</Text>
                 <Link href="/(auth)/forgot-password" asChild>
                   <TouchableOpacity>
@@ -117,7 +139,7 @@ export default function ResetPasswordScreen() {
             )}
 
             {success && (
-              <View style={styles.messageBox}>
+              <View style={styles.messageBox} accessibilityLiveRegion="polite">
                 <Text style={styles.messageText}>Password updated! Taking you to your collection…</Text>
               </View>
             )}
@@ -194,6 +216,13 @@ const styles = StyleSheet.create({
     borderColor: colors.success,
   },
   messageText: { fontSize: 14, fontFamily: fonts.display, color: colors.success },
+  mismatchHint: {
+    fontSize: 13,
+    fontFamily: fonts.text,
+    color: colors.error,
+    marginTop: -spacing.sm,
+    marginBottom: spacing.ms,
+  },
   errorBox: {
     borderRadius: radii.md,
     paddingHorizontal: spacing.md,

@@ -56,6 +56,11 @@ export default function TabLayout() {
   const { pendingCount } = useChallenges();
   const { friends } = useFriends();
   const pendingRequestCount = friends.filter(f => f.status === 'pending' && !f.is_requester).length;
+  // The badge draws its own accessibilityLabel, but it lives inside the tab
+  // button — which is itself one accessible element, so nothing underneath it
+  // is ever announced. The count has to be part of the tab's own label or a
+  // screen reader user is never told there is anything waiting.
+  const friendsBadge = pendingCount + pendingRequestCount;
 
   return (
     <Tabs
@@ -144,9 +149,11 @@ export default function TabLayout() {
         name="friends"
         options={{
           title: 'Friends',
-          tabBarAccessibilityLabel: 'Friends',
+          tabBarAccessibilityLabel: friendsBadge > 0
+            ? `Friends, ${friendsBadge} waiting on you`
+            : 'Friends',
           tabBarIcon: ({ focused }) => (
-            <TabIcon Icon={Users} focused={focused} badgeCount={pendingCount + pendingRequestCount} />
+            <TabIcon Icon={Users} focused={focused} badgeCount={friendsBadge} />
           ),
         }}
       />

@@ -14,6 +14,7 @@ import Animated, {
 import { ImagePlus, Zap, ZapOff } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useAuth } from '@/hooks/useAuth';
+import SettingsButton from '@/components/SettingsButton';
 import { colors, shadows, radii, spacing, fonts } from '@/constants/theme';
 import { TAB_BAR_CLEARANCE } from '@/constants/tabBar';
 import { useProfile } from '@/hooks/useProfile';
@@ -800,6 +801,9 @@ export default function ScanScreen() {
       <View style={styles.header}>
         <Text style={styles.prompt}>What did you find?</Text>
         <Text style={styles.promptSub}>Take a photo to learn!</Text>
+        {/* Absolutely placed rather than in a row: the prompt is centred on
+            the screen, not on the space left over beside a button. */}
+        <SettingsButton style={styles.headerSettings} />
       </View>
 
       <View style={styles.cameraArea}>
@@ -974,6 +978,7 @@ const styles = StyleSheet.create({
     paddingTop: spacing.lg,
     paddingBottom: spacing.sm,
   },
+  headerSettings: { position: 'absolute', right: spacing.lg, top: spacing.sm },
   prompt: { fontSize: 20, fontFamily: fonts.display, color: colors.inkDark, letterSpacing: -0.3 },
   promptSub: { fontSize: 13, fontFamily: fonts.text, color: colors.terra, marginTop: 2, },
 

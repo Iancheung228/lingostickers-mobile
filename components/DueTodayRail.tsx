@@ -12,7 +12,11 @@ interface DueTodayRailProps {
   /// Already sliced for display — `totalDue` is the honest count.
   due: Sticker[];
   totalDue: number;
+  /// Every language in the collection — not just the ones with cards due —
+  /// so the chip row can always undo its own filter.
   languages: Language[];
+  /// The chips live here but scope the whole home screen (the Latest feed and
+  /// the grid below it too), not only this rail — see collection.tsx.
   activeLanguage: Language | null;
   onSelectLanguage: (language: Language | null) => void;
   getUrl: (path: string | null | undefined) => string | null;
@@ -59,7 +63,8 @@ export default function DueTodayRail({
   const cardWidth = cardWidthFor(width);
   // The filter chips have to survive an empty queue: hiding the whole
   // section when a language filter matches nothing would take away the only
-  // control that could undo it.
+  // control that could undo it — and it governs the rest of the screen too,
+  // so losing it would strand the grid below in a filter with no off switch.
   const multilingual = languages.length > 1;
   if (due.length === 0 && !multilingual) return null;
 

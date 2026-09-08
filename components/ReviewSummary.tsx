@@ -1,4 +1,4 @@
-import { Modal, View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { Modal, View, Text, StyleSheet, TouchableOpacity, Pressable } from 'react-native';
 import { Check, RotateCcw } from 'lucide-react-native';
 import { colors, radii, spacing, shadows, fonts } from '@/constants/theme';
 
@@ -19,8 +19,18 @@ export default function ReviewSummary({ stats, onDone }: ReviewSummaryProps) {
 
   return (
     <Modal visible transparent animationType="fade" onRequestClose={onDone}>
-      <View style={styles.overlay}>
-        <View style={styles.card}>
+      {/* A card floating on a dimmed backdrop is read as "tap outside to
+          close" everywhere else on a phone, and there is nothing here to lose
+          by leaving — the session is already over and every grade is written.
+          The inner Pressable is what stops a tap on the card itself from
+          falling through to the scrim. */}
+      <Pressable
+        style={styles.overlay}
+        onPress={onDone}
+        accessibilityRole="button"
+        accessibilityLabel="Close the session summary"
+      >
+        <Pressable style={styles.card} onPress={() => {}} accessible={false}>
           <View style={styles.badge}>
             <Check size={26} color={colors.white} strokeWidth={3} />
           </View>
@@ -39,8 +49,8 @@ export default function ReviewSummary({ stats, onDone }: ReviewSummaryProps) {
           <TouchableOpacity style={styles.doneBtn} onPress={onDone} activeOpacity={0.85}>
             <Text style={styles.doneText}>Done</Text>
           </TouchableOpacity>
-        </View>
-      </View>
+        </Pressable>
+      </Pressable>
     </Modal>
   );
 }

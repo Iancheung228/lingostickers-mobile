@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Modal, View, Text, Image, TouchableOpacity, TextInput, StyleSheet, SafeAreaView, ScrollView, ActivityIndicator, Alert, KeyboardAvoidingView, Platform, useWindowDimensions } from 'react-native';
-import { X, Bookmark, Pencil, Volume2, Lightbulb, Info, RotateCcw } from 'lucide-react-native';
+import { Modal, View, Text, Image, TouchableOpacity, TextInput, StyleSheet, SafeAreaView, ScrollView, ActivityIndicator, Alert, KeyboardAvoidingView, Platform, useWindowDimensions, Pressable } from 'react-native';
+import { X, Bookmark, Pencil, Volume2, Lightbulb, Info, RotateCcw, Check } from 'lucide-react-native';
 import { StickerDraft } from '@/lib/types';
 import { supabase } from '@/lib/supabase';
 import { speak, stopSpeaking } from '@/lib/speech';
@@ -64,6 +64,9 @@ export default function DiscoveryReveal({ draft, onAdd, onDiscard, onRetryExtrac
   };
 
   const confirmEditingWord = () => {
+    // Idempotent: the bar's tick and the scrim behind it can both resolve the
+    // same edit, and a second call would fire a second translation request.
+    if (!editingWord) return;
     const trimmed = wordInput.trim();
     setEditingWord(false);
     if (!trimmed || trimmed.toLowerCase() === draft.translation.toLowerCase()) return;
@@ -78,6 +81,7 @@ export default function DiscoveryReveal({ draft, onAdd, onDiscard, onRetryExtrac
   };
 
   const confirmEditingSentence = () => {
+    if (!editingSentence) return;
     const trimmed = sentenceInput.trim();
     setEditingSentence(false);
     if (!trimmed || trimmed.toLowerCase() === draft.sentenceTranslation.toLowerCase()) return;
@@ -85,6 +89,11 @@ export default function DiscoveryReveal({ draft, onAdd, onDiscard, onRetryExtrac
       Alert.alert('Translation failed', err?.message ?? 'Could not update the sentence. Please try again.');
     });
   };
+
+  // What the bar's two buttons and the scrim behind it all route through, so
+  // "finish this edit" means one thing no matter which of them you reach for.
+  const confirmEdit = () => { confirmEditingWord(); confirmEditingSentence(); };
+  const cancelEdit = () => { setEditingWord(false); setEditingSentence(false); };
 
   // onRequestClose is the Android back gesture. Routed to onDiscard, which
   // confirms first — this screen holds a result that cost ~10-20s and a real
@@ -97,6 +106,7 @@ export default function DiscoveryReveal({ draft, onAdd, onDiscard, onRetryExtrac
           <TouchableOpacity
             onPress={onDiscard}
             style={styles.closeButton}
+            hitSlop={8}
             disabled={saving}
             accessibilityRole="button"
             accessibilityLabel="Discard this discovery"
@@ -220,39 +230,73 @@ export default function DiscoveryReveal({ draft, onAdd, onDiscard, onRetryExtrac
           </TouchableOpacity>
         </View>
 
+        {/* The edit bar used to be a bare input that discarded itself on blur,
+            and blur is fired by tapping anything at all — including "Add to
+            Collection", which then saved the card with the correction you had
+            just typed thrown away, and no way to tell that had happened.
+            Now nothing resolves an edit except the three controls that say
+            they do: the tick, the cross, and tapping away from the bar. The
+            scrim is also what stops a stray tap reaching the buttons behind
+            it while a correction is half-typed. */}
         {(editingWord || editingSentence) && (
-          <KeyboardAvoidingView
-            style={styles.floatingEditWrap}
-            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-            pointerEvents="box-none"
-          >
-            <View style={styles.floatingEditBar}>
-              {editingWord ? (
-                <TextInput
-                  style={[styles.floatingEditInput, { fontFamily: wordFontFor(draft.language) }]}
-                  value={wordInput}
-                  onChangeText={setWordInput}
-                  autoFocus
-                  autoCapitalize="words"
-                  autoCorrect={false}
-                  returnKeyType="done"
-                  onSubmitEditing={confirmEditingWord}
-                  onBlur={() => setEditingWord(false)}
-                />
-              ) : (
-                <TextInput
-                  style={[styles.floatingEditInput, { fontFamily: wordFontFor(draft.language) }]}
-                  value={sentenceInput}
-                  onChangeText={setSentenceInput}
-                  autoFocus
-                  autoCapitalize="sentences"
-                  returnKeyType="done"
-                  onSubmitEditing={confirmEditingSentence}
-                  onBlur={() => setEditingSentence(false)}
-                />
-              )}
-            </View>
-          </KeyboardAvoidingView>
+          <View style={StyleSheet.absoluteFill}>
+            <Pressable
+              style={styles.editScrim}
+              onPress={confirmEdit}
+              accessibilityRole="button"
+              accessibilityLabel="Finish editing"
+            />
+            <KeyboardAvoidingView
+              style={styles.floatingEditWrap}
+              behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+              pointerEvents="box-none"
+            >
+              <View style={styles.floatingEditBar}>
+                <TouchableOpacity
+                  style={styles.editBarBtn}
+                  onPress={cancelEdit}
+                  hitSlop={10}
+                  accessibilityRole="button"
+                  accessibilityLabel="Cancel this edit"
+                >
+                  <X size={18} color={colors.inkLight} />
+                </TouchableOpacity>
+
+                {editingWord ? (
+                  <TextInput
+                    style={[styles.floatingEditInput, { fontFamily: wordFontFor(draft.language) }]}
+                    value={wordInput}
+                    onChangeText={setWordInput}
+                    autoFocus
+                    autoCapitalize="words"
+                    autoCorrect={false}
+                    returnKeyType="done"
+                    onSubmitEditing={confirmEditingWord}
+                  />
+                ) : (
+                  <TextInput
+                    style={[styles.floatingEditInput, { fontFamily: wordFontFor(draft.language) }]}
+                    value={sentenceInput}
+                    onChangeText={setSentenceInput}
+                    autoFocus
+                    autoCapitalize="sentences"
+                    returnKeyType="done"
+                    onSubmitEditing={confirmEditingSentence}
+                  />
+                )}
+
+                <TouchableOpacity
+                  style={[styles.editBarBtn, styles.editBarConfirm]}
+                  onPress={confirmEdit}
+                  hitSlop={10}
+                  accessibilityRole="button"
+                  accessibilityLabel="Apply this edit"
+                >
+                  <Check size={18} color={colors.white} strokeWidth={3} />
+                </TouchableOpacity>
+              </View>
+            </KeyboardAvoidingView>
+          </View>
         )}
       </SafeAreaView>
     </Modal>
@@ -372,6 +416,7 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: colors.borderLight,
   },
+  editScrim: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(43, 42, 40, 0.25)' },
   floatingEditWrap: {
     position: 'absolute',
     left: 0,
@@ -379,7 +424,10 @@ const styles = StyleSheet.create({
     bottom: 0,
   },
   floatingEditBar: {
-    paddingHorizontal: 24,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: 16,
     paddingTop: 12,
     paddingBottom: 16,
     backgroundColor: colors.card,
@@ -387,8 +435,15 @@ const styles = StyleSheet.create({
     borderTopColor: colors.borderLight,
     ...shadows.card,
   },
+  editBarBtn: {
+    width: 38, height: 38, borderRadius: 19,
+    alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1.5, borderColor: colors.borderLight,
+  },
+  editBarConfirm: { backgroundColor: colors.terra, borderColor: colors.terra },
   // fontFamily from the render site — you are editing target-language text.
   floatingEditInput: {
+    flex: 1,
     fontSize: 17,
     color: colors.inkDark,
     textAlign: 'center',

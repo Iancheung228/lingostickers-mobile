@@ -8,6 +8,7 @@ import { Sticker } from '@/lib/types';
 import { useSignedUrls } from '@/hooks/useSignedUrls';
 import StickerCard from '@/components/StickerCard';
 import StudyCard from '@/components/StudyCard';
+import SettingsButton from '@/components/SettingsButton';
 import { colors, shadows, radii, spacing, fonts } from '@/constants/theme';
 
 const DATE_FORMAT = new Intl.DateTimeFormat('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
@@ -21,7 +22,10 @@ export default function DayScreen() {
   const [selectedSticker, setSelectedSticker] = useState<Sticker | null>(null);
 
   const fetchStickers = useCallback(async () => {
-    if (!user || !date) return;
+    // Returning without lowering `loading` would leave this screen spinning
+    // forever on a malformed link — the one path that can reach it without a
+    // date in hand.
+    if (!user || !date) { setLoading(false); return; }
     // date is a local-time "YYYY-MM-DD" key — bound the query to that local
     // day's start/end so it matches how the calendar bucketed stickers.
     const dayStart = new Date(`${date}T00:00:00`);
@@ -50,6 +54,19 @@ export default function DayScreen() {
     setSelectedSticker(prev => prev && prev.id === id ? { ...prev, ...patch } : prev);
   }, []);
 
+  // The same optimistic toggle the collection grid uses. This grid draws the
+  // identical card, and a heart that appears on one screen and not the other
+  // reads as the button having gone missing rather than as a deliberate
+  // difference between two views of the same sticker.
+  const handleToggleFavorite = useCallback(async (id: string) => {
+    const target = stickers.find(s => s.id === id);
+    if (!target) return;
+    const next = !target.is_favorite;
+    patchSticker(id, { is_favorite: next });
+    const { error } = await supabase.from('stickers').update({ is_favorite: next }).eq('id', id);
+    if (error) patchSticker(id, { is_favorite: !next });
+  }, [stickers, patchSticker]);
+
   // One batched sign request for the whole day's grid — see
   // hooks/useSignedUrls.ts.
   const urls = useSignedUrls(useMemo(
@@ -74,12 +91,13 @@ export default function DayScreen() {
         >
           <ArrowLeft size={18} color={colors.inkMid} />
         </TouchableOpacity>
-        <View>
+        <View style={styles.headerText}>
           <Text style={styles.title}>{formattedDate}</Text>
           <Text style={styles.subtitle}>
             {loadError ? "couldn't load this day" : `${stickers.length} captured`}
           </Text>
         </View>
+        <SettingsButton />
       </View>
 
       {loading ? (
@@ -107,11 +125,33 @@ export default function DayScreen() {
           numColumns={2}
           columnWrapperStyle={styles.row}
           contentContainerStyle={styles.grid}
+          // Reachable by deleting the last sticker of a day from the card
+          // that opens out of this very grid: the list emptied and the screen
+          // went blank under a header still offering to go back, with nothing
+          // saying what had happened.
+          ListEmptyComponent={
+            <View style={styles.emptyWrap}>
+              <Text style={styles.errorTitle}>Nothing left on this day</Text>
+              <Text style={styles.errorBody}>
+                Every sticker found on this date has been deleted.
+              </Text>
+              <TouchableOpacity
+                style={styles.retryBtn}
+                onPress={() => router.back()}
+                activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityLabel="Back to the calendar"
+              >
+                <Text style={styles.retryText}>Back to calendar</Text>
+              </TouchableOpacity>
+            </View>
+          }
           renderItem={({ item }) => (
             <View style={styles.cardWrapper}>
               <StickerCard
                 sticker={item}
                 onPress={() => setSelectedSticker(item)}
+                onToggleFavorite={handleToggleFavorite}
                 imageUrl={urls.get(item.image_path) ?? null}
                 voiceUrl={item.voice_note_path ? urls.get(item.voice_note_path) ?? null : null}
               />
@@ -132,6 +172,7 @@ export default function DayScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.sky },
+  headerText: { flex: 1 },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -152,6 +193,14 @@ const styles = StyleSheet.create({
   title: { fontSize: 15, fontFamily: fonts.display, color: colors.inkDark },
   subtitle: { fontSize: 10, fontFamily: fonts.mono, color: colors.inkFaint, marginTop: 1 },
   loader: { flex: 1 },
+  // Not `errorWrap`: that one is a whole-screen replacement and uses flex:1,
+  // which collapses to nothing inside a list's content container.
+  emptyWrap: {
+    alignItems: 'center',
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.xxl,
+    gap: spacing.ms,
+  },
   errorWrap: {
     flex: 1,
     alignItems: 'center',

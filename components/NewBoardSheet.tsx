@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
-  Modal, View, Text, TextInput, StyleSheet, TouchableOpacity,
-  KeyboardAvoidingView, Platform, ActivityIndicator, Alert,
+  View, Text, TextInput, StyleSheet, TouchableOpacity, ActivityIndicator, Alert,
 } from 'react-native';
-import { colors, radii, spacing, shadows, fonts } from '@/constants/theme';
+import BottomSheet, { BottomSheetHandle } from '@/components/BottomSheet';
+import { colors, radii, spacing, fonts } from '@/constants/theme';
 
 interface NewBoardSheetProps {
   visible: boolean;
@@ -18,6 +18,7 @@ interface NewBoardSheetProps {
 export default function NewBoardSheet({ visible, onCancel, onCreate }: NewBoardSheetProps) {
   const [name, setName] = useState('');
   const [saving, setSaving] = useState(false);
+  const sheet = useRef<BottomSheetHandle>(null);
 
   // Cleared on each open rather than on close, so a cancelled draft never
   // reappears the next time the sheet is summoned.
@@ -33,71 +34,69 @@ export default function NewBoardSheet({ visible, onCancel, onCreate }: NewBoardS
       Alert.alert("Couldn't create board", error.message);
       return;
     }
-    onCancel();
+    sheet.current?.close();
+  };
+
+  // Same gate as the field editor: every exit — scrim tap, drag-down, back
+  // button, Cancel — asks first if there's a name typed that would be lost.
+  const requestClose = () => {
+    if (saving) { sheet.current?.settle(); return; }
+    if (!name.trim()) { sheet.current?.close(); return; }
+    sheet.current?.settle();
+    Alert.alert(
+      'Discard this board?',
+      "The name you typed won't be saved.",
+      [
+        { text: 'Keep editing', style: 'cancel' },
+        { text: 'Discard', style: 'destructive', onPress: () => sheet.current?.close() },
+      ],
+    );
   };
 
   if (!visible) return null;
 
   return (
-    <Modal visible transparent animationType="slide" onRequestClose={onCancel}>
-      <KeyboardAvoidingView
-        style={styles.overlay}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
-        <View style={styles.sheet}>
-          <View style={styles.grabber} />
+    <BottomSheet
+      ref={sheet}
+      onRequestClose={requestClose}
+      onClosed={onCancel}
+      header={
+        <>
           <Text style={styles.title}>New board</Text>
           <Text style={styles.subtitle}>Give it a name — you&apos;ll pick stickers next.</Text>
+        </>
+      }
+    >
+      <TextInput
+        autoFocus
+        value={name}
+        onChangeText={setName}
+        placeholder="e.g. Tokyo Trip"
+        placeholderTextColor={colors.inkFaint}
+        style={styles.input}
+        onSubmitEditing={handleCreate}
+        returnKeyType="done"
+      />
 
-          <TextInput
-            autoFocus
-            value={name}
-            onChangeText={setName}
-            placeholder="e.g. Tokyo Trip"
-            placeholderTextColor={colors.inkFaint}
-            style={styles.input}
-            onSubmitEditing={handleCreate}
-            returnKeyType="done"
-          />
-
-          <View style={styles.actions}>
-            <TouchableOpacity style={styles.cancelBtn} onPress={onCancel} disabled={saving}>
-              <Text style={styles.cancelText}>Cancel</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.createBtn, (!name.trim() || saving) && styles.createBtnDisabled]}
-              onPress={handleCreate}
-              disabled={!name.trim() || saving}
-            >
-              {saving
-                ? <ActivityIndicator size="small" color={colors.white} />
-                : <Text style={styles.createText}>Create board</Text>}
-            </TouchableOpacity>
-          </View>
-        </View>
-      </KeyboardAvoidingView>
-    </Modal>
+      <View style={styles.actions}>
+        <TouchableOpacity style={styles.cancelBtn} onPress={requestClose} disabled={saving}>
+          <Text style={styles.cancelText}>Cancel</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.createBtn, (!name.trim() || saving) && styles.createBtnDisabled]}
+          onPress={handleCreate}
+          disabled={!name.trim() || saving}
+        >
+          {saving
+            ? <ActivityIndicator size="small" color={colors.white} />
+            : <Text style={styles.createText}>Create board</Text>}
+        </TouchableOpacity>
+      </View>
+    </BottomSheet>
   );
 }
 
 const styles = StyleSheet.create({
-  overlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(43, 42, 40, 0.45)' },
-  sheet: {
-    backgroundColor: colors.card,
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.ms,
-    paddingBottom: spacing.xl,
-    ...shadows.card,
-  },
-  grabber: {
-    alignSelf: 'center',
-    width: 40, height: 4,
-    borderRadius: radii.full,
-    backgroundColor: colors.border,
-    marginBottom: spacing.ms,
-  },
   title: { fontSize: 20, fontFamily: fonts.display, color: colors.inkDark },
   subtitle: { fontSize: 13, fontFamily: fonts.text, color: colors.inkLight, lineHeight: 19, marginTop: 2 },
   input: { marginTop: spacing.md, padding: spacing.md, borderRadius: radii.md, backgroundColor: colors.sky, borderWidth: 1.5, borderColor: colors.borderLight, fontSize: 16, fontFamily: fonts.text, color: colors.inkMid, },

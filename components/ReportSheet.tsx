@@ -42,11 +42,28 @@ export default function ReportSheet({
   const [detail, setDetail] = useState('');
   const [sending, setSending] = useState(false);
 
-  // Cleared on open, not on close: leaving the previous answers up while the
-  // sheet slides away looks like the report failed to send.
+  // A pageSheet is dismissed by a downward swipe that iOS performs itself —
+  // there is no hook to veto it and no confirmation to put in front of it. So
+  // an accidental swipe must not be able to destroy anything: the answers are
+  // cleared when the sheet opens on a *different* subject, or after a report
+  // actually goes, and not merely because it closed. Reopening on the same
+  // person hands back exactly what was typed.
+  //
+  // (Clearing on close rather than on open was also wrong for a second
+  // reason: the previous answers stayed on screen while the sheet slid away,
+  // which read as the report having failed to send.)
+  const target = `${reportedUserId ?? ''}|${challengeId ?? ''}`;
+  const [draftFor, setDraftFor] = useState(target);
+
   useEffect(() => {
-    if (visible) { setReason(null); setDetail(''); setSending(false); }
-  }, [visible]);
+    if (!visible) return;
+    setSending(false);
+    if (draftFor !== target) {
+      setReason(null);
+      setDetail('');
+      setDraftFor(target);
+    }
+  }, [visible, target, draftFor]);
 
   const name = reportedName ?? 'this person';
 
@@ -70,6 +87,8 @@ export default function ReportSheet({
     }
 
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    setReason(null);
+    setDetail('');
     onClose();
 
     if (onBlock) {
@@ -93,7 +112,7 @@ export default function ReportSheet({
           <Text style={styles.title}>Report</Text>
           <TouchableOpacity
             onPress={onClose}
-            hitSlop={8}
+            hitSlop={12}
             accessibilityRole="button"
             accessibilityLabel="Close without reporting"
           >

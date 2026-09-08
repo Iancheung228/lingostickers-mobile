@@ -59,7 +59,12 @@ export default function FriendProfile({ friend, currentUserId, onClose, onRemove
         {
           text: 'Remove', style: 'destructive',
           onPress: async () => {
-            await removeFriend(friend.id);
+            // The block path below checks its error; this one didn't, so a
+            // failed removal still closed the sheet and refreshed the list —
+            // the friend reappeared a moment later with nothing said, which
+            // reads as the app undoing your decision on its own.
+            const { error } = await removeFriend(friend.id);
+            if (error) { Alert.alert("Couldn't remove", error.message); return; }
             onRemoved();
             onClose();
           },
@@ -106,7 +111,7 @@ export default function FriendProfile({ friend, currentUserId, onClose, onRemove
           <Text style={styles.title} numberOfLines={1}>{friend.friend.username ?? 'Friend'}</Text>
           <TouchableOpacity
             onPress={onClose}
-            hitSlop={8}
+            hitSlop={12}
             accessibilityRole="button"
             accessibilityLabel="Close this profile"
           >

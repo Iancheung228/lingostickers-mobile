@@ -66,7 +66,7 @@ export default function StickerPickerModal({
           </View>
           <TouchableOpacity
             onPress={onClose}
-            hitSlop={8}
+            hitSlop={12}
             accessibilityRole="button"
             accessibilityLabel="Close the sticker picker"
           >

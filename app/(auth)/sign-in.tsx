@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity,
   StyleSheet, KeyboardAvoidingView, Platform, ActivityIndicator, ScrollView,
 } from 'react-native';
 import { Link } from 'expo-router';
 import { useAuth } from '@/hooks/useAuth';
+import PasswordField from '@/components/PasswordField';
 import AuthIntro from '@/components/AuthIntro';
 import { colors, typography, shadows, radii, spacing, fonts } from '@/constants/theme';
 
@@ -16,6 +17,9 @@ export default function SignInScreen() {
   const [error, setError] = useState<string | null>(null);
   const [unconfirmed, setUnconfirmed] = useState(false);
   const [resendMessage, setResendMessage] = useState<string | null>(null);
+  // So the email field's return key can hand over instead of dismissing the
+  // keyboard and leaving the password box untouched two rows below it.
+  const passwordRef = useRef<TextInput>(null);
 
   const isFormValid = email.trim().length > 0 && password.length > 0;
 
@@ -64,13 +68,13 @@ export default function SignInScreen() {
           {/* Card */}
           <View style={styles.card}>
             {error && (
-              <View style={styles.errorBox}>
+              <View style={styles.errorBox} accessibilityRole="alert" accessibilityLiveRegion="polite">
                 <Text style={styles.errorText}>{error}</Text>
               </View>
             )}
 
             {unconfirmed && (
-              <View style={styles.errorBox}>
+              <View style={styles.errorBox} accessibilityRole="alert" accessibilityLiveRegion="polite">
                 <Text style={styles.errorText}>Please confirm your email before signing in.</Text>
                 <TouchableOpacity onPress={handleResend} disabled={loading}>
                   <Text style={styles.errorLink}>Resend confirmation email</Text>
@@ -79,11 +83,15 @@ export default function SignInScreen() {
             )}
 
             {resendMessage && (
-              <View style={styles.messageBox}>
+              <View style={styles.messageBox} accessibilityLiveRegion="polite">
                 <Text style={styles.messageText}>{resendMessage}</Text>
               </View>
             )}
 
+            {/* textContentType/autoComplete are what let iOS's Keychain and
+                Android's autofill offer the saved login above the keyboard.
+                Without them a returning user has to type an address and a
+                password they have never once typed on this device. */}
             <TextInput
               style={styles.input}
               placeholder="Email"
@@ -91,15 +99,25 @@ export default function SignInScreen() {
               value={email}
               onChangeText={setEmail}
               autoCapitalize="none"
+              autoCorrect={false}
               keyboardType="email-address"
+              textContentType="username"
+              autoComplete="email"
+              returnKeyType="next"
+              submitBehavior="submit"
+              onSubmitEditing={() => passwordRef.current?.focus()}
             />
-            <TextInput
+            <PasswordField
+              ref={passwordRef}
               style={styles.input}
               placeholder="Password"
               placeholderTextColor={colors.inkFaint}
               value={password}
               onChangeText={setPassword}
-              secureTextEntry
+              textContentType="password"
+              autoComplete="current-password"
+              returnKeyType="go"
+              onSubmitEditing={handleSignIn}
             />
 
             <Link href="/(auth)/forgot-password" asChild>

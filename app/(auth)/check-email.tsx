@@ -62,7 +62,7 @@ export default function CheckEmailScreen() {
         {/* Card */}
         <View style={styles.card}>
           {message && (
-            <View style={styles.messageBox}>
+            <View style={styles.messageBox} accessibilityLiveRegion="polite">
               <Text style={styles.messageText}>{message}</Text>
             </View>
           )}

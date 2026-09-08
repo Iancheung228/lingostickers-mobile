@@ -1,7 +1,10 @@
-import { createContext, useContext, useState, useCallback, useEffect, ReactNode, createElement } from 'react';
+import { createContext, useContext, useState, useCallback, useEffect, useRef, ReactNode, createElement } from 'react';
 import { supabase } from '@/lib/supabase';
+import { getFunctionErrorMessage } from '@/lib/functionError';
 import { BlockedUser, FriendWithProfile, PersonSummary } from '@/lib/types';
 import { useAuth } from '@/hooks/useAuth';
+
+const SEARCH_DEBOUNCE_MS = 280;
 
 function useFriendsState() {
   const { user } = useAuth();
@@ -10,6 +13,11 @@ function useFriendsState() {
   const [loading, setLoading] = useState(true);
   const [searchResults, setSearchResults] = useState<PersonSummary[]>([]);
   const [searching, setSearching] = useState(false);
+  // Long enough that a typed-out username is one request, short enough that
+  // pausing mid-word still feels immediate.
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Which search is allowed to write the results — see searchUsers.
+  const searchSeq = useRef(0);
   // Blocks live here, next to the friend graph, because blocking is the one
   // action that changes both at once — the trigger in migration 034 severs the
   // friendship, so a block that didn't also refresh this list would leave the
@@ -84,24 +92,52 @@ function useFriendsState() {
 
   useEffect(() => { fetchFriends(); }, [fetchFriends]);
   useEffect(() => { fetchBlocked(); }, [fetchBlocked]);
+  // A search still pending when the screen closes has nothing left to update.
+  useEffect(() => () => { if (searchTimer.current) clearTimeout(searchTimer.current); }, []);
 
-  const searchUsers = useCallback(async (query: string) => {
-    if (!userId || query.trim().length < 2) { setSearchResults([]); return; }
+  /**
+   * Username search, called on every keystroke.
+   *
+   * Two things it has to do that the straight-through version didn't:
+   *
+   * - **Wait.** It used to fire one RPC per character, so typing a seven
+   *   letter name was seven round trips, six of which nobody would ever read.
+   * - **Ignore the losers.** Those requests can also come back *out of
+   *   order*: the reply for "mi" arriving after the reply for "michael"
+   *   overwrote the right answer with a stale one, which reads as the search
+   *   ignoring what you finished typing. Each call takes a ticket, and a
+   *   reply that isn't holding the current one is dropped on the floor.
+   */
+  const searchUsers = useCallback((query: string) => {
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    const q = query.trim();
+    if (!userId || q.length < 2) {
+      searchSeq.current += 1;
+      setSearchResults([]);
+      setSearching(false);
+      return;
+    }
+    // Set immediately, not inside the timer: the spinner should appear the
+    // moment there is something to wait for, not a beat later.
     setSearching(true);
+    const seq = (searchSeq.current += 1);
 
-    const existingIds = new Set(friends.map(f => f.friend.id));
-    existingIds.add(userId);
+    searchTimer.current = setTimeout(async () => {
+      const existingIds = new Set(friends.map(f => f.friend.id));
+      existingIds.add(userId);
 
-    // Goes through the search_profiles RPC rather than querying `profiles`
-    // directly. A client-side query can only exclude the blocks *you* made —
-    // it cannot see a block made against you, so someone who blocked you would
-    // still appear here with a working Add button that then failed at the
-    // trigger. The RPC applies the same both-directions predicate the RLS
-    // policies use. See migration 034 §6.
-    const { data } = await supabase.rpc('search_profiles', { q: query.trim() });
+      // Goes through the search_profiles RPC rather than querying `profiles`
+      // directly. A client-side query can only exclude the blocks *you* made —
+      // it cannot see a block made against you, so someone who blocked you would
+      // still appear here with a working Add button that then failed at the
+      // trigger. The RPC applies the same both-directions predicate the RLS
+      // policies use. See migration 034 §6.
+      const { data } = await supabase.rpc('search_profiles', { q });
+      if (seq !== searchSeq.current) return;
 
-    setSearchResults((data ?? []).filter((p: PersonSummary) => !existingIds.has(p.id)));
-    setSearching(false);
+      setSearchResults((data ?? []).filter((p: PersonSummary) => !existingIds.has(p.id)));
+      setSearching(false);
+    }, SEARCH_DEBOUNCE_MS);
   }, [userId, friends]);
 
   const sendFriendRequest = useCallback(async (addresseeId: string) => {
@@ -111,8 +147,12 @@ function useFriendsState() {
       body: { addressee_id: addresseeId },
     });
 
-    if (!res.error) fetchFriends();
-    return { error: res.error as Error | null };
+    if (res.error) {
+      // skills.md #3 — the raw error only ever says "non-2xx status code".
+      return { error: new Error(await getFunctionErrorMessage(res.error)) };
+    }
+    fetchFriends();
+    return { error: null };
   }, [userId, fetchFriends]);
 
   const respondToRequest = useCallback(async (friendshipId: string, status: 'accepted' | 'declined') => {

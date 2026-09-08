@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { Modal, View, Text, TextInput, FlatList, TouchableOpacity, StyleSheet, SafeAreaView, ActivityIndicator } from 'react-native';
+import { Modal, View, Text, TextInput, FlatList, TouchableOpacity, StyleSheet, SafeAreaView, ActivityIndicator, Alert } from 'react-native';
 import { X, UserPlus, Check } from 'lucide-react-native';
 import { useFriends } from '@/hooks/useFriends';
 import Avatar from '@/components/Avatar';
@@ -24,7 +24,12 @@ export default function FriendSearch({ visible, onClose }: FriendSearchProps) {
   }, [searchUsers]);
 
   const handleAdd = useCallback(async (userId: string) => {
-    await sendFriendRequest(userId);
+    // The result was thrown away, so a request that the server refused —
+    // already friends, blocked, offline — still turned the button into a
+    // permanent, disabled "Sent". The row then lied about the one thing it
+    // exists to report, and there was no way to try again.
+    const { error } = await sendFriendRequest(userId);
+    if (error) { Alert.alert("Couldn't send that request", error.message); return; }
     setSentIds(prev => new Set([...prev, userId]));
     // The first moment the user is actually waiting on someone else — which
     // is the only honest reason to ask for notifications. Deliberately after
@@ -42,7 +47,7 @@ export default function FriendSearch({ visible, onClose }: FriendSearchProps) {
           <Text style={styles.title}>Add Friend</Text>
           <TouchableOpacity
             onPress={onClose}
-            hitSlop={8}
+            hitSlop={12}
             accessibilityRole="button"
             accessibilityLabel="Close add friend"
           >
@@ -87,6 +92,11 @@ export default function FriendSearch({ visible, onClose }: FriendSearchProps) {
                     style={[styles.addButton, sent && styles.addButtonSent]}
                     onPress={() => !sent && handleAdd(item.id)}
                     disabled={sent}
+                    accessibilityRole="button"
+                    accessibilityLabel={sent
+                      ? `Friend request sent to ${item.username ?? 'this person'}`
+                      : `Send a friend request to ${item.username ?? 'this person'}`}
+                    accessibilityState={{ disabled: sent }}
                   >
                     {sent
                       ? <Check size={14} color={colors.white} />
@@ -125,7 +135,15 @@ export default function FriendSearch({ visible, onClose }: FriendSearchProps) {
                   <Avatar name={f.friend.username} avatarPath={f.friend.avatar_path} size={38} />
                 </View>
                 <Text style={styles.username}>{f.friend.username ?? 'Unknown'}</Text>
-                <TouchableOpacity style={styles.cancelButton} onPress={() => removeFriend(f.id)}>
+                <TouchableOpacity
+                  style={styles.cancelButton}
+                  onPress={async () => {
+                    const { error } = await removeFriend(f.id);
+                    if (error) Alert.alert("Couldn't withdraw that request", error.message);
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Withdraw your request to ${f.friend.username ?? 'this person'}`}
+                >
                   <Text style={styles.cancelText}>Cancel</Text>
                 </TouchableOpacity>
               </View>

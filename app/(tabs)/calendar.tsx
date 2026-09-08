@@ -14,6 +14,7 @@ import { weekAhead, weekActivity, dueToday, dueCountsByDate, dateKeyOf, reviewMi
 import WeekActivityTracker from '@/components/WeekActivityTracker';
 import StudySessionHost from '@/components/StudySessionHost';
 import { Sticker } from '@/lib/types';
+import SettingsButton from '@/components/SettingsButton';
 import { colors, spacing, fonts, radii, shadows } from '@/constants/theme';
 import { TAB_BAR_CLEARANCE } from '@/constants/tabBar';
 
@@ -312,6 +313,17 @@ export default function CalendarScreen() {
                 onPress={() => router.push(`/day/${cell.key}`)}
                 disabled={dayStickers.length === 0}
                 activeOpacity={0.7}
+                accessibilityRole="button"
+                // A day with finds draws its first sticker's cutout instead of
+                // its number, which leaves a screen reader with an unlabelled
+                // image where the date should be. The label says both, and
+                // says whether there is anything behind the tap.
+                accessibilityLabel={
+                  dayStickers.length === 0
+                    ? `${cell.day}, nothing found`
+                    : `${cell.day}, ${dayStickers.length} sticker${dayStickers.length === 1 ? '' : 's'}`
+                }
+                accessibilityState={{ disabled: dayStickers.length === 0 }}
               >
                 {isToday && <View style={styles.todayBox} pointerEvents="none" />}
                 {dayStickers.length > 0 ? (
@@ -376,6 +388,8 @@ export default function CalendarScreen() {
               </TouchableOpacity>
             ))}
           </View>
+
+          <SettingsButton variant="bare" size={19} color={colors.maroon} />
         </View>
       </View>
 

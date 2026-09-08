@@ -46,7 +46,7 @@ export function FriendRequestRow({ username, avatarPath, onAccept, onDecline, on
           onPress={onFlag}
           accessibilityRole="button"
           accessibilityLabel={`Report or block ${name}`}
-          hitSlop={6}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 4 }}
         >
           <MoreHorizontal size={16} color={colors.inkLight} strokeWidth={2.5} />
         </TouchableOpacity>
@@ -55,7 +55,7 @@ export function FriendRequestRow({ username, avatarPath, onAccept, onDecline, on
           onPress={onAccept}
           accessibilityRole="button"
           accessibilityLabel={`Accept ${name}`}
-          hitSlop={6}
+          hitSlop={{ top: 10, bottom: 10, left: 4, right: 4 }}
         >
           <Check size={16} color={colors.white} strokeWidth={3} />
         </TouchableOpacity>
@@ -64,7 +64,7 @@ export function FriendRequestRow({ username, avatarPath, onAccept, onDecline, on
           onPress={onDecline}
           accessibilityRole="button"
           accessibilityLabel={`Decline ${name}`}
-          hitSlop={6}
+          hitSlop={{ top: 10, bottom: 10, left: 4, right: 10 }}
         >
           <X size={16} color={colors.inkLight} strokeWidth={3} />
         </TouchableOpacity>
@@ -130,10 +130,13 @@ const styles = StyleSheet.create({
   line: { fontSize: 14, fontFamily: fonts.text, color: colors.inkMid, lineHeight: 19 },
   strong: { fontFamily: fonts.display, color: colors.inkDark },
   meta: { fontSize: 11, fontFamily: fonts.display, color: colors.inkFaint},
-  actions: { flexDirection: 'row', gap: 6 },
+  // 8pt apart rather than 6, and the buttons wider — see the hitSlop on each
+  // of them below. Accept and Decline sit side by side and answer a friend
+  // request in opposite directions; their touch areas must not overlap.
+  actions: { flexDirection: 'row', gap: 8 },
   iconBtn: {
-    width: 32,
-    height: 32,
+    width: 34,
+    height: 34,
     borderRadius: radii.full,
     alignItems: 'center',
     justifyContent: 'center',

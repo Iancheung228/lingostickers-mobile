@@ -10,6 +10,7 @@ import { Board } from '@/lib/types';
 import BoardCarouselPage from '@/components/BoardCarouselPage';
 import BoardRail from '@/components/BoardRail';
 import NewBoardSheet from '@/components/NewBoardSheet';
+import SettingsButton from '@/components/SettingsButton';
 import { colors, spacing, fonts, radii, shadows } from '@/constants/theme';
 import { TAB_BAR_CLEARANCE } from '@/constants/tabBar';
 
@@ -68,6 +69,10 @@ export default function WallScreen() {
 
   return (
     <View style={[styles.container, { paddingTop: insets.top + spacing.sm, paddingBottom: insets.bottom + TAB_BAR_CLEARANCE }]}>
+      {/* With no boards there's no board header to hang the gear off, so it
+          gets its own slot in the same corner it occupies everywhere else. */}
+      {boards.length === 0 && <SettingsButton style={styles.emptySettings} />}
+
       {boards.length === 0 ? (
         <View style={styles.empty}>
           <View style={styles.emptyIconCircle}>
@@ -147,6 +152,7 @@ const styles = StyleSheet.create({
   // resolving taller than the space actually reserved above the rail.
   list: { flex: 1 },
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.xl },
+  emptySettings: { position: 'absolute', top: 0, right: spacing.md, zIndex: 1 },
   emptyIconCircle: {
     width: 52, height: 52,
     borderRadius: radii.full,

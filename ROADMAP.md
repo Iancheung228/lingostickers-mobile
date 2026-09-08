@@ -199,6 +199,18 @@ range if none. Collection screen gained a Grid/Story toggle — Story mode shows
 `ChapterDetailView` (a 2-column grid of that chapter's stickers, reusing
 `StickerCard`/`StickerDetailView`).
 
+**Superseded (2026-09-08): the Story view is gone; the location capture it was
+built on is not.** The collection screen was rebuilt around a single grid under
+the home masthead (commit `305dade`), which removed the Grid/Story toggle and
+with it the only route into `ChapterCard`/`ChapterDetailView`. Those two
+components and `lib/chapters.ts` sat unreferenced from that commit until they
+were deleted on 2026-09-08 — this section was still claiming a shipped feature
+that nothing on screen could reach. What *did* survive, and is still load
+bearing, is everything below: `005_location.sql`'s columns, `lib/location.ts`,
+`lib/photoMetadata.ts`, and the two capture flows. `location_label` is read
+today by `StickerCard` and by the study card's WHERE field. If clustering is
+ever wanted again, `buildChapters` is recoverable from this commit's parent.
+
 **When/where capture is split into two flows** (per explicit product
 decision — an imported old photo's memory happened wherever/whenever the
 *photo* was taken, not wherever the user is reviewing their camera roll):
