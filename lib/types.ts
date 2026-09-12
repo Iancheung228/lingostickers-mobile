@@ -78,6 +78,11 @@ export interface Sticker {
   longitude: number | null;
   location_label: string | null;
   source: 'scan' | 'challenge';
+  /// Who first scanned this card, carried unchanged through every challenge
+  /// win so it survives any number of hops. Stamped by a trigger, never by the
+  /// client (migration 042). Null only on pre-042 rows that could not be
+  /// attributed.
+  origin_author_id: string | null;
   is_favorite: boolean;
   notes: string | null;
   // How many times this card has been studied to the end (front flipped to

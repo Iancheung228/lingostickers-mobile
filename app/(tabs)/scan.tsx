@@ -646,6 +646,9 @@ export default function ScanScreen() {
   const handleAdd = async () => {
     if (!draft || !user) return;
     setSaving(true);
+    // origin_author_id is deliberately NOT sent: a BEFORE INSERT trigger
+    // (042) stamps it from auth.uid(), so a card can never claim an author
+    // it did not have. Read it back rather than assuming it.
     const { error } = await supabase.from('stickers').insert({
       user_id: user.id,
       language: draft.language,

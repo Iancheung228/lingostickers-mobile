@@ -140,6 +140,11 @@ Deno.serve(async (req) => {
           memory_photo_color: wonMemoryColor,
           language: challenge.snapshot_language,
           source: 'challenge',
+          // Carried, not re-derived. Setting this to the sender would make
+          // the card claim whoever passed it on as its author — the one-hop
+          // bug that migration 042 exists to end. The service role is the
+          // only caller permitted to name someone other than itself.
+          origin_author_id: challenge.snapshot_origin_author_id ?? challenge.sender_id,
           discovered_at: new Date().toISOString(),
         })
         .select('id')

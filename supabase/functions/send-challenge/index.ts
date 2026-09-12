@@ -53,7 +53,7 @@ Deno.serve(async (req) => {
     // ── 2. Verify sticker ownership ──────────────────────────────
     const { data: sticker } = await admin
       .from('stickers')
-      .select('id, word, translation, reading, sentence, image_path, memory_photo_path, language')
+      .select('id, word, translation, reading, sentence, image_path, memory_photo_path, language, origin_author_id')
       .eq('id', sticker_id)
       .eq('user_id', senderId)
       .single();
@@ -127,6 +127,11 @@ Deno.serve(async (req) => {
         snapshot_image_path: challengeImagePath,
         snapshot_memory_photo_path: challengeMemoryPath,
         snapshot_language: sticker.language,
+        // Snapshotted with everything else: source_sticker_id is a soft
+        // reference, so resolving the author at win time would break the
+        // moment the sender deleted their sticker. Falls back to the sender,
+        // who is the author whenever this was their own scan (042).
+        snapshot_origin_author_id: sticker.origin_author_id ?? senderId,
         snapshot_accepted_answers: acceptedAnswers,
       })
       .select('id')
