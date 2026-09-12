@@ -31,6 +31,8 @@ import ScanProgress, { ScanStage } from '@/components/ScanProgress';
 import GhostCutoutReveal from '@/components/GhostCutoutReveal';
 import { debugLog, debugWarn } from '@/lib/debug';
 import { alertPermissionDenied } from '@/lib/permissions';
+import { useAiConsent } from '@/lib/aiConsent';
+import { AiConsentGate } from '@/components/AiConsentGate';
 
 // The photo a scan is working from, and — for live captures only — the moment
 // and raw sensor frame the shutter caught. Named so the direct-capture path can
@@ -40,6 +42,7 @@ type CameraCapture = { discoveredAt: string; rawUri: string; rawWidth: number; r
 
 export default function ScanScreen() {
   const { user } = useAuth();
+  const { accepted: aiConsented, accept: acceptAiConsent } = useAiConsent(user?.id);
   const { profile } = useProfile(user?.id);
   const language = profile?.target_language ?? 'fr';
   const [permission, requestPermission, getPermission] = useCameraPermissions();
@@ -116,9 +119,9 @@ export default function ScanScreen() {
   // cutout never shows the previous scan's preview.
   const previewCutoutRef = useRef<string | null>(null);
   // How long the vocabulary call itself took, as reported by the edge
-  // function. Separates 'the network was slow' from 'Groq was rate-limited',
+  // function. Separates 'the network was slow' from 'the model was rate-limited',
   // which is the difference between a payload problem and a quota problem.
-  const lastGroqMsRef = useRef<number | null>(null);
+  const lastVocabMsRef = useRef<number | null>(null);
 
   // Rectangular (3:4 portrait) camera viewport sized to the screen width
   // (with off-white margin), capped so it doesn't dominate on tablets and
@@ -246,8 +249,11 @@ export default function ScanScreen() {
       throw new Error(body?.error ?? 'This took too long and was cut off. Please try again.');
     }
     if (data.error) throw new Error(data.error);
-    lastGroqMsRef.current = typeof data._debug_groqMs === 'number' ? data._debug_groqMs : null;
-    debugLog('[scan] edge fn debug:', data._debug_bgStatus, `groq ${lastGroqMsRef.current}ms`);
+    // `_debug_groqMs` is the pre-Gemini name; edge functions deploy
+    // separately from app builds, so accept both for one release.
+    const vocabMs = data._debug_vocabMs ?? data._debug_groqMs;
+    lastVocabMsRef.current = typeof vocabMs === 'number' ? vocabMs : null;
+    debugLog('[scan] edge fn debug:', data._debug_bgStatus, `vocab ${lastVocabMsRef.current}ms`);
 
     setDraft({
       language: data.language === 'ja' || data.language === 'yue' ? data.language : 'fr',
@@ -289,11 +295,12 @@ export default function ScanScreen() {
   // sticker as the "memory photo" to flip to.
   // A small copy of the wider scene, for the vision model only.
   //
-  // Groq is sent the scene so the example sentence can describe where the
-  // object actually was — but it needs far less resolution to do that than the
-  // hero background does to fill a phone screen. Sending the full 1280px copy
-  // to both was pushing every scan against a free-tier token budget, and the
-  // 429s that produced were being waited out for tens of seconds.
+  // The vision model is sent the scene so the example sentence can describe
+  // where the object actually was. It does NOT need this to be small for
+  // token reasons — measured 2026-09-09, both Gemini and Groq bill a flat
+  // per-image rate that is identical at 640px and 1280px. It stays small
+  // because the phone uploads it: 1280px is ~5x the bytes over cellular, and
+  // that is latency the user waits through on every scan.
   const prepareContextPhoto = useCallback(async (uri: string, width: number, height: number) => {
     const longSide = Math.max(width, height);
     let context = ImageManipulator.manipulate(uri);
@@ -461,7 +468,7 @@ export default function ScanScreen() {
         const serverMs = Date.now() - submitStarted;
         debugLog(
           `[scan] memory-photo ${memoryMs}ms ‖ cutout ${cutoutMs}ms · create-sticker ${serverMs}ms` +
-            ` (groq ${lastGroqMsRef.current ?? '?'}ms)` +
+            ` (vocab ${lastVocabMsRef.current ?? '?'}ms)` +
             (CUTOUT_DRY_RUN ? ' (includes rembg — dry run runs both pipelines)' : ''),
         );
       } catch (submitErr) {
@@ -781,6 +788,14 @@ export default function ScanScreen() {
   }, [language]);
 
   if (!permission) return <View style={styles.container} />;
+
+  // Guideline 5.1.2(i): the photo goes to third-party AI, so consent comes
+  // before anything that could capture one — ahead of the camera prompt, not
+  // after it. `undefined` means the stored answer has not been read yet;
+  // rendering the gate then would flash it at people who already agreed.
+  if (user && aiConsented === false) {
+    return <AiConsentGate onAccept={acceptAiConsent} />;
+  }
 
   if (!permission.granted) {
     // Once canAskAgain is false, requestPermission() resolves to denied

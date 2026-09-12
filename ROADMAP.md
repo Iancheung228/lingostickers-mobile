@@ -1,4 +1,4 @@
-# LingoStickers — Product Roadmap
+# Tabi Stickers — Product Roadmap
 
 > Living document. This is a multi-day plan — check items off, add notes,
 > and update "Open questions" as decisions get made. Pick up wherever you
