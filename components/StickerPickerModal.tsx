@@ -5,7 +5,7 @@ import { Sticker } from '@/lib/types';
 import { supabase } from '@/lib/supabase';
 import { useSignedUrls } from '@/hooks/useSignedUrls';
 import StickerCard from '@/components/StickerCard';
-import { colors, radii, spacing, fonts } from '@/constants/theme';
+import { colors, spacing, fonts } from '@/constants/theme';
 
 interface StickerPickerModalProps {
   visible: boolean;
@@ -64,7 +64,12 @@ export default function StickerPickerModal({
               </Text>
             )}
           </View>
-          <TouchableOpacity onPress={onClose} hitSlop={8}>
+          <TouchableOpacity
+            onPress={onClose}
+            hitSlop={12}
+            accessibilityRole="button"
+            accessibilityLabel="Close the sticker picker"
+          >
             <X size={22} color={colors.inkDark} />
           </TouchableOpacity>
         </View>
@@ -108,9 +113,9 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
   },
   headerText: { flex: 1, paddingRight: spacing.md },
-  title: { fontSize: 20, fontWeight: '800', color: colors.inkDark },
-  subtitle: { fontSize: 12, fontWeight: '600', color: colors.inkLight, marginTop: 2 },
-  empty: { color: colors.inkFaint, textAlign: 'center', marginTop: 48, fontSize: 14, paddingHorizontal: 32 },
+  title: { fontSize: 20, fontFamily: fonts.display, color: colors.inkDark },
+  subtitle: { fontSize: 12, fontFamily: fonts.display, color: colors.inkLight, marginTop: 2 },
+  empty: { color: colors.inkFaint, textAlign: 'center', marginTop: 48, fontSize: 14, fontFamily: fonts.text, paddingHorizontal: 32 },
   grid: { paddingHorizontal: 16, paddingBottom: 32 },
   row: { gap: 12, marginBottom: 12 },
   cardWrapper: { flex: 1 },

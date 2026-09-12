@@ -1,6 +1,7 @@
 /**
- * The spaced-repetition scheduler: SM-2, over the state added in
- * 028_study_card_review_state.sql and 029_sm2_scheduler.sql.
+ * The spaced-repetition scheduler: SM-2 with Anki's learning steps, over the
+ * state added in 028_study_card_review_state.sql, 029_sm2_scheduler.sql and
+ * 040_learning_steps.sql.
  *
  * Every function here is pure — it takes a card and a clock and returns
  * either a verdict or a patch. The database write that applies a patch lives
@@ -9,9 +10,24 @@
  * exercised without a React Native runtime or a Supabase client. Same
  * reasoning as lib/relativeTime.ts.
  *
- * Deliberately day-granular. There are no learning steps and no intraday
- * scheduling, so the queue changes only at midnight and "is this due" is a
- * question about dates rather than about the current minute.
+ * **A card is in one of three phases**, and the four buttons mean different
+ * things in each — this is the part 029's day-granular scheduler was missing,
+ * which is why Again, Hard and Good all used to resolve to "tomorrow" on a
+ * card you had just met:
+ *
+ *   learning     A new card. Walks LEARNING_STEPS_MIN (1m, 10m) — minutes,
+ *                not days, because the useful question about a word you just
+ *                failed is "can you recall it in a minute", and burning a
+ *                whole day to ask it wastes the day.
+ *   review       Graduated. The day-granular SM-2 ladder from 029, unchanged:
+ *                interval × ease, due at local midnight.
+ *   relearning   Lapsed back off the review ladder. Walks
+ *                RELEARNING_STEPS_MIN (10m) and then graduates back onto the
+ *                interval stored in interval_days.
+ *
+ * Review-card due times are still written at local midnight, so the queue
+ * still turns over overnight rather than reshuffling through the afternoon.
+ * Only cards on a step are scheduled to the minute.
  */
 import { Language, Sticker } from '@/lib/types';
 
@@ -26,19 +42,63 @@ export const START_EASE = 2.5;
 
 // A card you have only just scanned rests a day before its first review —
 // you were looking at the object minutes ago, so asking immediately measures
-// nothing.
+// nothing. Applies to rows written before 040, which have no due_at.
 export const NEW_CARD_REST_DAYS = 1;
 
 // How many due cards the home screen previews. The session itself takes the
 // whole queue; this only caps what the rail renders.
 export const DUE_PREVIEW = 12;
 
+// --- Anki's defaults --------------------------------------------------------
+// These are Anki's own out-of-the-box deck options, kept as they ship rather
+// than tuned by taste: they are the numbers the overwhelming majority of
+// spaced-repetition practice has actually been run on, and any deviation
+// should be a change someone can point at evidence for.
+//
+//   https://docs.ankiweb.net/deck-options.html
+
+/** Minutes at each rung of the new-card ladder. Anki: `1m 10m`. */
+export const LEARNING_STEPS_MIN = [1, 10];
+/** Minutes at each rung of the after-a-lapse ladder. Anki: `10m`. */
+export const RELEARNING_STEPS_MIN = [10];
+/** Days a card waits after finishing the learning ladder. */
+export const GRADUATING_INTERVAL_DAYS = 1;
+/** Days a card waits when Easy skips the ladder outright. */
+export const EASY_INTERVAL_DAYS = 4;
+/** Hard grows the interval by this much instead of by ease. */
+export const HARD_MULTIPLIER = 1.2;
+/** Easy multiplies the Good interval by this on top of ease. */
+export const EASY_BONUS = 1.3;
+/**
+ * What a lapse leaves of the interval. Anki's default is 0 — a forgotten card
+ * goes back to a day, on the argument that an interval you demonstrably could
+ * not hold is not evidence of anything worth keeping. The ease penalty below
+ * is what carries the card's history forward instead.
+ */
+export const LAPSE_MULTIPLIER = 0;
+/** …but never below this, so a lapse can't schedule a card into the past. */
+export const MIN_LAPSE_INTERVAL_DAYS = 1;
+
+/**
+ * How far ahead a running session will pull a card that is on a step.
+ *
+ * Anki calls this the learn-ahead limit and also defaults it to 20 minutes.
+ * Without it, answering Good on a new card would book it for ten minutes'
+ * time and then end the session, so the second half of the learning ladder
+ * would only ever be walked by someone who came back within the window —
+ * i.e. almost never. See components/StudySessionHost.tsx.
+ */
+export const LEARN_AHEAD_MIN = 20;
+
 export type Grade = 'again' | 'hard' | 'good' | 'easy';
+export type Phase = 'learning' | 'review' | 'relearning';
 
 /** The columns a grading writes. Exactly the shape of the Supabase update. */
 export interface SchedulePatch {
   ease_factor: number;
   interval_days: number;
+  learning_step: number | null;
+  due_at: string;
   review_count: number;
   lapses: number;
   last_reviewed_at: string;
@@ -50,6 +110,15 @@ export interface SchedulePatch {
 function startOfDay(ms: number): number {
   const d = new Date(ms);
   d.setHours(0, 0, 0, 0);
+  return d.getTime();
+}
+
+/** Local midnight `days` days after the local midnight containing `ms`. */
+function midnightIn(ms: number, days: number): number {
+  // Stepped by date parts rather than by adding milliseconds so a DST
+  // boundary inside the interval can't shift the due day by one.
+  const d = new Date(startOfDay(ms));
+  d.setDate(d.getDate() + days);
   return d.getTime();
 }
 
@@ -68,88 +137,261 @@ export function findsToday(stickers: Sticker[], now: number = Date.now()): numbe
 }
 
 // ---------------------------------------------------------------------------
-// SM-2
+// Phases
 // ---------------------------------------------------------------------------
 
-// SM-2 is defined over a 0–5 recall quality. Only four of those six are
-// reachable from four buttons, and the ones chosen here are the standard
-// mapping: below 3 is a failure, 3 is a struggle, 5 is instant.
-const QUALITY: Record<Grade, number> = { again: 2, hard: 3, good: 4, easy: 5 };
-
 /**
- * SM-2's ease adjustment. Good is deliberately neutral (+0), so ease drifts
- * only when a card is genuinely harder or easier than the schedule assumed.
+ * Which ladder a card is on, and where.
+ *
+ * Derived rather than stored, so rows written before 040 (which have
+ * learning_step = NULL) land in the right place without a backfill: one that
+ * has been studied graduated under the old scheduler and is a review card;
+ * one that hasn't is new. Learning and relearning are told apart by
+ * interval_days exactly as Anki tells them apart — a card on a step that has
+ * never graduated has no interval yet, and one that has lapsed carries the
+ * interval it will graduate back onto.
  */
-export function nextEase(ease: number, grade: Grade): number {
-  const q = QUALITY[grade];
-  const next = ease + (0.1 - (5 - q) * (0.08 + (5 - q) * 0.02));
-  return Math.max(MIN_EASE, Number(next.toFixed(3)));
+export function phaseOf(sticker: Sticker): { phase: Phase; step: number } {
+  const step = sticker.learning_step;
+  if (step == null) {
+    return sticker.last_reviewed_at
+      ? { phase: 'review', step: -1 }
+      : { phase: 'learning', step: 0 };
+  }
+  return { phase: (sticker.interval_days ?? 0) > 0 ? 'relearning' : 'learning', step };
+}
+
+function stepsFor(phase: Phase): number[] {
+  return phase === 'relearning' ? RELEARNING_STEPS_MIN : LEARNING_STEPS_MIN;
 }
 
 /**
- * The next interval in whole days.
- *
- * Branches on the current interval rather than on a separate repetition
- * counter: 0 means never studied, 1 means it is on the first rung. That keeps
- * `review_count` free to be an honest monotonic "times studied" for the card's
- * own badge, instead of an SM-2 internal that resets on every lapse.
+ * Anki's Hard-on-a-step delay: on the first rung, the average of the first
+ * two rungs (or 1.5× the only rung), so Hard sits between Again and Good
+ * rather than being a synonym for one of them; on any later rung, a repeat of
+ * that rung.
  */
-export function nextInterval(intervalDays: number, ease: number, grade: Grade): number {
-  // A lapse drops the card to the bottom rung rather than to zero: with no
-  // intraday scheduling, "tomorrow" is the soonest it can come back.
-  if (grade === 'again') return 1;
-  if (intervalDays <= 0) return grade === 'easy' ? 4 : 1;
-  if (intervalDays === 1) return grade === 'hard' ? 2 : grade === 'easy' ? 8 : 6;
+function hardStepDelay(steps: number[], step: number): number {
+  if (step > 0) return steps[Math.min(step, steps.length - 1)];
+  return steps.length > 1 ? (steps[0] + steps[1]) / 2 : steps[0] * 1.5;
+}
 
-  const base =
-    grade === 'hard' ? intervalDays * 1.2 :
-    grade === 'easy' ? intervalDays * ease * 1.3 :
-    intervalDays * ease;
-  // Always advance by at least a day, so a rounding-down can't leave a card
-  // stuck repeating the same interval forever.
-  return Math.max(intervalDays + 1, Math.round(base));
+// ---------------------------------------------------------------------------
+// SM-2
+// ---------------------------------------------------------------------------
+
+/**
+ * What one press of one button does to a card, before any clock is involved.
+ *
+ * `delayMinutes` non-null means the card stays on (or moves to) a step and is
+ * due that many minutes from the moment it was answered. Null means it is a
+ * review card due at midnight `intervalDays` days out. Exactly one of those
+ * is true of any answer, and `schedule` and the button labels both read this
+ * one function — so what a button previews can't drift from what it does.
+ */
+export interface Outcome {
+  ease: number;
+  intervalDays: number;
+  learningStep: number | null;
+  delayMinutes: number | null;
+  lapsed: boolean;
+}
+
+/**
+ * SM-2's ease adjustments, as Anki applies them: only a review answer moves
+ * ease. Walking the learning ladder doesn't, because the ladder is there to
+ * establish the first memory rather than to measure a schedule that hasn't
+ * been made yet.
+ */
+const EASE_DELTA: Record<Grade, number> = {
+  again: -0.20,
+  hard:  -0.15,
+  good:   0,
+  easy:  +0.15,
+};
+
+export function nextEase(ease: number, grade: Grade): number {
+  return Math.max(MIN_EASE, Number((ease + EASE_DELTA[grade]).toFixed(3)));
+}
+
+export function nextOutcome(sticker: Sticker, grade: Grade): Outcome {
+  const ease = sticker.ease_factor ?? START_EASE;
+  const interval = sticker.interval_days ?? 0;
+  const { phase, step } = phaseOf(sticker);
+
+  if (phase === 'learning' || phase === 'relearning') {
+    const steps = stepsFor(phase);
+    // A card being learned graduates onto GRADUATING_INTERVAL_DAYS; a card
+    // being relearned graduates back onto the interval its lapse left it,
+    // which is already stored in interval_days.
+    const graduated = phase === 'relearning' ? Math.max(1, interval) : GRADUATING_INTERVAL_DAYS;
+    const base = { ease, lapsed: false };
+
+    if (grade === 'again') {
+      return { ...base, intervalDays: interval, learningStep: 0, delayMinutes: steps[0] };
+    }
+    if (grade === 'hard') {
+      return { ...base, intervalDays: interval, learningStep: step, delayMinutes: hardStepDelay(steps, step) };
+    }
+    if (grade === 'easy') {
+      // Easy leaves the ladder immediately at any rung. Out of relearning
+      // that means a day earlier than Good, not the full four — the card has
+      // just been forgotten, and one confident answer doesn't undo that.
+      const days = phase === 'relearning' ? Math.max(graduated + 1, Math.round(graduated * EASY_BONUS)) : EASY_INTERVAL_DAYS;
+      return { ...base, intervalDays: days, learningStep: null, delayMinutes: null };
+    }
+    const next = step + 1;
+    return next >= steps.length
+      ? { ...base, intervalDays: graduated, learningStep: null, delayMinutes: null }
+      : { ...base, intervalDays: interval, learningStep: next, delayMinutes: steps[next] };
+  }
+
+  // --- review -------------------------------------------------------------
+  if (grade === 'again') {
+    // A lapse doesn't go straight back to "tomorrow" any more: it drops onto
+    // the relearning ladder, so the card comes back inside the same sitting
+    // while the failure is still informative. The interval it will graduate
+    // back onto is decided here, at lapse time, and parked in interval_days.
+    return {
+      ease: nextEase(ease, 'again'),
+      intervalDays: Math.max(MIN_LAPSE_INTERVAL_DAYS, Math.round(interval * LAPSE_MULTIPLIER)),
+      learningStep: 0,
+      delayMinutes: RELEARNING_STEPS_MIN[0],
+      lapsed: true,
+    };
+  }
+
+  // The three passing intervals are computed together and stacked, each at
+  // least a day past the one below it. Both halves of that matter:
+  //
+  //   - the +1 floor stops a rounding-down leaving a card repeating the same
+  //     interval forever;
+  //   - stacking stops the buttons collapsing into each other at short
+  //     intervals, which is the whole complaint this scheduler exists to fix.
+  //     On a 1-day card, 1.2×, 2.5× and 3.25× round to 1, 3 and 3 — so Good
+  //     and Easy would be the same button, exactly as Again and Hard used to
+  //     be. Stacked, they are 2d, 3d and 4d. Anki enforces the same ordering.
+  const hardDays = Math.max(interval + 1, Math.round(interval * HARD_MULTIPLIER));
+  const goodDays = Math.max(hardDays + 1, Math.round(interval * ease));
+  const easyDays = Math.max(goodDays + 1, Math.round(interval * ease * EASY_BONUS));
+  return {
+    ease: nextEase(ease, grade),
+    intervalDays: grade === 'hard' ? hardDays : grade === 'easy' ? easyDays : goodDays,
+    learningStep: null,
+    delayMinutes: null,
+    lapsed: false,
+  };
 }
 
 /** The full patch a grading writes. Pure — the caller performs the update. */
 export function schedule(sticker: Sticker, grade: Grade, now: number = Date.now()): SchedulePatch {
-  const ease = sticker.ease_factor ?? START_EASE;
+  const outcome = nextOutcome(sticker, grade);
+  // A card on a step is due to the minute from the moment it was answered; a
+  // review card is due at local midnight of its target day, which is what
+  // keeps the day-granular queue from reshuffling itself through the
+  // afternoon.
+  const due = outcome.delayMinutes != null
+    ? now + outcome.delayMinutes * 60_000
+    : midnightIn(now, outcome.intervalDays);
   return {
-    ease_factor: nextEase(ease, grade),
-    interval_days: nextInterval(sticker.interval_days ?? 0, ease, grade),
+    ease_factor: outcome.ease,
+    interval_days: outcome.intervalDays,
+    learning_step: outcome.learningStep,
+    due_at: new Date(due).toISOString(),
     review_count: (sticker.review_count ?? 0) + 1,
-    lapses: (sticker.lapses ?? 0) + (grade === 'again' ? 1 : 0),
+    lapses: (sticker.lapses ?? 0) + (outcome.lapsed ? 1 : 0),
     last_reviewed_at: new Date(now).toISOString(),
   };
 }
 
 /**
  * A preview of where each button would send the card, for the labels under
- * the grading buttons. Same arithmetic the write uses, so the two can't drift.
+ * the grading buttons. Reads the same `nextOutcome` the write does, so the
+ * two can't drift — and formats the *nominal* delay rather than the wall
+ * clock difference, because a review card booked for tomorrow midnight is
+ * "1d" whatever time of the evening you answered it.
  */
-export function intervalPreview(sticker: Sticker, grade: Grade): number {
-  return nextInterval(sticker.interval_days ?? 0, sticker.ease_factor ?? START_EASE, grade);
+export function intervalPreview(sticker: Sticker, grade: Grade): string {
+  const outcome = nextOutcome(sticker, grade);
+  return outcome.delayMinutes != null
+    ? formatMinutes(outcome.delayMinutes)
+    : formatInterval(outcome.intervalDays);
+}
+
+/** "1m", "6m", "45m", "2h" — the sub-day end of the same scale. */
+export function formatMinutes(minutes: number): string {
+  const m = Math.round(minutes);
+  if (m < 60) return `${m}m`;
+  const hours = m / 60;
+  return `${hours < 10 ? Number(hours.toFixed(1)) : Math.round(hours)}h`;
+}
+
+/**
+ * The same compact delay spoken as words, for the grading buttons'
+ * accessibility labels — VoiceOver reads "1m" as "one em".
+ */
+const DELAY_WORDS: Record<string, [string, string]> = {
+  m:  ['minute', 'minutes'],
+  h:  ['hour', 'hours'],
+  d:  ['day', 'days'],
+  mo: ['month', 'months'],
+  y:  ['year', 'years'],
+};
+
+export function spokenDelay(compact: string): string {
+  // `mo` first, or the alternation matches the `m` of "3mo" and leaves "o".
+  const parsed = /^([\d.]+)(mo|[mhdy])$/.exec(compact);
+  if (!parsed) return compact;
+  const [, count, unit] = parsed;
+  const [one, many] = DELAY_WORDS[unit];
+  return `${count} ${Number(count) === 1 ? one : many}`;
+}
+
+/** "6d", "3mo", "1.5y" — the gap each button would open up. */
+export function formatInterval(days: number): string {
+  if (days < 30) return `${days}d`;
+  if (days < 365) return `${Math.round(days / 30)}mo`;
+  const years = days / 365;
+  return `${years < 10 ? years.toFixed(1).replace(/\.0$/, '') : Math.round(years)}y`;
 }
 
 // ---------------------------------------------------------------------------
 // The queue
 // ---------------------------------------------------------------------------
 
-/** Days a card is past due. Negative means it is still resting. */
-export function overdueBy(sticker: Sticker, now: number = Date.now()): number {
-  // A never-studied card's clock runs from when it was found, not from a
-  // review that never happened.
+/**
+ * The moment a card next comes up, in epoch ms.
+ *
+ * due_at is authoritative when present. It is absent only on rows last
+ * written before 040, which are deliberately not backfilled (a server-side
+ * date_trunc would have shifted the due day for anyone west of GMT) — those
+ * fall back to 029's inference, computed here in the user's own timezone
+ * exactly as it always was: local midnight of last_reviewed_at (or of
+ * discovered_at, for a card never studied) plus the interval.
+ */
+export function dueAtMs(sticker: Sticker): number {
+  if (sticker.due_at) {
+    const at = new Date(sticker.due_at).getTime();
+    if (!Number.isNaN(at)) return at;
+  }
   const studied = !!sticker.last_reviewed_at;
   const clockStart = studied ? sticker.last_reviewed_at! : sticker.discovered_at;
   const interval = studied ? (sticker.interval_days ?? 0) : NEW_CARD_REST_DAYS;
-  return ageInDays(clockStart, now) - interval;
+  const from = new Date(clockStart).getTime();
+  return midnightIn(Number.isNaN(from) ? Date.now() : from, interval);
+}
+
+/** Days a card is past due. Negative means it is still resting. */
+export function overdueBy(sticker: Sticker, now: number = Date.now()): number {
+  return Math.round((startOfDay(now) - startOfDay(dueAtMs(sticker))) / 86_400_000);
 }
 
 export function isDue(sticker: Sticker, now: number = Date.now()): boolean {
-  return overdueBy(sticker, now) >= 0;
+  return dueAtMs(sticker) <= now;
 }
 
 /**
- * Everything due, most-overdue first. Uncapped — the session studies the whole
+ * Everything due, soonest-due first. Uncapped — the session studies the whole
  * queue, and the home screen slices it for the preview rail.
  *
  * Ties break toward the card studied fewest times, so a word you have barely
@@ -162,11 +404,12 @@ export function dueToday(
   const now = opts.now ?? Date.now();
   return stickers
     .filter(s => !opts.language || s.language === opts.language)
-    .map(s => ({ sticker: s, over: overdueBy(s, now) }))
-    .filter(a => a.over >= 0)
-    .sort((x, y) => y.over - x.over || (x.sticker.review_count ?? 0) - (y.sticker.review_count ?? 0))
+    .map(s => ({ sticker: s, due: dueAtMs(s) }))
+    .filter(a => a.due <= now)
+    .sort((x, y) => x.due - y.due || (x.sticker.review_count ?? 0) - (y.sticker.review_count ?? 0))
     .map(a => a.sticker);
 }
+
 
 // ---------------------------------------------------------------------------
 // Forecast

@@ -14,6 +14,7 @@ import { weekAhead, weekActivity, dueToday, dueCountsByDate, dateKeyOf, reviewMi
 import WeekActivityTracker from '@/components/WeekActivityTracker';
 import StudySessionHost from '@/components/StudySessionHost';
 import { Sticker } from '@/lib/types';
+import SettingsButton from '@/components/SettingsButton';
 import { colors, spacing, fonts, radii, shadows } from '@/constants/theme';
 import { TAB_BAR_CLEARANCE } from '@/constants/tabBar';
 
@@ -312,6 +313,17 @@ export default function CalendarScreen() {
                 onPress={() => router.push(`/day/${cell.key}`)}
                 disabled={dayStickers.length === 0}
                 activeOpacity={0.7}
+                accessibilityRole="button"
+                // A day with finds draws its first sticker's cutout instead of
+                // its number, which leaves a screen reader with an unlabelled
+                // image where the date should be. The label says both, and
+                // says whether there is anything behind the tap.
+                accessibilityLabel={
+                  dayStickers.length === 0
+                    ? `${cell.day}, nothing found`
+                    : `${cell.day}, ${dayStickers.length} sticker${dayStickers.length === 1 ? '' : 's'}`
+                }
+                accessibilityState={{ disabled: dayStickers.length === 0 }}
               >
                 {isToday && <View style={styles.todayBox} pointerEvents="none" />}
                 {dayStickers.length > 0 ? (
@@ -376,6 +388,8 @@ export default function CalendarScreen() {
               </TouchableOpacity>
             ))}
           </View>
+
+          <SettingsButton variant="bare" size={19} color={colors.maroon} />
         </View>
       </View>
 
@@ -511,7 +525,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 27,
     lineHeight: 34,
-    fontFamily: fonts.cozy,
+    fontFamily: fonts.display,
     color: colors.maroon,
     letterSpacing: -0.4,
   },
@@ -539,7 +553,7 @@ const styles = StyleSheet.create({
   },
   segment: { paddingHorizontal: spacing.ms, paddingVertical: 9, borderRadius: radii.full },
   segmentActive: { backgroundColor: colors.white },
-  segmentText: { fontSize: 12, fontFamily: fonts.cozy, color: colors.maroon },
+  segmentText: { fontSize: 12, fontFamily: fonts.display, color: colors.maroon },
   segmentTextActive: { color: colors.blushDeep },
 
   findDot: {
@@ -589,7 +603,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 3 },
     elevation: 3,
   },
-  dueRingText: { fontSize: 13, fontFamily: fonts.cozy, color: colors.blushDeep },
+  dueRingText: { fontSize: 13, fontFamily: fonts.display, color: colors.blushDeep },
   dueRingTextToday: { color: colors.white },
 
   reviewCta: {
@@ -604,7 +618,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.blushDeep,
     ...shadows.card,
   },
-  reviewCtaText: { fontSize: 16, fontFamily: fonts.cozy, color: colors.white },
+  reviewCtaText: { fontSize: 16, fontFamily: fonts.display, color: colors.white },
 
   weekdayRow: { flexDirection: 'row', marginBottom: 8 },
   weekdayCell: { flex: 1, alignItems: 'center' },

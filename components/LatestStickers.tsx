@@ -4,7 +4,7 @@ import { MapPin, Volume2 } from 'lucide-react-native';
 import { Sticker } from '@/lib/types';
 import { timeAgo } from '@/lib/relativeTime';
 import { useTrimmedVoicePlayback } from '@/hooks/useTrimmedVoicePlayback';
-import { colors, radii, spacing, shadows, fonts } from '@/constants/theme';
+import { colors, radii, spacing, shadows, fonts, wordFontFor } from '@/constants/theme';
 
 interface LatestStickersProps {
   stickers: Sticker[];
@@ -75,10 +75,9 @@ function Row({ sticker, last, imageUrl, voiceUrl, onPress }: {
     voiceUrl, sticker.voice_note_start_ms, sticker.voice_note_end_ms
   );
   const when = timeAgo(sticker.discovered_at);
-  // Kosugi Maru only covers the CJK scripts — a French word set in it falls
-  // back to a system face mid-list and the row heights jump, so the serif
-  // display face carries the Latin-script languages instead.
-  const wordFont = sticker.language === 'fr' ? fonts.cozy : fonts.jp;
+  // One helper, in one place — the family a headword needs depends entirely
+  // on which language it is in. See wordFontFor in constants/theme.ts.
+  const wordFont = wordFontFor(sticker.language);
 
   return (
     <TouchableOpacity
@@ -91,7 +90,7 @@ function Row({ sticker, last, imageUrl, voiceUrl, onPress }: {
           <Image
             source={{ uri: imageUrl, cacheKey: sticker.image_path }}
             cachePolicy="memory-disk"
-            contentFit="cover"
+            contentFit="contain"
             style={styles.thumbImage}
           />
         ) : (
@@ -119,6 +118,8 @@ function Row({ sticker, last, imageUrl, voiceUrl, onPress }: {
           style={styles.speakBtn}
           onPress={(e) => { e.stopPropagation(); play(); }}
           hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel={`Play your recording of ${sticker.word}`}
         >
           <Volume2 size={16} color={colors.blushDeep} />
         </TouchableOpacity>
@@ -146,8 +147,8 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: spacing.sm,
   },
-  title: { fontSize: 18, fontFamily: fonts.cozy, color: colors.inkDark },
-  sortLabel: { fontSize: 13, fontWeight: '600', color: colors.inkLight },
+  title: { fontSize: 18, fontFamily: fonts.display, color: colors.inkDark },
+  sortLabel: { fontSize: 13, fontFamily: fonts.display, color: colors.inkLight },
 
   row: {
     flexDirection: 'row',
@@ -156,25 +157,23 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm + 2,
   },
   rowDivided: { borderBottomWidth: 1, borderBottomColor: colors.borderLight },
+  // Just the cut-out, no disc. The sand fill, white ring and shadow behind it
+  // read as a second object sitting under the sticker — and the disc had to
+  // clip, which is why the image was `cover` and lost the edges of anything
+  // that wasn't roughly square.
   thumb: {
     width: 54,
     height: 54,
-    borderRadius: radii.full,
-    backgroundColor: colors.sand,
-    borderWidth: 3,
-    borderColor: colors.white,
     alignItems: 'center',
     justifyContent: 'center',
-    overflow: 'hidden',
-    ...shadows.card,
   },
   thumbImage: { width: '100%', height: '100%' },
   rowText: { flex: 1, gap: 1 },
   word: { fontSize: 20, color: colors.inkDark },
   reading: { fontSize: 12, fontFamily: fonts.mono, color: colors.inkLight },
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 2 },
-  meta: { flex: 1, fontSize: 11, color: colors.inkFaint },
-  when: { fontSize: 12, color: colors.inkFaint, fontWeight: '500' },
+  meta: { flex: 1, fontSize: 11, fontFamily: fonts.text, color: colors.inkFaint },
+  when: { fontSize: 12, fontFamily: fonts.text, color: colors.inkFaint},
   speakBtn: {
     width: 34,
     height: 34,

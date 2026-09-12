@@ -1,4 +1,4 @@
-import { Modal, View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { Modal, View, Text, StyleSheet, TouchableOpacity, Pressable } from 'react-native';
 import { Check, RotateCcw } from 'lucide-react-native';
 import { colors, radii, spacing, shadows, fonts } from '@/constants/theme';
 
@@ -19,8 +19,18 @@ export default function ReviewSummary({ stats, onDone }: ReviewSummaryProps) {
 
   return (
     <Modal visible transparent animationType="fade" onRequestClose={onDone}>
-      <View style={styles.overlay}>
-        <View style={styles.card}>
+      {/* A card floating on a dimmed backdrop is read as "tap outside to
+          close" everywhere else on a phone, and there is nothing here to lose
+          by leaving — the session is already over and every grade is written.
+          The inner Pressable is what stops a tap on the card itself from
+          falling through to the scrim. */}
+      <Pressable
+        style={styles.overlay}
+        onPress={onDone}
+        accessibilityRole="button"
+        accessibilityLabel="Close the session summary"
+      >
+        <Pressable style={styles.card} onPress={() => {}} accessible={false}>
           <View style={styles.badge}>
             <Check size={26} color={colors.white} strokeWidth={3} />
           </View>
@@ -39,8 +49,8 @@ export default function ReviewSummary({ stats, onDone }: ReviewSummaryProps) {
           <TouchableOpacity style={styles.doneBtn} onPress={onDone} activeOpacity={0.85}>
             <Text style={styles.doneText}>Done</Text>
           </TouchableOpacity>
-        </View>
-      </View>
+        </Pressable>
+      </Pressable>
     </Modal>
   );
 }
@@ -81,8 +91,8 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
     marginBottom: spacing.md,
   },
-  title: { fontSize: 22, fontFamily: fonts.cozy, color: colors.inkDark },
-  subtitle: { fontSize: 14, color: colors.inkLight, marginTop: 2 },
+  title: { fontSize: 22, fontFamily: fonts.display, color: colors.inkDark },
+  subtitle: { fontSize: 14, fontFamily: fonts.text, color: colors.inkLight, marginTop: 2 },
 
   stats: {
     flexDirection: 'row',
@@ -93,7 +103,7 @@ const styles = StyleSheet.create({
   },
   stat: { flex: 1, alignItems: 'center', gap: 2 },
   statValueRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  statValue: { fontSize: 26, fontFamily: fonts.cozy, color: colors.inkDark },
+  statValue: { fontSize: 26, fontFamily: fonts.display, color: colors.inkDark },
   statValueMuted: { color: colors.inkLight },
   statLabel: { fontSize: 11, fontFamily: fonts.mono, color: colors.inkFaint, letterSpacing: 1 },
   divider: { width: 1, height: 34, backgroundColor: colors.borderLight },
@@ -105,5 +115,5 @@ const styles = StyleSheet.create({
     borderRadius: radii.full,
     backgroundColor: colors.terra,
   },
-  doneText: { fontSize: 16, fontFamily: fonts.cozy, color: colors.white },
+  doneText: { fontSize: 16, fontFamily: fonts.display, color: colors.white },
 });

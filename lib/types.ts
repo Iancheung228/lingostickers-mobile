@@ -37,10 +37,20 @@ export interface Sticker {
   reading: string;
   sentence: string;
   sentence_translation: string;
-  // Short English callout naming a grammar pattern the sentence uses, or a
-  // bonus word it introduces — see supabase/functions/_shared/vocab.ts.
+  // Short English callout teaching the grammar structure the sentence was
+  // built around — see supabase/functions/_shared/vocab.ts.
   // Null for stickers created before this existed.
   sentence_insight: string | null;
+  // The sentence split into chunks, each paired with what it means here —
+  // see 041_sentence_gloss.sql. Typed as unknown rather than GlossChunk[]
+  // because it is a JSONB column that can also hold a gloss for a sentence
+  // that has since been hand-edited; `glossFor` in lib/gloss.ts is the only
+  // sanctioned way to read it, and it re-checks the fit before returning.
+  sentence_gloss: unknown;
+  // Which structure from the language's syllabus this sentence demonstrates
+  // ('fr.depuis', 'ja.te-iru'…). Read back on the next scan so the rotation
+  // can avoid repeating it. Null for anything created before 041.
+  grammar_key: string | null;
   // "noun", "verb", … — the qualifier on the study card's MEANS row. Null
   // for stickers created before 028_study_card_review_state.sql, which
   // render the row without it.
@@ -77,10 +87,18 @@ export interface Sticker {
   review_count: number;
   last_reviewed_at: string | null;
   // SM-2 state — see 029_sm2_scheduler.sql and lib/review.ts.
-  // interval_days is 0 for a card that has never been studied.
+  // interval_days is 0 for a card that has never been studied, and for one
+  // still walking its learning steps.
   ease_factor: number;
   interval_days: number;
   lapses: number;
+  // Learning-step state — see 040_learning_steps.sql. due_at is the moment
+  // the card next comes up (minute-granular on a step, local midnight once
+  // graduated), and is null only on rows last written before 040, which
+  // lib/review.ts falls back to inferring. learning_step is the rung the card
+  // sits on, or null for a card in plain review.
+  due_at: string | null;
+  learning_step: number | null;
 }
 
 /// The region of a source photo that's actually on screen. x/y/w/h are
@@ -216,6 +234,8 @@ export interface StickerDraft {
   sentence: string;
   sentenceTranslation: string;
   sentenceInsight: string | null;
+  sentenceGloss: unknown;
+  grammarKey: string | null;
   partOfSpeech: string | null;
   category: Category;
   imagePath: string;
@@ -235,3 +255,19 @@ export interface StickerDraft {
   longitude: number | null;
   locationLabel: string | null;
 }
+
+// ---------------------------------------------------------------------------
+// Moderation — see migration 034 and lib/moderation.ts.
+// ---------------------------------------------------------------------------
+
+// A block is directional and lives independently of any friendship, so it is
+// its own row rather than a friendships.status value. `blocked` carries the
+// profile so the manage-blocked list can name who you blocked.
+export interface BlockedUser {
+  id: string;
+  blocked_id: string;
+  created_at: string;
+  blocked: PersonSummary;
+}
+
+export type ReportReason = 'sexual' | 'violent' | 'hateful' | 'harassment' | 'spam' | 'other';

@@ -204,14 +204,29 @@ export default function BackgroundCropper({
   const busy = rotating || confirming;
 
   return (
-    <Modal visible={!!asset} animationType="fade" transparent>
+    <Modal visible={!!asset} animationType="fade" transparent onRequestClose={busy ? undefined : onCancel}>
       <View style={styles.overlay}>
         <View style={styles.header}>
-          <TouchableOpacity style={styles.headerBtn} onPress={onCancel} disabled={busy} hitSlop={8}>
+          <TouchableOpacity
+            style={styles.headerBtn}
+            onPress={onCancel}
+            disabled={busy}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Cancel without changing the cover photo"
+          >
             <X size={20} color={colors.white} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Adjust cover photo</Text>
-          <TouchableOpacity style={styles.headerBtn} onPress={handleConfirm} disabled={busy} hitSlop={8}>
+          <TouchableOpacity
+            style={styles.headerBtn}
+            onPress={handleConfirm}
+            disabled={busy}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Use this crop as the cover photo"
+            accessibilityState={{ disabled: busy, busy }}
+          >
             {confirming ? <ActivityIndicator size="small" color={colors.white} /> : <Check size={20} color={colors.white} />}
           </TouchableOpacity>
         </View>
@@ -270,7 +285,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  headerTitle: { fontSize: 15, fontFamily: fonts.cozy, color: colors.white },
+  headerTitle: { fontSize: 15, fontFamily: fonts.display, color: colors.white },
   frameWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   frame: {
     borderRadius: radii.xl,
@@ -287,7 +302,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  hint: { marginTop: spacing.md, fontSize: 12, fontWeight: '600', color: 'rgba(255,255,255,0.7)' },
+  hint: { marginTop: spacing.md, fontSize: 12, fontFamily: fonts.display, color: 'rgba(255,255,255,0.7)' },
   footer: { alignItems: 'center', paddingBottom: spacing.xxl, paddingTop: spacing.md },
   rotateBtn: {
     flexDirection: 'row',
@@ -299,5 +314,5 @@ const styles = StyleSheet.create({
     backgroundColor: colors.card,
     ...shadows.card,
   },
-  rotateBtnText: { fontSize: 13, fontWeight: '700', color: colors.inkDark },
+  rotateBtnText: { fontSize: 13, fontFamily: fonts.display, color: colors.inkDark },
 });

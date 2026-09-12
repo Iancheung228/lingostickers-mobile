@@ -4,7 +4,7 @@ import {
   RefreshControl, ScrollView, ActivityIndicator, Modal, Pressable,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
-import { useFocusEffect, router } from 'expo-router';
+import { useFocusEffect } from 'expo-router';
 import { Heart, ArrowUpDown, Check, Search, X } from 'lucide-react-native';
 import { useAuth } from '@/hooks/useAuth';
 import { useProfile } from '@/hooks/useProfile';
@@ -22,6 +22,7 @@ import { DAILY_GOAL, DUE_PREVIEW, dueToday, findsToday, reviewMinutes } from '@/
 import StudySessionHost from '@/components/StudySessionHost';
 import { colors, shadows, radii, spacing, typography, fonts } from '@/constants/theme';
 import { TAB_BAR_CLEARANCE } from '@/constants/tabBar';
+import { languageLabel } from '@/lib/languages';
 
 const CATEGORIES: Array<'All' | Category> = ['All', 'Kitchen', 'Animals', 'Study', 'Nature', 'Other'];
 
@@ -125,14 +126,26 @@ export default function CollectionScreen() {
   const trimmedQuery = searchQuery.trim().toLowerCase();
   const isSearching = searchActive && trimmedQuery.length > 0;
 
+  // The language chips sit on the due rail, but they scope the whole screen
+  // below it — the feed and the grid too. Picking Japanese and then scrolling
+  // into a grid still full of French is the filter quietly not meaning what
+  // it says. `languages` below is deliberately derived from the *unscoped*
+  // collection, so the chip row can always undo itself (skills.md #8: an
+  // exit you draw has to keep working).
+  const inLanguage = useMemo(
+    () => (langFilter ? stickers.filter(s => s.language === langFilter) : stickers),
+    [stickers, langFilter]
+  );
+
   // Sorted first, then filtered — the "Latest stickers" feed shows the whole
-  // collection in the chosen order while the grid below shows the filtered
-  // slice of it, and both have to agree about what "latest" means.
+  // (language-scoped) collection in the chosen order while the grid below
+  // shows the filtered slice of it, and both have to agree about what
+  // "latest" means.
   const sortField = sortMode === 'recentlyAdded' ? 'created_at' : 'discovered_at';
-  const sorted = useMemo(() => [...stickers].sort((a, b) => {
+  const sorted = useMemo(() => [...inLanguage].sort((a, b) => {
     const diff = new Date(a[sortField]).getTime() - new Date(b[sortField]).getTime();
     return sortMode === 'oldest' ? diff : -diff;
-  }), [stickers, sortField, sortMode]);
+  }), [inLanguage, sortField, sortMode]);
 
   let filtered = isSearching
     ? sorted.filter(s =>
@@ -215,12 +228,12 @@ export default function CollectionScreen() {
         reviewMinutes={reviewMinutes(due.length)}
         onStartReview={startReview}
         onSearch={openSearch}
-        onSettings={() => router.push('/profile')}
       />
 
       {/* ── Mini sticker wall preview, lifted into the rose band above ── */}
       <View style={styles.wallLift}>
         <MiniStickerWall
+          borderStyle={profile?.cutout_border_style ?? 'shadow'}
           stickers={stickers}
           userId={user?.id}
           backgroundPath={profile?.home_background_path}
@@ -269,7 +282,12 @@ export default function CollectionScreen() {
               returnKeyType="search"
             />
             {searchQuery.length > 0 && (
-              <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={8}>
+              <TouchableOpacity
+                onPress={() => setSearchQuery('')}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel="Clear the search box"
+              >
                 <X size={14} color={colors.inkFaint} />
               </TouchableOpacity>
             )}
@@ -364,12 +382,22 @@ export default function CollectionScreen() {
             />
           ) : (
             <EmptyState
-              title={isSearching ? `No matches for "${searchQuery.trim()}"` : 'No stickers yet'}
-              subtitle={isSearching
-                ? 'Try a different word, meaning, or note.'
-                : favoritesOnly
-                  ? 'Tap the heart on a sticker to favorite it!'
-                  : 'Tap the Scan tab to discover your first word!'}
+              title={
+                isSearching ? `No matches for "${searchQuery.trim()}"`
+                : langFilter ? `No ${languageLabel(langFilter)} stickers here`
+                : 'No stickers yet'
+              }
+              subtitle={
+                isSearching ? 'Try a different word, meaning, or note.'
+                // The language chips are up in the due rail, possibly
+                // scrolled off the top by the time you reach an empty grid —
+                // so say which filter is doing this, and undo it from here.
+                : langFilter ? 'The language filter above is narrowing this screen.'
+                : favoritesOnly ? 'Tap the heart on a sticker to favorite it!'
+                : 'Tap the Scan tab to discover your first word!'
+              }
+              actionLabel={!isSearching && langFilter ? 'Show all languages' : undefined}
+              onAction={() => setLangFilter(null)}
             />
           )
         }
@@ -438,7 +466,10 @@ export default function CollectionScreen() {
   );
 }
 
-function EmptyState({ title, subtitle, onRetry }: { title: string; subtitle: string; onRetry?: () => void }) {
+function EmptyState({ title, subtitle, onRetry, actionLabel, onAction }: {
+  title: string; subtitle: string; onRetry?: () => void;
+  actionLabel?: string; onAction?: () => void;
+}) {
   return (
     <View style={styles.empty}>
       <Text style={styles.emptyTitle}>{title}</Text>
@@ -452,6 +483,17 @@ function EmptyState({ title, subtitle, onRetry }: { title: string; subtitle: str
           accessibilityLabel="Try loading your collection again"
         >
           <Text style={styles.retryText}>Try Again</Text>
+        </TouchableOpacity>
+      )}
+      {actionLabel && onAction && (
+        <TouchableOpacity
+          style={styles.retryBtn}
+          onPress={onAction}
+          activeOpacity={0.85}
+          accessibilityRole="button"
+          accessibilityLabel={actionLabel}
+        >
+          <Text style={styles.retryText}>{actionLabel}</Text>
         </TouchableOpacity>
       )}
     </View>
@@ -485,10 +527,10 @@ const styles = StyleSheet.create({
     borderRadius: radii.full,
     backgroundColor: colors.borderLight,
   },
-  searchInput: { flex: 1, padding: 0, fontSize: 14, color: colors.inkDark },
-  searchCancel: { fontSize: 13, fontWeight: '600', color: colors.inkMid },
+  searchInput: { flex: 1, padding: 0, fontSize: 14, fontFamily: fonts.text, color: colors.inkDark },
+  searchCancel: { fontSize: 13, fontFamily: fonts.display, color: colors.inkMid },
   searchResultsLabelWrap: { flex: 1, justifyContent: 'center', paddingVertical: spacing.xs },
-  searchResultsLabel: { fontSize: 12, fontWeight: '600', color: colors.inkFaint },
+  searchResultsLabel: { fontSize: 12, fontFamily: fonts.display, color: colors.inkFaint },
 
   filterRow: {
     flexDirection: 'row',
@@ -526,7 +568,7 @@ const styles = StyleSheet.create({
   },
   chipAlt: { backgroundColor: colors.card, borderColor: colors.borderLight },
   chipAltActive: { backgroundColor: colors.terra, borderColor: colors.terra },
-  chipText: { fontSize: 13, fontWeight: '600', color: colors.inkMid },
+  chipText: { fontSize: 13, fontFamily: fonts.display, color: colors.inkMid },
   chipTextActive: { color: colors.white },
 
   loader: { marginTop: spacing.xxl, alignSelf: 'center' },
@@ -555,7 +597,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     ...shadows.button,
   },
-  retryText: { color: colors.white, fontSize: 14, fontWeight: '700', letterSpacing: 0.3 },
+  retryText: { color: colors.white, fontSize: 14, fontFamily: fonts.display, letterSpacing: 0.3 },
 
   modalOverlay: {
     flex: 1,
@@ -571,7 +613,7 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     ...shadows.card,
   },
-  sortModalTitle: { fontSize: 16, fontFamily: fonts.cozy, color: colors.inkDark, marginBottom: spacing.sm },
+  sortModalTitle: { fontSize: 16, fontFamily: fonts.display, color: colors.inkDark, marginBottom: spacing.sm },
   sortOption: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -581,6 +623,6 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.borderLight,
   },
   sortOptionLast: { borderBottomWidth: 0 },
-  sortOptionText: { fontSize: 15, fontWeight: '600', color: colors.inkMid },
+  sortOptionText: { fontSize: 15, fontFamily: fonts.display, color: colors.inkMid },
   sortOptionTextActive: { color: colors.terra },
 });

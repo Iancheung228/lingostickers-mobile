@@ -2,7 +2,7 @@ import { View, Text, StyleSheet } from 'react-native';
 import { Image } from 'expo-image';
 import Avatar from '@/components/Avatar';
 import { timeAgo } from '@/lib/relativeTime';
-import { colors, radii, spacing, shadows, fonts } from '@/constants/theme';
+import { colors, radii, spacing, shadows, fonts, wordFontFor } from '@/constants/theme';
 
 // ---------------------------------------------------------------------------
 // A challenge you sent that a friend solved.
@@ -21,6 +21,11 @@ import { colors, radii, spacing, shadows, fonts } from '@/constants/theme';
 // ---------------------------------------------------------------------------
 interface SolvedRowProps {
   word: string;
+  /// The word's own language, so the headword can be set in a face that has
+  /// its characters. Without this the row set every language in the Latin
+  /// serif, and a Cantonese or Japanese word fell through to whatever the OS
+  /// substituted glyph by glyph.
+  language: string;
   translation: string;
   solverName: string | null;
   solverAvatarPath: string | null;
@@ -31,7 +36,7 @@ interface SolvedRowProps {
 }
 
 export default function SolvedRow({
-  word, translation, solverName, solverAvatarPath, completedAt, imageUrl,
+  word, language, translation, solverName, solverAvatarPath, completedAt, imageUrl,
 }: SolvedRowProps) {
   return (
     <View style={styles.row}>
@@ -52,7 +57,7 @@ export default function SolvedRow({
       </View>
 
       <View style={styles.body}>
-        <Text style={styles.word} numberOfLines={1}>{word}</Text>
+        <Text style={[styles.word, { fontFamily: wordFontFor(language) }]} numberOfLines={1}>{word}</Text>
         <Text style={styles.translation} numberOfLines={1}>{translation}</Text>
       </View>
 
@@ -93,9 +98,10 @@ const styles = StyleSheet.create({
   thumbImage: { width: '100%', height: '100%' },
   thumbEmpty: { width: '100%', height: '100%', backgroundColor: colors.cardAlt },
   body: { flex: 1, gap: 1 },
-  word: { fontSize: 17, fontFamily: fonts.cozy, color: colors.inkDark },
-  translation: { fontSize: 12, color: colors.inkLight, textTransform: 'capitalize' },
+  // fontFamily comes from the render site — it depends on the word's language.
+  word: { fontSize: 17, color: colors.inkDark },
+  translation: { fontSize: 12, fontFamily: fonts.text, color: colors.inkLight, textTransform: 'capitalize' },
   solver: { alignItems: 'center', gap: 3, maxWidth: 92 },
-  solverText: { fontSize: 10, color: colors.inkFaint, fontWeight: '600', textAlign: 'center' },
-  time: { fontSize: 9, color: colors.inkFaint },
+  solverText: { fontSize: 10, fontFamily: fonts.mono, color: colors.inkFaint, textAlign: 'center' },
+  time: { fontSize: 9, fontFamily: fonts.mono, color: colors.inkFaint },
 });

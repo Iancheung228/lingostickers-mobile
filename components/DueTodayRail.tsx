@@ -3,21 +3,19 @@ import { Image } from 'expo-image';
 import { ChevronRight } from 'lucide-react-native';
 import { Sticker, Language, PersonSummary } from '@/lib/types';
 import { ageInDays } from '@/lib/review';
-import { seededRandom } from '@/lib/seededRandom';
 import Avatar from '@/components/Avatar';
 import { colors, radii, spacing, shadows, fonts } from '@/constants/theme';
-
-const LANGUAGE_LABELS: Record<Language, string> = {
-  fr: 'French',
-  ja: 'Japanese',
-  yue: 'Cantonese',
-};
+import { languageLabel } from '@/lib/languages';
 
 interface DueTodayRailProps {
   /// Already sliced for display — `totalDue` is the honest count.
   due: Sticker[];
   totalDue: number;
+  /// Every language in the collection — not just the ones with cards due —
+  /// so the chip row can always undo its own filter.
   languages: Language[];
+  /// The chips live here but scope the whole home screen (the Latest feed and
+  /// the grid below it too), not only this rail — see collection.tsx.
   activeLanguage: Language | null;
   onSelectLanguage: (language: Language | null) => void;
   getUrl: (path: string | null | undefined) => string | null;
@@ -50,11 +48,10 @@ function cardWidthFor(screenWidth: number): number {
   return Math.max(96, Math.min(150, Math.floor(usable / CARDS_ACROSS)));
 }
 
-// Each card's image well gets its own tint so a row of them reads as a
-// shelf of different things rather than one repeated card. Seeded off the
-// sticker id (not the index) so a card keeps its color as the queue
-// reshuffles day to day — same reasoning as the wall's tape colors.
-const WELL_TINTS = [colors.sand, colors.skyBlue, colors.terraLight, colors.borderLight];
+// The image well used to carry a seeded tint per card, so a row read as a
+// shelf of different things. Dropped deliberately: the sticker IS the object,
+// and a coloured panel behind a cut-out reads as a second card behind the
+// first rather than as a backdrop. The cut-out now floats on the card itself.
 
 export default function DueTodayRail({
   due, totalDue, languages, activeLanguage, onSelectLanguage,
@@ -64,7 +61,8 @@ export default function DueTodayRail({
   const cardWidth = cardWidthFor(width);
   // The filter chips have to survive an empty queue: hiding the whole
   // section when a language filter matches nothing would take away the only
-  // control that could undo it.
+  // control that could undo it — and it governs the rest of the screen too,
+  // so losing it would strand the grid below in a filter with no off switch.
   const multilingual = languages.length > 1;
   if (due.length === 0 && !multilingual) return null;
 
@@ -92,7 +90,7 @@ export default function DueTodayRail({
           {languages.map(l => (
             <LangChip
               key={l}
-              label={LANGUAGE_LABELS[l]}
+              label={languageLabel(l)}
               active={activeLanguage === l}
               onPress={() => onSelectLanguage(l)}
             />
@@ -144,7 +142,6 @@ function DueCard({ sticker, width, url, author, onPress }: {
   const discovered = new Date(sticker.discovered_at);
   const day = discovered.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric' });
   const age = ageInDays(sticker.discovered_at);
-  const tint = WELL_TINTS[Math.floor(seededRandom(sticker.id, 7) * WELL_TINTS.length)];
 
   return (
     <TouchableOpacity style={[styles.card, { width }]} onPress={onPress} activeOpacity={0.9}>
@@ -163,7 +160,7 @@ function DueCard({ sticker, width, url, author, onPress }: {
         {sticker.notes?.trim() || sticker.sentence_translation || sticker.translation}
       </Text>
 
-      <View style={[styles.well, { backgroundColor: tint }]}>
+      <View style={styles.well}>
         {url ? (
           <Image
             source={{ uri: url, cacheKey: sticker.image_path }}
@@ -188,9 +185,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     marginBottom: spacing.ms,
   },
-  title: { fontSize: 19, fontFamily: fonts.cozy, color: colors.inkDark },
+  title: { fontSize: 19, fontFamily: fonts.display, color: colors.inkDark },
   link: { flexDirection: 'row', alignItems: 'center', gap: 2 },
-  linkText: { fontSize: 13, fontWeight: '600', color: colors.inkLight },
+  linkText: { fontSize: 13, fontFamily: fonts.display, color: colors.inkLight },
 
   langRow: { paddingHorizontal: RAIL_GUTTER, gap: spacing.sm, paddingBottom: spacing.ms },
   langChip: {
@@ -202,14 +199,9 @@ const styles = StyleSheet.create({
     borderColor: colors.borderLight,
   },
   langChipActive: { backgroundColor: colors.terra, borderColor: colors.terra },
-  langChipText: { fontSize: 12, fontWeight: '600', color: colors.inkMid },
+  langChipText: { fontSize: 12, fontFamily: fonts.display, color: colors.inkMid },
   langChipTextActive: { color: colors.white },
-  empty: {
-    paddingHorizontal: RAIL_GUTTER,
-    paddingBottom: spacing.sm,
-    fontSize: 13,
-    color: colors.inkFaint,
-  },
+  empty: { paddingHorizontal: RAIL_GUTTER, paddingBottom: spacing.sm, fontSize: 13, fontFamily: fonts.text, color: colors.inkFaint, },
 
   rail: { paddingHorizontal: RAIL_GUTTER, gap: CARD_GAP, paddingBottom: spacing.xs },
   card: {
@@ -221,15 +213,15 @@ const styles = StyleSheet.create({
   },
   cardHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   cardHeadText: { flex: 1 },
-  cardDay: { fontSize: 14, fontFamily: fonts.cozy, color: colors.inkDark },
+  cardDay: { fontSize: 14, fontFamily: fonts.display, color: colors.inkDark },
   cardAge: { fontSize: 9, fontFamily: fonts.mono, color: colors.inkFaint, letterSpacing: 1 },
 
-  cardBody: { fontSize: 12.5, color: colors.inkMid, lineHeight: 16, minHeight: 32 },
+  cardBody: { fontSize: 12.5, fontFamily: fonts.text, color: colors.inkMid, lineHeight: 16, minHeight: 32 },
 
+  // No background: the cut-out sits directly on the card. Height is kept so
+  // the rail's cards stay the same size whether or not an image has loaded.
   well: {
     height: 62,
-    borderRadius: radii.md,
-    overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
   },

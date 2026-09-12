@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity,
   StyleSheet, KeyboardAvoidingView, Platform, ActivityIndicator, ScrollView,
 } from 'react-native';
 import { Link } from 'expo-router';
 import { useAuth } from '@/hooks/useAuth';
+import PasswordField from '@/components/PasswordField';
 import AuthIntro from '@/components/AuthIntro';
 import { colors, typography, shadows, radii, spacing, fonts } from '@/constants/theme';
 
@@ -16,6 +17,9 @@ export default function SignInScreen() {
   const [error, setError] = useState<string | null>(null);
   const [unconfirmed, setUnconfirmed] = useState(false);
   const [resendMessage, setResendMessage] = useState<string | null>(null);
+  // So the email field's return key can hand over instead of dismissing the
+  // keyboard and leaving the password box untouched two rows below it.
+  const passwordRef = useRef<TextInput>(null);
 
   const isFormValid = email.trim().length > 0 && password.length > 0;
 
@@ -64,13 +68,13 @@ export default function SignInScreen() {
           {/* Card */}
           <View style={styles.card}>
             {error && (
-              <View style={styles.errorBox}>
+              <View style={styles.errorBox} accessibilityRole="alert" accessibilityLiveRegion="polite">
                 <Text style={styles.errorText}>{error}</Text>
               </View>
             )}
 
             {unconfirmed && (
-              <View style={styles.errorBox}>
+              <View style={styles.errorBox} accessibilityRole="alert" accessibilityLiveRegion="polite">
                 <Text style={styles.errorText}>Please confirm your email before signing in.</Text>
                 <TouchableOpacity onPress={handleResend} disabled={loading}>
                   <Text style={styles.errorLink}>Resend confirmation email</Text>
@@ -79,11 +83,15 @@ export default function SignInScreen() {
             )}
 
             {resendMessage && (
-              <View style={styles.messageBox}>
+              <View style={styles.messageBox} accessibilityLiveRegion="polite">
                 <Text style={styles.messageText}>{resendMessage}</Text>
               </View>
             )}
 
+            {/* textContentType/autoComplete are what let iOS's Keychain and
+                Android's autofill offer the saved login above the keyboard.
+                Without them a returning user has to type an address and a
+                password they have never once typed on this device. */}
             <TextInput
               style={styles.input}
               placeholder="Email"
@@ -91,15 +99,25 @@ export default function SignInScreen() {
               value={email}
               onChangeText={setEmail}
               autoCapitalize="none"
+              autoCorrect={false}
               keyboardType="email-address"
+              textContentType="username"
+              autoComplete="email"
+              returnKeyType="next"
+              submitBehavior="submit"
+              onSubmitEditing={() => passwordRef.current?.focus()}
             />
-            <TextInput
+            <PasswordField
+              ref={passwordRef}
               style={styles.input}
               placeholder="Password"
               placeholderTextColor={colors.inkFaint}
               value={password}
               onChangeText={setPassword}
-              secureTextEntry
+              textContentType="password"
+              autoComplete="current-password"
+              returnKeyType="go"
+              onSubmitEditing={handleSignIn}
             />
 
             <Link href="/(auth)/forgot-password" asChild>
@@ -149,16 +167,10 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.lg,
     gap: 6,
   },
-  eyebrow: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: colors.inkFaint,
-    letterSpacing: 2,
-    textTransform: 'uppercase',
-  },
+  eyebrow: { fontSize: 11, fontFamily: fonts.monoBold, color: colors.inkFaint, letterSpacing: 2, textTransform: 'uppercase', },
   title: {
     fontSize: 38,
-    fontFamily: fonts.cozy,
+    fontFamily: fonts.display,
     color: colors.inkDark,
     letterSpacing: -1,
     textAlign: 'center',
@@ -178,17 +190,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
   },
-  input: {
-    backgroundColor: colors.sky,
-    borderRadius: radii.md,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 14,
-    fontSize: 15,
-    color: colors.inkDark,
-    marginBottom: spacing.ms,
-    borderWidth: 1.5,
-    borderColor: colors.border,
-  },
+  input: { backgroundColor: colors.sky, borderRadius: radii.md, paddingHorizontal: spacing.md, paddingVertical: 14, fontSize: 15, fontFamily: fonts.text, color: colors.inkDark, marginBottom: spacing.ms, borderWidth: 1.5, borderColor: colors.border, },
   button: {
     backgroundColor: colors.terra,
     borderRadius: radii.lg,
@@ -203,17 +205,12 @@ const styles = StyleSheet.create({
     shadowOpacity: 0,
     elevation: 0,
   },
-  buttonText: {
-    color: colors.card,
-    fontSize: 16,
-    fontWeight: '700',
-    letterSpacing: 0.3,
-  },
+  buttonText: { color: colors.card, fontSize: 16, fontFamily: fonts.display, letterSpacing: 0.3, },
   forgotButton: { alignItems: 'flex-end', marginBottom: spacing.md },
-  forgotText: { color: colors.terra, fontSize: 13, fontWeight: '700' },
+  forgotText: { color: colors.terra, fontSize: 13, fontFamily: fonts.display,},
   linkButton: { alignItems: 'center' },
-  linkText: { color: colors.inkLight, fontSize: 14 },
-  linkAccent: { color: colors.terra, fontWeight: '700' },
+  linkText: { color: colors.inkLight, fontSize: 14, fontFamily: fonts.text },
+  linkAccent: { color: colors.terra, fontFamily: fonts.display },
   errorBox: {
     borderRadius: radii.md,
     paddingHorizontal: spacing.md,
@@ -223,14 +220,8 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: colors.error,
   },
-  errorText: { fontSize: 14, fontWeight: '600', color: colors.error },
-  errorLink: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: colors.inkDark,
-    textDecorationLine: 'underline',
-    marginTop: spacing.xs,
-  },
+  errorText: { fontSize: 14, fontFamily: fonts.display, color: colors.error },
+  errorLink: { fontSize: 13, fontFamily: fonts.display, color: colors.inkDark, textDecorationLine: 'underline', marginTop: spacing.xs, },
   messageBox: {
     borderRadius: radii.md,
     paddingHorizontal: spacing.md,
@@ -240,5 +231,5 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: colors.success,
   },
-  messageText: { fontSize: 14, fontWeight: '600', color: colors.success },
+  messageText: { fontSize: 14, fontFamily: fonts.display, color: colors.success },
 });

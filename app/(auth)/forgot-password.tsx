@@ -17,6 +17,7 @@ export default function ForgotPasswordScreen() {
   const [code, setCode] = useState('');
   const [verifying, setVerifying] = useState(false);
   const [verifyError, setVerifyError] = useState<string | null>(null);
+  const [resent, setResent] = useState(false);
 
   const isFormValid = email.trim().length > 0;
   const isCodeValid = code.trim().length > 0;
@@ -27,7 +28,22 @@ export default function ForgotPasswordScreen() {
     const { error } = await resetPasswordForEmail(email.trim());
     setLoading(false);
     if (error) debugWarn('resetPasswordForEmail error:', error.message);
+    // Reported as sent either way, deliberately: saying "no such account"
+    // here would turn this box into a way to test which addresses are
+    // registered.
+    if (sent) setResent(true);
     setSent(true);
+  };
+
+  // Once the code has been sent, this screen used to have exactly two exits:
+  // type the right code, or go back to sign-in and start over. A code that
+  // never arrives, or an address with a typo in it, had no route out — so
+  // both are offered below the field.
+  const handleUseDifferentEmail = () => {
+    setSent(false);
+    setCode('');
+    setVerifyError(null);
+    setResent(false);
   };
 
   const handleVerify = async () => {
@@ -61,7 +77,12 @@ export default function ForgotPasswordScreen() {
               value={email}
               onChangeText={setEmail}
               autoCapitalize="none"
+              autoCorrect={false}
               keyboardType="email-address"
+              textContentType="emailAddress"
+              autoComplete="email"
+              returnKeyType="send"
+              onSubmitEditing={handleSend}
               editable={!sent}
             />
 
@@ -82,12 +103,15 @@ export default function ForgotPasswordScreen() {
 
             {sent && (
               <>
-                <View style={styles.messageBox}>
+                <View style={styles.messageBox} accessibilityLiveRegion="polite">
                   <Text style={styles.messageText}>
                     If an account exists for that email, we sent a code. Check your inbox.
                   </Text>
                 </View>
 
+                {/* oneTimeCode is what puts the code from the email onto the
+                    keyboard's suggestion bar, so it can be filled with one
+                    tap instead of memorised and typed back in. */}
                 <TextInput
                   style={styles.input}
                   placeholder="Code from email"
@@ -95,10 +119,15 @@ export default function ForgotPasswordScreen() {
                   value={code}
                   onChangeText={setCode}
                   keyboardType="number-pad"
+                  textContentType="oneTimeCode"
+                  autoComplete="one-time-code"
+                  autoFocus
+                  returnKeyType="go"
+                  onSubmitEditing={handleVerify}
                 />
 
                 {verifyError && (
-                  <View style={styles.errorBox}>
+                  <View style={styles.errorBox} accessibilityRole="alert" accessibilityLiveRegion="polite">
                     <Text style={styles.errorText}>{verifyError}</Text>
                   </View>
                 )}
@@ -115,6 +144,18 @@ export default function ForgotPasswordScreen() {
                     <Text style={styles.buttonText}>Verify Code</Text>
                   )}
                 </TouchableOpacity>
+
+                <View style={styles.recoveryRow}>
+                  <TouchableOpacity onPress={handleSend} disabled={loading} hitSlop={8}>
+                    <Text style={[styles.recoveryLink, loading && styles.recoveryLinkBusy]}>
+                      {resent ? 'Code sent again' : 'Send another code'}
+                    </Text>
+                  </TouchableOpacity>
+                  <Text style={styles.recoveryDot}>·</Text>
+                  <TouchableOpacity onPress={handleUseDifferentEmail} hitSlop={8}>
+                    <Text style={styles.recoveryLink}>Use a different email</Text>
+                  </TouchableOpacity>
+                </View>
               </>
             )}
 
@@ -135,7 +176,7 @@ const styles = StyleSheet.create({
   inner: { flex: 1, justifyContent: 'center', paddingHorizontal: spacing.lg },
   title: {
     fontSize: 34,
-    fontFamily: fonts.cozy,
+    fontFamily: fonts.display,
     color: colors.inkDark,
     textAlign: 'center',
     marginBottom: spacing.sm,
@@ -153,17 +194,7 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     ...shadows.card,
   },
-  input: {
-    backgroundColor: colors.sky,
-    borderRadius: radii.md,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 14,
-    fontSize: 15,
-    color: colors.inkDark,
-    marginBottom: spacing.md,
-    borderWidth: 1.5,
-    borderColor: colors.border,
-  },
+  input: { backgroundColor: colors.sky, borderRadius: radii.md, paddingHorizontal: spacing.md, paddingVertical: 14, fontSize: 15, fontFamily: fonts.text, color: colors.inkDark, marginBottom: spacing.md, borderWidth: 1.5, borderColor: colors.border, },
   button: {
     backgroundColor: colors.terra,
     borderRadius: radii.lg,
@@ -174,7 +205,7 @@ const styles = StyleSheet.create({
     ...shadows.button,
   },
   buttonDisabled: { backgroundColor: colors.terraLight, shadowOpacity: 0, elevation: 0 },
-  buttonText: { color: colors.card, fontSize: 16, fontWeight: '700', letterSpacing: 0.3 },
+  buttonText: { color: colors.card, fontSize: 16, fontFamily: fonts.display, letterSpacing: 0.3 },
   messageBox: {
     borderRadius: radii.md,
     paddingHorizontal: spacing.md,
@@ -184,7 +215,17 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: colors.success,
   },
-  messageText: { fontSize: 14, fontWeight: '600', color: colors.success },
+  messageText: { fontSize: 14, fontFamily: fonts.display, color: colors.success },
+  recoveryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  recoveryLink: { fontSize: 13, fontFamily: fonts.display, color: colors.terra },
+  recoveryLinkBusy: { color: colors.inkFaint },
+  recoveryDot: { fontSize: 13, color: colors.inkFaint },
   errorBox: {
     borderRadius: radii.md,
     paddingHorizontal: spacing.md,
@@ -194,8 +235,8 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: colors.error,
   },
-  errorText: { fontSize: 14, fontWeight: '600', color: colors.error },
+  errorText: { fontSize: 14, fontFamily: fonts.display, color: colors.error },
   linkButton: { alignItems: 'center' },
-  linkText: { color: colors.inkLight, fontSize: 14 },
-  linkAccent: { color: colors.terra, fontWeight: '700' },
+  linkText: { color: colors.inkLight, fontSize: 14, fontFamily: fonts.text },
+  linkAccent: { color: colors.terra, fontFamily: fonts.display },
 });

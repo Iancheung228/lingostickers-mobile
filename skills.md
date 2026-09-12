@@ -296,3 +296,443 @@ O(k²) per pixel. A hand-rolled separable sliding-window blur is O(1) per pixel
 and keeps the matte in float; quantising to 8 bits to reach vImage's fast path
 throws away exactly the sub-level precision in the transition band that the
 refinement exists to recover.
+
+---
+
+## 8. A sheet's chrome is a promise — honour it, or don't draw it
+
+**Symptom:** "the only way out of this form is the Cancel button." Reported as
+the form feeling *trapping*, not as a missing feature — people had already
+tried two other ways out before complaining.
+
+**Root cause:** `FieldEditor` had the complete visual vocabulary of a
+dismissible bottom sheet — rounded top corners, a grabber, a dimmed scrim —
+and implemented none of the gestures that vocabulary announces. The grabber
+was a **false affordance**: a control that looks draggable and isn't. Users
+don't read a sheet's source; they read its edges, and a grabber says "pull me"
+as plainly as a door handle says "pull". Every one of those looks costs
+nothing to draw and sets an expectation that silently fails.
+
+**Fix pattern:** dismissal is not one button, it's a **set of equivalent
+exits**, and they must all route through a single guard so which one you reach
+for never changes what happens to your work. `components/BottomSheet.tsx` owns
+the chrome and the gestures; the owner owns the policy:
+
+- Exits wired: scrim tap, drag-down (distance **or** velocity — distance alone
+  ignores a quick flick, velocity alone ignores a slow deliberate pull),
+  Android back, `onAccessibilityEscape`, and the Cancel button. Keep the
+  button; it is the discoverable and screen-reader-reachable one.
+- The shell **asks** (`onRequestClose`) rather than closes, and the owner
+  answers with `close()` or `settle()` on the ref. That split is the whole
+  point: it leaves room for an unsaved-changes prompt between the gesture and
+  the exit. Easy dismissal without a dirty check just converts "trapped" into
+  "lost my edits".
+- Exit on the **save** path too, or the success route snaps away while the
+  cancel route glides — that inconsistency reads as breakage. A sheet whose
+  owner unmounts it must mirror the prop it renders from, so it can outlive
+  that prop by one animation.
+
+**Two traps this cost time on, both worth checking in any new sheet:**
+- **A React ref is not visible to a worklet.** A `closing` flag guarding the
+  pan handlers must be a `useSharedValue`; a `useRef` is captured by value
+  when the worklet is built, so the UI thread reads a frozen `false` forever
+  and a mid-exit drag still moves the sheet.
+- **Compare specs by key, not identity.** `BoardCarouselPage` builds its
+  editor spec inline in JSX, so the object is new on every parent render.
+  Anything keyed on identity either re-seeds the draft on every keystroke's
+  re-render (wiping what you typed) or loops. `keyOf()` in `FieldEditor.tsx`.
+
+**Also:** gestures inside an RN `Modal` need their own `GestureHandlerRootView`
+— the one in `app/_layout.tsx` is outside the modal's view hierarchy.
+
+**Sheets on `presentationStyle="pageSheet"` already get swipe-to-dismiss from
+iOS and need none of this.** It's the `transparent` + `animationType="slide"`
+sheets that draw the chrome themselves and must therefore honour it themselves.
+
+---
+
+## 9. Two actions on one surface need two shapes — and `hitSlop` is a budget
+
+**Symptom:** "the card says tap it to flip and it doesn't", "I hit play and it
+recorded over my take", "I meant to accept and it declined". Reported as the
+control being *wrong*, never as the user having missed — because from the
+outside a mis-aimed tap and a broken button are the same event.
+
+**Root cause, two of them, and they compound:**
+
+1. **The larger action swallowed the smaller one.** `StudyCard`'s back face
+   made each whole field an edit target, so on a card whose four fields fill
+   the face, "tap the card to go back" was true only in the gutters between
+   them. The footer went on saying it anyway. The rule that came out of it:
+   when one surface carries two actions, the *rarer, more specific* one gets a
+   drawn control and the *common, ambient* one keeps the background. Editing a
+   field is rare and deliberate; flipping is what you do on every card.
+
+2. **Neighbouring `hitSlop` rectangles overlapped.** `hitSlop` doesn't shrink
+   with the gap it grows into, so `gap: 8` with `hitSlop={8}` on both sides
+   puts 8pt of each button *inside* its neighbour, and which one you get is
+   decided by z-order rather than by where you aimed. This was live in three
+   places: `StickerCard`'s speak/play pair, `InboxRow`'s accept/decline, and
+   `StudyCard`'s speak/play/mic row — the last two being pairs whose two
+   outcomes are opposites.
+
+**Fix pattern:**
+- Treat `hitSlop` as **anisotropic**: generous where nothing is adjacent
+  (usually vertical), and *at most half the gap* where something is. Pass an
+  object, not a number, wherever a control has a horizontal neighbour.
+- The arithmetic to run on any row of buttons: `gap >= left_slop +
+  right_slop`. If it fails, either widen the gap or narrow the slop — a 36pt
+  target you can actually hit beats a 48pt one that overlaps its neighbour.
+- A control that is the *only* way into something must be **drawn as a
+  control**. A bare 13pt glyph beside a label reads as decoration; the same
+  glyph in a bordered 28pt disc with `hitSlop` out to 48 reads as a button and
+  hits like one. Small-and-aimable is a visual decision plus a touch decision,
+  not one decision.
+- Say out loud what each region does before shipping it, then check the copy
+  on screen still matches. "Tap the card to go back" was the bug report.
+
+**Where the boundaries live now:** `Field`/`FrontFace` in `StudyCard.tsx`
+(pencil edits, everything else flips), `StickerCard.tsx`, `InboxRow.tsx`.
+
+---
+
+## 10. An exit the OS performs can't be vetoed — so make it non-destructive
+
+**Symptom:** a swipe-down on a `pageSheet` throws away what you typed, and
+there is no obvious place to put a confirmation.
+
+**Root cause:** `presentationStyle="pageSheet"` gets iOS's own swipe-to-dismiss
+(entry #8's happy path) — but RN surfaces it only as `onRequestClose`, which
+fires *after* the sheet has already gone. There is no `isModalInPresentation`
+binding, so the "are you sure?" that a Cancel button can show has nowhere to
+run. `ReportSheet` cleared its answers on open, which meant an accidental
+swipe silently binned a half-written report.
+
+**Fix pattern:** stop trying to guard the exit and make the exit cheap.
+Keep the draft keyed to its *subject* rather than to the sheet's visibility,
+and clear it only when the subject changes or the work is actually submitted —
+so reopening on the same person hands back exactly what was typed. Same shape
+as `FieldEditor`'s `keyOf()` in #8: what re-seeds a form is a change of
+subject, never a change of mounting.
+
+**The related trap:** `onBlur` is not a "the user finished" signal. `DiscoveryReveal`'s
+inline editor cancelled on blur, and blur is fired by tapping *anything* —
+including "Add to Collection", which then saved the card with the correction
+thrown away. An edit should be resolved only by controls that say they resolve
+it (a tick, a cross, a scrim tap), and those resolvers must be idempotent,
+because a tap on one of them fires the blur of another.
+
+---
+
+## 11. A box you type into is a race, and a form is a chain
+
+**Symptom:** "I typed the whole username and the wrong people came up." Or,
+quieter and more common: signing in takes a minute because nothing autofills
+and the return key does nothing.
+
+**Root cause — three separate omissions that all look like polish and aren't:**
+
+1. **No debounce, no ordering.** `searchUsers` fired one RPC per keystroke and
+   wrote whatever came back. Replies are not guaranteed to arrive in the order
+   they were sent, so the reply for `mi` landing after the reply for `michael`
+   overwrote the right answer with a stale one. Debouncing alone does *not*
+   fix this — it only makes it rarer.
+2. **No `textContentType` / `autoComplete`.** These are what let iOS Keychain
+   and Android autofill offer a saved login, generate a strong password on a
+   sign-up field (`newPassword`), or put an emailed code on the keyboard's
+   suggestion bar (`oneTimeCode`). Without them the user retypes, from memory,
+   credentials they have never typed on that device.
+3. **No `returnKeyType` chain.** Every return key closed the keyboard over the
+   field the user was about to fill in, instead of handing over to it.
+
+**Fix pattern:**
+- Every debounced fetch takes a ticket (`const seq = ++seqRef.current`) and
+  drops its own reply if it is no longer holding the current one. Clear the
+  timer on unmount.
+- Every text field declares what it holds. Every field but the last says
+  `returnKeyType="next"` + `submitBehavior="submit"` and focuses the next ref;
+  the last one submits.
+- A password field is `components/PasswordField.tsx` — one implementation with
+  a reveal toggle, rather than four bare `secureTextEntry` boxes. It lifts the
+  caller's margin onto its wrapper, because otherwise the caller's
+  `marginBottom` sits inside the wrapper and centres the eye half a gap low.
+
+**And the general one behind all three:** a screen that only ever gets tested
+by the person who wrote it gets tested by someone who knows the password, the
+username and the field order. Every one of these was invisible from the
+inside.
+
+---
+
+## 12. A scale with options that don't differ isn't a scale — and its colours are half of it
+
+**Symptom:** two complaints about the study card's grading row that turned out
+to be the same complaint. "Hard is white and Good is red, that's backwards."
+And: "Again, Hard and Good all say 1d — why am I being asked?"
+
+**Root cause, one per half:**
+
+1. **The colour ramp ran against the meaning.** `toneHard` was
+   `colors.card` — bare white, the same as an unstyled surface — and
+   `toneGood` was `terraLight`/`terra`, the brand rose the app uses for its
+   *primary action* everywhere else, which on a four-button row reads as an
+   alarm. So the button meaning "I struggled" looked like nothing and the
+   button meaning "I got it" looked like a warning. Colour on a grading scale
+   is the fastest signal the row carries; when it disagrees with the words, it
+   beats the words.
+
+2. **Three of the four buttons resolved to the same interval.** 029's
+   scheduler was day-granular by design ("no learning steps and no intraday
+   scheduling"), so on a card you had just met, `nextInterval` returned 1 for
+   Again, 1 for Hard and 1 for Good. Answering honestly that you had blanked
+   bought you nothing over answering that you knew it — which is the one thing
+   a self-graded scale cannot afford, because it teaches the user their answer
+   doesn't matter.
+
+**Fix pattern:**
+- **Paint the ramp as a ramp.** Filled red → sand → pale green → filled green
+  (`toneAgain`…`toneEasy` in `StudyCard.tsx`). The two ends are the two filled
+  buttons; the middle two are tints of the end they head toward. Keep the
+  brand colour out of it entirely — on a row of four peers, "primary action"
+  is a claim none of them can make.
+- **White text needs a darker fill than the semantic token.** White on
+  `colors.error` is ~3.9:1 and on `colors.success` ~3.1:1, both under AA for
+  14pt. `errorDeep`/`successDeep` exist for exactly this; use the base
+  colours for borders and icons and the Deep pair whenever white sits on top.
+- **Give a card being *learned* its own ladder, in minutes.** `lib/review.ts`
+  now has three phases (learning / review / relearning) with Anki's default
+  steps — 1m, 10m for a new card; 10m after a lapse — and only graduates onto
+  the day-granular SM-2 ladder once the card is answered correctly through the
+  end of that ladder. New card, first press: Again 1m, Hard 6m, Good 10m,
+  Easy 4d. Four buttons, four answers.
+- **Stack the passing intervals so they can't collapse.** `hard`, `good` and
+  `easy` are computed together and each floored at one day past the one below.
+  Without that, a 1-day card gives 1.2× → 1d, 2.5× → 3d and 3.25× → 3d, and
+  Good and Easy become the same button — the original bug, one rung higher up.
+- **Whatever the button previews must be what the button does.** One
+  `nextOutcome()` produces both the label and the write, so they can't drift.
+  Format the *nominal* delay, not the wall-clock difference: a card booked for
+  tomorrow midnight is "1d" whatever time of the evening you answered it.
+
+**The session has to honour the ladder or the ladder is theatre.** A 10-minute
+step that ends the session is a step nobody ever walks. `StudySessionHost`
+re-queues anything the scheduler booked inside `LEARN_AHEAD_MIN` (20 min,
+Anki's default too), ordered by due time — which also replaced the old
+special-case that re-queued Again and nothing else. Two things that cost time:
+the re-queued card must carry its **patch** forward (`{ ...current, ...patch }`)
+or a second answer in the same sitting computes from the wrong rung; and it
+must never land immediately next while another card waits, or the "test" is of
+the last five seconds.
+
+**Sub-day scheduling is a schema change, not a constant.** `interval_days` is
+an INTEGER and there is no way to say "1 minute" in it. 040 adds `due_at`
+(the authoritative moment, minute-granular) and `learning_step`. Old rows are
+deliberately **not** backfilled — a server-side `date_trunc` would shift the
+due day for anyone west of GMT — so `dueAtMs()` keeps 029's inference as a
+fallback, computed client-side in the user's own timezone. Review cards are
+still written at **local midnight**, so the day-granular feel the old
+scheduler was built around (the queue turning over overnight rather than
+reshuffling through the afternoon) survives for every card past its steps.
+
+---
+
+## 13. A model asked to label its own output will label whatever it did
+
+**Symptom:** the teaching note on a card kept being true and useless — "Uses
+the present tense." — and the same three or four structures came round again
+and again. Reported as *the sentences are a bit boring*, never as "the
+syllabus is broken", because from the outside there was no syllabus to break.
+
+**Root cause:** `sentence_insight` asked the model to name the grammar its
+sentence used, *after* it had already written the sentence. Nothing chose what
+the card should teach — the caption chose, and a caption reaches for the
+present tense and a locative preposition every single time. The tell was in
+the field's own instruction: three fallbacks deep ("(a) name the pattern…
+(b) otherwise a bonus word… (c) otherwise a fact about the headword"), most of
+its length spent forbidding the model from making something up. When a
+question needs that much scaffolding against invention, the honest answer to
+it is usually "nothing in particular", and you are asking at the wrong time.
+
+This is #6 again in a different costume: correcting an answer downstream
+instead of making the thing you want an **input**.
+
+**Fix pattern:**
+- `_shared/syllabus.ts` holds the structures, banded roughly by CEFR and
+  ordered by *yield* rather than by textbook order — the places the language
+  does something English does not are where a learner's errors actually live
+  (`fr.depuis` + present, `ja.counters`, `yue.classifier`).
+- The prompt offers **two** targets, not one, and the model picks which the
+  photo can carry. One target forces a contortion whenever the scene can't
+  host it, and unnatural input is worse than input with no form focus at all.
+- **Read the choice back** (`grammar_key`, stored on the row) instead of
+  assuming the model obeyed. That stored value is what the next scan's
+  no-repeat window reads, so a silently-substituted structure would poison the
+  rotation and the teaching note in the same move.
+- **Say which rule wins.** "Ground it in the specific photo" and "keep the
+  vocabulary common" genuinely conflict — detail-hunting drags in *windowsill,
+  chipped, half-full*, which is below a beginner's coverage and never recurs.
+  The prompt names the winner in the rule itself. Rules phrased as
+  encouragement ("naturally mentioning a second real object is encouraged —
+  but only if the scene genuinely supports it") got, reliably, none of the
+  behaviour they described.
+
+**The other half — anything the model produces that must *correspond* to
+something else has to be checked against it, and dropped whole when it
+doesn't fit.** `normalizeGloss` requires the gloss chunks to reconstruct the
+sentence, spacing and punctuation aside, or the entire gloss becomes null. A
+wrong segmentation is worse than none: it teaches boundaries that don't exist,
+confidently, and nothing in it tells the learner it's wrong. Three things this
+cost:
+
+- **Never repair a partial answer into passing.** A gloss patched up until it
+  validates is no longer evidence that the model segmented correctly — it's
+  evidence that the repair worked.
+- **Re-run the check at render time, not only at write time.** The sentence is
+  hand-editable from the study card and the gloss is not, so a stored gloss can
+  start describing a sentence that no longer exists. `lib/gloss.ts` re-checks;
+  `StudyCard.handleSaveField` also nulls the gloss, the note and the grammar
+  key whenever the sentence itself changes, because a stale row is still a lie
+  waiting for someone to query it.
+- **A punctuation strip written for Latin text eats letters.** `ー` in コーヒー
+  is a hyphen to any `[-–—]` class, `・` and `々` are similar traps. Stripping
+  it would have made コヒ validate against コーヒー — a mis-segmentation passing
+  as a formatting difference, which is precisely the case the validator exists
+  to catch. There is a test for exactly this.
+
+**Two smaller things worth keeping:**
+- Everything that reads stickers uses `select('*')`, so adding a column needed
+  no query changes anywhere. Check that before assuming it of the next one.
+- The prompt modules are deliberately free of Deno APIs at module scope, so
+  `node --experimental-strip-types` can import and test them directly —
+  `scripts/test-sentence-logic.mts` for the pure logic, `scripts/prompt-lab.mts`
+  to run the *shipping* prompt against real photographs. A prompt change is
+  the one kind of change that cannot be reviewed by reading it.
+
+---
+
+## 14. A model provider is an adapter, not an API you call directly
+
+**Symptom:** "we need to move off this provider" turns into a week, because the
+provider's wire format has leaked into the code that builds prompts, the code
+that parses cards, the retry logic, the error messages, and every test that
+stubs `fetch`.
+
+**Root cause:** calling `fetch('https://api.provider.com/…')` from the module
+that owns the prompt couples two things that change on completely different
+schedules. The prompt changes when teaching changes. The provider changes when
+the vendor retires a model — which, for vision, happens: Groq's only two vision
+models were both Preview ("not recommended for production, may be discontinued
+at short notice"), and that, not cost, is what forced the 2026-09-09 migration
+to Gemini.
+
+**Fix pattern — `supabase/functions/_shared/llm/`:**
+- `types.ts` is the vocabulary both sides share: `LlmPart` (text or image),
+  `LlmRequest`, `LlmResult`, and `LlmError`. No HTTP.
+- `gemini.ts` / `groq.ts` are adapters. They are the *only* files that know
+  what `inline_data` or `max_completion_tokens` is.
+- `index.ts` owns retry, failover and config. `vocab.ts` calls `callModel()`
+  and never sees a URL.
+- Every provider factory takes an injectable `transport`, and `callModel` takes
+  injectable `providers` and `sleep`. That is what makes the whole retry and
+  failover matrix testable in milliseconds with no network — see
+  `scripts/test-llm.mts`.
+
+**The error taxonomy is the design, not boilerplate.** Retry and failover are
+decided entirely by `LlmError.kind`, and two of the rules are the ones worth
+remembering:
+- **Never fail over on `invalid`.** A malformed request is *our* bug; falling
+  back to a second model on it hides that bug behind a permanently worse card.
+- **Never fail over on `blocked`.** A safety refusal is a decision about the
+  content — another vendor will very likely refuse it too, and the user is owed
+  an answer, not a silent substitution.
+- Cap every backoff. Groq answers a spent daily budget with "retry after
+  2048s"; honoured literally that is a 34-minute request.
+
+**Two provider facts that cost real time to discover, both measured:**
+- **A bad Gemini API key returns `400 INVALID_ARGUMENT`, not 401.** Only
+  `error.details[].reason === 'API_KEY_INVALID'` separates a credential fault
+  (fail over) from a malformed body (do not). Classify on the detail.
+- **`mediaResolution` is whole-request on `generateContent`.** Per-part
+  `media_resolution` is rejected on every 3.x model, so the crop and the scene
+  necessarily share one setting. LOW = 268 tok/image, MEDIUM = 542, HIGH = 1094.
+
+**Thinking is latency you are not buying anything with here.** Gemini 3.x
+reasons by default. This task is one structured extraction, not a problem;
+`thinkingConfig: { thinkingBudget: 0 }` cut p50 from 3.0s to 2.3s with 16/16
+gloss validity held. Measure before assuming a "smarter" setting helps.
+
+---
+
+## 15. State the response shape once, or it will drift
+
+**Symptom:** the model returns a field the parser ignores, or omits one the
+prompt never actually asked for. Looks like a model quality problem. Isn't.
+
+**Root cause:** a card's shape was stated twice per request — once as prose in
+the prompt ("return JSON with these exact fields…") and, once structured output
+arrived, again as a JSON Schema. Two hand-written literals describing one
+contract always drift.
+
+**Fix pattern:** `_shared/cardSchema.ts` holds one ordered registry; `renderProse`
+and `renderJsonSchema` both project from it, off the same list of `FieldKey`s
+the caller asks for. Drift stops being a discipline problem and becomes
+impossible. `test-llm.mts` asserts the two renderings cover an identical key
+set for every language × option combination.
+
+**ORDER IS LOAD-BEARING, and it is not obvious.** Gemini fills fields in schema
+order, so `sentence` must be generated before `gloss`, `grammar_key` and
+`sentence_insight` — otherwise all three describe a sentence that does not
+exist yet. `assertFieldOrder` runs on every render and throws rather than
+letting an unsafe order reach a provider.
+
+**The bug this refactor introduced, and how it was caught.** Field descriptions
+are embedded *inside* a JSON example the model is told to copy, so a double
+quote in a description must be escaped. Moving the insight text into the
+registry dropped the escaping (`would say "have had"` instead of
+`would say \"have had\"`), making the example itself malformed JSON. The
+existing per-line regex test passed. The fix is a stronger invariant: **the
+whole rendered block must `JSON.parse`.** Assert the property, not the shape.
+
+**Also worth keeping:** closed sets belong in the schema as `enum`
+(`part_of_speech`, `category`), not only in prose — that is enforcement rather
+than a request, and the live test uses a value outside the enum as its signal
+that the schema was never actually sent.
+
+---
+
+## 16. `deno check` is a gate this project never had
+
+`tsconfig.json` excludes `supabase/functions` (the Deno URL imports are errors
+to `tsc`), and eslint ignores it too. So until 2026-09-09 **no type checker had
+ever run over the edge functions** — nine functions, the entire backend.
+
+`npm run typecheck:functions` now runs `deno check` over them. Installing Deno
+locally is the only prerequisite (`curl -fsSL https://deno.land/install.sh | sh`).
+
+It reported **8 pre-existing errors** the first time it ran, all fixed
+2026-09-09 — so the gate is green and can stay that way. Two were worth more
+than a type fix:
+
+- **`import * as UPNG` — the fix TypeScript suggests — would have broken every
+  server-side cutout.** esm.sh's generated `.d.ts` for `upng-js` declares no
+  default export, but the module it actually *serves* has ONLY a default:
+  probed at runtime, the namespace object's sole key is `"default"`, so
+  `UPNG.decode` would have been `undefined`. `jpeg-js` is the opposite — its
+  namespace really does expose `decode`. **Two adjacent imports, opposite
+  correct fixes.** Never "fix" a module-shape error without probing what the
+  module returns at runtime; the answer differs per package.
+  `?no-dts` drops the wrong types while keeping the working default import.
+- **The three `'user' is possibly null` in `delete-account` were not a latent
+  NPE.** `user` *is* guarded; TypeScript simply cannot carry that narrowing
+  into a nested `async function` closure, because a closure can outlive it.
+  Capturing `const userId = user.id` before the closure is the honest fix; a
+  `!` assertion would have suppressed a true warning about a real language rule.
+
+The remaining two were ordinary: `SupabaseClient` (what `serviceClient()`
+returns) vs `ReturnType<typeof createClient>` resolve to different generic
+defaults, and `Uint8Array<ArrayBufferLike>` is not a `BlobPart` because the
+buffer *could* be shared — ours never is.
+
+**Verify a change to the image pipeline by running it, not by type-checking
+it.** `deno check` passing proves nothing about esm.sh interop; decoding a real
+JPEG and round-tripping a PNG does.

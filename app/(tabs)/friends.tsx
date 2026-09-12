@@ -1,7 +1,7 @@
 import { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import {
   View, Text, SectionList, StyleSheet, SafeAreaView,
-  TouchableOpacity, RefreshControl, ActivityIndicator,
+  TouchableOpacity, RefreshControl, ActivityIndicator, Alert,
 } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { UserPlus } from 'lucide-react-native';
@@ -15,11 +15,13 @@ import FriendProfile from '@/components/FriendProfile';
 import FriendRail from '@/components/FriendRail';
 import FriendsEmpty from '@/components/FriendsEmpty';
 import SolvedRow from '@/components/SolvedRow';
+import ReportSheet from '@/components/ReportSheet';
 import { FriendRequestRow, ChallengeRow } from '@/components/InboxRow';
-import { ChallengeWithSender, FriendWithProfile } from '@/lib/types';
+import { ChallengeWithSender, FriendWithProfile, PersonSummary } from '@/lib/types';
 import {
   buildInboxItems, buildSections, subtitleFor, isFirstRun, type Row,
 } from '@/lib/friendsSections';
+import SettingsButton from '@/components/SettingsButton';
 import { colors, shadows, radii, spacing, fonts } from '@/constants/theme';
 import { TAB_BAR_CLEARANCE } from '@/constants/tabBar';
 import { enablePushNotifications } from '@/lib/notifications';
@@ -40,7 +42,10 @@ import { enablePushNotifications } from '@/lib/notifications';
 
 export default function FriendsScreen() {
   const { user } = useAuth();
-  const { friends, loading: friendsLoading, respondToRequest, refetch: refetchFriends } = useFriends();
+  const {
+    friends, loading: friendsLoading, respondToRequest,
+    blockUser, refetch: refetchFriends,
+  } = useFriends();
   const {
     inbox, feed, loading: challengesLoading,
     fetchInbox, fetchFeed, getChallengeImageUrls,
@@ -52,6 +57,9 @@ export default function FriendsScreen() {
   const [selectedFriend, setSelectedFriend] = useState<FriendWithProfile | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [solvedImages, setSolvedImages] = useState<Record<string, string>>({});
+  // The person a pending request's "⋯" was opened against, held so the report
+  // sheet knows who it is about. Null when the sheet is closed.
+  const [reportTarget, setReportTarget] = useState<PersonSummary | null>(null);
 
   const acceptedFriends = useMemo(() => friends.filter(f => f.status === 'accepted'), [friends]);
   const pendingReceived = useMemo(
@@ -117,6 +125,29 @@ export default function FriendsScreen() {
     if (user?.id) enablePushNotifications(user.id);
   }, [respondToRequest, user?.id]);
 
+  // An unanswered request is the only way a stranger reaches you, so the
+  // safety controls have to be reachable before you decide. Blocking here
+  // also disposes of the request itself — the trigger in migration 034 deletes
+  // the friendship row, so there is nothing left to answer.
+  const handleFlagRequest = useCallback((person: PersonSummary) => {
+    const name = person.username ?? 'this person';
+    Alert.alert(
+      name,
+      'This person sent you a friend request.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Report', onPress: () => setReportTarget(person) },
+        {
+          text: 'Block', style: 'destructive',
+          onPress: async () => {
+            const { error } = await blockUser(person.id);
+            if (error) Alert.alert("Couldn't block", error.message);
+          },
+        },
+      ],
+    );
+  }, [blockUser]);
+
   const renderRow = useCallback((row: Row) => {
     switch (row.kind) {
       case 'request':
@@ -126,6 +157,7 @@ export default function FriendsScreen() {
             avatarPath={row.friendship.friend.avatar_path}
             onAccept={() => handleAccept(row.friendship.id)}
             onDecline={() => respondToRequest(row.friendship.id, 'declined')}
+            onFlag={() => handleFlagRequest(row.friendship.friend)}
           />
         );
       case 'challenge':
@@ -142,6 +174,7 @@ export default function FriendsScreen() {
         return (
           <SolvedRow
             word={row.challenge.snapshot_word}
+            language={row.challenge.snapshot_language}
             translation={row.challenge.snapshot_translation}
             solverName={row.challenge.receiver?.username ?? null}
             solverAvatarPath={row.challenge.receiver?.avatar_path ?? null}
@@ -152,7 +185,7 @@ export default function FriendsScreen() {
       case 'resting':
         return <Text style={styles.resting}>{row.text}</Text>;
     }
-  }, [handleAccept, respondToRequest, solvedImages]);
+  }, [handleAccept, respondToRequest, handleFlagRequest, solvedImages]);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -161,15 +194,18 @@ export default function FriendsScreen() {
           <Text style={styles.title}>Friends</Text>
           <Text style={styles.subtitle}>{subtitle}</Text>
         </View>
-        <TouchableOpacity
-          onPress={() => setSearchVisible(true)}
-          style={styles.addBtn}
-          hitSlop={8}
-          accessibilityRole="button"
-          accessibilityLabel="Add a friend"
-        >
-          <UserPlus size={20} color={colors.inkDark} />
-        </TouchableOpacity>
+        <View style={styles.headerActions}>
+          <TouchableOpacity
+            onPress={() => setSearchVisible(true)}
+            style={styles.addBtn}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 4 }}
+            accessibilityRole="button"
+            accessibilityLabel="Add a friend"
+          >
+            <UserPlus size={20} color={colors.inkDark} />
+          </TouchableOpacity>
+          <SettingsButton hitSlop={{ top: 10, bottom: 10, left: 4, right: 10 }} />
+        </View>
       </View>
 
       {loading && !refreshing ? (
@@ -233,6 +269,19 @@ export default function FriendsScreen() {
         onClose={() => setSelectedFriend(null)}
         onRemoved={refetchFriends}
       />
+
+      <ReportSheet
+        visible={!!reportTarget}
+        reporterId={user?.id}
+        reportedUserId={reportTarget?.id}
+        reportedName={reportTarget?.username ?? null}
+        onBlock={async () => {
+          if (!reportTarget) return;
+          const { error } = await blockUser(reportTarget.id);
+          if (error) Alert.alert("Couldn't block", error.message);
+        }}
+        onClose={() => setReportTarget(null)}
+      />
     </SafeAreaView>
   );
 }
@@ -248,8 +297,9 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.sm,
   },
   headerText: { flex: 1, gap: 1 },
-  title: { fontSize: 24, fontFamily: fonts.cozy, color: colors.inkDark, letterSpacing: -0.5 },
-  subtitle: { fontSize: 12, color: colors.inkLight, fontWeight: '600' },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  title: { fontSize: 24, fontFamily: fonts.display, color: colors.inkDark, letterSpacing: -0.5 },
+  subtitle: { fontSize: 12, fontFamily: fonts.display, color: colors.inkLight},
   addBtn: {
     width: 40,
     height: 40,
@@ -268,7 +318,7 @@ const styles = StyleSheet.create({
     paddingTop: spacing.md,
     paddingBottom: spacing.sm,
   },
-  sectionLabel: { fontSize: 11, fontWeight: '800', color: colors.inkFaint, letterSpacing: 1.5 },
+  sectionLabel: { fontSize: 11, fontFamily: fonts.monoBold, color: colors.inkFaint, letterSpacing: 1.5 },
   countPill: {
     minWidth: 18,
     height: 18,
@@ -278,13 +328,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 5,
   },
-  countText: { fontSize: 10, fontWeight: '800', color: colors.white },
-  resting: {
-    fontSize: 13,
-    color: colors.inkFaint,
-    paddingHorizontal: spacing.md,
-    paddingBottom: spacing.sm,
-    lineHeight: 18,
-  },
+  countText: { fontSize: 10, fontFamily: fonts.display, color: colors.white },
+  resting: { fontSize: 13, fontFamily: fonts.text, color: colors.inkFaint, paddingHorizontal: spacing.md, paddingBottom: spacing.sm, lineHeight: 18, },
   listContent: { paddingBottom: spacing.xxl },
 });

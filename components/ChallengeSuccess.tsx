@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Modal, View, Text, TouchableOpacity, StyleSheet, SafeAreaView, Image } from 'react-native';
+import { Modal, View, Text, TouchableOpacity, StyleSheet, SafeAreaView, Image, Pressable } from 'react-native';
 import Animated, {
   useSharedValue, useAnimatedStyle, withSequence, withTiming, withDelay, interpolate, Easing,
 } from 'react-native-reanimated';
@@ -7,7 +7,8 @@ import { MessageCircle, PartyPopper, RotateCw } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { ChallengeWithSender, Sticker } from '@/lib/types';
 import { supabase } from '@/lib/supabase';
-import { colors, radii, spacing, fonts } from '@/constants/theme';
+import { colors, fonts, wordFontFor, sentenceFontFor } from '@/constants/theme';
+import { languageLabel } from '@/lib/languages';
 
 interface ChallengeSuccessProps {
   challenge: ChallengeWithSender | null;
@@ -93,8 +94,17 @@ export default function ChallengeSuccess({ challenge, wonStickerId, onClose }: C
 
   return (
     <Modal visible={!!challenge} animationType="fade" transparent onRequestClose={onClose}>
-      <View style={styles.overlay}>
-        <SafeAreaView style={styles.sheet}>
+      {/* Rounded top corners, anchored to the bottom, over a dimmed backdrop:
+          this is drawn as a bottom sheet, so tapping away from it has to close
+          it. Drawing the vocabulary and honouring none of it is what made the
+          field editor feel trapping — see skills.md #8. */}
+      <Pressable
+        style={styles.overlay}
+        onPress={onClose}
+        accessibilityRole="button"
+        accessibilityLabel="Close"
+      >
+        <SafeAreaView style={styles.sheet} onStartShouldSetResponder={() => true}>
           <PartyPopper size={36} color={colors.sage} style={styles.emoji} />
           <Text style={styles.title}>You got it!</Text>
           <Text style={styles.subtitle}>
@@ -107,6 +117,10 @@ export default function ChallengeSuccess({ challenge, wonStickerId, onClose }: C
               onPress={handleFlip}
               activeOpacity={sticker?.memory_photo_path ? 0.85 : 1}
               disabled={!sticker?.memory_photo_path}
+              accessibilityRole={sticker?.memory_photo_path ? 'button' : 'image'}
+              accessibilityLabel={sticker?.memory_photo_path
+                ? `The sticker you just won — tap to see the photo it came from`
+                : 'The sticker you just won'}
             >
               <Animated.View style={[styles.face, frontFaceStyle]}>
                 {imageUrl
@@ -131,23 +145,25 @@ export default function ChallengeSuccess({ challenge, wonStickerId, onClose }: C
             </View>
           )}
 
-          <Text style={styles.word}>{challenge.snapshot_word}</Text>
+          <Text style={[styles.word, { fontFamily: wordFontFor(challenge.snapshot_language) }]}>{challenge.snapshot_word}</Text>
           <Text style={styles.reading}>{challenge.snapshot_reading}</Text>
           <Text style={styles.translation}>{challenge.snapshot_translation}</Text>
 
           <View style={styles.replyPrompt}>
             <View style={styles.replyLabelRow}>
               <MessageCircle size={14} color={colors.inkDark} />
-              <Text style={styles.replyLabel}>Use it in a sentence en français!</Text>
+              <Text style={styles.replyLabel}>
+                Use it in a sentence in {languageLabel(challenge.snapshot_language)}!
+              </Text>
             </View>
-            <Text style={styles.replyHint}>{challenge.snapshot_sentence}</Text>
+            <Text style={[styles.replyHint, { fontFamily: sentenceFontFor(challenge.snapshot_language) }]}>{challenge.snapshot_sentence}</Text>
           </View>
 
           <TouchableOpacity style={styles.doneButton} onPress={onClose}>
             <Text style={styles.doneText}>Done</Text>
           </TouchableOpacity>
         </SafeAreaView>
-      </View>
+      </Pressable>
     </Modal>
   );
 }
@@ -167,8 +183,8 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
   },
   emoji: { marginBottom: 8 },
-  title: { fontSize: 26, fontWeight: '800', color: colors.inkDark, marginBottom: 4 },
-  subtitle: { fontSize: 14, color: colors.inkFaint, marginBottom: 20 },
+  title: { fontSize: 26, fontFamily: fonts.display, color: colors.inkDark, marginBottom: 4 },
+  subtitle: { fontSize: 14, fontFamily: fonts.text, color: colors.inkFaint, marginBottom: 20 },
   stickerWrap: { marginBottom: 8 },
   stickerFrame: { width: 160, height: 160 },
   face: {
@@ -184,10 +200,14 @@ const styles = StyleSheet.create({
   memoryImage: { width: '100%', height: '100%' },
   stickerPlaceholder: { width: '100%', height: '100%', backgroundColor: colors.borderLight, borderRadius: 20 },
   flipHint: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 12 },
-  flipHintText: { fontSize: 12, color: colors.inkFaint, fontWeight: '600' },
-  word: { fontSize: 28, fontWeight: '800', color: colors.inkDark, marginBottom: 2 },
-  reading: { fontSize: 14, color: colors.inkFaint, marginBottom: 4 },
-  translation: { fontSize: 16, color: colors.inkMid, marginBottom: 20 },
+  flipHintText: { fontSize: 12, fontFamily: fonts.display, color: colors.inkFaint},
+  // fontFamily comes from the render site — the word is target-language.
+  word: { fontSize: 28, color: colors.inkDark, marginBottom: 2 },
+  // The reading is always a Latin romanization (romaji with macrons,
+  // Jyutping, or an English respelling) — never target-language script — so
+  // it belongs to the mono `data` role like every other reading in the app.
+  reading: { fontSize: 14, fontFamily: fonts.mono, color: colors.inkFaint, marginBottom: 4 },
+  translation: { fontSize: 16, fontFamily: fonts.text, color: colors.inkMid, marginBottom: 20 },
   replyPrompt: {
     backgroundColor: colors.card,
     borderRadius: 12,
@@ -198,8 +218,9 @@ const styles = StyleSheet.create({
     borderColor: colors.borderLight,
   },
   replyLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 },
-  replyLabel: { fontSize: 13, fontWeight: '700', color: colors.inkDark },
-  replyHint: { fontSize: 13, color: colors.inkMid, fontStyle: 'italic', lineHeight: 18 },
+  replyLabel: { fontSize: 13, fontFamily: fonts.display, color: colors.inkDark },
+  // fontFamily from the render site: this is the target-language sentence.
+  replyHint: { fontSize: 13, color: colors.inkMid, lineHeight: 18 },
   doneButton: {
     backgroundColor: colors.terra,
     borderRadius: 12,
@@ -207,5 +228,5 @@ const styles = StyleSheet.create({
     paddingHorizontal: 48,
     alignItems: 'center',
   },
-  doneText: { fontSize: 16, fontWeight: '700', color: colors.white },
+  doneText: { fontSize: 16, fontFamily: fonts.display, color: colors.white },
 });

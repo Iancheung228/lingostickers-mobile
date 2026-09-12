@@ -1,8 +1,8 @@
-import { Alert } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { File } from 'expo-file-system';
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import { supabase } from '@/lib/supabase';
+import { alertPermissionDenied } from '@/lib/permissions';
 
 // ---------------------------------------------------------------------------
 // Profile pictures.
@@ -34,11 +34,12 @@ export function avatarUrl(path: string | null | undefined): string | null {
 /// the denial is explained here rather than at each call site, so nobody has
 /// to re-derive which of the two "null" cases deserves a message.
 export async function pickAvatarImage(): Promise<{ uri: string } | null> {
-  const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-  if (status !== 'granted') {
-    Alert.alert(
+  const { granted, canAskAgain } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+  if (!granted) {
+    alertPermissionDenied(
       'Photos Access Needed',
-      'Tabi Stickers needs access to your photo library to set a profile picture.'
+      'Tabi Stickers needs access to your photo library to set a profile picture.',
+      canAskAgain
     );
     return null;
   }

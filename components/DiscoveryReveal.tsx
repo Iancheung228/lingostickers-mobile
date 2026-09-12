@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
-import { Modal, View, Text, Image, TouchableOpacity, TextInput, StyleSheet, SafeAreaView, ScrollView, ActivityIndicator, Alert, KeyboardAvoidingView, Platform, useWindowDimensions } from 'react-native';
-import { X, Bookmark, Pencil, Volume2, Lightbulb, Info, RotateCcw } from 'lucide-react-native';
+import { Modal, View, Text, Image, TouchableOpacity, TextInput, StyleSheet, SafeAreaView, ScrollView, ActivityIndicator, Alert, KeyboardAvoidingView, Platform, useWindowDimensions, Pressable } from 'react-native';
+import { X, Bookmark, Pencil, Volume2, Info, RotateCcw, Check } from 'lucide-react-native';
 import { StickerDraft } from '@/lib/types';
 import { supabase } from '@/lib/supabase';
 import { speak, stopSpeaking } from '@/lib/speech';
-import { colors, radii, spacing, fonts, shadows } from '@/constants/theme';
+import { colors, spacing, shadows, fonts, wordFontFor, sentenceFontFor } from '@/constants/theme';
+import { SentenceGloss, SentenceInsight } from '@/components/SentenceGloss';
 
 interface DiscoveryRevealProps {
   draft: StickerDraft | null;
@@ -64,6 +65,9 @@ export default function DiscoveryReveal({ draft, onAdd, onDiscard, onRetryExtrac
   };
 
   const confirmEditingWord = () => {
+    // Idempotent: the bar's tick and the scrim behind it can both resolve the
+    // same edit, and a second call would fire a second translation request.
+    if (!editingWord) return;
     const trimmed = wordInput.trim();
     setEditingWord(false);
     if (!trimmed || trimmed.toLowerCase() === draft.translation.toLowerCase()) return;
@@ -78,6 +82,7 @@ export default function DiscoveryReveal({ draft, onAdd, onDiscard, onRetryExtrac
   };
 
   const confirmEditingSentence = () => {
+    if (!editingSentence) return;
     const trimmed = sentenceInput.trim();
     setEditingSentence(false);
     if (!trimmed || trimmed.toLowerCase() === draft.sentenceTranslation.toLowerCase()) return;
@@ -86,12 +91,27 @@ export default function DiscoveryReveal({ draft, onAdd, onDiscard, onRetryExtrac
     });
   };
 
+  // What the bar's two buttons and the scrim behind it all route through, so
+  // "finish this edit" means one thing no matter which of them you reach for.
+  const confirmEdit = () => { confirmEditingWord(); confirmEditingSentence(); };
+  const cancelEdit = () => { setEditingWord(false); setEditingSentence(false); };
+
+  // onRequestClose is the Android back gesture. Routed to onDiscard, which
+  // confirms first — this screen holds a result that cost ~10-20s and a real
+  // API call to produce, so back must not silently bin it.
   return (
-    <Modal visible animationType="slide" presentationStyle="fullScreen">
+    <Modal visible animationType="slide" presentationStyle="fullScreen" onRequestClose={onDiscard}>
       <SafeAreaView style={styles.container}>
         <View style={styles.header}>
           <Text style={styles.headerTitle}>New Discovery</Text>
-          <TouchableOpacity onPress={onDiscard} style={styles.closeButton} disabled={saving}>
+          <TouchableOpacity
+            onPress={onDiscard}
+            style={styles.closeButton}
+            hitSlop={8}
+            disabled={saving}
+            accessibilityRole="button"
+            accessibilityLabel="Discard this discovery"
+          >
             <X size={24} color={colors.inkDark} />
           </TouchableOpacity>
         </View>
@@ -122,7 +142,7 @@ export default function DiscoveryReveal({ draft, onAdd, onDiscard, onRetryExtrac
 
           <View style={styles.wordRow}>
             <Text
-              style={[styles.word, retranslating && styles.fadedWhileTranslating]}
+              style={[styles.word, { fontFamily: wordFontFor(draft.language) }, retranslating && styles.fadedWhileTranslating]}
               numberOfLines={2}
               adjustsFontSizeToFit
               minimumFontScale={0.55}
@@ -133,6 +153,8 @@ export default function DiscoveryReveal({ draft, onAdd, onDiscard, onRetryExtrac
               onPress={() => speak(draft.word, draft.language)}
               style={styles.speakButton}
               hitSlop={10}
+              accessibilityRole="button"
+              accessibilityLabel={`Hear ${draft.word} pronounced`}
             >
               <Volume2 size={20} color={colors.terra} />
             </TouchableOpacity>
@@ -156,7 +178,7 @@ export default function DiscoveryReveal({ draft, onAdd, onDiscard, onRetryExtrac
           </TouchableOpacity>
 
           {!!draft.sentence && (
-            <Text style={[styles.sentence, retranslatingSentence && styles.fadedWhileTranslating]}>
+            <Text style={[styles.sentence, { fontFamily: sentenceFontFor(draft.language) }, retranslatingSentence && styles.fadedWhileTranslating]}>
               {draft.sentence}
             </Text>
           )}
@@ -177,11 +199,16 @@ export default function DiscoveryReveal({ draft, onAdd, onDiscard, onRetryExtrac
             )}
           </TouchableOpacity>
 
-          {!!draft.sentenceInsight && !retranslatingSentence && (
-            <View style={styles.insightRow}>
-              <Lightbulb size={12} color={colors.sageDark} />
-              <Text style={styles.insightText}>{draft.sentenceInsight}</Text>
-            </View>
+          {!retranslatingSentence && (
+            <>
+              <SentenceGloss
+                raw={draft.sentenceGloss}
+                sentence={draft.sentence}
+                language={draft.language}
+                style={styles.revealBlock}
+              />
+              <SentenceInsight text={draft.sentenceInsight} style={styles.revealBlock} />
+            </>
           )}
         </ScrollView>
 
@@ -209,39 +236,73 @@ export default function DiscoveryReveal({ draft, onAdd, onDiscard, onRetryExtrac
           </TouchableOpacity>
         </View>
 
+        {/* The edit bar used to be a bare input that discarded itself on blur,
+            and blur is fired by tapping anything at all — including "Add to
+            Collection", which then saved the card with the correction you had
+            just typed thrown away, and no way to tell that had happened.
+            Now nothing resolves an edit except the three controls that say
+            they do: the tick, the cross, and tapping away from the bar. The
+            scrim is also what stops a stray tap reaching the buttons behind
+            it while a correction is half-typed. */}
         {(editingWord || editingSentence) && (
-          <KeyboardAvoidingView
-            style={styles.floatingEditWrap}
-            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-            pointerEvents="box-none"
-          >
-            <View style={styles.floatingEditBar}>
-              {editingWord ? (
-                <TextInput
-                  style={styles.floatingEditInput}
-                  value={wordInput}
-                  onChangeText={setWordInput}
-                  autoFocus
-                  autoCapitalize="words"
-                  autoCorrect={false}
-                  returnKeyType="done"
-                  onSubmitEditing={confirmEditingWord}
-                  onBlur={() => setEditingWord(false)}
-                />
-              ) : (
-                <TextInput
-                  style={styles.floatingEditInput}
-                  value={sentenceInput}
-                  onChangeText={setSentenceInput}
-                  autoFocus
-                  autoCapitalize="sentences"
-                  returnKeyType="done"
-                  onSubmitEditing={confirmEditingSentence}
-                  onBlur={() => setEditingSentence(false)}
-                />
-              )}
-            </View>
-          </KeyboardAvoidingView>
+          <View style={StyleSheet.absoluteFill}>
+            <Pressable
+              style={styles.editScrim}
+              onPress={confirmEdit}
+              accessibilityRole="button"
+              accessibilityLabel="Finish editing"
+            />
+            <KeyboardAvoidingView
+              style={styles.floatingEditWrap}
+              behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+              pointerEvents="box-none"
+            >
+              <View style={styles.floatingEditBar}>
+                <TouchableOpacity
+                  style={styles.editBarBtn}
+                  onPress={cancelEdit}
+                  hitSlop={10}
+                  accessibilityRole="button"
+                  accessibilityLabel="Cancel this edit"
+                >
+                  <X size={18} color={colors.inkLight} />
+                </TouchableOpacity>
+
+                {editingWord ? (
+                  <TextInput
+                    style={[styles.floatingEditInput, { fontFamily: wordFontFor(draft.language) }]}
+                    value={wordInput}
+                    onChangeText={setWordInput}
+                    autoFocus
+                    autoCapitalize="words"
+                    autoCorrect={false}
+                    returnKeyType="done"
+                    onSubmitEditing={confirmEditingWord}
+                  />
+                ) : (
+                  <TextInput
+                    style={[styles.floatingEditInput, { fontFamily: wordFontFor(draft.language) }]}
+                    value={sentenceInput}
+                    onChangeText={setSentenceInput}
+                    autoFocus
+                    autoCapitalize="sentences"
+                    returnKeyType="done"
+                    onSubmitEditing={confirmEditingSentence}
+                  />
+                )}
+
+                <TouchableOpacity
+                  style={[styles.editBarBtn, styles.editBarConfirm]}
+                  onPress={confirmEdit}
+                  hitSlop={10}
+                  accessibilityRole="button"
+                  accessibilityLabel="Apply this edit"
+                >
+                  <Check size={18} color={colors.white} strokeWidth={3} />
+                </TouchableOpacity>
+              </View>
+            </KeyboardAvoidingView>
+          </View>
         )}
       </SafeAreaView>
     </Modal>
@@ -257,7 +318,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
   },
-  headerTitle: { fontSize: 18, fontWeight: '700', color: colors.inkDark },
+  headerTitle: { fontSize: 18, fontFamily: fonts.display, color: colors.inkDark },
   closeButton: {
     width: 40,
     height: 40,
@@ -292,7 +353,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     maxWidth: 300,
   },
-  bgIssueText: { flex: 1, fontSize: 12, color: colors.sageDark, lineHeight: 16, fontWeight: '600' },
+  bgIssueText: { flex: 1, fontSize: 12, fontFamily: fonts.display, color: colors.sageDark, lineHeight: 16},
   stickerFrame: { marginBottom: 24 },
   image: { width: '100%', height: '100%' },
   wordRow: {
@@ -307,8 +368,10 @@ const styles = StyleSheet.create({
   // flexShrink lets a long word give ground to the speaker button instead of
   // shoving it to the screen edge; adjustsFontSizeToFit (see the Text) then
   // scales it down rather than wrapping the layout apart.
-  word: { flexShrink: 1, fontSize: 40, fontWeight: '800', color: colors.inkDark, textAlign: 'center' },
-  reading: { fontSize: 18, color: colors.inkMid, fontStyle: 'italic', marginBottom: 10, textAlign: 'center' },
+  // fontFamily from the render site — target-language headword.
+  word: { flexShrink: 1, fontSize: 40, color: colors.inkDark, textAlign: 'center' },
+  // Always a Latin romanization, never target script — the mono data role.
+  reading: { fontSize: 18, fontFamily: fonts.mono, color: colors.inkMid, marginBottom: 10, textAlign: 'center' },
   fadedWhileTranslating: { opacity: 0.35 },
   translationRow: {
     flexDirection: 'row',
@@ -317,11 +380,11 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     paddingHorizontal: 4,
   },
-  translation: { fontSize: 13, color: colors.terra, fontWeight: '800', letterSpacing: 3, textAlign: 'center' },
+  translation: { fontSize: 13, fontFamily: fonts.monoBold, color: colors.terra, letterSpacing: 3, textAlign: 'center' },
+  // fontFamily from the render site — target-language sentence.
   sentence: {
     fontSize: 15,
     color: colors.inkDark,
-    fontWeight: '600',
     textAlign: 'center',
     lineHeight: 22,
     marginTop: 20,
@@ -335,24 +398,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
     marginTop: 4,
   },
-  sentenceTranslation: {
-    fontSize: 12,
-    color: colors.inkFaint,
-    fontStyle: 'italic',
-    textAlign: 'center',
-  },
-  insightRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 6,
-    marginTop: spacing.md,
-    paddingTop: spacing.sm,
-    paddingHorizontal: spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: colors.borderLight,
-    maxWidth: 280,
-  },
-  insightText: { flex: 1, fontSize: 12, color: colors.sageDark, lineHeight: 16 },
+  sentenceTranslation: { fontSize: 12, fontFamily: fonts.text, color: colors.inkFaint, textAlign: 'center' },
+  // The reveal centres everything above it; these two blocks span the content
+  // width instead. An interlinear gloss has to be left-aligned to be read at
+  // all — the columns are the meaning — and the note under it lines up with
+  // the gloss rather than floating between the two alignments.
+  revealBlock: { alignSelf: 'stretch', marginTop: spacing.md },
   actions: {
     paddingHorizontal: 32,
     paddingTop: spacing.ms,
@@ -364,6 +415,7 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: colors.borderLight,
   },
+  editScrim: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(43, 42, 40, 0.25)' },
   floatingEditWrap: {
     position: 'absolute',
     left: 0,
@@ -371,7 +423,10 @@ const styles = StyleSheet.create({
     bottom: 0,
   },
   floatingEditBar: {
-    paddingHorizontal: 24,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: 16,
     paddingTop: 12,
     paddingBottom: 16,
     backgroundColor: colors.card,
@@ -379,10 +434,17 @@ const styles = StyleSheet.create({
     borderTopColor: colors.borderLight,
     ...shadows.card,
   },
+  editBarBtn: {
+    width: 38, height: 38, borderRadius: 19,
+    alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1.5, borderColor: colors.borderLight,
+  },
+  editBarConfirm: { backgroundColor: colors.terra, borderColor: colors.terra },
+  // fontFamily from the render site — you are editing target-language text.
   floatingEditInput: {
+    flex: 1,
     fontSize: 17,
     color: colors.inkDark,
-    fontWeight: '700',
     textAlign: 'center',
     paddingVertical: 12,
     paddingHorizontal: 18,
@@ -405,7 +467,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 },
     elevation: 6,
   },
-  addButtonText: { color: colors.white, fontSize: 16, fontWeight: '800', letterSpacing: 1 },
+  addButtonText: { color: colors.white, fontSize: 16, fontFamily: fonts.display, letterSpacing: 1 },
   secondaryActions: {
     flexDirection: 'row',
     justifyContent: 'center',
@@ -419,7 +481,7 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingVertical: 10,
   },
-  retryButtonText: { color: colors.terra, fontSize: 13, fontWeight: '700' },
+  retryButtonText: { color: colors.terra, fontSize: 13, fontFamily: fonts.display,},
   discardButton: { alignItems: 'center', paddingVertical: 12 },
-  discardButtonText: { color: colors.inkFaint, fontSize: 14, fontWeight: '600' },
+  discardButtonText: { color: colors.inkFaint, fontSize: 14, fontFamily: fonts.display,},
 });

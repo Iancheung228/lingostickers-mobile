@@ -10,6 +10,7 @@ import { File, Paths } from 'expo-file-system';
 import { useBoardStickers } from '@/hooks/useBoards';
 import { supabase } from '@/lib/supabase';
 import { useCoachMark } from '@/lib/coachMarks';
+import { alertPermissionDenied } from '@/lib/permissions';
 import {
   BackgroundCrop, Board, BoardStickerWithSticker, CropRect, Sticker,
   WallDisplayStyle, CutoutBorderStyle,
@@ -22,6 +23,7 @@ import { MAX_DIM_PCT } from '@/components/WallBackground';
 import FieldEditor from '@/components/FieldEditor';
 import StudyCard from '@/components/StudyCard';
 import StickerPickerModal from '@/components/StickerPickerModal';
+import SettingsButton from '@/components/SettingsButton';
 import { colors, shadows, radii, spacing, fonts } from '@/constants/theme';
 
 // Long side capped so a full-res photo library import doesn't balloon
@@ -37,8 +39,9 @@ const SOURCE_MAX_SIDE = 2048;
 
 // Both header side slots are pinned to this, so the title between them is
 // centred on the *screen* rather than merely on the leftover space. It's the
-// width of the widest thing either slot holds (the "+ Add" pill).
-const SIDE_SLOT_W = 78;
+// width of the widest thing either slot holds — the "+ Add" pill, plus the
+// settings gear that sits to its right on every screen in the app.
+const SIDE_SLOT_W = 104;
 
 interface BoardCarouselPageProps {
   board: Board;
@@ -180,9 +183,13 @@ export default function BoardCarouselPage({
   // handleCropConfirm, so nobody uploads a photo they haven't previewed.
   const handlePickBackground = async () => {
     if (!currentUserId || uploadingBackground) return;
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('Photos Access Needed', 'Tabi Stickers needs access to your photo library to set a board background.');
+    const { granted, canAskAgain } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!granted) {
+      alertPermissionDenied(
+        'Photos Access Needed',
+        'Tabi Stickers needs access to your photo library to set a board background.',
+        canAskAgain
+      );
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 1 });
@@ -371,7 +378,14 @@ export default function BoardCarouselPage({
     <View style={styles.page}>
       <View style={styles.header}>
         <View ref={menuAnchorRef} collapsable={false} style={styles.side}>
-          <TouchableOpacity onPress={openMenu} style={styles.iconBtn} hitSlop={8} activeOpacity={0.7}>
+          <TouchableOpacity
+            onPress={openMenu}
+            style={styles.iconBtn}
+            hitSlop={8}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel="Board options"
+          >
             {uploadingBackground || loadingSource
               ? <ActivityIndicator size="small" color={colors.inkDark} />
               : <MoreHorizontal size={18} color={colors.inkDark} />}
@@ -380,7 +394,13 @@ export default function BoardCarouselPage({
 
         {/* The name is the one thing on this screen the user typed, so it's
             editable where it's displayed rather than somewhere else. */}
-        <TouchableOpacity style={styles.titleWrap} onPress={() => setRenaming(true)} activeOpacity={0.6}>
+        <TouchableOpacity
+          style={styles.titleWrap}
+          onPress={() => setRenaming(true)}
+          activeOpacity={0.6}
+          accessibilityRole="button"
+          accessibilityLabel={`Rename the board “${board.name}”`}
+        >
           <View style={styles.titleRow}>
             <Text style={styles.title} numberOfLines={1}>{board.name}</Text>
             <Pencil size={11} color={colors.inkFaint} />
@@ -392,10 +412,20 @@ export default function BoardCarouselPage({
             screen has its own "+" that means "new board". Two identical
             glyphs, two different nouns, one screen. */}
         <View style={[styles.side, styles.sideRight]}>
-          <TouchableOpacity onPress={() => setPickerOpen(true)} style={styles.addBtn} activeOpacity={0.85}>
+          <TouchableOpacity
+            onPress={() => setPickerOpen(true)}
+            style={styles.addBtn}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 4 }}
+            activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel="Add stickers to this board"
+          >
             <Plus size={15} color={colors.white} strokeWidth={2.75} />
             <Text style={styles.addText}>Add</Text>
           </TouchableOpacity>
+          {/* Bare, not a disc: this row already carries two solid buttons,
+              and a third would read as a third thing to do here. */}
+          <SettingsButton variant="bare" hitSlop={{ top: 10, bottom: 10, left: 4, right: 12 }} />
         </View>
       </View>
 
@@ -542,11 +572,11 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.sm,
   },
   side: { width: SIDE_SLOT_W, alignItems: 'flex-start' },
-  sideRight: { alignItems: 'flex-end' },
+  sideRight: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: spacing.sm },
   titleWrap: { flex: 1, alignItems: 'center' },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: 5, maxWidth: '100%' },
-  title: { fontSize: 15, fontFamily: fonts.cozy, color: colors.inkDark, textAlign: 'center', flexShrink: 1 },
-  subtitle: { fontSize: 10, color: colors.inkFaint, fontWeight: '600', marginTop: 1 },
+  title: { fontSize: 15, fontFamily: fonts.display, color: colors.inkDark, textAlign: 'center', flexShrink: 1 },
+  subtitle: { fontSize: 10, fontFamily: fonts.mono, color: colors.inkFaint, marginTop: 1 },
   iconBtn: {
     width: 36,
     height: 36,
@@ -567,7 +597,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.terra,
     ...shadows.button,
   },
-  addText: { fontSize: 13, fontFamily: fonts.cozy, color: colors.white },
+  addText: { fontSize: 13, fontFamily: fonts.display, color: colors.white },
   canvasWrap: { flex: 1, marginHorizontal: spacing.md, marginBottom: spacing.md },
   loader: { flex: 1 },
   empty: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.xl },
@@ -580,8 +610,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: spacing.sm,
   },
-  emptyTitle: { fontSize: 18, fontFamily: fonts.cozy, color: colors.inkDark, marginBottom: 8 },
-  emptySubtitle: { fontSize: 13, color: colors.inkFaint, textAlign: 'center', lineHeight: 20 },
+  emptyTitle: { fontSize: 18, fontFamily: fonts.display, color: colors.inkDark, marginBottom: 8 },
+  emptySubtitle: { fontSize: 13, fontFamily: fonts.text, color: colors.inkFaint, textAlign: 'center', lineHeight: 20 },
   emptyBtn: {
     flexDirection: 'row', alignItems: 'center', gap: spacing.xs,
     marginTop: spacing.lg,
@@ -589,7 +619,7 @@ const styles = StyleSheet.create({
     borderRadius: radii.full, backgroundColor: colors.terra,
     ...shadows.button,
   },
-  emptyBtnText: { fontSize: 15, fontFamily: fonts.cozy, color: colors.white },
+  emptyBtnText: { fontSize: 15, fontFamily: fonts.display, color: colors.white },
   // Floats over the canvas rather than sitting in the header's flow, so
   // dismissing it doesn't reflow the board underneath.
   coach: {
@@ -606,7 +636,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 253, 244, 0.94)',
     ...shadows.card,
   },
-  coachText: { flex: 1, fontSize: 12, fontWeight: '600', color: colors.inkMid, lineHeight: 17 },
+  coachText: { flex: 1, fontSize: 12, fontFamily: fonts.display, color: colors.inkMid, lineHeight: 17 },
   tintSliderWrap: {
     position: 'absolute',
     left: spacing.sm,

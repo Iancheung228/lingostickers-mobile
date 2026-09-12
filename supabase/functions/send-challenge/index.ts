@@ -1,5 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { getAcceptedAnswersWithGroq } from '../_shared/vocab.ts';
+import { getAcceptedAnswers } from '../_shared/vocab.ts';
 import { consumeQuota, errorResponse } from '../_shared/rateLimit.ts';
 
 const corsHeaders = {
@@ -62,7 +62,7 @@ Deno.serve(async (req) => {
 
     // ── 2a. Claim quota ──────────────────────────────────────────
     // After the friendship and ownership checks so a rejected request never
-    // burns a unit, but before the Groq call below, which is the spend this
+    // burns a unit, but before the model call below, which is the spend this
     // is protecting. Throws ApiError(429), caught at the bottom.
     await consumeQuota(admin, senderId, 'send-challenge');
 
@@ -110,7 +110,7 @@ Deno.serve(async (req) => {
     // Generated once here (not on every guess) so answer-checking stays an
     // instant, free string comparison. snapshot_word is always included as
     // a fallback even if this call fails or returns nothing.
-    const synonyms = await getAcceptedAnswersWithGroq(sticker.word, sticker.language);
+    const synonyms = await getAcceptedAnswers(sticker.word, sticker.language);
     const acceptedAnswers = [sticker.word, ...synonyms];
 
     // ── 4. Insert challenge ──────────────────────────────────────

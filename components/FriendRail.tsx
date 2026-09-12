@@ -2,7 +2,7 @@ import { ScrollView, View, Text, TouchableOpacity, StyleSheet } from 'react-nati
 import { UserPlus } from 'lucide-react-native';
 import Avatar from '@/components/Avatar';
 import { FriendWithProfile } from '@/lib/types';
-import { colors, radii, spacing } from '@/constants/theme';
+import { colors, radii, spacing, fonts } from '@/constants/theme';
 
 // ---------------------------------------------------------------------------
 // The friends directory, as one line.
@@ -79,7 +79,7 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   item: { width: ITEM_WIDTH, alignItems: 'center', gap: 5 },
-  name: { fontSize: 11, color: colors.inkLight, fontWeight: '600', maxWidth: ITEM_WIDTH },
+  name: { fontSize: 11, fontFamily: fonts.display, color: colors.inkLight, maxWidth: ITEM_WIDTH },
   addName: { color: colors.inkFaint },
   addCircle: {
     width: 46,

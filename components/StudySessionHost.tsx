@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import * as Haptics from 'expo-haptics';
 import { Sticker } from '@/lib/types';
-import { Grade } from '@/lib/review';
+import { dueAtMs, Grade, LEARN_AHEAD_MIN, SchedulePatch } from '@/lib/review';
 import StudyCard from '@/components/StudyCard';
 import ReviewSummary from '@/components/ReviewSummary';
 
@@ -40,18 +40,38 @@ export default function StudySessionHost({ queue, onExit, onUpdate, onDeleted }:
 
   const current = cards?.[index] ?? null;
 
-  const handleGraded = (grade: Grade) => {
-    if (!cards) return;
+  const handleGraded = (grade: Grade, patch: SchedulePatch) => {
+    if (!cards || !current) return;
     setStats(prev => ({
       graded: (prev?.graded ?? 0) + 1,
       again: (prev?.again ?? 0) + (grade === 'again' ? 1 : 0),
     }));
 
-    // An "Again" card goes to the back of the queue so it comes round once
-    // more this session. The schedule has already booked it for tomorrow
-    // either way, but being told you forgot a word and then never seeing it
-    // again in that sitting reads as broken.
-    const next = grade === 'again' && current ? [...cards, current] : cards;
+    // The graded card carries its new schedule forward, because it may well
+    // be answered again before this session ends — and a second answer read
+    // off the pre-grading card would compute from the wrong rung of the
+    // learning ladder (or think a card that has just lapsed is still a review
+    // card, and hand it a multiplied interval instead of graduating it).
+    const graded = { ...current, ...patch };
+
+    // Anything the scheduler booked inside the learn-ahead window is still
+    // being learned, so it comes round again in this sitting rather than
+    // being left mid-ladder until tomorrow — Again at 1m, Hard at 6m, Good at
+    // 10m. Being told you forgot a word and then never seeing it again in
+    // that sitting is what this exists to prevent; the window is the reason
+    // it's the scheduler's answer that decides, not a special case for Again.
+    const next = [...cards];
+    if (dueAtMs(graded) - Date.now() <= LEARN_AHEAD_MIN * 60_000) {
+      // Placed by due time, so a card due in a minute overtakes one due in
+      // ten — but never immediately, while some other card is still waiting:
+      // the same card twice in a row is a memory test of the last five
+      // seconds.
+      const tail = next.slice(index + 1);
+      const ahead = tail.findIndex(c => dueAtMs(c) > dueAtMs(graded));
+      const at = ahead < 0 ? tail.length : Math.max(ahead, tail.length > 0 ? 1 : 0);
+      next.splice(index + 1 + at, 0, graded);
+    }
+
     if (index + 1 < next.length) {
       setCards(next);
       setIndex(i => i + 1);

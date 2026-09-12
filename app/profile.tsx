@@ -1,36 +1,49 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView, ScrollView, ActivityIndicator, Alert, Linking } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
-import { ArrowLeft, Camera, LogOut, BookOpen, Heart, Check, Trash2, Shield, ExternalLink } from 'lucide-react-native';
+import { ArrowLeft, Camera, LogOut, BookOpen, Heart, Check, Trash2, Shield, ExternalLink, Ban, Mail } from 'lucide-react-native';
 import { useAuth } from '@/hooks/useAuth';
 import { useProfile } from '@/hooks/useProfile';
 import { supabase } from '@/lib/supabase';
 import { Language, Sticker, WallDisplayStyle, CutoutBorderStyle } from '@/lib/types';
+import { useFriends } from '@/hooks/useFriends';
 import { pickAvatarImage } from '@/lib/avatars';
 import { isLocalCutoutAvailable } from '@/lib/cutout';
 import Avatar from '@/components/Avatar';
-import { colors, shadows, radii, spacing, fonts } from '@/constants/theme';
+import BlockedAccounts from '@/components/BlockedAccounts';
+import { colors, shadows, radii, spacing, fonts, wordFontFor } from '@/constants/theme';
+import { LANGUAGES } from '@/lib/languages';
 
 // Published at the apex domain and linked from App Store Connect too. In
 // the app because the Profile screen is where a person — and a reviewer —
 // looks for it.
 const PRIVACY_URL = 'https://tabistickers.com/privacy.html';
 
-const LANGUAGES: { code: Language; native: string; label: string }[] = [
-  { code: 'fr', native: 'Français', label: 'French' },
-  { code: 'ja', native: '日本語', label: 'Japanese' },
-  { code: 'yue', native: '廣東話', label: 'Cantonese' },
-];
+// Guideline 1.2 asks for published contact information alongside the report
+// and block controls, so it sits in the same section as them rather than only
+// inside the privacy policy.
+const SUPPORT_EMAIL = 'iancheung228@gmail.com';
 
 const WALL_DISPLAY_STYLES: { code: WallDisplayStyle; label: string; subtitle: string }[] = [
   { code: 'framed', label: 'Framed', subtitle: 'Stickers sit inside a little photo card' },
   { code: 'cutout', label: 'Cutout only', subtitle: 'Just the sticker shape, no card behind it' },
 ];
 
+// These describe what the setting ACTUALLY does, which is not what they used
+// to say. Every sticker gets a thin white edge baked into its PNG at the
+// moment it is cut out — on the device in StickerStyler.swift, and on the
+// server in create-sticker — and nothing here can remove it, because by the
+// time the app is drawing the sticker the border is already pixels. So the old
+// "no outline" and "just the bare cutout, completely flat" were both promising
+// something the app cannot deliver, and "White outline" was quietly stacking a
+// second border on top of the first.
+//
+// Removing the baked border is a Swift change, which means a native rebuild;
+// until then the honest fix is to describe the three options as what they are.
 const CUTOUT_BORDER_STYLES: { code: CutoutBorderStyle; label: string; subtitle: string }[] = [
-  { code: 'outline', label: 'White outline', subtitle: 'A thick white sticker-style border' },
-  { code: 'shadow', label: 'Shadow', subtitle: 'A soft drop shadow, no outline' },
-  { code: 'none', label: 'No border', subtitle: 'Just the bare cutout, completely flat' },
+  { code: 'outline', label: 'Thick outline', subtitle: 'Widens the white edge into a bold sticker border' },
+  { code: 'shadow', label: 'Shadow', subtitle: 'A soft drop shadow behind the cutout' },
+  { code: 'none', label: 'Flat', subtitle: 'No shadow and no extra border' },
 ];
 
 export default function ProfileScreen() {
@@ -49,6 +62,8 @@ export default function ProfileScreen() {
   const [updatingBorderStyle, setUpdatingBorderStyle] = useState<CutoutBorderStyle | null>(null);
   const [deletingAccount, setDeletingAccount] = useState(false);
   const [savingAvatar, setSavingAvatar] = useState(false);
+  const [blockedOpen, setBlockedOpen] = useState(false);
+  const { blocked } = useFriends();
 
   const fetchStickers = useCallback(async () => {
     if (!user) return;
@@ -243,7 +258,7 @@ export default function ProfileScreen() {
                   activeOpacity={0.8}
                 >
                   <View>
-                    <Text style={styles.langNative}>{native}</Text>
+                    <Text style={[styles.langNative, { fontFamily: wordFontFor(code) }]}>{native}</Text>
                     <Text style={styles.langLabel}>{label}</Text>
                   </View>
                   {updatingLanguage === code ? (
@@ -317,8 +332,57 @@ export default function ProfileScreen() {
                   );
                 })}
               </View>
+              <Text style={styles.sectionFootnote}>
+                Every sticker keeps the thin white edge it was cut out with — these
+                change what sits on top of it.
+              </Text>
             </>
           )}
+
+          {/* Safety — the controls Guideline 1.2 asks for, gathered in one
+              place so they can be found by someone who needs them in a hurry
+              and by a reviewer looking for them specifically. Reporting and
+              blocking themselves live where the person is (a friend's profile,
+              a challenge, an incoming request); this section is where you
+              review what you've done and how to reach a human. */}
+          <Text style={styles.sectionLabel}>SAFETY</Text>
+          <View style={styles.card}>
+            <TouchableOpacity
+              style={styles.infoRow}
+              onPress={() => setBlockedOpen(true)}
+              activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel="Manage blocked accounts"
+            >
+              <Ban size={16} color={colors.terraDark} />
+              <View style={styles.infoTextWrap}>
+                <Text style={styles.infoTitle}>Blocked accounts</Text>
+                <Text style={styles.infoSubtitle}>
+                  {blocked.length === 0
+                    ? 'Nobody is blocked'
+                    : `${blocked.length} ${blocked.length === 1 ? 'person' : 'people'} blocked`}
+                </Text>
+              </View>
+              <Text style={styles.rowChevron}>›</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.infoRow, styles.rowDivider]}
+              onPress={() => Linking.openURL(
+                `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent('Tabi Stickers — report a problem')}`,
+              )}
+              activeOpacity={0.7}
+              accessibilityRole="link"
+              accessibilityLabel="Email us about a problem"
+            >
+              <Mail size={16} color={colors.terraDark} />
+              <View style={styles.infoTextWrap}>
+                <Text style={styles.infoTitle}>Report a problem</Text>
+                <Text style={styles.infoSubtitle}>{SUPPORT_EMAIL}</Text>
+              </View>
+              <ExternalLink size={14} color={colors.inkFaint} />
+            </TouchableOpacity>
+          </View>
 
           {/* Info */}
           <Text style={styles.sectionLabel}>ABOUT</Text>
@@ -384,6 +448,8 @@ export default function ProfileScreen() {
           </TouchableOpacity>
         </ScrollView>
       )}
+
+      <BlockedAccounts visible={blockedOpen} onClose={() => setBlockedOpen(false)} />
     </SafeAreaView>
   );
 }
@@ -407,7 +473,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     ...shadows.card,
   },
-  title: { fontSize: 15, fontFamily: fonts.cozy, color: colors.inkDark },
+  title: { fontSize: 15, fontFamily: fonts.display, color: colors.inkDark },
   loader: { flex: 1 },
 
   scrollBody: { paddingHorizontal: spacing.md, paddingBottom: spacing.xxl },
@@ -444,7 +510,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   userInfo: { flex: 1 },
-  username: { fontSize: 15, fontFamily: fonts.cozy, color: colors.inkDark },
+  username: { fontSize: 15, fontFamily: fonts.display, color: colors.inkDark },
   email: { fontSize: 11, fontFamily: fonts.mono, color: colors.inkFaint, marginTop: 2 },
 
   statCardsRow: { flexDirection: 'row', gap: spacing.sm },
@@ -458,24 +524,17 @@ const styles = StyleSheet.create({
     padding: spacing.ms,
     ...shadows.card,
   },
-  statValue: { fontSize: 16, fontFamily: fonts.mono, fontWeight: '700', color: colors.inkDark },
-  statLabel: { fontSize: 9, fontWeight: '700', color: colors.inkFaint },
+  statValue: { fontSize: 16, fontFamily: fonts.monoBold, color: colors.inkDark },
+  statLabel: { fontSize: 9, fontFamily: fonts.mono, color: colors.inkFaint },
 
   note: {
     backgroundColor: 'rgba(255,255,255,0.55)',
     borderRadius: radii.lg,
     padding: spacing.ms,
   },
-  noteText: { fontSize: 11, fontWeight: '500', color: colors.inkDark, lineHeight: 16 },
+  noteText: { fontSize: 11, fontFamily: fonts.text, color: colors.inkDark, lineHeight: 16 },
 
-  sectionLabel: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: colors.inkFaint,
-    letterSpacing: 1.2,
-    marginBottom: spacing.sm,
-    paddingLeft: spacing.xs,
-  },
+  sectionLabel: { fontSize: 10, fontFamily: fonts.monoBold, color: colors.inkFaint, letterSpacing: 1.2, marginBottom: spacing.sm, paddingLeft: spacing.xs, },
   card: {
     backgroundColor: colors.card,
     borderRadius: radii.lg,
@@ -490,10 +549,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
   },
   rowDivider: { borderTopWidth: 1, borderTopColor: colors.borderLight },
-  langNative: { fontSize: 16, fontFamily: fonts.jp, color: colors.inkDark },
-  langLabel: { fontSize: 12, color: colors.inkFaint, marginTop: 2 },
-  wallStyleLabel: { fontSize: 14, fontWeight: '700', color: colors.inkDark },
-  wallStyleSubtitle: { fontSize: 11, color: colors.inkFaint, marginTop: 2 },
+  langNative: { fontSize: 16, color: colors.inkDark },
+  langLabel: { fontSize: 12, fontFamily: fonts.text, color: colors.inkFaint, marginTop: 2 },
+  wallStyleLabel: { fontSize: 14, fontFamily: fonts.display, color: colors.inkDark },
+  wallStyleSubtitle: { fontSize: 11, fontFamily: fonts.text, color: colors.inkFaint, marginTop: 2 },
   activeBadge: {
     width: 22,
     height: 22,
@@ -510,15 +569,17 @@ const styles = StyleSheet.create({
     padding: spacing.md,
   },
   infoTextWrap: { flex: 1 },
-  infoTitle: { fontSize: 13, fontWeight: '700', color: colors.inkDark },
-  infoSubtitle: { fontSize: 10, color: colors.inkFaint, marginTop: 2 },
+  infoTitle: { fontSize: 13, fontFamily: fonts.display, color: colors.inkDark },
+  infoSubtitle: { fontSize: 10, fontFamily: fonts.mono, color: colors.inkFaint, marginTop: 2 },
+  rowChevron: { fontSize: 20, fontFamily: fonts.text, color: colors.inkFaint, lineHeight: 20 },
+  sectionFootnote: { fontSize: 11, fontFamily: fonts.text, color: colors.inkFaint, lineHeight: 15, marginTop: spacing.sm, marginHorizontal: spacing.xs, },
   engineBadge: {
     backgroundColor: colors.sageLight,
     borderRadius: radii.full,
     paddingHorizontal: spacing.sm,
     paddingVertical: 3,
   },
-  engineBadgeText: { fontSize: 9, fontWeight: '800', color: colors.sageDark },
+  engineBadgeText: { fontSize: 9, fontFamily: fonts.display, color: colors.sageDark },
 
   logoutButton: {
     flexDirection: 'row',
@@ -530,7 +591,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
     ...shadows.card,
   },
-  logoutText: { fontSize: 14, fontWeight: '700', color: colors.inkFaint },
+  logoutText: { fontSize: 14, fontFamily: fonts.display, color: colors.inkFaint },
 
   deleteAccountButton: {
     flexDirection: 'row',
@@ -540,5 +601,5 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
     marginTop: spacing.sm,
   },
-  deleteAccountText: { fontSize: 13, fontWeight: '700', color: colors.error },
+  deleteAccountText: { fontSize: 13, fontFamily: fonts.display, color: colors.error },
 });

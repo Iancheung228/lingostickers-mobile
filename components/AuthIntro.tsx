@@ -52,7 +52,7 @@ const styles = StyleSheet.create({
   },
   wordmark: {
     fontSize: 30,
-    fontFamily: fonts.cozy,
+    fontFamily: fonts.display,
     color: colors.inkDark,
     letterSpacing: -0.5,
   },

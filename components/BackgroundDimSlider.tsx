@@ -4,7 +4,7 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { Contrast } from 'lucide-react-native';
-import { colors, radii, shadows } from '@/constants/theme';
+import { colors, radii, shadows, fonts } from '@/constants/theme';
 
 interface BackgroundDimSliderProps {
   // Last-committed percent (0-maxPct) — re-synced from outside whenever it
@@ -82,7 +82,28 @@ export default function BackgroundDimSlider({ value, maxPct, onPreviewChange, on
     <View style={styles.pill}>
       <Contrast size={12} color={colors.inkDark} />
       <GestureDetector gesture={pan}>
-        <View style={styles.track} hitSlop={{ top: 10, bottom: 10 }}>
+        {/* A custom slider is invisible to assistive tech unless it says so:
+            without `adjustable` and a value, VoiceOver reads three unlabelled
+            views and offers no way to move the thumb, so the dim control was
+            simply unavailable to anyone not dragging it with a finger. The
+            increment/decrement actions step by the same 5% the haptics do. */}
+        <View
+          style={styles.track}
+          hitSlop={{ top: 10, bottom: 10 }}
+          accessible
+          accessibilityRole="adjustable"
+          accessibilityLabel="Background dimming"
+          accessibilityValue={{ min: 0, max: maxPct, now: displayPct, text: `${displayPct} percent` }}
+          accessibilityActions={[{ name: 'increment' }, { name: 'decrement' }]}
+          onAccessibilityAction={(e) => {
+            const delta = e.nativeEvent.actionName === 'increment' ? HAPTIC_STEP_PCT : -HAPTIC_STEP_PCT;
+            const next = Math.min(maxPct, Math.max(0, displayPct + delta));
+            if (next === displayPct) return;
+            pct.value = next;
+            reportPreview(next);
+            commit(next);
+          }}
+        >
           <View style={styles.rail} />
           <Animated.View style={[styles.fill, fillStyle]} />
           <Animated.View style={[styles.thumb, thumbStyle]} />
@@ -135,5 +156,5 @@ const styles = StyleSheet.create({
     borderColor: colors.terra,
     ...shadows.card,
   },
-  pctText: { fontSize: 10, fontWeight: '700', color: colors.inkDark, minWidth: 24 },
+  pctText: { fontSize: 10, fontFamily: fonts.display, color: colors.inkDark, minWidth: 24 },
 });

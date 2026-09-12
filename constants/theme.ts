@@ -1,3 +1,5 @@
+import { Platform } from 'react-native';
+
 // Dusty-rose / warm-cream palette (blush redesign, Aug 2026). Every hex
 // below is sampled from the reference mockup, so the token *names* are the
 // ones the whole app already imports — only their values moved. That's
@@ -52,11 +54,17 @@ export const colors = {
   treeTrunk:  '#8B6040',
   skyBlue:    '#DCE6EC', // cool accent — the one non-rose sticker tint
 
-  // Semantic
+  // Semantic. The *Deep* pair are darkened from their base for the one job
+  // the base can't do: carrying white text at body size. White on #C4565B is
+  // ~3.9:1 and on #6E9E72 ~3.1:1, both short of WCAG AA's 4.5 for text under
+  // 18.66pt bold — these clear it. Use the base for borders and icons, the
+  // Deep one whenever white sits on top (the study card's grading row).
   error:      '#C4565B',
   errorLight: '#F7E0E1',
+  errorDeep:  '#A8434A',
   success:    '#6E9E72',
   successLight: '#E2EFE3',
+  successDeep:  '#4C7A52',
 
   // Utility
   border:     '#EADFD6',
@@ -69,24 +77,100 @@ export const colors = {
 // Font families loaded via @expo-google-fonts/* in app/_layout.tsx — the
 // string values match each package's exported constant name exactly, so
 // no import is needed at usage sites.
+//
+// FIVE ROLES, and every piece of text in the app is exactly one of them.
+// Before this there were 276 type declarations, 23 distinct font sizes, and
+// nine different ways of setting the one thing the app exists to show — a
+// vocabulary word. Worse, 198 of those 276 named no family at all, so the
+// moment you left the study card the app was set in the iOS system sans and
+// read like a settings screen rather than a keepsake.
+//
+//   word     the headword and the target-language sentence. Latin gets
+//            `display`; Japanese and Cantonese get a system face. This one
+//            is a function, not a constant — see wordFontFor below.
+//   display  screen titles, card headings, buttons, big counts.
+//   text     reading copy — meanings, translations, notes, hints, empty
+//            states, inputs. THIS is the role that did not exist.
+//   label    JetBrains Mono, uppercase and letterspaced. The index-card voice.
+//   data     JetBrains Mono again — readings, dates, counts, intervals.
+//
+// Newsreader replaces Fraunces for both Latin roles. Fraunces is a *display*
+// face whose quirks are drawn to work against continuous reading, and it was
+// being asked to set a 19px sentence; Newsreader was drawn by Production Type
+// for continuous on-screen reading, which is what this card actually asks
+// for. Two static weights, 229 KB measured — against 3.57 MB for the Japanese
+// face this replaces. Verified by parsing each .ttf's cmap: Newsreader covers
+// 34/34 of the French accent set and 8/8 of the typographic punctuation.
 export const fonts = {
-  cozy:       'Fraunces_700Bold',    // headings, buttons — warm serif display voice
-  cozyMedium: 'Fraunces_600SemiBold',
-  jp:         'KosugiMaru_400Regular', // Japanese word display
-  mono:       'JetBrainsMono_500Medium', // romaji, stats, technical labels
-  monoBold:   'JetBrainsMono_700Bold', // minimal-calendar month heading
+  display:  'Newsreader_500Medium',    // titles, headings, buttons, headwords
+  text:     'Newsreader_400Regular',   // reading copy — the role that was missing
+  mono:     'JetBrainsMono_500Medium', // romanization, stats, technical labels
+  monoBold: 'JetBrainsMono_700Bold',   // uppercase section labels, badges
 };
 
+// ---------------------------------------------------------------------------
+// The face a headword is set in, which depends on the language it is in.
+//
+// There used to be one `fonts.jp` — Kosugi Maru — applied to every headword in
+// every language. Kosugi Maru is a *Japanese* font: 7,525 codepoints, and
+// parsing its cmap directly says it covers 0 of 19 common French accented
+// characters and is missing 哋嘅咗嚟啲喺冇 (the particles that make written
+// Cantonese Cantonese) along with 咖啡 and 貓. Japanese was 15/15, which is why
+// this went unnoticed — and French is the DEFAULT language for a new account,
+// so the default experience was a headword rendered half in the Latin serif
+// and half
+// in whatever the OS substituted per missing glyph.
+//
+// Bundling real CJK instead is not the answer: a single Noto Sans HK weight is
+// ~8 MB against ~116 KB for a Latin one. The system already ships both faces,
+// correctly hinted, so name them and delete the 3.57 MB download.
+//
+//   fr  → Newsreader, verified 34/34 on the French accent set by parsing
+//         its cmap directly
+//   ja  → Hiragino Sans, the iOS system Japanese face
+//   yue → PingFang HK, which matters beyond coverage: it carries Hong Kong
+//         glyph forms rather than the mainland or Japanese variants of the
+//         same codepoints, so 骨 and 直 look the way a Hong Kong reader
+//         expects them to.
+//
+// Android returns undefined on purpose. There is no PingFang there, and naming
+// a font the platform does not have gets you the default face with no CJK
+// fallback at all — whereas letting it choose gets Noto CJK, which ships with
+// the OS. Undefined is the better answer, not the absent one.
+function cjkFaceFor(language: string): string | undefined {
+  if (Platform.OS !== 'ios') return undefined;
+  return language === 'yue' ? 'PingFang HK' : 'Hiragino Sans';
+}
+
+/** The headword: the display cut for Latin, the system face for CJK. */
+export function wordFontFor(language: string): string | undefined {
+  return language === 'fr' ? fonts.display : cjkFaceFor(language);
+}
+
+/**
+ * Target-language *sentences*, which want the text cut rather than the
+ * display one — a 19px sentence is reading, not a headline. Same system face
+ * as the headword for CJK, which have no separate text cut to switch to.
+ */
+export function sentenceFontFor(language: string): string | undefined {
+  return language === 'fr' ? fonts.text : cjkFaceFor(language);
+}
+
+// The scale. Note there is no `fontWeight` anywhere below, and there should
+// not be one at any call site either: these are *named faces*, and asking iOS
+// for a weight a named face does not have gets you a synthesised faux-bold —
+// a smeared outline rather than a drawn one. Weight is chosen by picking
+// `display` or `text`, not by asking for a number.
 export const typography = {
-  display:  { fontSize: 40, fontFamily: fonts.cozy, letterSpacing: -1, color: colors.inkDark },
-  h1:       { fontSize: 28, fontFamily: fonts.cozy, letterSpacing: -0.5, color: colors.inkDark },
-  h2:       { fontSize: 22, fontFamily: fonts.cozy, color: colors.inkDark },
-  h3:       { fontSize: 18, fontFamily: fonts.cozy, color: colors.inkDark },
-  body:     { fontSize: 15, fontWeight: '400' as const, color: colors.inkMid, lineHeight: 22 },
-  bodyBold: { fontSize: 15, fontWeight: '600' as const, color: colors.inkMid },
-  caption:  { fontSize: 12, fontWeight: '500' as const, color: colors.inkLight },
-  tiny:     { fontSize: 10, fontWeight: '600' as const, color: colors.inkFaint },
-  label:    { fontSize: 13, fontWeight: '700' as const, color: colors.inkMid, letterSpacing: 0.3 },
+  display:  { fontSize: 40, fontFamily: fonts.display, letterSpacing: -1, color: colors.inkDark },
+  h1:       { fontSize: 28, fontFamily: fonts.display, letterSpacing: -0.5, color: colors.inkDark },
+  h2:       { fontSize: 22, fontFamily: fonts.display, color: colors.inkDark },
+  h3:       { fontSize: 18, fontFamily: fonts.display, color: colors.inkDark },
+  body:     { fontSize: 15, fontFamily: fonts.text, color: colors.inkMid, lineHeight: 22 },
+  bodyBold: { fontSize: 15, fontFamily: fonts.display, color: colors.inkMid },
+  caption:  { fontSize: 12, fontFamily: fonts.text, color: colors.inkLight },
+  tiny:     { fontSize: 10, fontFamily: fonts.mono, color: colors.inkFaint },
+  label:    { fontSize: 13, fontFamily: fonts.monoBold, color: colors.inkMid, letterSpacing: 0.3 },
 };
 
 export const shadows = {

@@ -1,6 +1,6 @@
-import { useState, useRef, useCallback, useMemo } from 'react';
+import { useState, useRef, useCallback, useMemo, useEffect } from 'react';
 import {
-  View, Text, TouchableOpacity, StyleSheet, Alert,
+  View, Text, TouchableOpacity, StyleSheet, Alert, Linking, AppState,
   ActivityIndicator, useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -14,7 +14,8 @@ import Animated, {
 import { ImagePlus, Zap, ZapOff } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useAuth } from '@/hooks/useAuth';
-import { colors, shadows, radii, spacing } from '@/constants/theme';
+import SettingsButton from '@/components/SettingsButton';
+import { colors, shadows, radii, spacing, fonts } from '@/constants/theme';
 import { TAB_BAR_CLEARANCE } from '@/constants/tabBar';
 import { useProfile } from '@/hooks/useProfile';
 import { supabase } from '@/lib/supabase';
@@ -29,6 +30,9 @@ import PhotoExtractor, { ExtractResult, renderWholePhotoExtract } from '@/compon
 import ScanProgress, { ScanStage } from '@/components/ScanProgress';
 import GhostCutoutReveal from '@/components/GhostCutoutReveal';
 import { debugLog, debugWarn } from '@/lib/debug';
+import { alertPermissionDenied } from '@/lib/permissions';
+import { useAiConsent } from '@/lib/aiConsent';
+import { AiConsentGate } from '@/components/AiConsentGate';
 
 // The photo a scan is working from, and — for live captures only — the moment
 // and raw sensor frame the shutter caught. Named so the direct-capture path can
@@ -38,9 +42,23 @@ type CameraCapture = { discoveredAt: string; rawUri: string; rawWidth: number; r
 
 export default function ScanScreen() {
   const { user } = useAuth();
+  const { accepted: aiConsented, accept: acceptAiConsent } = useAiConsent(user?.id);
   const { profile } = useProfile(user?.id);
   const language = profile?.target_language ?? 'fr';
-  const [permission, requestPermission] = useCameraPermissions();
+  const [permission, requestPermission, getPermission] = useCameraPermissions();
+
+  // Sending someone to Settings only helps if we notice when they come back.
+  // Nothing else here re-reads the permission: `useFocusEffect` won't fire
+  // (the scan tab never lost focus — the Settings app was on top of it), and
+  // the hook only checks on mount. Without this the screen keeps showing
+  // "Open Settings" after the switch has already been flipped, which reads
+  // as the button having failed.
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') getPermission();
+    });
+    return () => sub.remove();
+  }, [getPermission]);
   const [processing, setProcessing] = useState(false);
   // Which stage of the scan is running, and whether step one had to fall back
   // to the server — both purely so the wait can explain itself.
@@ -101,9 +119,9 @@ export default function ScanScreen() {
   // cutout never shows the previous scan's preview.
   const previewCutoutRef = useRef<string | null>(null);
   // How long the vocabulary call itself took, as reported by the edge
-  // function. Separates 'the network was slow' from 'Groq was rate-limited',
+  // function. Separates 'the network was slow' from 'the model was rate-limited',
   // which is the difference between a payload problem and a quota problem.
-  const lastGroqMsRef = useRef<number | null>(null);
+  const lastVocabMsRef = useRef<number | null>(null);
 
   // Rectangular (3:4 portrait) camera viewport sized to the screen width
   // (with off-white margin), capped so it doesn't dominate on tablets and
@@ -231,8 +249,11 @@ export default function ScanScreen() {
       throw new Error(body?.error ?? 'This took too long and was cut off. Please try again.');
     }
     if (data.error) throw new Error(data.error);
-    lastGroqMsRef.current = typeof data._debug_groqMs === 'number' ? data._debug_groqMs : null;
-    debugLog('[scan] edge fn debug:', data._debug_bgStatus, `groq ${lastGroqMsRef.current}ms`);
+    // `_debug_groqMs` is the pre-Gemini name; edge functions deploy
+    // separately from app builds, so accept both for one release.
+    const vocabMs = data._debug_vocabMs ?? data._debug_groqMs;
+    lastVocabMsRef.current = typeof vocabMs === 'number' ? vocabMs : null;
+    debugLog('[scan] edge fn debug:', data._debug_bgStatus, `vocab ${lastVocabMsRef.current}ms`);
 
     setDraft({
       language: data.language === 'ja' || data.language === 'yue' ? data.language : 'fr',
@@ -242,6 +263,11 @@ export default function ScanScreen() {
       sentence: String(data.sentence ?? ''),
       sentenceTranslation: String(data.sentenceTranslation ?? ''),
       sentenceInsight: data.sentenceInsight ?? null,
+      // Validated against the sentence server-side before it got here; the
+      // card re-checks it at render time anyway (see lib/gloss.ts), so a
+      // malformed value degrades to no breakdown rather than a wrong one.
+      sentenceGloss: data.sentenceGloss ?? null,
+      grammarKey: data.grammarKey ?? null,
       partOfSpeech: data.partOfSpeech ?? null,
       category: data.category ?? 'Other',
       imagePath: String(data.imagePath ?? ''),
@@ -269,11 +295,12 @@ export default function ScanScreen() {
   // sticker as the "memory photo" to flip to.
   // A small copy of the wider scene, for the vision model only.
   //
-  // Groq is sent the scene so the example sentence can describe where the
-  // object actually was — but it needs far less resolution to do that than the
-  // hero background does to fill a phone screen. Sending the full 1280px copy
-  // to both was pushing every scan against a free-tier token budget, and the
-  // 429s that produced were being waited out for tens of seconds.
+  // The vision model is sent the scene so the example sentence can describe
+  // where the object actually was. It does NOT need this to be small for
+  // token reasons — measured 2026-09-09, both Gemini and Groq bill a flat
+  // per-image rate that is identical at 640px and 1280px. It stays small
+  // because the phone uploads it: 1280px is ~5x the bytes over cellular, and
+  // that is latency the user waits through on every scan.
   const prepareContextPhoto = useCallback(async (uri: string, width: number, height: number) => {
     const longSide = Math.max(width, height);
     let context = ImageManipulator.manipulate(uri);
@@ -441,7 +468,7 @@ export default function ScanScreen() {
         const serverMs = Date.now() - submitStarted;
         debugLog(
           `[scan] memory-photo ${memoryMs}ms ‖ cutout ${cutoutMs}ms · create-sticker ${serverMs}ms` +
-            ` (groq ${lastGroqMsRef.current ?? '?'}ms)` +
+            ` (vocab ${lastVocabMsRef.current ?? '?'}ms)` +
             (CUTOUT_DRY_RUN ? ' (includes rembg — dry run runs both pipelines)' : ''),
         );
       } catch (submitErr) {
@@ -593,9 +620,13 @@ export default function ScanScreen() {
   const handleImportPhoto = useCallback(async () => {
     if (processing) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('Photos Access Needed', 'Tabi Stickers needs access to your photo library to import a picture.');
+    const { granted, canAskAgain } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!granted) {
+      alertPermissionDenied(
+        'Photos Access Needed',
+        'Tabi Stickers needs access to your photo library to import a picture.',
+        canAskAgain
+      );
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -624,6 +655,8 @@ export default function ScanScreen() {
       sentence: draft.sentence,
       sentence_translation: draft.sentenceTranslation,
       sentence_insight: draft.sentenceInsight,
+      sentence_gloss: draft.sentenceGloss,
+      grammar_key: draft.grammarKey,
       part_of_speech: draft.partOfSpeech,
       category: draft.category,
       image_path: draft.imagePath,
@@ -739,8 +772,15 @@ export default function ScanScreen() {
         sentenceTranslation: newSentence,
         // translate-sentence spreads the LLM's raw JSON keys through
         // unchanged (unlike create-sticker, which remaps to camelCase) —
-        // so this reads the snake_case key on purpose.
+        // so this reads the snake_case keys on purpose.
         sentenceInsight: data.sentence_insight ?? prev.sentenceInsight,
+        // Both of these describe the sentence, and the sentence has just been
+        // replaced — so they are taken from the new response or dropped, never
+        // carried over from the old one. The grammar key goes for good: the
+        // learner chose this sentence's content, so it no longer demonstrates
+        // whatever structure the syllabus had picked for the scan.
+        sentenceGloss: data.gloss ?? null,
+        grammarKey: null,
       } : prev);
     } finally {
       setRetranslatingSentence(false);
@@ -749,15 +789,37 @@ export default function ScanScreen() {
 
   if (!permission) return <View style={styles.container} />;
 
+  // Guideline 5.1.2(i): the photo goes to third-party AI, so consent comes
+  // before anything that could capture one — ahead of the camera prompt, not
+  // after it. `undefined` means the stored answer has not been read yet;
+  // rendering the gate then would flash it at people who already agreed.
+  if (user && aiConsented === false) {
+    return <AiConsentGate onAccept={acceptAiConsent} />;
+  }
+
   if (!permission.granted) {
+    // Once canAskAgain is false, requestPermission() resolves to denied
+    // without ever showing a dialog — so a "Grant Permission" button here
+    // would be dead, on the one screen that produces every sticker in the
+    // app. Settings is the only way back; send them there instead.
+    const blocked = !permission.canAskAgain;
     return (
       <SafeAreaView style={styles.permissionContainer}>
         <Text style={styles.permissionTitle}>Camera Access Needed</Text>
         <Text style={styles.permissionSubtitle}>
-          Tabi Stickers needs your camera to identify objects and create stickers.
+          {blocked
+            ? 'Camera access is turned off for Tabi Stickers. Turn it back on in Settings to scan objects and create stickers.'
+            : 'Tabi Stickers needs your camera to identify objects and create stickers.'}
         </Text>
-        <TouchableOpacity style={styles.permissionButton} onPress={requestPermission}>
-          <Text style={styles.permissionButtonText}>Grant Permission</Text>
+        <TouchableOpacity
+          style={styles.permissionButton}
+          onPress={blocked ? () => Linking.openSettings() : requestPermission}
+          accessibilityRole="button"
+          accessibilityLabel={blocked ? 'Open Settings' : 'Grant camera permission'}
+        >
+          <Text style={styles.permissionButtonText}>
+            {blocked ? 'Open Settings' : 'Grant Permission'}
+          </Text>
         </TouchableOpacity>
       </SafeAreaView>
     );
@@ -768,6 +830,9 @@ export default function ScanScreen() {
       <View style={styles.header}>
         <Text style={styles.prompt}>What did you find?</Text>
         <Text style={styles.promptSub}>Take a photo to learn!</Text>
+        {/* Absolutely placed rather than in a row: the prompt is centred on
+            the screen, not on the space left over beside a button. */}
+        <SettingsButton style={styles.headerSettings} />
       </View>
 
       <View style={styles.cameraArea}>
@@ -942,19 +1007,9 @@ const styles = StyleSheet.create({
     paddingTop: spacing.lg,
     paddingBottom: spacing.sm,
   },
-  prompt: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: colors.inkDark,
-    letterSpacing: -0.3,
-    fontStyle: 'italic',
-  },
-  promptSub: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: colors.terra,
-    marginTop: 2,
-  },
+  headerSettings: { position: 'absolute', right: spacing.lg, top: spacing.sm },
+  prompt: { fontSize: 20, fontFamily: fonts.display, color: colors.inkDark, letterSpacing: -0.3 },
+  promptSub: { fontSize: 13, fontFamily: fonts.text, color: colors.terra, marginTop: 2, },
 
   cameraArea: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   cameraFrame: {
@@ -996,7 +1051,7 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: radii.full,
   },
-  zoomPillText: { color: colors.white, fontSize: 12, fontWeight: '700' },
+  zoomPillText: { color: colors.white, fontSize: 12, fontFamily: fonts.display,},
 
   processingOverlay: {
     ...StyleSheet.absoluteFillObject,
@@ -1012,7 +1067,7 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.lg,
     gap: spacing.md,
   },
-  hint: { color: colors.inkLight, fontSize: 13, fontWeight: '500' },
+  hint: { color: colors.inkLight, fontSize: 13, fontFamily: fonts.text,},
   scanProgressWrap: { alignSelf: 'stretch', paddingHorizontal: spacing.lg },
 
   captureRow: {
@@ -1039,7 +1094,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.sageLight,
   },
   sideBtnCircleDisabled: { opacity: 0.45 },
-  sideBtnLabel: { fontSize: 11, fontWeight: '600', color: colors.inkLight },
+  sideBtnLabel: { fontSize: 11, fontFamily: fonts.display, color: colors.inkLight },
   sideBtnLabelActive: { color: colors.sageDark },
 
   captureButton: {
@@ -1078,20 +1133,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xl,
     paddingBottom: TAB_BAR_CLEARANCE,
   },
-  permissionTitle: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: colors.inkDark,
-    marginBottom: spacing.sm,
-    textAlign: 'center',
-  },
-  permissionSubtitle: {
-    fontSize: 14,
-    color: colors.inkLight,
-    textAlign: 'center',
-    lineHeight: 22,
-    marginBottom: spacing.xl,
-  },
+  permissionTitle: { fontSize: 22, fontFamily: fonts.display, color: colors.inkDark, marginBottom: spacing.sm, textAlign: 'center', },
+  permissionSubtitle: { fontSize: 14, fontFamily: fonts.text, color: colors.inkLight, textAlign: 'center', lineHeight: 22, marginBottom: spacing.xl, },
   permissionButton: {
     backgroundColor: colors.terra,
     borderRadius: radii.lg,
@@ -1099,5 +1142,5 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xl,
     ...shadows.button,
   },
-  permissionButtonText: { color: colors.card, fontSize: 16, fontWeight: '700' },
+  permissionButtonText: { color: colors.card, fontSize: 16, fontFamily: fonts.display,},
 });

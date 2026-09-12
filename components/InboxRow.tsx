@@ -1,8 +1,8 @@
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import { Check, X, Play } from 'lucide-react-native';
+import { Check, X, Play, MoreHorizontal } from 'lucide-react-native';
 import Avatar from '@/components/Avatar';
 import { timeAgo } from '@/lib/relativeTime';
-import { colors, radii, spacing, shadows } from '@/constants/theme';
+import { colors, radii, spacing, shadows, fonts } from '@/constants/theme';
 
 // ---------------------------------------------------------------------------
 // One row for everything that is waiting on the user.
@@ -23,9 +23,14 @@ interface FriendRequestRowProps {
   avatarPath: string | null;
   onAccept: () => void;
   onDecline: () => void;
+  /// Opens the report/block options. An unanswered request from a stranger is
+  /// the one place someone can reach you without your consent, so the safety
+  /// controls have to be here and not only on a friend's profile — by the time
+  /// FriendProfile is reachable you have already accepted them.
+  onFlag: () => void;
 }
 
-export function FriendRequestRow({ username, avatarPath, onAccept, onDecline }: FriendRequestRowProps) {
+export function FriendRequestRow({ username, avatarPath, onAccept, onDecline, onFlag }: FriendRequestRowProps) {
   const name = username ?? 'Someone';
   return (
     <View style={styles.row}>
@@ -37,11 +42,20 @@ export function FriendRequestRow({ username, avatarPath, onAccept, onDecline }: 
       </View>
       <View style={styles.actions}>
         <TouchableOpacity
+          style={[styles.iconBtn, styles.more]}
+          onPress={onFlag}
+          accessibilityRole="button"
+          accessibilityLabel={`Report or block ${name}`}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 4 }}
+        >
+          <MoreHorizontal size={16} color={colors.inkLight} strokeWidth={2.5} />
+        </TouchableOpacity>
+        <TouchableOpacity
           style={[styles.iconBtn, styles.accept]}
           onPress={onAccept}
           accessibilityRole="button"
           accessibilityLabel={`Accept ${name}`}
-          hitSlop={6}
+          hitSlop={{ top: 10, bottom: 10, left: 4, right: 4 }}
         >
           <Check size={16} color={colors.white} strokeWidth={3} />
         </TouchableOpacity>
@@ -50,7 +64,7 @@ export function FriendRequestRow({ username, avatarPath, onAccept, onDecline }: 
           onPress={onDecline}
           accessibilityRole="button"
           accessibilityLabel={`Decline ${name}`}
-          hitSlop={6}
+          hitSlop={{ top: 10, bottom: 10, left: 4, right: 10 }}
         >
           <X size={16} color={colors.inkLight} strokeWidth={3} />
         </TouchableOpacity>
@@ -113,19 +127,25 @@ const styles = StyleSheet.create({
     ...shadows.card,
   },
   body: { flex: 1, gap: 2 },
-  line: { fontSize: 14, color: colors.inkMid, lineHeight: 19 },
-  strong: { fontWeight: '800', color: colors.inkDark },
-  meta: { fontSize: 11, color: colors.inkFaint, fontWeight: '600' },
-  actions: { flexDirection: 'row', gap: 6 },
+  line: { fontSize: 14, fontFamily: fonts.text, color: colors.inkMid, lineHeight: 19 },
+  strong: { fontFamily: fonts.display, color: colors.inkDark },
+  meta: { fontSize: 11, fontFamily: fonts.display, color: colors.inkFaint},
+  // 8pt apart rather than 6, and the buttons wider — see the hitSlop on each
+  // of them below. Accept and Decline sit side by side and answer a friend
+  // request in opposite directions; their touch areas must not overlap.
+  actions: { flexDirection: 'row', gap: 8 },
   iconBtn: {
-    width: 32,
-    height: 32,
+    width: 34,
+    height: 34,
     borderRadius: radii.full,
     alignItems: 'center',
     justifyContent: 'center',
   },
   accept: { backgroundColor: colors.sageDark },
   decline: { backgroundColor: colors.cardAlt },
+  // Quieter than the two answers it sits beside: this is the escape hatch, not
+  // a third thing being asked of the user.
+  more: { backgroundColor: colors.transparent },
   playBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -135,5 +155,5 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.ms,
     paddingVertical: 7,
   },
-  playText: { fontSize: 12, fontWeight: '800', color: colors.inkDark },
+  playText: { fontSize: 12, fontFamily: fonts.display, color: colors.inkDark },
 });

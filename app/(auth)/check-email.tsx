@@ -62,7 +62,7 @@ export default function CheckEmailScreen() {
         {/* Card */}
         <View style={styles.card}>
           {message && (
-            <View style={styles.messageBox}>
+            <View style={styles.messageBox} accessibilityLiveRegion="polite">
               <Text style={styles.messageText}>{message}</Text>
             </View>
           )}
@@ -109,16 +109,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     gap: 6,
   },
-  eyebrow: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: colors.inkFaint,
-    letterSpacing: 2,
-    textTransform: 'uppercase',
-  },
+  eyebrow: { fontSize: 11, fontFamily: fonts.monoBold, color: colors.inkFaint, letterSpacing: 2, textTransform: 'uppercase', },
   title: {
     fontSize: 36,
-    fontFamily: fonts.cozy,
+    fontFamily: fonts.display,
     color: colors.inkDark,
     textAlign: 'center',
     letterSpacing: -1,
@@ -129,7 +123,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 24,
   },
-  email: { fontWeight: '700', color: colors.inkDark },
+  email: { fontFamily: fonts.display, color: colors.inkDark },
   card: {
     marginHorizontal: spacing.lg,
     backgroundColor: colors.card,
@@ -138,12 +132,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
   },
-  hint: {
-    fontSize: 13,
-    color: colors.inkLight,
-    textAlign: 'center',
-    marginBottom: spacing.md,
-  },
+  hint: { fontSize: 13, fontFamily: fonts.text, color: colors.inkLight, textAlign: 'center', marginBottom: spacing.md, },
   button: {
     backgroundColor: colors.terra,
     borderRadius: radii.lg,
@@ -153,7 +142,7 @@ const styles = StyleSheet.create({
     ...shadows.button,
   },
   buttonDisabled: { backgroundColor: colors.terraLight, shadowOpacity: 0, elevation: 0 },
-  buttonText: { color: colors.card, fontSize: 16, fontWeight: '700', letterSpacing: 0.3 },
+  buttonText: { color: colors.card, fontSize: 16, fontFamily: fonts.display, letterSpacing: 0.3 },
   messageBox: {
     borderRadius: radii.md,
     paddingHorizontal: spacing.md,
@@ -163,8 +152,8 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: colors.success,
   },
-  messageText: { fontSize: 14, fontWeight: '600', color: colors.success, textAlign: 'center' },
+  messageText: { fontSize: 14, fontFamily: fonts.display, color: colors.success, textAlign: 'center' },
   linkButton: { alignItems: 'center' },
-  linkText: { color: colors.inkLight, fontSize: 14 },
-  linkAccent: { color: colors.terra, fontWeight: '700' },
+  linkText: { color: colors.inkLight, fontSize: 14, fontFamily: fonts.text },
+  linkAccent: { color: colors.terra, fontFamily: fonts.display },
 });

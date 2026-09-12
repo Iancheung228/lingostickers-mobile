@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, LayoutChangeEvent } from 'react-native';
 import Animated, { useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import { colors, radii, spacing, fonts } from '@/constants/theme';
+import { colors, fonts } from '@/constants/theme';
 
 export type ToolMode = 'box' | 'lasso';
 
@@ -11,9 +11,11 @@ interface ToolModeSwitchProps {
   onChange: (mode: ToolMode) => void;
 }
 
-const OPTIONS: { key: ToolMode; label: string }[] = [
-  { key: 'box', label: 'Box' },
-  { key: 'lasso', label: 'Lasso' },
+// The spoken label says what the tool *does*. "Box" and "Lasso" are legible
+// next to a photo you can see; read out on their own they are two nouns.
+const OPTIONS: { key: ToolMode; label: string; spoken: string }[] = [
+  { key: 'box', label: 'Box', spoken: 'Box tool — drag a rectangle around the object' },
+  { key: 'lasso', label: 'Lasso', spoken: 'Lasso tool — trace around the object with your finger' },
 ];
 
 const TRACK_PADDING = 4;
@@ -34,7 +36,11 @@ export default function ToolModeSwitch({ mode, onChange }: ToolModeSwitchProps) 
   }));
 
   return (
-    <View style={styles.track} onLayout={(e: LayoutChangeEvent) => setTrackWidth(e.nativeEvent.layout.width)}>
+    <View
+      style={styles.track}
+      accessibilityRole="radiogroup"
+      onLayout={(e: LayoutChangeEvent) => setTrackWidth(e.nativeEvent.layout.width)}
+    >
       {trackWidth > 0 && <Animated.View style={[styles.pill, pillStyle]} />}
       {OPTIONS.map((option) => {
         const active = option.key === mode;
@@ -47,6 +53,9 @@ export default function ToolModeSwitch({ mode, onChange }: ToolModeSwitchProps) 
               onChange(option.key);
             }}
             activeOpacity={0.7}
+            accessibilityRole="radio"
+            accessibilityLabel={option.spoken}
+            accessibilityState={{ selected: active }}
           >
             <Text style={[styles.label, active && styles.labelActive]}>{option.label}</Text>
           </TouchableOpacity>
@@ -84,6 +93,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  label: { fontSize: 14, fontWeight: '600', color: colors.inkMid },
-  labelActive: { color: colors.inkDark, fontWeight: '700' },
+  label: { fontSize: 14, fontFamily: fonts.display, color: colors.inkMid },
+  labelActive: { color: colors.inkDark },
 });

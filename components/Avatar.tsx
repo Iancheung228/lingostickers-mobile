@@ -1,7 +1,7 @@
 import { View, Text, StyleSheet } from 'react-native';
 import { Image } from 'expo-image';
 import { avatarUrl } from '@/lib/avatars';
-import { colors, radii } from '@/constants/theme';
+import { colors, radii, fonts } from '@/constants/theme';
 
 // ---------------------------------------------------------------------------
 // One avatar, used everywhere a person appears.
@@ -89,5 +89,5 @@ export default function Avatar({ name, avatarPath, size = 36, highlighted }: Ava
 const styles = StyleSheet.create({
   base: { alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
   highlighted: { borderWidth: 2, borderColor: colors.sageDark },
-  initial: { fontWeight: '800', color: colors.inkDark },
+  initial: { fontFamily: fonts.display, color: colors.inkDark },
 });

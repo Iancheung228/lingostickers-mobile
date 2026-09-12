@@ -26,7 +26,7 @@
 <body>
 
 <h1>Tabi Stickers Privacy Policy</h1>
-<p class="effective-date">Effective date: August 12, 2026</p>
+<p class="effective-date">Effective date: September 9, 2026</p>
 
 <p>Tabi Stickers ("we," "us," "the app") is a language-learning app that turns
 photos of real objects into vocabulary stickers. This policy explains what
@@ -83,14 +83,33 @@ the app:</p>
 <table>
   <tr><th>Provider</th><th>Purpose</th><th>Data involved</th></tr>
   <tr><td>Supabase</td><td>Authentication, database, file storage</td><td>Email, photos, sticker data, friend/challenge data</td></tr>
-  <tr><td>Groq</td><td>Generates vocabulary text/definitions from your photos</td><td>Photo content (processed, not stored by Groq)</td></tr>
-  <tr><td>Replicate</td><td>Removes image backgrounds for stickers</td><td>Photo content (processed, not stored by Replicate)</td></tr>
+  <tr><td>Google (Gemini API)</td><td>Reads your photo to identify the object and generate the word, translation and example sentence</td><td>Photo content (processed, not used to train Google's models &mdash; we use the paid tier, under which Google does not use prompts or responses to improve its products)</td></tr>
+  <tr><td>Replicate</td><td>Removes image backgrounds for stickers, when your device cannot do it</td><td>Photo content (processed, not stored by Replicate)</td></tr>
+  <tr><td>remove.bg</td><td>Backup background removal, used only if Replicate is unavailable</td><td>Photo content (processed, not stored by remove.bg)</td></tr>
   <tr><td>Expo</td><td>Delivers push notifications</td><td>Push token</td></tr>
 </table>
 
 <p>Each provider only receives the minimum data needed to perform its
 specific function, and is contractually restricted from using it for other
 purposes.</p>
+
+<h2>Sharing With Other Users</h2>
+
+<p>Tabi Stickers has social features. Adding someone as a friend lets you
+send each other challenges, but does <strong>not</strong> give them access to your
+collection &mdash; your notes, voice recordings, memory photos and location tags
+stay private to you.</p>
+
+<p><strong>Sending a challenge</strong> shares a snapshot of that sticker's word,
+translation, reading, sentence and image with the specific friend you send it
+to. This is the only way your sticker content becomes visible to another
+user.</p>
+
+<p><strong>Blocking and reporting.</strong> You can block another user or report
+content you believe breaks our rules. A report stores the reason you chose,
+any note you write, and a copy of the reported content (including the other
+user's image) so we can review it. Blocking is private &mdash; the other person is
+not told &mdash; and you can review or undo it under Settings &rarr; Safety.</p>
 
 <h2>Data Storage &amp; Retention</h2>
 
@@ -111,6 +130,12 @@ systems.</p>
 
 <p>Tabi Stickers is not directed at children under 13, and we do not
 knowingly collect information from children under 13.</p>
+
+<h2>Security</h2>
+
+<p>We use industry-standard practices to protect your information, including
+encrypted connections and per-user access controls, so that &mdash; outside of the
+friend-sharing described above &mdash; only you can access your own data.</p>
 
 <h2>Changes to This Policy</h2>
 
