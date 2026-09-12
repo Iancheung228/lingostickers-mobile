@@ -45,9 +45,9 @@ export const START_EASE = 2.5;
 // nothing. Applies to rows written before 040, which have no due_at.
 export const NEW_CARD_REST_DAYS = 1;
 
-// How many due cards the home screen previews. The session itself takes the
-// whole queue; this only caps what the rail renders.
-export const DUE_PREVIEW = 12;
+// How many cards the home screen's feed rail renders. Nothing else is capped
+// by this — the review session always takes the whole due queue.
+export const FEED_PREVIEW = 12;
 
 // --- Anki's defaults --------------------------------------------------------
 // These are Anki's own out-of-the-box deck options, kept as they ship rather

@@ -16,9 +16,9 @@ import StickerCard from '@/components/StickerCard';
 import StudyCard from '@/components/StudyCard';
 import MiniStickerWall from '@/components/MiniStickerWall';
 import HomeHeader from '@/components/HomeHeader';
-import DueTodayRail from '@/components/DueTodayRail';
+import FeedRail from '@/components/FeedRail';
 import LatestStickers, { MAX_ROWS as LATEST_FEED_ROWS } from '@/components/LatestStickers';
-import { DAILY_GOAL, DUE_PREVIEW, dueToday, findsToday, reviewMinutes } from '@/lib/review';
+import { DAILY_GOAL, FEED_PREVIEW, dueToday, findsToday, reviewMinutes } from '@/lib/review';
 import StudySessionHost from '@/components/StudySessionHost';
 import { colors, shadows, radii, spacing, typography, fonts } from '@/constants/theme';
 import { TAB_BAR_CLEARANCE } from '@/constants/tabBar';
@@ -166,6 +166,22 @@ export default function CollectionScreen() {
     () => dueToday(stickers, { language: langFilter ?? undefined }),
     [stickers, langFilter]
   );
+  // The rail is a feed of recent finds, NOT a preview of the review queue.
+  // Deliberately built from the whole collection rather than from `due`: a
+  // card scanned a minute ago is the newest thing you have and is correctly
+  // not due yet (NEW_CARD_REST_DAYS), so a due-derived rail could never show
+  // the thing you just made. `due` still exists untouched for HomeHeader's
+  // count and for startReview, which need the scheduler's own order.
+  //
+  // Language-filtered like everything else the chips govern.
+  const feedItems = useMemo(
+    () => stickers
+      .filter(s => !langFilter || s.language === langFilter)
+      .slice()
+      .sort((a, b) => Date.parse(b.discovered_at) - Date.parse(a.discovered_at))
+      .slice(0, FEED_PREVIEW),
+    [stickers, langFilter]
+  );
   const languages = useMemo(
     () => Array.from(new Set(stickers.map(s => s.language))),
     [stickers]
@@ -188,11 +204,11 @@ export default function CollectionScreen() {
     // images belong in the fast batch even though they aren't drawn from
     // `filtered` — otherwise the first thing on screen is the last to load.
     () => [
-      ...due.slice(0, DUE_PREVIEW).map(s => s.image_path),
+      ...feedItems.map(s => s.image_path),
       ...sorted.slice(0, LATEST_FEED_ROWS).map(s => s.image_path),
       ...filtered.slice(0, PRIORITY_COUNT).map(s => s.image_path),
     ],
-    [due, sorted, filtered]
+    [feedItems, sorted, filtered]
   ));
   const deferredUrls = useSignedUrls(useMemo(() => [
     ...filtered.slice(PRIORITY_COUNT).map(s => s.image_path),
@@ -245,16 +261,14 @@ export default function CollectionScreen() {
         />
       </View>
 
-      <DueTodayRail
-        due={due.slice(0, DUE_PREVIEW)}
-        totalDue={due.length}
+      <FeedRail
+        items={feedItems}
         languages={languages}
         activeLanguage={langFilter}
         onSelectLanguage={setLangFilter}
         getUrl={getUrl}
         getAuthor={getAuthor}
         onPressSticker={setSelectedSticker}
-        onReviewAll={startReview}
       />
 
       <LatestStickers

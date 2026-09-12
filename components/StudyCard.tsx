@@ -366,7 +366,20 @@ export default function StudyCard({
   // it was opened by a press that hadn't finished starting yet.
   useEffect(() => () => {
     holding.current = false;
-    if (recorder.isRecording) recorder.stop();
+    // `useAudioRecorder` disposes the native shared object when the component
+    // goes away, and reading `recorder.isRecording` on a released object
+    // throws NativeSharedObjectNotFoundException — which this fired on every
+    // card change, not just on close. If the recorder is already gone there is
+    // nothing left to stop, so that is the success case rather than an error.
+    //
+    // Read live off `recorder` rather than off `recorderState`: this cleanup's
+    // deps are the sticker id, so a polled value captured here would be stale
+    // for any recording that started after the effect last ran.
+    try {
+      if (recorder.isRecording) recorder.stop();
+    } catch {
+      // already disposed
+    }
   }, [sticker?.id]);
 
   useEffect(() => {

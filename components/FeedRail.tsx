@@ -1,29 +1,45 @@
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, useWindowDimensions } from 'react-native';
 import { Image } from 'expo-image';
-import { ChevronRight } from 'lucide-react-native';
 import { Sticker, Language, PersonSummary } from '@/lib/types';
 import { ageInDays } from '@/lib/review';
 import Avatar from '@/components/Avatar';
 import { colors, radii, spacing, shadows, fonts } from '@/constants/theme';
 import { languageLabel } from '@/lib/languages';
 
-interface DueTodayRailProps {
-  /// Already sliced for display — `totalDue` is the honest count.
-  due: Sticker[];
-  totalDue: number;
+// ---------------------------------------------------------------------------
+// The home screen's feed of recent finds.
+//
+// This was "Due today" — a preview of the review queue. It is a feed now, for
+// a reason worth recording: a card you scanned a minute ago is the newest
+// thing you have and the *last* thing worth reviewing, because you were
+// looking at the object when you made it. A queue must hide it (see
+// NEW_CARD_REST_DAYS); a feed must show it. Trying to be both meant a card
+// could be made and not appear.
+//
+// Reviewing did not lose its way in: HomeHeader carries the "N due · M min"
+// button, which is the entry point the session actually starts from.
+//
+// Today every card here is one of yours, or one won off a friend — whose face
+// it correctly carries, via stickers.origin_author_id. When sharing arrives,
+// this rail is where other people's finds appear, and nothing about its shape
+// has to change.
+// ---------------------------------------------------------------------------
+interface FeedRailProps {
+  /// Newest first, already sliced for display.
+  items: Sticker[];
   /// Every language in the collection — not just the ones with cards due —
   /// so the chip row can always undo its own filter.
   languages: Language[];
-  /// The chips live here but scope the whole home screen (the Latest feed and
-  /// the grid below it too), not only this rail — see collection.tsx.
+  /// The chips live here but scope the whole home screen (the list and the
+  /// grid below it too), not only this rail — see collection.tsx.
   activeLanguage: Language | null;
   onSelectLanguage: (language: Language | null) => void;
   getUrl: (path: string | null | undefined) => string | null;
-  /// Whose find this was — you for anything you scanned, the friend who sent
-  /// it for anything won off a challenge. Their face goes on the card.
+  /// Who originally made this card — you for anything you scanned, the person
+  /// who first scanned it for anything won off a challenge, at any depth.
+  /// Their face goes on the card.
   getAuthor: (sticker: Sticker) => PersonSummary | null;
   onPressSticker: (sticker: Sticker) => void;
-  onReviewAll: () => void;
 }
 
 // Cards are sized to the screen rather than fixed: exactly three fill the
@@ -53,10 +69,10 @@ function cardWidthFor(screenWidth: number): number {
 // and a coloured panel behind a cut-out reads as a second card behind the
 // first rather than as a backdrop. The cut-out now floats on the card itself.
 
-export default function DueTodayRail({
-  due, totalDue, languages, activeLanguage, onSelectLanguage,
-  getUrl, getAuthor, onPressSticker, onReviewAll,
-}: DueTodayRailProps) {
+export default function FeedRail({
+  items, languages, activeLanguage, onSelectLanguage,
+  getUrl, getAuthor, onPressSticker,
+}: FeedRailProps) {
   const { width } = useWindowDimensions();
   const cardWidth = cardWidthFor(width);
   // The filter chips have to survive an empty queue: hiding the whole
@@ -64,20 +80,12 @@ export default function DueTodayRail({
   // control that could undo it — and it governs the rest of the screen too,
   // so losing it would strand the grid below in a filter with no off switch.
   const multilingual = languages.length > 1;
-  if (due.length === 0 && !multilingual) return null;
+  if (items.length === 0 && !multilingual) return null;
 
   return (
     <View style={styles.section}>
       <View style={styles.header}>
-        <Text style={styles.title}>
-          Due today · {totalDue} card{totalDue === 1 ? '' : 's'}
-        </Text>
-        {totalDue > 0 && (
-          <TouchableOpacity style={styles.link} onPress={onReviewAll} hitSlop={8}>
-            <Text style={styles.linkText}>Review all</Text>
-            <ChevronRight size={14} color={colors.inkLight} />
-          </TouchableOpacity>
-        )}
+        <Text style={styles.title}>Latest finds</Text>
       </View>
 
       {multilingual && (
@@ -98,8 +106,8 @@ export default function DueTodayRail({
         </ScrollView>
       )}
 
-      {due.length === 0 ? (
-        <Text style={styles.empty}>Nothing due here right now.</Text>
+      {items.length === 0 ? (
+        <Text style={styles.empty}>Nothing in this language yet.</Text>
       ) : (
 
       <ScrollView
@@ -111,8 +119,8 @@ export default function DueTodayRail({
         snapToInterval={cardWidth + CARD_GAP}
         decelerationRate="fast"
       >
-        {due.map(sticker => (
-          <DueCard
+        {items.map(sticker => (
+          <FeedCard
             key={sticker.id}
             sticker={sticker}
             width={cardWidth}
@@ -135,7 +143,7 @@ function LangChip({ label, active, onPress }: { label: string; active: boolean; 
   );
 }
 
-function DueCard({ sticker, width, url, author, onPress }: {
+function FeedCard({ sticker, width, url, author, onPress }: {
   sticker: Sticker; width: number; url: string | null;
   author: PersonSummary | null; onPress: () => void;
 }) {
