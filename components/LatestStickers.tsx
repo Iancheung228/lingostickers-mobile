@@ -90,7 +90,7 @@ function Row({ sticker, last, imageUrl, voiceUrl, onPress }: {
           <Image
             source={{ uri: imageUrl, cacheKey: sticker.image_path }}
             cachePolicy="memory-disk"
-            contentFit="cover"
+            contentFit="contain"
             style={styles.thumbImage}
           />
         ) : (
@@ -157,17 +157,15 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm + 2,
   },
   rowDivided: { borderBottomWidth: 1, borderBottomColor: colors.borderLight },
+  // Just the cut-out, no disc. The sand fill, white ring and shadow behind it
+  // read as a second object sitting under the sticker — and the disc had to
+  // clip, which is why the image was `cover` and lost the edges of anything
+  // that wasn't roughly square.
   thumb: {
     width: 54,
     height: 54,
-    borderRadius: radii.full,
-    backgroundColor: colors.sand,
-    borderWidth: 3,
-    borderColor: colors.white,
     alignItems: 'center',
     justifyContent: 'center',
-    overflow: 'hidden',
-    ...shadows.card,
   },
   thumbImage: { width: '100%', height: '100%' },
   rowText: { flex: 1, gap: 1 },

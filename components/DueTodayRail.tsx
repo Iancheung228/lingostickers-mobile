@@ -3,7 +3,6 @@ import { Image } from 'expo-image';
 import { ChevronRight } from 'lucide-react-native';
 import { Sticker, Language, PersonSummary } from '@/lib/types';
 import { ageInDays } from '@/lib/review';
-import { seededRandom } from '@/lib/seededRandom';
 import Avatar from '@/components/Avatar';
 import { colors, radii, spacing, shadows, fonts } from '@/constants/theme';
 import { languageLabel } from '@/lib/languages';
@@ -49,11 +48,10 @@ function cardWidthFor(screenWidth: number): number {
   return Math.max(96, Math.min(150, Math.floor(usable / CARDS_ACROSS)));
 }
 
-// Each card's image well gets its own tint so a row of them reads as a
-// shelf of different things rather than one repeated card. Seeded off the
-// sticker id (not the index) so a card keeps its color as the queue
-// reshuffles day to day — same reasoning as the wall's tape colors.
-const WELL_TINTS = [colors.sand, colors.skyBlue, colors.terraLight, colors.borderLight];
+// The image well used to carry a seeded tint per card, so a row read as a
+// shelf of different things. Dropped deliberately: the sticker IS the object,
+// and a coloured panel behind a cut-out reads as a second card behind the
+// first rather than as a backdrop. The cut-out now floats on the card itself.
 
 export default function DueTodayRail({
   due, totalDue, languages, activeLanguage, onSelectLanguage,
@@ -144,7 +142,6 @@ function DueCard({ sticker, width, url, author, onPress }: {
   const discovered = new Date(sticker.discovered_at);
   const day = discovered.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric' });
   const age = ageInDays(sticker.discovered_at);
-  const tint = WELL_TINTS[Math.floor(seededRandom(sticker.id, 7) * WELL_TINTS.length)];
 
   return (
     <TouchableOpacity style={[styles.card, { width }]} onPress={onPress} activeOpacity={0.9}>
@@ -163,7 +160,7 @@ function DueCard({ sticker, width, url, author, onPress }: {
         {sticker.notes?.trim() || sticker.sentence_translation || sticker.translation}
       </Text>
 
-      <View style={[styles.well, { backgroundColor: tint }]}>
+      <View style={styles.well}>
         {url ? (
           <Image
             source={{ uri: url, cacheKey: sticker.image_path }}
@@ -221,10 +218,10 @@ const styles = StyleSheet.create({
 
   cardBody: { fontSize: 12.5, fontFamily: fonts.text, color: colors.inkMid, lineHeight: 16, minHeight: 32 },
 
+  // No background: the cut-out sits directly on the card. Height is kept so
+  // the rail's cards stay the same size whether or not an image has loaded.
   well: {
     height: 62,
-    borderRadius: radii.md,
-    overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
   },
