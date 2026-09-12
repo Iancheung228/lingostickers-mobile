@@ -33,6 +33,8 @@ yarn-error.*
 # local env files
 .env
 .env*.local
+# Local-only API keys for scripts/ validation harnesses — never committed.
+.env.groq
 
 # Claude Code harness state
 .claude/scheduled_tasks.lock
@@ -46,3 +48,9 @@ yarn-error.*
 
 # Supabase local tooling state
 supabase/.temp/
+
+# Test fixture photos, downloaded on demand by scripts/test-gemini-live.mts
+scripts/fixtures/.cache/
+
+# Created by `deno check` (local typecheck gate only; Supabase bundles its own deps)
+deno.lock

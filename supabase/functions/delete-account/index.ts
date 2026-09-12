@@ -26,6 +26,8 @@ Deno.serve(async (req) => {
     );
     const { data: { user }, error: authError } = await userClient.auth.getUser();
     if (authError || !user) return json({ error: 'Not authenticated' }, 401);
+    // Captured so the narrowing above survives into emptyUserFolder's closure.
+    const userId = user.id;
 
     const admin = createClient(
       Deno.env.get('SUPABASE_URL')!,
@@ -38,12 +40,12 @@ Deno.serve(async (req) => {
     // time, and since we remove each page before listing again, the next
     // list() call naturally returns whatever's left — no cursor needed.
     async function emptyUserFolder(bucket: string) {
-      let page = await admin.storage.from(bucket).list(user.id, { limit: 1000 });
+      let page = await admin.storage.from(bucket).list(userId, { limit: 1000 });
       while (page.data && page.data.length > 0) {
-        const paths = page.data.map(f => `${user.id}/${f.name}`);
+        const paths = page.data.map(f => `${userId}/${f.name}`);
         await admin.storage.from(bucket).remove(paths);
         if (page.data.length < 1000) break;
-        page = await admin.storage.from(bucket).list(user.id, { limit: 1000 });
+        page = await admin.storage.from(bucket).list(userId, { limit: 1000 });
       }
     }
 

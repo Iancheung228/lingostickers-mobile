@@ -52,7 +52,13 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "lint": "expo lint"
+    "lint": "expo lint",
+    "test": "node --experimental-strip-types --test scripts/test-sentence-logic.mts scripts/test-llm.mts",
+    "test:llm": "node --experimental-strip-types --test scripts/test-llm.mts",
+    "test:live": "node --experimental-strip-types --test scripts/test-gemini-live.mts",
+    "typecheck": "tsc --noEmit",
+    "typecheck:functions": "deno check supabase/functions/*/index.ts supabase/functions/_shared/**/*.ts",
+    "prompt": "node --experimental-strip-types scripts/show-prompt.mts"
   },
   "private": true
 }

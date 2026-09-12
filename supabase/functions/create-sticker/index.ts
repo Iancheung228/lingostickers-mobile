@@ -1,7 +1,13 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import UPNG from 'https://esm.sh/upng-js@2.1.0';
-import jpeg from 'https://esm.sh/jpeg-js@0.4.4';
-import { identifyWithGroq, resolveLanguage } from '../_shared/vocab.ts';
+import { createClient, type SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
+// esm.sh's generated .d.ts for upng-js declares no default export, but the
+// module it actually serves has ONLY a default — verified at runtime, the
+// namespace object's sole key is "default". So `import * as UPNG`, the fix
+// TypeScript suggests, would make UPNG.decode undefined and break every
+// server-side cutout. `?no-dts` drops the wrong types instead.
+import UPNG from 'https://esm.sh/upng-js@2.1.0?no-dts';
+import * as jpeg from 'https://esm.sh/jpeg-js@0.4.4';
+import { identifyFromPhoto, resolveLanguage } from '../_shared/vocab.ts';
+import { loadLearnerContext } from '../_shared/learner.ts';
 import { pickDominantColor } from '../_shared/imageColor.ts';
 import { requireUserId, consumeQuota, serviceClient, errorResponse } from '../_shared/rateLimit.ts';
 
@@ -67,17 +73,25 @@ Deno.serve(async (req) => {
 
     const supabase = serviceClient();
 
+    const lang = resolveLanguage(language);
+
+    // Started here rather than awaited here: it is a small indexed read that
+    // has nothing to do with the quota claim, so it overlaps with that and
+    // with the base64 work below instead of adding its latency to the scan.
+    // It is awaited immediately before the vocab call, the first thing that
+    // actually needs it. It never rejects — see loadLearnerContext.
+    const learnerPromise = loadLearnerContext(supabase, userId, lang);
+
     // Claimed before any upstream call: background removal and vision are
     // billed per request, so an image that ends up producing a bad cutout has
     // cost exactly as much as one the user keeps. Throws 429 when spent.
     const quota = await consumeQuota(supabase, userId, 'create-sticker');
 
-    const lang = resolveLanguage(language);
     const base64Data = image.includes(',') ? image.split(',')[1] : image;
     const imageBytes = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0));
     // Two different consumers want two different sizes of the wider scene.
     // Storage wants it big enough to fill a phone screen as the hero
-    // background; Groq only needs enough to describe what's around the object,
+    // background; the vision model only needs enough to describe what's around it,
     // and every extra pixel is tokens against a free-tier budget that is what
     // actually rate-limits this endpoint. The client sends both when it can.
     const sceneForVision: string | undefined = contextImage ?? memoryImage;
@@ -95,10 +109,11 @@ Deno.serve(async (req) => {
     // Run vocab identification, background removal, and the memory-photo
     // upload in parallel. Background removal is skipped entirely when the
     // device already did it — that's the whole point of the on-device path.
-    const groqStarted = Date.now();
+    const vocabStarted = Date.now();
     const [vocabResult, bgResult, memoryPhoto] = await Promise.all([
-      identifyWithGroq(base64Data, lang, memoryBase64Data)
-        .finally(() => console.log(`groq: ${Date.now() - groqStarted}ms`)),
+      learnerPromise
+        .then(learner => identifyFromPhoto(base64Data, lang, memoryBase64Data, learner))
+        .finally(() => console.log(`vocab: ${Date.now() - vocabStarted}ms`)),
       precutImagePath
         ? Promise.resolve({ data: null, status: 'device cutout (skipped)' })
         : removeBackground(imageBytes),
@@ -122,6 +137,11 @@ Deno.serve(async (req) => {
           sentence: vocabResult.sentence,
           sentenceTranslation: vocabResult.sentence_translation,
           sentenceInsight: vocabResult.sentence_insight ?? null,
+          // Already validated against the sentence in vocab.ts — null here
+          // means the model's chunks didn't reconstruct it, and the card
+          // simply renders without a breakdown.
+          sentenceGloss: vocabResult.gloss ?? null,
+          grammarKey: vocabResult.grammar_key ?? null,
           partOfSpeech: normalizePartOfSpeech(vocabResult.part_of_speech),
           category: vocabResult.category,
           imagePath: precutImagePath,
@@ -131,7 +151,7 @@ Deno.serve(async (req) => {
           bgSource: 'device',
           scansRemainingToday: quota.remaining,
           _debug_bgStatus: bgResult.status,
-          _debug_groqMs: Date.now() - groqStarted,
+          _debug_vocabMs: Date.now() - vocabStarted,
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
@@ -187,6 +207,8 @@ Deno.serve(async (req) => {
         sentence: vocabResult.sentence,
         sentenceTranslation: vocabResult.sentence_translation,
         sentenceInsight: vocabResult.sentence_insight ?? null,
+        sentenceGloss: vocabResult.gloss ?? null,
+        grammarKey: vocabResult.grammar_key ?? null,
         partOfSpeech: normalizePartOfSpeech(vocabResult.part_of_speech),
         category: vocabResult.category,
         imagePath,
@@ -198,7 +220,7 @@ Deno.serve(async (req) => {
         // UI. Nothing reads it yet.
         scansRemainingToday: quota.remaining,
         _debug_bgStatus: bgResult.status,
-        _debug_groqMs: Date.now() - groqStarted,
+        _debug_vocabMs: Date.now() - vocabStarted,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
@@ -234,7 +256,9 @@ function validatePrecutPath(raw: unknown, userId: string): string | null {
 // non-fatal — the sticker is still created without a memory photo.
 // ---------------------------------------------------------------------------
 async function uploadMemoryPhoto(
-  supabase: ReturnType<typeof createClient>,
+  // Matches what serviceClient() returns; `ReturnType<typeof createClient>`
+  // resolves to different generic defaults and does not accept it.
+  supabase: SupabaseClient,
   memoryImage: string | undefined,
   userId: string
 ): Promise<{ path: string | null; color: string | null }> {
@@ -433,7 +457,10 @@ async function removeBackgroundRemoveBg(imageBytes: Uint8Array): Promise<{ data:
 
   try {
     const form = new FormData();
-    form.append('image_file', new Blob([imageBytes], { type: 'image/jpeg' }), 'image.jpg');
+    // `Uint8Array<ArrayBufferLike>` is not assignable to BlobPart because the
+    // buffer *could* be a SharedArrayBuffer; ours never is. Cast rather than
+    // copy the bytes.
+    form.append('image_file', new Blob([imageBytes as BlobPart], { type: 'image/jpeg' }), 'image.jpg');
     form.append('size', 'auto');
 
     const response = await fetch('https://api.remove.bg/v1.0/removebg', {
@@ -578,7 +605,7 @@ function pickBorderColor(src: Uint8Array, sw: number, sh: number): [number, numb
 // UPNG decode+encode round-trips on the same image — PNG deflate encoding is
 // by far the most expensive thing in this file, and doing it 2-3x instead of
 // once was blowing well past Edge Functions' 2s CPU-time budget (wall-clock
-// waiting on Groq/Replicate doesn't count against that budget — this pure
+// waiting on the vision model/Replicate doesn't count against that budget — this pure
 // synchronous pixel work is what actually did). A worker hitting that limit
 // gets killed mid-request with no chance to return a normal JSON error,
 // which is what the client saw as a bare "non-2xx" response.

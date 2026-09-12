@@ -1,4 +1,4 @@
-import jpeg from 'https://esm.sh/jpeg-js@0.4.4';
+import * as jpeg from 'https://esm.sh/jpeg-js@0.4.4';
 
 // ---------------------------------------------------------------------------
 // pickDominantColor — a representative "ambient" color for a JPEG photo.

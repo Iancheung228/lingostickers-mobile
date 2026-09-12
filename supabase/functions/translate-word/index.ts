@@ -1,4 +1,4 @@
-import { translateWithGroq, resolveLanguage } from '../_shared/vocab.ts';
+import { translateWord, resolveLanguage } from '../_shared/vocab.ts';
 import { requireUserId, consumeQuota, serviceClient, errorResponse } from '../_shared/rateLimit.ts';
 
 const corsHeaders = {
@@ -22,11 +22,11 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Claimed before the Groq call — see create-sticker for the reasoning.
+    // Claimed before the model call — see create-sticker for the reasoning.
     await consumeQuota(serviceClient(), userId, 'translate-word');
 
     const lang = resolveLanguage(language);
-    const vocab = await translateWithGroq(englishWord.trim(), lang);
+    const vocab = await translateWord(englishWord.trim(), lang);
 
     return new Response(
       JSON.stringify({ ...vocab, language: lang }),

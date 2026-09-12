@@ -607,3 +607,132 @@ cost:
   `scripts/test-sentence-logic.mts` for the pure logic, `scripts/prompt-lab.mts`
   to run the *shipping* prompt against real photographs. A prompt change is
   the one kind of change that cannot be reviewed by reading it.
+
+---
+
+## 14. A model provider is an adapter, not an API you call directly
+
+**Symptom:** "we need to move off this provider" turns into a week, because the
+provider's wire format has leaked into the code that builds prompts, the code
+that parses cards, the retry logic, the error messages, and every test that
+stubs `fetch`.
+
+**Root cause:** calling `fetch('https://api.provider.com/…')` from the module
+that owns the prompt couples two things that change on completely different
+schedules. The prompt changes when teaching changes. The provider changes when
+the vendor retires a model — which, for vision, happens: Groq's only two vision
+models were both Preview ("not recommended for production, may be discontinued
+at short notice"), and that, not cost, is what forced the 2026-09-09 migration
+to Gemini.
+
+**Fix pattern — `supabase/functions/_shared/llm/`:**
+- `types.ts` is the vocabulary both sides share: `LlmPart` (text or image),
+  `LlmRequest`, `LlmResult`, and `LlmError`. No HTTP.
+- `gemini.ts` / `groq.ts` are adapters. They are the *only* files that know
+  what `inline_data` or `max_completion_tokens` is.
+- `index.ts` owns retry, failover and config. `vocab.ts` calls `callModel()`
+  and never sees a URL.
+- Every provider factory takes an injectable `transport`, and `callModel` takes
+  injectable `providers` and `sleep`. That is what makes the whole retry and
+  failover matrix testable in milliseconds with no network — see
+  `scripts/test-llm.mts`.
+
+**The error taxonomy is the design, not boilerplate.** Retry and failover are
+decided entirely by `LlmError.kind`, and two of the rules are the ones worth
+remembering:
+- **Never fail over on `invalid`.** A malformed request is *our* bug; falling
+  back to a second model on it hides that bug behind a permanently worse card.
+- **Never fail over on `blocked`.** A safety refusal is a decision about the
+  content — another vendor will very likely refuse it too, and the user is owed
+  an answer, not a silent substitution.
+- Cap every backoff. Groq answers a spent daily budget with "retry after
+  2048s"; honoured literally that is a 34-minute request.
+
+**Two provider facts that cost real time to discover, both measured:**
+- **A bad Gemini API key returns `400 INVALID_ARGUMENT`, not 401.** Only
+  `error.details[].reason === 'API_KEY_INVALID'` separates a credential fault
+  (fail over) from a malformed body (do not). Classify on the detail.
+- **`mediaResolution` is whole-request on `generateContent`.** Per-part
+  `media_resolution` is rejected on every 3.x model, so the crop and the scene
+  necessarily share one setting. LOW = 268 tok/image, MEDIUM = 542, HIGH = 1094.
+
+**Thinking is latency you are not buying anything with here.** Gemini 3.x
+reasons by default. This task is one structured extraction, not a problem;
+`thinkingConfig: { thinkingBudget: 0 }` cut p50 from 3.0s to 2.3s with 16/16
+gloss validity held. Measure before assuming a "smarter" setting helps.
+
+---
+
+## 15. State the response shape once, or it will drift
+
+**Symptom:** the model returns a field the parser ignores, or omits one the
+prompt never actually asked for. Looks like a model quality problem. Isn't.
+
+**Root cause:** a card's shape was stated twice per request — once as prose in
+the prompt ("return JSON with these exact fields…") and, once structured output
+arrived, again as a JSON Schema. Two hand-written literals describing one
+contract always drift.
+
+**Fix pattern:** `_shared/cardSchema.ts` holds one ordered registry; `renderProse`
+and `renderJsonSchema` both project from it, off the same list of `FieldKey`s
+the caller asks for. Drift stops being a discipline problem and becomes
+impossible. `test-llm.mts` asserts the two renderings cover an identical key
+set for every language × option combination.
+
+**ORDER IS LOAD-BEARING, and it is not obvious.** Gemini fills fields in schema
+order, so `sentence` must be generated before `gloss`, `grammar_key` and
+`sentence_insight` — otherwise all three describe a sentence that does not
+exist yet. `assertFieldOrder` runs on every render and throws rather than
+letting an unsafe order reach a provider.
+
+**The bug this refactor introduced, and how it was caught.** Field descriptions
+are embedded *inside* a JSON example the model is told to copy, so a double
+quote in a description must be escaped. Moving the insight text into the
+registry dropped the escaping (`would say "have had"` instead of
+`would say \"have had\"`), making the example itself malformed JSON. The
+existing per-line regex test passed. The fix is a stronger invariant: **the
+whole rendered block must `JSON.parse`.** Assert the property, not the shape.
+
+**Also worth keeping:** closed sets belong in the schema as `enum`
+(`part_of_speech`, `category`), not only in prose — that is enforcement rather
+than a request, and the live test uses a value outside the enum as its signal
+that the schema was never actually sent.
+
+---
+
+## 16. `deno check` is a gate this project never had
+
+`tsconfig.json` excludes `supabase/functions` (the Deno URL imports are errors
+to `tsc`), and eslint ignores it too. So until 2026-09-09 **no type checker had
+ever run over the edge functions** — nine functions, the entire backend.
+
+`npm run typecheck:functions` now runs `deno check` over them. Installing Deno
+locally is the only prerequisite (`curl -fsSL https://deno.land/install.sh | sh`).
+
+It reported **8 pre-existing errors** the first time it ran, all fixed
+2026-09-09 — so the gate is green and can stay that way. Two were worth more
+than a type fix:
+
+- **`import * as UPNG` — the fix TypeScript suggests — would have broken every
+  server-side cutout.** esm.sh's generated `.d.ts` for `upng-js` declares no
+  default export, but the module it actually *serves* has ONLY a default:
+  probed at runtime, the namespace object's sole key is `"default"`, so
+  `UPNG.decode` would have been `undefined`. `jpeg-js` is the opposite — its
+  namespace really does expose `decode`. **Two adjacent imports, opposite
+  correct fixes.** Never "fix" a module-shape error without probing what the
+  module returns at runtime; the answer differs per package.
+  `?no-dts` drops the wrong types while keeping the working default import.
+- **The three `'user' is possibly null` in `delete-account` were not a latent
+  NPE.** `user` *is* guarded; TypeScript simply cannot carry that narrowing
+  into a nested `async function` closure, because a closure can outlive it.
+  Capturing `const userId = user.id` before the closure is the honest fix; a
+  `!` assertion would have suppressed a true warning about a real language rule.
+
+The remaining two were ordinary: `SupabaseClient` (what `serviceClient()`
+returns) vs `ReturnType<typeof createClient>` resolve to different generic
+defaults, and `Uint8Array<ArrayBufferLike>` is not a `BlobPart` because the
+buffer *could* be shared — ours never is.
+
+**Verify a change to the image pipeline by running it, not by type-checking
+it.** `deno check` passing proves nothing about esm.sh interop; decoding a real
+JPEG and round-tripping a PNG does.

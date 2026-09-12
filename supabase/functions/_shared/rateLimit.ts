@@ -6,6 +6,7 @@
 // JWT, then claim one unit of their daily quota before any upstream spend.
 // ---------------------------------------------------------------------------
 import { createClient, type SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { LlmError, httpStatusFor } from './llm/index.ts';
 
 // Daily calls allowed per user, per endpoint, resetting at UTC midnight.
 //
@@ -17,7 +18,7 @@ import { createClient, type SupabaseClient } from 'https://esm.sh/@supabase/supa
 //
 // Each can be overridden without a code change by setting the matching env var
 // on the function (e.g. `npx supabase secrets set DAILY_LIMIT_CREATE_STICKER=25`).
-// send-challenge belongs here too: it calls Groq once per challenge to build
+// send-challenge belongs here too: it calls the model once per challenge to build
 // the accepted-answer list. Abuse is already bounded by needing an accepted
 // friendship and an owned sticker, so its bucket is generous — this is here so
 // that no paid endpoint sits outside the cap, not because it is a likely
@@ -77,7 +78,7 @@ export async function requireUserId(req: Request): Promise<string> {
 // ---------------------------------------------------------------------------
 // Call this *before* doing any upstream work. A call counts once it's
 // accepted, whether or not the result is any good — a rejected crop or a
-// discarded scan has already cost the same Replicate/Groq spend as a kept one.
+// discarded scan has already cost the same Replicate/model spend as a kept one.
 export async function consumeQuota(
   admin: SupabaseClient,
   userId: string,
@@ -130,6 +131,16 @@ function limitMessage(endpoint: Endpoint, limit: number): string {
 // rate limited" from "the server broke"; anything else is an unexpected
 // failure and stays a 500, matching what these functions returned before.
 export function errorResponse(err: unknown, corsHeaders: Record<string, string>): Response {
+  // Model failures are remapped once, here, so no screen has to know what a
+  // provider quota is — and so raw provider text (model ids, token budgets)
+  // never reaches a client. See skills.md §3.
+  if (err instanceof LlmError) {
+    return new Response(
+      JSON.stringify({ error: err.userMessage }),
+      { status: httpStatusFor(err.kind), headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
+
   const status = err instanceof ApiError ? err.status : 500;
   const message = (err as any)?.message ?? 'Internal server error';
   return new Response(
