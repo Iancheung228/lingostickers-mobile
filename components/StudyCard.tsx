@@ -20,11 +20,12 @@ import { useAuth } from '@/hooks/useAuth';
 import { useProfile } from '@/hooks/useProfile';
 import { useSignedUrls } from '@/hooks/useSignedUrls';
 import { useStickerAuthors } from '@/hooks/useStickerAuthors';
-import { ageInDays, intervalPreview, schedule, Grade } from '@/lib/review';
+import { ageInDays, intervalPreview, schedule, spokenDelay, Grade, SchedulePatch } from '@/lib/review';
 import { computeTrimOffsets, MeteringSample } from '@/lib/audioTrim';
 import { useTrimmedVoicePlayback } from '@/hooks/useTrimmedVoicePlayback';
 import Avatar from '@/components/Avatar';
 import FieldEditor, { EditorSpec } from '@/components/FieldEditor';
+import { SentenceGloss, SentenceInsight } from '@/components/SentenceGloss';
 import { getFunctionErrorMessage } from '@/lib/functionError';
 import { saveStickerToPhotos, shareSticker } from '@/lib/exportSticker';
 import { alertPermissionDenied } from '@/lib/permissions';
@@ -50,7 +51,7 @@ interface StudyCardProps {
   onClose: () => void;
   /// Fired after a grade is written. The parent decides what "next" means —
   /// advance a session queue, or close a one-off card.
-  onGraded?: (grade: Grade) => void;
+  onGraded?: (grade: Grade, patch: SchedulePatch) => void;
   /// Position in the current study session, if there is one.
   progress?: { index: number; total: number };
   /// Fired after the sticker and every file it owns are gone, so the screen
@@ -182,20 +183,33 @@ async function regenerateFromMeaning(englishWord: string, language: Sticker['lan
   return derived;
 }
 
-const GRADES: Array<{ grade: Grade; label: string; tone: 'toneAgain' | 'toneHard' | 'toneGood' | 'toneEasy' }> = [
-  { grade: 'again', label: 'Again', tone: 'toneAgain' },
-  { grade: 'hard',  label: 'Hard',  tone: 'toneHard'  },
-  { grade: 'good',  label: 'Good',  tone: 'toneGood'  },
-  { grade: 'easy',  label: 'Easy',  tone: 'toneEasy'  },
+/**
+ * The four buttons, left to right, painted as one ramp.
+ *
+ * The ramp is the whole point and it used to run the wrong way: Hard was bare
+ * white and Good was the brand rose, so the button meaning "I struggled" read
+ * as blank and the button meaning "I got it" read as an alarm. Colour on a
+ * grading scale is not decoration — it is the fastest signal the row carries,
+ * and if it disagrees with the words it beats the words.
+ *
+ * So: filled red → sand → pale green → filled green. Failure and mastery are
+ * the two ends and are the two filled buttons; the two middle answers are
+ * tints of the colour their end is heading toward. Nothing on this row is the
+ * brand rose any more, because the brand rose is what the app uses for
+ * "primary action" everywhere else and none of these four is more primary
+ * than the others.
+ */
+const GRADES: Array<{
+  grade: Grade;
+  label: string;
+  tone: 'toneAgain' | 'toneHard' | 'toneGood' | 'toneEasy';
+  onFill: boolean;
+}> = [
+  { grade: 'again', label: 'Again', tone: 'toneAgain', onFill: true  },
+  { grade: 'hard',  label: 'Hard',  tone: 'toneHard',  onFill: false },
+  { grade: 'good',  label: 'Good',  tone: 'toneGood',  onFill: false },
+  { grade: 'easy',  label: 'Easy',  tone: 'toneEasy',  onFill: true  },
 ];
-
-/** "6d", "3mo", "1.5y" — the gap each button would open up. */
-export function formatInterval(days: number): string {
-  if (days < 30) return `${days}d`;
-  if (days < 365) return `${Math.round(days / 30)}mo`;
-  const years = days / 365;
-  return `${years < 10 ? years.toFixed(1).replace(/\.0$/, '') : Math.round(years)}y`;
-}
 
 /**
  * Splits a sentence around the headword so it can be bolded in place.
@@ -389,7 +403,7 @@ export default function StudyCard({
     );
     const patch = schedule(sticker, grade);
     onUpdate?.(sticker.id, patch);
-    onGraded?.(grade);
+    onGraded?.(grade, patch);
     const { error } = await supabase.from('stickers').update(patch).eq('id', sticker.id);
     // Roll back rather than leave the card claiming a review the server never
     // stored — the schedule would then disagree on the next load.
@@ -397,6 +411,8 @@ export default function StudyCard({
       onUpdate?.(sticker.id, {
         ease_factor: sticker.ease_factor,
         interval_days: sticker.interval_days,
+        learning_step: sticker.learning_step,
+        due_at: sticker.due_at,
         review_count: sticker.review_count,
         lapses: sticker.lapses,
         last_reviewed_at: sticker.last_reviewed_at,
@@ -422,6 +438,20 @@ export default function StudyCard({
     for (const [key, raw] of Object.entries(values)) {
       if (raw.length > 0) patch[key] = raw;
       else if (NULLABLE_FIELDS.has(key)) patch[key] = null;
+    }
+
+    // Three columns describe the sentence rather than being part of it: the
+    // word-by-word gloss, the note explaining its grammar, and the syllabus
+    // key naming the structure it was built around. Rewriting the sentence by
+    // hand leaves all three describing a sentence that no longer exists, and
+    // this editor has no way to regenerate them — it takes the target-language
+    // text directly from the user. SentenceGloss re-checks the gloss at render
+    // time and would fall silent on its own, but a stale row is still a lie
+    // waiting for someone to query it, and nothing re-checks the note at all.
+    if (typeof patch.sentence === 'string' && patch.sentence !== sticker.sentence) {
+      patch.sentence_gloss = null;
+      patch.sentence_insight = null;
+      patch.grammar_key = null;
     }
 
     try {
@@ -752,7 +782,7 @@ export default function StudyCard({
             is the machinery around it. */}
         {flipped && mode === 'review' ? (
           <View style={styles.gradeRow}>
-            {GRADES.map(({ grade, label, tone }) => (
+            {GRADES.map(({ grade, label, tone, onFill }) => (
               <TouchableOpacity
                 key={grade}
                 style={[styles.gradeBtn, styles[tone], grading && styles.gradeBtnBusy]}
@@ -762,14 +792,14 @@ export default function StudyCard({
                 // Spoken as a sentence, because "Easy 3mo" read aloud is two
                 // unrelated nouns. The interval is the whole point of the
                 // button — it's what distinguishes the four of them.
-                accessibilityLabel={`${label} — next review in ${formatInterval(intervalPreview(sticker, grade))}`}
+                accessibilityLabel={`${label} — next review in ${spokenDelay(intervalPreview(sticker, grade))}`}
                 accessibilityState={{ disabled: grading }}
               >
-                <Text style={[styles.gradeLabel, tone === 'toneAgain' && styles.gradeLabelOnDark]}>
+                <Text style={[styles.gradeLabel, onFill && styles.gradeLabelOnFill]}>
                   {label}
                 </Text>
-                <Text style={[styles.gradeWhen, tone === 'toneAgain' && styles.gradeWhenOnDark]}>
-                  {formatInterval(intervalPreview(sticker, grade))}
+                <Text style={[styles.gradeWhen, onFill && styles.gradeWhenOnFill]}>
+                  {intervalPreview(sticker, grade)}
                 </Text>
               </TouchableOpacity>
             ))}
@@ -1058,6 +1088,12 @@ function BackFace({ sticker, mode, onEditField, imageUrl, voice, onScroll }: {
               ) : sticker.sentence}
             </Text>
             <Text style={styles.sentenceTranslation}>{sticker.sentence_translation}</Text>
+            <SentenceGloss
+              raw={sticker.sentence_gloss}
+              sentence={sticker.sentence}
+              language={sticker.language}
+            />
+            <SentenceInsight text={sticker.sentence_insight} />
           </Field>
         </ScrollView>
       </View>
@@ -1386,12 +1422,17 @@ const styles = StyleSheet.create({
   // row looks live while it is inert, and the second tap that gets no response
   // reads as the button being broken rather than as it already having worked.
   gradeBtnBusy: { opacity: 0.45 },
-  toneAgain: { backgroundColor: colors.error, borderColor: colors.error },
-  toneHard:  { backgroundColor: colors.card, borderColor: colors.border },
-  toneGood:  { backgroundColor: colors.terraLight, borderColor: colors.terra },
-  toneEasy:  { backgroundColor: colors.successLight, borderColor: colors.success },
-  gradeLabel: { fontSize: 14, fontFamily: fonts.display, color: colors.inkDark },
-  gradeLabelOnDark: { color: colors.white },
-  gradeWhen: { fontSize: 10, fontFamily: fonts.mono, color: colors.inkLight },
-  gradeWhenOnDark: { color: colors.white, opacity: 0.85 },
+  // The two filled ends use the *Deep* shades rather than the plain semantic
+  // ones: white on colors.error clears only ~3.9:1, and this label is 14pt,
+  // which is below the size where WCAG relaxes to 3:1.
+  toneAgain: { backgroundColor: colors.errorDeep, borderColor: colors.errorDeep },
+  toneHard:  { backgroundColor: colors.sageLight, borderColor: colors.sageDark },
+  toneGood:  { backgroundColor: colors.successLight, borderColor: colors.success },
+  toneEasy:  { backgroundColor: colors.successDeep, borderColor: colors.successDeep },
+  // Neutral warm-black rather than the rose-brown heading ink, which reads as
+  // a third hue sitting on top of a sand or a green button.
+  gradeLabel: { fontSize: 14, fontFamily: fonts.display, color: colors.charcoal },
+  gradeLabelOnFill: { color: colors.white },
+  gradeWhen: { fontSize: 10, fontFamily: fonts.mono, color: colors.inkMid },
+  gradeWhenOnFill: { color: colors.white, opacity: 0.85 },
 });

@@ -461,3 +461,149 @@ and the return key does nothing.
 by the person who wrote it gets tested by someone who knows the password, the
 username and the field order. Every one of these was invisible from the
 inside.
+
+---
+
+## 12. A scale with options that don't differ isn't a scale — and its colours are half of it
+
+**Symptom:** two complaints about the study card's grading row that turned out
+to be the same complaint. "Hard is white and Good is red, that's backwards."
+And: "Again, Hard and Good all say 1d — why am I being asked?"
+
+**Root cause, one per half:**
+
+1. **The colour ramp ran against the meaning.** `toneHard` was
+   `colors.card` — bare white, the same as an unstyled surface — and
+   `toneGood` was `terraLight`/`terra`, the brand rose the app uses for its
+   *primary action* everywhere else, which on a four-button row reads as an
+   alarm. So the button meaning "I struggled" looked like nothing and the
+   button meaning "I got it" looked like a warning. Colour on a grading scale
+   is the fastest signal the row carries; when it disagrees with the words, it
+   beats the words.
+
+2. **Three of the four buttons resolved to the same interval.** 029's
+   scheduler was day-granular by design ("no learning steps and no intraday
+   scheduling"), so on a card you had just met, `nextInterval` returned 1 for
+   Again, 1 for Hard and 1 for Good. Answering honestly that you had blanked
+   bought you nothing over answering that you knew it — which is the one thing
+   a self-graded scale cannot afford, because it teaches the user their answer
+   doesn't matter.
+
+**Fix pattern:**
+- **Paint the ramp as a ramp.** Filled red → sand → pale green → filled green
+  (`toneAgain`…`toneEasy` in `StudyCard.tsx`). The two ends are the two filled
+  buttons; the middle two are tints of the end they head toward. Keep the
+  brand colour out of it entirely — on a row of four peers, "primary action"
+  is a claim none of them can make.
+- **White text needs a darker fill than the semantic token.** White on
+  `colors.error` is ~3.9:1 and on `colors.success` ~3.1:1, both under AA for
+  14pt. `errorDeep`/`successDeep` exist for exactly this; use the base
+  colours for borders and icons and the Deep pair whenever white sits on top.
+- **Give a card being *learned* its own ladder, in minutes.** `lib/review.ts`
+  now has three phases (learning / review / relearning) with Anki's default
+  steps — 1m, 10m for a new card; 10m after a lapse — and only graduates onto
+  the day-granular SM-2 ladder once the card is answered correctly through the
+  end of that ladder. New card, first press: Again 1m, Hard 6m, Good 10m,
+  Easy 4d. Four buttons, four answers.
+- **Stack the passing intervals so they can't collapse.** `hard`, `good` and
+  `easy` are computed together and each floored at one day past the one below.
+  Without that, a 1-day card gives 1.2× → 1d, 2.5× → 3d and 3.25× → 3d, and
+  Good and Easy become the same button — the original bug, one rung higher up.
+- **Whatever the button previews must be what the button does.** One
+  `nextOutcome()` produces both the label and the write, so they can't drift.
+  Format the *nominal* delay, not the wall-clock difference: a card booked for
+  tomorrow midnight is "1d" whatever time of the evening you answered it.
+
+**The session has to honour the ladder or the ladder is theatre.** A 10-minute
+step that ends the session is a step nobody ever walks. `StudySessionHost`
+re-queues anything the scheduler booked inside `LEARN_AHEAD_MIN` (20 min,
+Anki's default too), ordered by due time — which also replaced the old
+special-case that re-queued Again and nothing else. Two things that cost time:
+the re-queued card must carry its **patch** forward (`{ ...current, ...patch }`)
+or a second answer in the same sitting computes from the wrong rung; and it
+must never land immediately next while another card waits, or the "test" is of
+the last five seconds.
+
+**Sub-day scheduling is a schema change, not a constant.** `interval_days` is
+an INTEGER and there is no way to say "1 minute" in it. 040 adds `due_at`
+(the authoritative moment, minute-granular) and `learning_step`. Old rows are
+deliberately **not** backfilled — a server-side `date_trunc` would shift the
+due day for anyone west of GMT — so `dueAtMs()` keeps 029's inference as a
+fallback, computed client-side in the user's own timezone. Review cards are
+still written at **local midnight**, so the day-granular feel the old
+scheduler was built around (the queue turning over overnight rather than
+reshuffling through the afternoon) survives for every card past its steps.
+
+---
+
+## 13. A model asked to label its own output will label whatever it did
+
+**Symptom:** the teaching note on a card kept being true and useless — "Uses
+the present tense." — and the same three or four structures came round again
+and again. Reported as *the sentences are a bit boring*, never as "the
+syllabus is broken", because from the outside there was no syllabus to break.
+
+**Root cause:** `sentence_insight` asked the model to name the grammar its
+sentence used, *after* it had already written the sentence. Nothing chose what
+the card should teach — the caption chose, and a caption reaches for the
+present tense and a locative preposition every single time. The tell was in
+the field's own instruction: three fallbacks deep ("(a) name the pattern…
+(b) otherwise a bonus word… (c) otherwise a fact about the headword"), most of
+its length spent forbidding the model from making something up. When a
+question needs that much scaffolding against invention, the honest answer to
+it is usually "nothing in particular", and you are asking at the wrong time.
+
+This is #6 again in a different costume: correcting an answer downstream
+instead of making the thing you want an **input**.
+
+**Fix pattern:**
+- `_shared/syllabus.ts` holds the structures, banded roughly by CEFR and
+  ordered by *yield* rather than by textbook order — the places the language
+  does something English does not are where a learner's errors actually live
+  (`fr.depuis` + present, `ja.counters`, `yue.classifier`).
+- The prompt offers **two** targets, not one, and the model picks which the
+  photo can carry. One target forces a contortion whenever the scene can't
+  host it, and unnatural input is worse than input with no form focus at all.
+- **Read the choice back** (`grammar_key`, stored on the row) instead of
+  assuming the model obeyed. That stored value is what the next scan's
+  no-repeat window reads, so a silently-substituted structure would poison the
+  rotation and the teaching note in the same move.
+- **Say which rule wins.** "Ground it in the specific photo" and "keep the
+  vocabulary common" genuinely conflict — detail-hunting drags in *windowsill,
+  chipped, half-full*, which is below a beginner's coverage and never recurs.
+  The prompt names the winner in the rule itself. Rules phrased as
+  encouragement ("naturally mentioning a second real object is encouraged —
+  but only if the scene genuinely supports it") got, reliably, none of the
+  behaviour they described.
+
+**The other half — anything the model produces that must *correspond* to
+something else has to be checked against it, and dropped whole when it
+doesn't fit.** `normalizeGloss` requires the gloss chunks to reconstruct the
+sentence, spacing and punctuation aside, or the entire gloss becomes null. A
+wrong segmentation is worse than none: it teaches boundaries that don't exist,
+confidently, and nothing in it tells the learner it's wrong. Three things this
+cost:
+
+- **Never repair a partial answer into passing.** A gloss patched up until it
+  validates is no longer evidence that the model segmented correctly — it's
+  evidence that the repair worked.
+- **Re-run the check at render time, not only at write time.** The sentence is
+  hand-editable from the study card and the gloss is not, so a stored gloss can
+  start describing a sentence that no longer exists. `lib/gloss.ts` re-checks;
+  `StudyCard.handleSaveField` also nulls the gloss, the note and the grammar
+  key whenever the sentence itself changes, because a stale row is still a lie
+  waiting for someone to query it.
+- **A punctuation strip written for Latin text eats letters.** `ー` in コーヒー
+  is a hyphen to any `[-–—]` class, `・` and `々` are similar traps. Stripping
+  it would have made コヒ validate against コーヒー — a mis-segmentation passing
+  as a formatting difference, which is precisely the case the validator exists
+  to catch. There is a test for exactly this.
+
+**Two smaller things worth keeping:**
+- Everything that reads stickers uses `select('*')`, so adding a column needed
+  no query changes anywhere. Check that before assuming it of the next one.
+- The prompt modules are deliberately free of Deno APIs at module scope, so
+  `node --experimental-strip-types` can import and test them directly —
+  `scripts/test-sentence-logic.mts` for the pure logic, `scripts/prompt-lab.mts`
+  to run the *shipping* prompt against real photographs. A prompt change is
+  the one kind of change that cannot be reviewed by reading it.

@@ -257,6 +257,11 @@ export default function ScanScreen() {
       sentence: String(data.sentence ?? ''),
       sentenceTranslation: String(data.sentenceTranslation ?? ''),
       sentenceInsight: data.sentenceInsight ?? null,
+      // Validated against the sentence server-side before it got here; the
+      // card re-checks it at render time anyway (see lib/gloss.ts), so a
+      // malformed value degrades to no breakdown rather than a wrong one.
+      sentenceGloss: data.sentenceGloss ?? null,
+      grammarKey: data.grammarKey ?? null,
       partOfSpeech: data.partOfSpeech ?? null,
       category: data.category ?? 'Other',
       imagePath: String(data.imagePath ?? ''),
@@ -643,6 +648,8 @@ export default function ScanScreen() {
       sentence: draft.sentence,
       sentence_translation: draft.sentenceTranslation,
       sentence_insight: draft.sentenceInsight,
+      sentence_gloss: draft.sentenceGloss,
+      grammar_key: draft.grammarKey,
       part_of_speech: draft.partOfSpeech,
       category: draft.category,
       image_path: draft.imagePath,
@@ -758,8 +765,15 @@ export default function ScanScreen() {
         sentenceTranslation: newSentence,
         // translate-sentence spreads the LLM's raw JSON keys through
         // unchanged (unlike create-sticker, which remaps to camelCase) —
-        // so this reads the snake_case key on purpose.
+        // so this reads the snake_case keys on purpose.
         sentenceInsight: data.sentence_insight ?? prev.sentenceInsight,
+        // Both of these describe the sentence, and the sentence has just been
+        // replaced — so they are taken from the new response or dropped, never
+        // carried over from the old one. The grammar key goes for good: the
+        // learner chose this sentence's content, so it no longer demonstrates
+        // whatever structure the syllabus had picked for the scan.
+        sentenceGloss: data.gloss ?? null,
+        grammarKey: null,
       } : prev);
     } finally {
       setRetranslatingSentence(false);

@@ -54,11 +54,17 @@ export const colors = {
   treeTrunk:  '#8B6040',
   skyBlue:    '#DCE6EC', // cool accent — the one non-rose sticker tint
 
-  // Semantic
+  // Semantic. The *Deep* pair are darkened from their base for the one job
+  // the base can't do: carrying white text at body size. White on #C4565B is
+  // ~3.9:1 and on #6E9E72 ~3.1:1, both short of WCAG AA's 4.5 for text under
+  // 18.66pt bold — these clear it. Use the base for borders and icons, the
+  // Deep one whenever white sits on top (the study card's grading row).
   error:      '#C4565B',
   errorLight: '#F7E0E1',
+  errorDeep:  '#A8434A',
   success:    '#6E9E72',
   successLight: '#E2EFE3',
+  successDeep:  '#4C7A52',
 
   // Utility
   border:     '#EADFD6',

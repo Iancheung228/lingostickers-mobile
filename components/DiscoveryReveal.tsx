@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
 import { Modal, View, Text, Image, TouchableOpacity, TextInput, StyleSheet, SafeAreaView, ScrollView, ActivityIndicator, Alert, KeyboardAvoidingView, Platform, useWindowDimensions, Pressable } from 'react-native';
-import { X, Bookmark, Pencil, Volume2, Lightbulb, Info, RotateCcw, Check } from 'lucide-react-native';
+import { X, Bookmark, Pencil, Volume2, Info, RotateCcw, Check } from 'lucide-react-native';
 import { StickerDraft } from '@/lib/types';
 import { supabase } from '@/lib/supabase';
 import { speak, stopSpeaking } from '@/lib/speech';
 import { colors, spacing, shadows, fonts, wordFontFor, sentenceFontFor } from '@/constants/theme';
+import { SentenceGloss, SentenceInsight } from '@/components/SentenceGloss';
 
 interface DiscoveryRevealProps {
   draft: StickerDraft | null;
@@ -198,11 +199,16 @@ export default function DiscoveryReveal({ draft, onAdd, onDiscard, onRetryExtrac
             )}
           </TouchableOpacity>
 
-          {!!draft.sentenceInsight && !retranslatingSentence && (
-            <View style={styles.insightRow}>
-              <Lightbulb size={12} color={colors.sageDark} />
-              <Text style={styles.insightText}>{draft.sentenceInsight}</Text>
-            </View>
+          {!retranslatingSentence && (
+            <>
+              <SentenceGloss
+                raw={draft.sentenceGloss}
+                sentence={draft.sentence}
+                language={draft.language}
+                style={styles.revealBlock}
+              />
+              <SentenceInsight text={draft.sentenceInsight} style={styles.revealBlock} />
+            </>
           )}
         </ScrollView>
 
@@ -393,18 +399,11 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   sentenceTranslation: { fontSize: 12, fontFamily: fonts.text, color: colors.inkFaint, textAlign: 'center' },
-  insightRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 6,
-    marginTop: spacing.md,
-    paddingTop: spacing.sm,
-    paddingHorizontal: spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: colors.borderLight,
-    maxWidth: 280,
-  },
-  insightText: { flex: 1, fontSize: 12, fontFamily: fonts.text, color: colors.sageDark, lineHeight: 16 },
+  // The reveal centres everything above it; these two blocks span the content
+  // width instead. An interlinear gloss has to be left-aligned to be read at
+  // all — the columns are the meaning — and the note under it lines up with
+  // the gloss rather than floating between the two alignments.
+  revealBlock: { alignSelf: 'stretch', marginTop: spacing.md },
   actions: {
     paddingHorizontal: 32,
     paddingTop: spacing.ms,
