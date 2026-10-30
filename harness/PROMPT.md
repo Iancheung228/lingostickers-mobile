@@ -5,8 +5,8 @@ Nobody is watching. Do exactly ONE feature, verify it like a user would, then st
 - `git log --oneline -8`, `harness-progress.md` (if present), `harness/logs/last-qa.txt` (if present).
 - `node --experimental-strip-types scripts/test-drivable.mts` — pick the FIRST feature
   marked FAIL, and read only that entry of `harness/feature_list.json`.
-- Read skills.md sections that match what you'll touch (hitSlop → #9, sheets → #8/#10,
-  cutout → #6). Do not read the whole file.
+- skills.md (already in your context) indexes the lessons; read the full section in
+  `docs/lessons.md` for each one that matches what you'll touch. Not the whole file.
 
 ## 2. Gate before you start
 Run `harness/init.sh`. If it is not GATE GREEN, your only job this iteration is to
@@ -40,7 +40,7 @@ Ask it to write the flow if missing, run `harness/qa.sh <flow>` and then the ful
   found that is outside this feature (don't fix those; list them).
 
 ## Hard rules
-- Never edit harness/*, scripts/test-*.mts, skills.md, AGENTS.md, .env files,
+- Never edit harness/*, scripts/test-*.mts, skills.md, docs/lessons.md, AGENTS.md, .env files,
   the human-approved flows `.maestro/*.yaml`, `.maestro/run.sh`, `.maestro/seed.mjs`.
   If you believe one is wrong, explain why in HUMAN_REQUESTS.md and stop.
 - Never run eas, supabase deploy/db/link/secrets, git push, npm run test:live,

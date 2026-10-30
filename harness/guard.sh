@@ -10,7 +10,7 @@ payload=$(echo "$input" | /usr/bin/python3 -c 'import json,sys; d=json.load(sys.
 # Human-owned: the definition of done, the tests, the lessons, the secrets, and
 # the human-approved Maestro flows + tooling. Agents may add flows under
 # .maestro/agent/ only.
-PROTECTED='harness/|scripts/test-|skills\.md|AGENTS\.md|CLAUDE\.md|\.env|\.claude/agents/|\.maestro/[^/]+\.(yaml|sh|mjs)$|\.maestro/[^/]+\.(yaml|sh|mjs)[ "]|\.maestro/qa\.env|\.maestro/fixtures/'
+PROTECTED='harness/|scripts/test-|skills\.md|docs/lessons\.md|AGENTS\.md|CLAUDE\.md|\.env|\.claude/agents/|\.maestro/[^/]+\.(yaml|sh|mjs)$|\.maestro/[^/]+\.(yaml|sh|mjs)[ "]|\.maestro/qa\.env|\.maestro/fixtures/'
 
 case "$tool" in
   Bash)

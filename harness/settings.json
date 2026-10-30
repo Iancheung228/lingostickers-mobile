@@ -5,7 +5,7 @@
       "Bash(supabase db *)", "Bash(supabase functions *)", "Bash(supabase link *)", "Bash(supabase secrets *)",
       "Bash(npm run test:live*)", "Bash(maestro cloud *)",
       "Read(**/.env)", "Read(**/.env.*)",
-      "Edit(harness/**)", "Edit(scripts/test-*)", "Edit(skills.md)", "Edit(.maestro/*.yaml)", "Edit(.maestro/run.sh)", "Edit(.maestro/seed.mjs)", "Edit(.claude/agents/**)", "Write(harness/**)", "Write(scripts/test-*)", "Write(skills.md)", "Write(.maestro/*.yaml)", "Write(.maestro/run.sh)", "Write(.maestro/seed.mjs)", "Write(.claude/agents/**)"
+      "Edit(harness/**)", "Edit(scripts/test-*)", "Edit(skills.md)", "Edit(docs/lessons.md)", "Edit(.maestro/*.yaml)", "Edit(.maestro/run.sh)", "Edit(.maestro/seed.mjs)", "Edit(.claude/agents/**)", "Write(harness/**)", "Write(scripts/test-*)", "Write(skills.md)", "Write(docs/lessons.md)", "Write(.maestro/*.yaml)", "Write(.maestro/run.sh)", "Write(.maestro/seed.mjs)", "Write(.claude/agents/**)"
     ]
   },
   "hooks": {

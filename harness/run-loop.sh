@@ -25,7 +25,7 @@ notify() { osascript -e "display notification \"$1\" with title \"Tabi harness\"
 
 # Files that define "done". Byte-identical to the scaffold commit, or the run stops.
 PROTECTED=(harness/feature_list.json harness/guard.sh harness/init.sh harness/PROMPT.md
-  harness/settings.json harness/qa.sh harness/qa-hierarchy.sh scripts/test-drivable.mts skills.md
+  harness/settings.json harness/qa.sh harness/qa-hierarchy.sh scripts/test-drivable.mts skills.md docs/lessons.md
   .maestro/sign-in.yaml .maestro/study-grade.yaml .maestro/run.sh .maestro/seed.mjs
   .claude/agents/qa-tester.md)
 
