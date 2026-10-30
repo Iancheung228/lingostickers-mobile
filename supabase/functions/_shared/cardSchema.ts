@@ -26,6 +26,7 @@ export type FieldKey =
   | 'translation'
   | 'part_of_speech'
   | 'reading'
+  | 'forms'
   | 'sentence'
   | 'sentence_translation'
   | 'grammar_key'
@@ -47,8 +48,55 @@ export const CARD_FIELDS: FieldKey[] = [
   'category',
 ];
 
-export const PARTS_OF_SPEECH = ['noun', 'verb', 'adjective', 'adverb', 'phrase'] as const;
+export const PARTS_OF_SPEECH = ['noun', 'verb', 'adjective', 'adverb', 'phrase', 'idiom'] as const;
 export const CATEGORIES = ['Kitchen', 'Animals', 'Study', 'Nature', 'Other'] as const;
+
+/**
+ * A card that did not start from a cut-out object: a typed word, or a word
+ * picked off a scene prompt. Same as CARD_FIELDS plus `forms`, which sits in
+ * the headword block — it describes the word, not the sentence, and the
+ * sentence is better for being written after the model has spelled out the
+ * forms it can conjugate or agree into.
+ */
+export const ANY_WORD_FIELDS: FieldKey[] = [
+  ...HEADWORD_FIELDS,
+  'forms',
+  'sentence',
+  'sentence_translation',
+  'grammar_key',
+  'gloss',
+  'sentence_insight',
+  'category',
+];
+
+const FORMS_SCHEMA_LINE = `"forms": [{"l": "a short label, e.g. present (je)", "v": "the form itself"}]`;
+
+/** The instruction that goes with FORMS_SCHEMA_LINE, for one language. */
+export function formsRules(language: Language): string {
+  return `LIST THE FORMS. In "forms", give the forms of the headword a learner actually needs, chosen by its part of speech: ${LANGUAGE_SCHEMAS[language].forms}. Each entry is a short English label "l" and the form itself "v", written in the same script as the headword. 2 to 6 entries. A phrase with nothing to conjugate or agree gets an empty list — never pad it with forms that do not exist.`;
+}
+
+export interface FormEntry {
+  l: string;
+  v: string;
+}
+
+/**
+ * The model's `forms`, kept only where every entry is a non-empty label and
+ * value. At most six — the prompt asks for 2 to 6, and a seventh is the model
+ * padding. An empty list is a real answer (an idiom has nothing to conjugate)
+ * and is kept as one; anything malformed becomes null.
+ */
+export function normalizeForms(raw: unknown): FormEntry[] | null {
+  if (!Array.isArray(raw)) return null;
+  const out: FormEntry[] = [];
+  for (const entry of raw) {
+    const l = typeof entry?.l === 'string' ? entry.l.trim() : '';
+    const v = typeof entry?.v === 'string' ? entry.v.trim() : '';
+    if (l && v) out.push({ l, v });
+  }
+  return out.slice(0, 6);
+}
 
 /** Fields that must not be generated before `sentence` exists. */
 const SENTENCE_DEPENDENTS: FieldKey[] = ['sentence_translation', 'grammar_key', 'gloss', 'sentence_insight'];
@@ -60,6 +108,14 @@ export interface LanguageSchema {
   /** Genuinely per-language: what "word" and "reading" mean here. */
   word: string;
   reading: string;
+  /**
+   * The same, for a headword that may be any part of speech. Kept separate
+   * from `word` rather than replacing it: the scan path names an object and
+   * its examples are tuned for that.
+   */
+  anyWord: string;
+  /** Which forms of each part of speech are worth a learner's attention. */
+  forms: string;
 }
 
 export const LANGUAGE_SCHEMAS: Record<Language, LanguageSchema> = {
@@ -68,12 +124,20 @@ export const LANGUAGE_SCHEMAS: Record<Language, LanguageSchema> = {
     sentenceNote: 'in French',
     word: 'the object name in French with article (e.g. Le Café, La Pomme, Le Chien)',
     reading: 'phonetic spelling of the French word in English (e.g. luh ka-fay, la pum, luh she-en)',
+    anyWord:
+      'the word or phrase in French, in dictionary form: a noun with its indefinite article so the gender shows (un café, une pomme), a verb in the infinitive (courir, se lever), an adjective in the masculine singular (fumant), an idiom as it is usually written (boire un coup)',
+    forms:
+      'verb → the present for je and nous, the passé composé for je (naming the auxiliary), and the past participle; noun → gender and plural; adjective → feminine, masculine plural and feminine plural; idiom → "literally" (word-for-word English) and "register" (casual, neutral or formal)',
   },
   ja: {
     label: 'Japanese',
     sentenceNote: 'in Japanese, written naturally with kanji and kana',
     word: 'the object name in Japanese, written naturally with kanji/katakana/hiragana as appropriate (e.g. コーヒー, りんご, 犬)',
     reading: 'romaji reading of the Japanese word, using macrons for long vowels (e.g. kōhī, ringo, inu)',
+    anyWord:
+      'the word or phrase in Japanese, in dictionary form, written naturally with kanji/katakana/hiragana as appropriate (e.g. コーヒー, 飲む, 静か, 猫の手も借りたい)',
+    forms:
+      'verb → its group (godan, ichidan or irregular), then the masu, te, nai and ta forms; noun → the counter used to count it; adjective → whether it is an i- or na-adjective, then its negative and past; idiom → "literally" (word-for-word English) and "register" (casual, neutral or formal)',
   },
   yue: {
     label: 'Cantonese',
@@ -81,6 +145,10 @@ export const LANGUAGE_SCHEMAS: Record<Language, LanguageSchema> = {
       'in written colloquial Cantonese — Traditional Chinese characters, spoken Cantonese grammar and vocabulary, NOT Standard Written Chinese',
     word: 'the object name in Cantonese, written in Traditional Chinese characters as used in Hong Kong (e.g. 咖啡, 蘋果, 狗)',
     reading: 'Jyutping romanization of the Cantonese word, with tone numbers (e.g. gaa3 fe1, ping4 gwo2, gau2)',
+    anyWord:
+      'the word or phrase in Cantonese, written in Traditional Chinese characters as used in Hong Kong, as it is actually said in speech rather than in Standard Written Chinese (e.g. 咖啡, 飲, 靚, 食得滯)',
+    forms:
+      'verb → how it combines with the aspect markers 咗, 緊 and 過, each with a two-to-four-character example; noun → its classifier (e.g. 杯, 隻, 張); adjective → its comparative with 過 and an intensified form; idiom → "literally" (word-for-word English) and "register" (casual, neutral or formal)',
   },
 };
 
@@ -111,6 +179,12 @@ export interface RenderOptions {
    * learner supplied an English sentence to render.
    */
   sentenceAs?: 'about-photo' | 'translation';
+  /**
+   * What the headword is allowed to be. 'object' (the default) is the scan
+   * path's noun-with-article; 'any' is any part of speech, for typed words
+   * and scene prompts.
+   */
+  headword?: 'object' | 'any';
 }
 
 interface FieldSpec {
@@ -124,9 +198,11 @@ function specFor(key: FieldKey, opts: RenderOptions): FieldSpec {
   const lang = LANGUAGE_SCHEMAS[opts.language];
   switch (key) {
     case 'word':
-      return { prose: lang.word, json: { type: 'string' } };
+      return { prose: opts.headword === 'any' ? lang.anyWord : lang.word, json: { type: 'string' } };
     case 'translation':
-      return { prose: 'English translation (e.g. Coffee, Apple, Dog)', json: { type: 'string' } };
+      return opts.headword === 'any'
+        ? { prose: 'concise English meaning, with to before a verb (e.g. coffee, to run, quiet, to grab a drink)', json: { type: 'string' } }
+        : { prose: 'English translation (e.g. Coffee, Apple, Dog)', json: { type: 'string' } };
     case 'part_of_speech':
       return {
         prose: `the headword's part of speech in lowercase English, one of exactly: ${PARTS_OF_SPEECH.join(', ')}`,
@@ -134,6 +210,25 @@ function specFor(key: FieldKey, opts: RenderOptions): FieldSpec {
       };
     case 'reading':
       return { prose: lang.reading, json: { type: 'string' } };
+    case 'forms':
+      return {
+        // A whole "key": value line, like gloss: the example has to show a
+        // nested shape. Label/value pairs rather than a fixed object, because
+        // what is worth listing differs by part of speech AND by language —
+        // one closed schema would be wrong for most of the combinations.
+        // What to put in it is said in the prompt (formsRules), the same split
+        // as GLOSS_SCHEMA_LINE / GLOSS_RULES — this line must stay valid JSON.
+        prose: FORMS_SCHEMA_LINE,
+        json: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: { l: { type: 'string' }, v: { type: 'string' } },
+            required: ['l', 'v'],
+            propertyOrdering: ['l', 'v'],
+          },
+        },
+      };
     case 'sentence':
       return {
         prose:

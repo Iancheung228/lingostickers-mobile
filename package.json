@@ -53,7 +53,7 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "lint": "expo lint",
-    "test": "node --experimental-strip-types --test scripts/test-sentence-logic.mts scripts/test-llm.mts",
+    "test": "node --experimental-strip-types --test scripts/test-sentence-logic.mts scripts/test-llm.mts scripts/test-any-word.mts",
     "test:llm": "node --experimental-strip-types --test scripts/test-llm.mts",
     "test:live": "node --experimental-strip-types --test scripts/test-gemini-live.mts",
     "typecheck": "tsc --noEmit",

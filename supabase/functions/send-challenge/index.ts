@@ -60,6 +60,11 @@ Deno.serve(async (req) => {
 
     if (!sticker) return json({ error: 'You do not own this sticker' }, 403);
 
+    // A challenge is "guess the word from my picture". A typed card (043) may
+    // have no picture, and there is nothing to guess from — refuse it before
+    // claiming quota rather than failing on the snapshot copy below.
+    if (!sticker.image_path) return json({ error: 'This card has no picture to guess from yet' }, 400);
+
     // ── 2a. Claim quota ──────────────────────────────────────────
     // After the friendship and ownership checks so a rejected request never
     // burns a unit, but before the model call below, which is the spend this

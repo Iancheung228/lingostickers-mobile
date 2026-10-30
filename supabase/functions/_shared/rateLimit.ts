@@ -23,8 +23,15 @@ import { LlmError, httpStatusFor } from './llm/index.ts';
 // friendship and an owned sticker, so its bucket is generous — this is here so
 // that no paid endpoint sits outside the cap, not because it is a likely
 // attack surface.
+// create-card and scene-words are the "any word" paths. One photo can now be
+// asked several prompts and yield several cards, so they get buckets of their
+// own sized for that, rather than draining create-sticker's ten scans. Both
+// are a single model call with no background removal, roughly a tenth of a
+// cent each, so the cap is about abuse rather than cost.
 const DEFAULT_DAILY_LIMITS: Record<string, number> = {
   'create-sticker': 10,
+  'create-card': 40,
+  'scene-words': 25,
   'translate-word': 30,
   'translate-sentence': 30,
   'send-challenge': 30,
@@ -120,6 +127,8 @@ function limitMessage(endpoint: Endpoint, limit: number): string {
   const noun =
     endpoint === 'create-sticker' ? 'sticker scans' :
     endpoint === 'send-challenge' ? 'challenges' :
+    endpoint === 'create-card' ? 'new cards' :
+    endpoint === 'scene-words' ? 'photo prompts' :
     'translations';
   return `Daily limit reached — you've used all ${limit} of today's ${noun}. Try again tomorrow.`;
 }

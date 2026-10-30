@@ -1,0 +1,1346 @@
+{
+  "schema": 2,
+  "status": "DRAFT v3 — follows 00_PLAN_v3.md (functionality only; no visual changes). Requires the harness v2 changes in 00_SYNTHESIS.md §9. Run after the current 6 testID features pass.",
+  "goal": "Functional round: scene prompts (one photo, many words), Quick Add for any word/phrase/idiom in fr/yue/ja, word-type-aware cards, and Anki-grade basics — without changing existing visuals.",
+  "rules": "As harness/feature_list.json, plus: executor=human entries and unmet requires_human are BLOCKED_ON_HUMAN, never picked; use spec.copy strings verbatim; respect out_of_scope. Do not change existing visuals, copy or layout except where a feature's acceptance requires it.",
+  "features": [
+    {
+      "id": "dev-debug-surface",
+      "title": "Dev-only debug screen that makes invisible state assertable",
+      "kind": "infra",
+      "executor": "loop",
+      "depends_on": [],
+      "requires_human": [],
+      "backend": "none",
+      "seed": "one-due",
+      "spec": {
+        "user_story": "As the QA agent I need to see scheduled notifications, recent analytics events and pending writes as on-screen text so Maestro can assert them.",
+        "acceptance": [
+          "1. lib/analytics.ts keeps the last 50 trackEvent calls (name + props JSON) in an in-memory ring buffer ONLY when __DEV__ is true, and still forwards to Aptabase exactly as before.",
+          "2. A route app/__debug.tsx renders three sections with headers 'SCHEDULED', 'EVENTS', 'PENDING WRITES'; each item is one Text line; empty sections show 'none'.",
+          "3. SCHEDULED lists Notifications.getAllScheduledNotificationsAsync() as '<identifier> · <trigger type> · <hour>:<minute>' when available.",
+          "4. The route renders null and redirects to '/' when __DEV__ is false.",
+          "5. Opening lingostickers://__debug in the Simulator shows the screen; a 'Refresh' button re-reads all three sections."
+        ],
+        "copy": {
+          "title": "Debug",
+          "refresh": "Refresh",
+          "empty": "none"
+        },
+        "out_of_scope": [
+          "No link to this screen from any visible UI",
+          "No change to existing analytics event names or props"
+        ]
+      },
+      "checks": {
+        "static": [
+          {
+            "file": "lib/analytics.ts",
+            "includes": [
+              "__DEV__",
+              "getRecentEvents"
+            ],
+            "forbid": []
+          },
+          {
+            "file": "app/__debug.tsx",
+            "testIDs": [
+              "debug-refresh",
+              "debug-scheduled",
+              "debug-events",
+              "debug-pending"
+            ],
+            "includes": [
+              "__DEV__",
+              "getAllScheduledNotificationsAsync"
+            ],
+            "forbid": []
+          }
+        ],
+        "unit": [],
+        "events": [
+          "app_launched"
+        ]
+      },
+      "flows": [
+        {
+          "path": ".maestro/agent/dev-debug-surface.yaml",
+          "owner": "agent",
+          "must_show": "Sign in, openLink lingostickers://__debug, assert the three section headers, tap Refresh, assert an 'app_launched' line in EVENTS.",
+          "asserts": [
+            "openLink",
+            "lingostickers://__debug",
+            "SCHEDULED",
+            "EVENTS",
+            "PENDING WRITES",
+            "debug-refresh",
+            "app_launched"
+          ],
+          "screenshots": [
+            "debug-screen"
+          ]
+        }
+      ],
+      "budget": {
+        "max_attempts": 3,
+        "max_usd_per_attempt": 3
+      },
+      "verify_human": "Build a preview (release) bundle and confirm lingostickers://__debug lands on home, not the debug screen."
+    },
+    {
+      "id": "scheduler-tests-enable",
+      "title": "Make lib/review.ts unit-testable and cover it",
+      "kind": "chore",
+      "executor": "human",
+      "depends_on": [],
+      "requires_human": [
+        "change lib/review.ts imports to `import type` where only types are used",
+        "write scripts/test-review.mts covering nextOutcome for new/learning/review/relearning × 4 grades"
+      ],
+      "backend": "none",
+      "seed": "one-due",
+      "spec": {
+        "user_story": "As the loop, I need a trusted oracle for the scheduler before any feature touches it.",
+        "acceptance": [
+          "1. node --experimental-strip-types --test scripts/test-review.mts passes",
+          "2. npm test includes it"
+        ],
+        "copy": {},
+        "out_of_scope": [
+          "No change to scheduling behaviour"
+        ]
+      },
+      "checks": {
+        "static": [
+          {
+            "file": "package.json",
+            "includes": [
+              "test-review.mts"
+            ],
+            "forbid": []
+          }
+        ],
+        "unit": [
+          {
+            "file": "scripts/test-review.mts",
+            "owner": "human",
+            "min_pass": 8
+          }
+        ],
+        "events": []
+      },
+      "flows": [],
+      "budget": {
+        "max_attempts": 1,
+        "max_usd_per_attempt": 0
+      },
+      "verify_human": "none"
+    },
+    {
+      "id": "schema-any-word",
+      "title": "Migration: cards without a cutout, word forms, idioms, scene grouping",
+      "kind": "chore",
+      "executor": "loop",
+      "depends_on": [],
+      "requires_human": [
+        "apply the migration to staging then prod (loop only writes the file)"
+      ],
+      "backend": "staging",
+      "seed": "none",
+      "spec": {
+        "user_story": "As the app, I can store a card that came from text or from a scene prompt, not only from a cutout.",
+        "acceptance": [
+          "1. New supabase/migrations/043_any_word_cards.sql: stickers.image_path DROP NOT NULL; ADD forms jsonb NULL; ADD scene_id uuid NULL with an index on (user_id, scene_id); ADD source text NOT NULL DEFAULT 'scan' CHECK (source IN ('scan','scene','text','mined','onboarding'))",
+          "2. part_of_speech accepts 'idiom' (update any CHECK constraint if one exists; otherwise note none)",
+          "3. lib/types.ts Sticker gains forms, scene_id, source with image_path nullable; npm run typecheck passes with every image_path consumer handling null",
+          "4. Existing rows unaffected; no backfill"
+        ],
+        "copy": {},
+        "out_of_scope": [
+          "No UI"
+        ]
+      },
+      "checks": {
+        "static": [
+          {
+            "file": "supabase/migrations/043_any_word_cards.sql",
+            "includes": [
+              "scene_id",
+              "forms",
+              "DROP NOT NULL"
+            ],
+            "forbid": [
+              "DROP TABLE",
+              "DELETE FROM"
+            ]
+          },
+          {
+            "file": "lib/types.ts",
+            "includes": [
+              "scene_id",
+              "forms"
+            ],
+            "forbid": []
+          }
+        ],
+        "unit": [],
+        "events": []
+      },
+      "flows": [],
+      "budget": {
+        "max_attempts": 2,
+        "max_usd_per_attempt": 2
+      },
+      "verify_human": "Apply on staging; open the app; existing cards still render."
+    },
+    {
+      "id": "create-card-function",
+      "title": "Edge function create-card: any word or phrase, either language, any part of speech",
+      "kind": "feature",
+      "executor": "loop",
+      "depends_on": [],
+      "requires_human": [
+        "deploy: npx supabase functions deploy create-card",
+        "human writes scripts/test-create-card.mts against the pure prompt/normalise helpers"
+      ],
+      "backend": "none",
+      "seed": "none",
+      "spec": {
+        "user_story": "As a learner, I can turn any word, phrase or idiom I typed into a full card, without needing a photo.",
+        "acceptance": [
+          "1. New supabase/functions/create-card/index.ts: input {text, language, scene? (base64), crop? (base64)}; text may be English or the target language, or a headword chosen from scene-words; reuses requireUserId + consumeQuota + callModel (_shared/llm) exactly like translate-word",
+          "2. Model returns CARD_FIELDS from _shared/cardSchema.ts plus detected_input_language; with a scene the sentence is about that scene (same rules as identifyFromPhoto), without one it is a natural standalone example",
+          "3. part_of_speech enum gains 'idiom' (keep 'phrase'); the registry stays the single source (lessons #15) and assertFieldOrder still passes",
+          "4. POS-specific extra fields are produced via a new registry entry 'forms' (object, nullable): verb forms, noun gender/article or counter, adjective agreement, idiom literal_gloss + register; prose and JSON Schema both projected from the registry",
+          "5. Output is validated whole (lessons #13): gloss must reconstruct the sentence or is nulled",
+          "6. npm run typecheck:functions passes"
+        ],
+        "copy": {},
+        "out_of_scope": [
+          "No client UI (separate feature)",
+          "No change to create-sticker behaviour"
+        ]
+      },
+      "checks": {
+        "static": [
+          {
+            "file": "supabase/functions/create-card/index.ts",
+            "includes": [
+              "consumeQuota",
+              "callModel"
+            ],
+            "forbid": [
+              "fetch('https://generativelanguage"
+            ]
+          },
+          {
+            "file": "supabase/functions/_shared/cardSchema.ts",
+            "includes": [
+              "'idiom'",
+              "forms"
+            ],
+            "forbid": []
+          }
+        ],
+        "unit": [
+          {
+            "file": "scripts/test-create-card.mts",
+            "owner": "human",
+            "min_pass": 6
+          }
+        ],
+        "events": []
+      },
+      "flows": [],
+      "budget": {
+        "max_attempts": 3,
+        "max_usd_per_attempt": 4
+      },
+      "verify_human": "After deploy, call it with 'to run late' (fr), 'courir' (fr), '猫の手も借りたい' (ja) and check the forms field is right."
+    },
+    {
+      "id": "quick-add",
+      "title": "Quick Add: type or paste → card, image optional",
+      "kind": "feature",
+      "executor": "loop",
+      "depends_on": [
+        "create-card-function",
+        "schema-any-word"
+      ],
+      "requires_human": [],
+      "backend": "staging",
+      "seed": "one-due",
+      "spec": {
+        "user_story": "As a learner who just heard a word, I can save it as a full card in two taps and a few keystrokes.",
+        "acceptance": [
+          "1. A '+' button (testID quick-add-open) is reachable from home and collection; it opens a sheet with the text field focused and a camera shortcut",
+          "2. Submitting calls create-card and shows a preview card (word, reading, meaning, POS badge, example, forms) with Save and Edit",
+          "3. Cards with image_path null render without an image (word-only layout using existing text styles) everywhere a sticker is shown (StickerCard, StudyCard, FeedRail, boards) — no broken image placeholder, no other visual change",
+          "4. Duplicate check: if the same word+language exists, show copy.dupe with 'Add as new example' and 'Save anyway'",
+          "5. trackEvent('card_saved', {source:'text', pos}); saved with source 'text'"
+        ],
+        "copy": {
+          "placeholder": "A word or phrase, in either language",
+          "dupe": "You already have this one. Add this as a new example instead?"
+        },
+        "out_of_scope": [
+          "No OCR",
+          "No batch paste",
+          "No restyling of existing screens"
+        ]
+      },
+      "checks": {
+        "static": [
+          {
+            "file": "components/QuickAddSheet.tsx",
+            "testIDs": [
+              "quick-add-input",
+              "quick-add-save"
+            ],
+            "includes": [
+              "create-card"
+            ],
+            "forbid": []
+          }
+        ],
+        "unit": [],
+        "events": [
+          "card_saved"
+        ]
+      },
+      "flows": [
+        {
+          "path": ".maestro/agent/quick-add.yaml",
+          "owner": "agent",
+          "must_show": "Open quick add, type 'to run late', submit, assert a preview with a POS badge, save, assert it appears in the collection without an image.",
+          "asserts": [
+            "quick-add-open",
+            "quick-add-input",
+            "quick-add-save"
+          ],
+          "screenshots": [
+            "quick-add-preview",
+            "collection-text-card"
+          ]
+        }
+      ],
+      "budget": {
+        "max_attempts": 3,
+        "max_usd_per_attempt": 5
+      },
+      "verify_human": "Try 10 real words across POS and an idiom per language."
+    },
+    {
+      "id": "scene-words-function",
+      "title": "Edge function scene-words: ask a prompt about a photo or a region of it",
+      "kind": "feature",
+      "executor": "loop",
+      "depends_on": [
+        "create-card-function"
+      ],
+      "requires_human": [
+        "deploy: npx supabase functions deploy scene-words",
+        "human writes scripts/test-scene-prompts.mts (registry shape, avoid-list dedupe, candidate validation)"
+      ],
+      "backend": "none",
+      "seed": "none",
+      "spec": {
+        "user_story": "As a learner, one photo can teach me actions, qualities, positions and phrases, not only the object.",
+        "acceptance": [
+          "1. supabase/functions/_shared/scenePrompts.ts: a registry of prompts {id, label, partOfSpeech hint, instruction} with ids what-is-it, happening, like, how, where, local, say-here, custom; pure module, no Deno APIs at module scope (lessons #13)",
+          "2. supabase/functions/scene-words/index.ts: input {scene (base64), crop? (base64), promptId, customText? (<=80 chars), language, avoid: string[]}; uses requireUserId, consumeQuota and callModel exactly like translate-word",
+          "3. Returns 3-6 candidates {word, translation, reading, part_of_speech} via structured output projected from cardSchema HEADWORD_FIELDS (lessons #15); candidates in avoid (case/accents-insensitive) are dropped server-side",
+          "4. With a crop, the instruction scopes to the crop and uses the scene only as context (mirror vocab.ts:183 wording)",
+          "5. 'custom' text is passed as data inside a delimited block, never concatenated into the instruction; over-length is rejected 400",
+          "6. npm run typecheck:functions passes"
+        ],
+        "copy": {},
+        "out_of_scope": [
+          "No change to create-sticker or the What-is-it cutout path",
+          "No client UI"
+        ]
+      },
+      "checks": {
+        "static": [
+          {
+            "file": "supabase/functions/_shared/scenePrompts.ts",
+            "includes": [
+              "happening",
+              "say-here",
+              "custom"
+            ],
+            "forbid": [
+              "Deno."
+            ]
+          },
+          {
+            "file": "supabase/functions/scene-words/index.ts",
+            "includes": [
+              "consumeQuota",
+              "callModel",
+              "avoid"
+            ],
+            "forbid": []
+          }
+        ],
+        "unit": [
+          {
+            "file": "scripts/test-scene-prompts.mts",
+            "owner": "human",
+            "min_pass": 5
+          }
+        ],
+        "events": []
+      },
+      "flows": [],
+      "budget": {
+        "max_attempts": 3,
+        "max_usd_per_attempt": 4
+      },
+      "verify_human": "After deploy, run each prompt against 5 real photos per language (scripts/prompt-lab.mts pattern) and judge the chips."
+    },
+    {
+      "id": "scene-prompt-capture",
+      "title": "Pick a prompt after the photo; save several words from one scene",
+      "kind": "feature",
+      "executor": "loop",
+      "depends_on": [
+        "scene-words-function",
+        "schema-any-word",
+        "quick-add"
+      ],
+      "requires_human": [],
+      "backend": "staging",
+      "seed": "one-due",
+      "spec": {
+        "user_story": "As a learner, after taking a photo I choose what to learn from it and keep as many words as I want.",
+        "acceptance": [
+          "1. After capture or import, a prompt row (testID scene-prompts) lists the registry labels; 'What is it?' is preselected and runs today's exact cutout path unchanged",
+          "2. Optional region: the existing PhotoExtractor box/lasso can be used before a non-noun prompt; its crop is sent as crop",
+          "3. Non-noun prompts call scene-words and show 3-6 selectable chips (testID scene-chip-<i>); multi-select; Save (testID scene-save) creates one card per chip via create-card with the scene as context, all sharing a new scene_id and source 'scene'",
+          "4. Card image for non-noun prompts = uploaded region crop, else the scene photo; no cutout is run",
+          "5. After saving, the same photo stays open with the prompt row so another prompt can be asked; the avoid list includes everything already saved from this scene",
+          "6. Quota errors use the existing getFunctionErrorMessage path (lessons #3)",
+          "7. trackEvent('scene_prompt_used', {promptId}) and trackEvent('card_saved', {source:'scene', pos}) per card"
+        ],
+        "copy": {
+          "whatIsIt": "What is it?",
+          "happening": "What's happening?",
+          "like": "What's it like?",
+          "how": "How?",
+          "where": "Where is it?",
+          "local": "Say it like a local",
+          "sayHere": "What would you say here?",
+          "custom": "Ask your own…"
+        },
+        "out_of_scope": [
+          "No visual restyle of the scan screen beyond adding the prompt row and chips",
+          "No change to the cutout pipeline"
+        ]
+      },
+      "checks": {
+        "static": [
+          {
+            "file": "app/(tabs)/scan.tsx",
+            "testIDs": [
+              "scene-prompts",
+              "scene-save"
+            ],
+            "includes": [
+              "scene-words",
+              "scene_id"
+            ],
+            "forbid": []
+          }
+        ],
+        "unit": [],
+        "events": [
+          "scene_prompt_used",
+          "card_saved"
+        ]
+      },
+      "flows": [
+        {
+          "path": ".maestro/agent/scene-prompt-capture.yaml",
+          "owner": "agent",
+          "must_show": "Using the cutout fixture photo, pick What's happening?, select two chips, Save, assert two new cards in the collection, then pick What's it like? on the same photo and assert chips appear.",
+          "asserts": [
+            "scene-prompts",
+            "What's happening?",
+            "scene-chip-0",
+            "scene-save"
+          ],
+          "screenshots": [
+            "scene-chips",
+            "collection-after-scene"
+          ]
+        }
+      ],
+      "budget": {
+        "max_attempts": 3,
+        "max_usd_per_attempt": 5
+      },
+      "verify_human": "On a phone, in a real kitchen and street, try every prompt in fr, yue and ja."
+    },
+    {
+      "id": "pos-aware-card",
+      "title": "Study card shows word-type-specific fields",
+      "kind": "feature",
+      "executor": "loop",
+      "depends_on": [
+        "quick-add"
+      ],
+      "requires_human": [],
+      "backend": "none",
+      "seed": "ten-mixed",
+      "spec": {
+        "user_story": "As a learner, a verb card shows me its forms, a noun its gender, an idiom what it literally says vs means.",
+        "acceptance": [
+          "1. StudyCard back renders sticker.forms by part_of_speech: verb → forms table; noun → article/gender or counter chip; adjective → agreement row; idiom → 'Literally' and 'Means' rows plus register chip",
+          "2. Null forms render nothing (old cards unchanged)",
+          "3. Forms are editable through the existing FieldEditor pencil pattern (lessons #9)",
+          "4. VoiceOver reads the forms in order"
+        ],
+        "copy": {
+          "literally": "Literally",
+          "means": "Means"
+        },
+        "out_of_scope": [
+          "No new card directions"
+        ]
+      },
+      "checks": {
+        "static": [
+          {
+            "file": "components/StudyCard.tsx",
+            "includes": [
+              "forms",
+              "Literally"
+            ],
+            "forbid": []
+          }
+        ],
+        "unit": [],
+        "events": []
+      },
+      "flows": [
+        {
+          "path": ".maestro/agent/pos-aware-card.yaml",
+          "owner": "agent",
+          "must_show": "With seed ten-mixed (must include a verb and an idiom), flip the idiom card and assert 'Literally' and 'Means'.",
+          "asserts": [
+            "Literally",
+            "Means"
+          ],
+          "screenshots": [
+            "idiom-back",
+            "verb-back"
+          ]
+        }
+      ],
+      "budget": {
+        "max_attempts": 3,
+        "max_usd_per_attempt": 3
+      },
+      "verify_human": "Check French verb and Japanese idiom backs look right."
+    },
+    {
+      "id": "mine-from-sentence",
+      "title": "Tap a chunk of a card's example to make a new card",
+      "kind": "feature",
+      "executor": "loop",
+      "depends_on": [
+        "quick-add"
+      ],
+      "requires_human": [],
+      "backend": "none",
+      "seed": "one-due",
+      "spec": {
+        "user_story": "As a learner, I can grab the verb or adjective from an example sentence I'm already reading.",
+        "acceptance": [
+          "1. Long-press a gloss chunk in SentenceGloss opens Quick Add prefilled with that chunk, keeping the source sentence as the example",
+          "2. Short tap behaviour unchanged",
+          "3. trackEvent('card_saved', {source:'mined'})"
+        ],
+        "copy": {},
+        "out_of_scope": []
+      },
+      "checks": {
+        "static": [
+          {
+            "file": "components/SentenceGloss.tsx",
+            "includes": [
+              "onLongPress"
+            ],
+            "forbid": []
+          }
+        ],
+        "unit": [],
+        "events": [
+          "card_saved"
+        ]
+      },
+      "flows": [
+        {
+          "path": ".maestro/agent/mine-from-sentence.yaml",
+          "owner": "agent",
+          "must_show": "Flip the seeded card, long-press a gloss chunk, assert the quick add sheet opens prefilled.",
+          "asserts": [
+            "longPressOn",
+            "quick-add-input"
+          ],
+          "screenshots": [
+            "mined-prefill"
+          ]
+        }
+      ],
+      "budget": {
+        "max_attempts": 3,
+        "max_usd_per_attempt": 3
+      },
+      "verify_human": "none"
+    },
+    {
+      "id": "same-day-first-review",
+      "title": "A new sticker is due 10 minutes after it is saved, not at midnight",
+      "kind": "feature",
+      "executor": "loop",
+      "depends_on": [
+        "scheduler-tests-enable"
+      ],
+      "requires_human": [],
+      "backend": "none",
+      "seed": "empty",
+      "spec": {
+        "user_story": "As a learner who just found a word, I want to be asked it again today while the moment is fresh.",
+        "acceptance": [
+          "1. Saving a sticker writes due_at = now + 10 minutes (learning phase, learning_step 0) instead of leaving due_at null",
+          "2. dueAtMs keeps its null fallback for old rows unchanged",
+          "3. Learning-step behaviour from lessons #12 is unchanged once the first review happens",
+          "4. scripts/test-review.mts (human) gains a case asserting a just-saved card is due within 10 minutes and passes"
+        ],
+        "copy": {},
+        "out_of_scope": [
+          "No backfill of existing rows",
+          "No FSRS"
+        ]
+      },
+      "checks": {
+        "static": [
+          {
+            "file": "lib/review.ts",
+            "includes": [
+              "due_at"
+            ],
+            "forbid": []
+          }
+        ],
+        "unit": [
+          {
+            "file": "scripts/test-review.mts",
+            "owner": "human",
+            "min_pass": 9
+          }
+        ],
+        "events": []
+      },
+      "flows": [],
+      "budget": {
+        "max_attempts": 3,
+        "max_usd_per_attempt": 3
+      },
+      "verify_human": "Scan an object on a phone; 10 minutes later the home rail / study shows it due."
+    },
+    {
+      "id": "grade-write-queue",
+      "title": "Grades survive a failed write: queue, retry, and honest summary",
+      "kind": "fix",
+      "executor": "loop",
+      "depends_on": [
+        "dev-debug-surface"
+      ],
+      "requires_human": [],
+      "backend": "none",
+      "seed": "one-due",
+      "spec": {
+        "user_story": "As a learner reviewing on the subway, I want my grades kept when the network drops, so a session is never silently thrown away.",
+        "acceptance": [
+          "1. New pure module lib/pendingWrites.ts: enqueue({stickerId, patch, at}), coalesce so only the latest patch per stickerId is kept, list(), remove(stickerId); persisted to AsyncStorage key 'pendingGrades:v1:<userId>'. Pure functions take an injectable storage so they can be unit-tested.",
+          "2. StudyCard.handleGrade no longer rolls back on error (components/StudyCard.tsx ~L424-437): on a failed update it enqueues the patch, keeps the optimistic state, and the session continues.",
+          "3. A flush runs on app foreground, on session end, and after any successful grade; each queued patch is written with .update(patch).eq('id', stickerId) and only applied if the server row's last_reviewed_at is older than the patch's (last-write-wins); success removes it.",
+          "4. ReviewSummary shows copy.pending with the count when any grades remain queued at session end; otherwise unchanged.",
+          "5. trackEvent('card_graded', {grade, queued}) fires once per grade with queued=true|false.",
+          "6. scripts/test-grade-queue.mts (human-owned) passes: coalescing, persistence round-trip, last-write-wins ordering, removal on success, no loss on a throwing writer."
+        ],
+        "copy": {
+          "pending": "{n} reviews will sync when you're back online"
+        },
+        "out_of_scope": [
+          "No NetInfo or other native dependency",
+          "No offline scanning",
+          "No change to lib/review.ts scheduling math"
+        ]
+      },
+      "checks": {
+        "static": [
+          {
+            "file": "lib/pendingWrites.ts",
+            "includes": [
+              "pendingGrades:v1:",
+              "export function enqueue",
+              "export async function flush"
+            ],
+            "forbid": []
+          },
+          {
+            "file": "components/StudyCard.tsx",
+            "includes": [
+              "enqueue("
+            ],
+            "forbid": [
+              "// Roll back rather than leave the card claiming"
+            ]
+          },
+          {
+            "file": "components/ReviewSummary.tsx",
+            "includes": [
+              "sync when you're back online"
+            ],
+            "forbid": []
+          }
+        ],
+        "unit": [
+          {
+            "file": "scripts/test-grade-queue.mts",
+            "owner": "human",
+            "min_pass": 5
+          }
+        ],
+        "events": [
+          "card_graded"
+        ]
+      },
+      "flows": [
+        {
+          "path": ".maestro/agent/grade-write-queue.yaml",
+          "owner": "agent",
+          "must_show": "Regression of the happy path with the queue in place: same journey as .maestro/study-grade.yaml (grade Good, 2 / 2 requeue, Session done, 1 card reviewed), then open lingostickers://__debug and assert PENDING WRITES shows 'none' and EVENTS contains 'card_graded'. (Offline itself is verified by the unit test; the Simulator has no scriptable airplane mode.)",
+          "asserts": [
+            "Good — next review in",
+            "2 / 2",
+            "Session done",
+            "lingostickers://__debug",
+            "PENDING WRITES",
+            "none",
+            "card_graded"
+          ],
+          "screenshots": [
+            "session-done",
+            "debug-pending-empty"
+          ]
+        }
+      ],
+      "budget": {
+        "max_attempts": 3,
+        "max_usd_per_attempt": 3
+      },
+      "verify_human": "On a phone: start a session, enable Airplane Mode, grade 3 cards, end — summary shows '3 reviews will sync…'; disable Airplane Mode, foreground the app, confirm in Supabase that the 3 rows have new last_reviewed_at."
+    },
+    {
+      "id": "undo-grade",
+      "title": "Undo the last answer in a study session",
+      "kind": "feature",
+      "executor": "loop",
+      "depends_on": [
+        "grade-write-queue"
+      ],
+      "requires_human": [],
+      "backend": "none",
+      "seed": "one-due",
+      "spec": {
+        "user_story": "As a learner who mis-tapped a grade, I can take it back.",
+        "acceptance": [
+          "1. After a grade, an Undo control (testID study-undo) is visible until the next grade",
+          "2. Undo restores the card's previous scheduling fields (and dequeues/reverts its write) and shows it again",
+          "3. Only one level of undo"
+        ],
+        "copy": {
+          "undo": "Undo"
+        },
+        "out_of_scope": []
+      },
+      "checks": {
+        "static": [
+          {
+            "file": "components/StudySessionHost.tsx",
+            "testIDs": [
+              "study-undo"
+            ],
+            "includes": [],
+            "forbid": []
+          }
+        ],
+        "unit": [],
+        "events": [
+          "grade_undone"
+        ]
+      },
+      "flows": [
+        {
+          "path": ".maestro/agent/undo-grade.yaml",
+          "owner": "agent",
+          "must_show": "Grade the seeded card Again, tap Undo, assert the same card's front is back.",
+          "asserts": [
+            "study-undo"
+          ],
+          "screenshots": [
+            "after-undo"
+          ]
+        }
+      ],
+      "budget": {
+        "max_attempts": 3,
+        "max_usd_per_attempt": 3
+      },
+      "verify_human": "none"
+    },
+    {
+      "id": "decks-and-tags",
+      "title": "Decks and tags replace noun-only categories",
+      "kind": "feature",
+      "executor": "loop",
+      "depends_on": [
+        "quick-add"
+      ],
+      "requires_human": [
+        "migration: decks table (owner RLS), stickers.deck_id, stickers.tags text[] (loop writes, human applies)"
+      ],
+      "backend": "staging",
+      "seed": "ten-mixed",
+      "spec": {
+        "user_story": "As an Anki user, I organise cards into decks and tags and study one deck at a time.",
+        "acceptance": [
+          "1. Every user has a default deck per language; new cards go to the last-used deck",
+          "2. Collection filters by deck and tag; study can start from a deck",
+          "3. Card edit allows deck move and tags",
+          "4. Category chips are hidden (column kept for compatibility)"
+        ],
+        "copy": {
+          "defaultDeck": "My {language} words"
+        },
+        "out_of_scope": [
+          "No shared decks",
+          "No per-deck limits yet"
+        ]
+      },
+      "checks": {
+        "static": [
+          {
+            "file": "lib/types.ts",
+            "includes": [
+              "deck_id",
+              "tags"
+            ],
+            "forbid": []
+          }
+        ],
+        "unit": [],
+        "events": []
+      },
+      "flows": [
+        {
+          "path": ".maestro/agent/decks-and-tags.yaml",
+          "owner": "agent",
+          "must_show": "Create a deck, move a card into it, filter the collection by it, start study from it.",
+          "asserts": [
+            "deck"
+          ],
+          "screenshots": [
+            "deck-filter"
+          ]
+        }
+      ],
+      "budget": {
+        "max_attempts": 3,
+        "max_usd_per_attempt": 4
+      },
+      "verify_human": "none"
+    },
+    {
+      "id": "funnel-events",
+      "title": "Instrument the activation funnel",
+      "kind": "feature",
+      "executor": "loop",
+      "depends_on": [
+        "dev-debug-surface"
+      ],
+      "requires_human": [
+        "add Aptabase to docs/privacy.html (B2) before release"
+      ],
+      "backend": "none",
+      "seed": "empty",
+      "spec": {
+        "user_story": "As the founder, I need to know where new users drop off between install and their first review.",
+        "acceptance": [
+          "1. trackEvent fires exactly once per occurrence for: signup_completed, first_card_started, card_saved {language, source, pos}, first_review_completed, session_done {cards, minutes}, challenge_sent, scene_prompt_used {promptId}",
+          "2. No PII (no words, no emails) in props",
+          "3. Each event appears on the debug EVENTS list when triggered in the Simulator"
+        ],
+        "copy": {},
+        "out_of_scope": [
+          "No new analytics SDK",
+          "No change to existing event names"
+        ]
+      },
+      "checks": {
+        "static": [],
+        "unit": [],
+        "events": [
+          "signup_completed",
+          "first_card_started",
+          "card_saved",
+          "first_review_completed",
+          "session_done",
+          "challenge_sent"
+        ]
+      },
+      "flows": [
+        {
+          "path": ".maestro/agent/funnel-events.yaml",
+          "owner": "agent",
+          "must_show": "Sign in, complete a study session, open the debug route, assert session_done appears in EVENTS.",
+          "asserts": [
+            "lingostickers://__debug",
+            "session_done"
+          ],
+          "screenshots": [
+            "debug-events"
+          ]
+        }
+      ],
+      "budget": {
+        "max_attempts": 3,
+        "max_usd_per_attempt": 3
+      },
+      "verify_human": "Check the Aptabase dashboard after a real-device session."
+    },
+    {
+      "id": "draft-persistence",
+      "title": "A scanned draft survives the app being killed",
+      "kind": "fix",
+      "executor": "loop",
+      "depends_on": [
+        "dev-debug-surface"
+      ],
+      "requires_human": [],
+      "backend": "none",
+      "seed": "one-due",
+      "spec": {
+        "user_story": "As a learner, if my phone kills the app between scan and Add, I want my sticker waiting for me, not gone.",
+        "acceptance": [
+          "1. The unsaved DiscoveryReveal draft (paths + generated fields) is persisted to AsyncStorage key 'scanDraft:v1:<userId>' as soon as generation succeeds",
+          "2. On launch, a persisted draft re-opens the reveal with copy.resume banner",
+          "3. Add or Discard clears the key; Discard also deletes the uploaded files",
+          "4. PENDING WRITES on the debug route lists an open draft as 'draft <word>'"
+        ],
+        "copy": {
+          "resume": "You left this one unfinished"
+        },
+        "out_of_scope": [
+          "No server-side orphan sweeper (separate human task)"
+        ]
+      },
+      "checks": {
+        "static": [
+          {
+            "file": "app/(tabs)/scan.tsx",
+            "includes": [
+              "scanDraft:v1:"
+            ],
+            "forbid": []
+          }
+        ],
+        "unit": [],
+        "events": [
+          "draft_restored"
+        ]
+      },
+      "flows": [
+        {
+          "path": ".maestro/agent/draft-persistence.yaml",
+          "owner": "agent",
+          "must_show": "Using the cutout-sim-fixture, scan to the reveal, stopApp, launchApp, assert the resume banner and the word are shown, tap Discard, assert debug PENDING WRITES shows none.",
+          "asserts": [
+            "stopApp",
+            "launchApp",
+            "You left this one unfinished",
+            "lingostickers://__debug",
+            "none"
+          ],
+          "screenshots": [
+            "draft-resumed"
+          ]
+        }
+      ],
+      "budget": {
+        "max_attempts": 3,
+        "max_usd_per_attempt": 3
+      },
+      "verify_human": "On a phone: scan, swipe the app away before Add, reopen; the card is there."
+    },
+    {
+      "id": "backlog-guards",
+      "title": "Cap new cards per day and show minutes, never counts",
+      "kind": "feature",
+      "executor": "loop",
+      "depends_on": [
+        "scheduler-tests-enable"
+      ],
+      "requires_human": [],
+      "backend": "none",
+      "seed": "ten-mixed",
+      "spec": {
+        "user_story": "As a learner who scans a lot, my study queue never becomes a wall I'm afraid of.",
+        "acceptance": [
+          "1. At most 5 never-reviewed cards enter a day's queue (configurable constant); the rest wait in their deck, oldest first",
+          "2. If due reviews exceed 60, new cards for the day drop to 0",
+          "3. Study entry points show '~N min' (8s per review card, 20s per new card, rounded up) instead of a due count",
+          "4. After ≥3 days away, the first session is capped at 20 cards and opens with copy.welcome",
+          "5. Pure queue selection lives in lib/review.ts and is covered by human tests"
+        ],
+        "copy": {
+          "welcome": "Welcome back. Here are the ones most worth saving today."
+        },
+        "out_of_scope": [
+          "No FSRS",
+          "No settings UI for the caps"
+        ]
+      },
+      "checks": {
+        "static": [
+          {
+            "file": "lib/review.ts",
+            "includes": [
+              "NEW_PER_DAY"
+            ],
+            "forbid": []
+          }
+        ],
+        "unit": [
+          {
+            "file": "scripts/test-review.mts",
+            "owner": "human",
+            "min_pass": 12
+          }
+        ],
+        "events": []
+      },
+      "flows": [
+        {
+          "path": ".maestro/agent/backlog-guards.yaml",
+          "owner": "agent",
+          "must_show": "With seed ten-mixed, home shows a '~N min' label and no raw due count.",
+          "asserts": [
+            "min"
+          ],
+          "screenshots": [
+            "home-minutes"
+          ]
+        }
+      ],
+      "budget": {
+        "max_attempts": 3,
+        "max_usd_per_attempt": 3
+      },
+      "verify_human": "none"
+    },
+    {
+      "id": "scene-sibling-spacing",
+      "title": "Cards from the same photo are never studied back to back",
+      "kind": "feature",
+      "executor": "loop",
+      "depends_on": [
+        "scene-prompt-capture",
+        "backlog-guards"
+      ],
+      "requires_human": [
+        "human adds cases to scripts/test-review.mts for sibling spacing"
+      ],
+      "backend": "none",
+      "seed": "ten-mixed",
+      "spec": {
+        "user_story": "As a learner, words learned from one photo don't blur together in review.",
+        "acceptance": [
+          "1. Session ordering (pure function in lib/review.ts) never places two cards with the same non-null scene_id adjacently when another card is available",
+          "2. Learning-ahead requeue (lessons #12) respects the same rule",
+          "3. Order is otherwise unchanged"
+        ],
+        "copy": {},
+        "out_of_scope": []
+      },
+      "checks": {
+        "static": [
+          {
+            "file": "lib/review.ts",
+            "includes": [
+              "scene_id"
+            ],
+            "forbid": []
+          }
+        ],
+        "unit": [
+          {
+            "file": "scripts/test-review.mts",
+            "owner": "human",
+            "min_pass": 14
+          }
+        ],
+        "events": []
+      },
+      "flows": [],
+      "budget": {
+        "max_attempts": 3,
+        "max_usd_per_attempt": 3
+      },
+      "verify_human": "none"
+    },
+    {
+      "id": "post-save-handoff",
+      "title": "After save: say when the card comes back, offer Add another / Open deck",
+      "kind": "feature",
+      "executor": "loop",
+      "depends_on": [
+        "same-day-first-review",
+        "decks-and-tags"
+      ],
+      "requires_human": [],
+      "backend": "none",
+      "seed": "empty",
+      "spec": {
+        "user_story": "As a learner who just made a sticker, I see it land somewhere that is mine, and I know when I'll see it again.",
+        "acceptance": [
+          "1. After a save from any capture path (scan, scene, Quick Add) a confirmation shows copy.next",
+          "2. Primary copy.again stays in the same capture mode; secondary copy.done opens the collection filtered to the card's deck",
+          "3. No new animation; existing transitions only",
+          "4. trackEvent('sticker_saved') unchanged"
+        ],
+        "copy": {
+          "next": "We'll ask you this one in 10 minutes",
+          "again": "Add another",
+          "done": "Open deck"
+        },
+        "out_of_scope": [
+          "No animation or visual redesign"
+        ]
+      },
+      "checks": {
+        "static": [
+          {
+            "file": "app/(tabs)/scan.tsx",
+            "testIDs": [
+              "handoff-again",
+              "handoff-done"
+            ],
+            "includes": [],
+            "forbid": []
+          }
+        ],
+        "unit": [],
+        "events": [
+          "sticker_saved"
+        ]
+      },
+      "flows": [
+        {
+          "path": ".maestro/agent/post-save-handoff.yaml",
+          "owner": "agent",
+          "must_show": "Using the cutout fixture, scan and Add; assert the 10-minute line; tap Add another and assert the camera.",
+          "asserts": [
+            "We'll ask you this one in 10 minutes",
+            "handoff-again",
+            "handoff-done"
+          ],
+          "screenshots": [
+            "today-page"
+          ]
+        }
+      ],
+      "budget": {
+        "max_attempts": 3,
+        "max_usd_per_attempt": 4
+      },
+      "verify_human": "Feel the landing on a phone; it should feel like slapping a sticker down."
+    },
+    {
+      "id": "review-reminder",
+      "title": "Daily local review reminder with a Profile toggle and time",
+      "kind": "feature",
+      "executor": "loop",
+      "depends_on": [
+        "dev-debug-surface"
+      ],
+      "requires_human": [],
+      "backend": "none",
+      "seed": "one-due",
+      "spec": {
+        "user_story": "As a learner I want one gentle daily nudge when cards are due so I come back without having to remember.",
+        "acceptance": [
+          "1. Profile gains a REMINDERS section with a switch (testID reminder-toggle) and a time row (testID reminder-time) defaulting to 19:00; the time row is hidden while the switch is off.",
+          "2. Turning the switch on calls the existing in-context permission flow from lib/notifications.ts; if permission is denied the switch returns to off and an inline note with the copy 'deniedNote' is shown (no system Alert).",
+          "3. When on, exactly ONE local notification is scheduled with identifier 'review-reminder' using a DAILY trigger at the chosen hour and minute; changing the time replaces it (still exactly one).",
+          "4. Turning it off cancels 'review-reminder'.",
+          "5. Setting persists per user in AsyncStorage key 'reminder:v1:<userId>' as {enabled, hour, minute} and is restored on relaunch; signing out cancels the reminder.",
+          "6. Pure helper lib/reminders.ts exports reminderBody(dueCount: number): string returning copy.body_some for n>=1 with n substituted and copy.body_none for 0, and nextReminderPlan(settings) returning {identifier, hour, minute} or null; scripts/test-review-reminder.mts (human-owned) must pass.",
+          "7. trackEvent('reminder_enabled', {hour}) and trackEvent('reminder_disabled') fire on the respective toggles."
+        ],
+        "copy": {
+          "section": "REMINDERS",
+          "toggle": "Daily review reminder",
+          "deniedNote": "Notifications are off for Tabi Stickers. Turn them on in Settings to get reminders.",
+          "body_some": "{n} cards are ready for review",
+          "body_none": "Find something new today?",
+          "title": "Tabi Stickers"
+        },
+        "out_of_scope": [
+          "No remote push changes",
+          "No streaks",
+          "No native/config-plugin changes",
+          "Do not ask for notification permission at launch"
+        ]
+      },
+      "checks": {
+        "static": [
+          {
+            "file": "lib/reminders.ts",
+            "includes": [
+              "scheduleNotificationAsync",
+              "cancelScheduledNotificationAsync",
+              "review-reminder",
+              "DAILY"
+            ],
+            "forbid": [
+              "requestPermissionsAsync()"
+            ]
+          },
+          {
+            "file": "app/profile.tsx",
+            "testIDs": [
+              "reminder-toggle",
+              "reminder-time"
+            ],
+            "includes": [
+              "REMINDERS"
+            ],
+            "forbid": [
+              "Alert.alert('Notifications"
+            ]
+          },
+          {
+            "file": "hooks/useAuth.ts",
+            "includes": [
+              "cancelReviewReminder"
+            ],
+            "forbid": []
+          }
+        ],
+        "unit": [
+          {
+            "file": "scripts/test-review-reminder.mts",
+            "owner": "human",
+            "min_pass": 6
+          }
+        ],
+        "events": [
+          "reminder_enabled",
+          "reminder_disabled"
+        ]
+      },
+      "flows": [
+        {
+          "path": ".maestro/agent/review-reminder.yaml",
+          "owner": "agent",
+          "must_show": "Sign in, open Profile, tap reminder-toggle (accept the iOS permission dialog), open lingostickers://__debug, assert a SCHEDULED line containing 'review-reminder' and '19:00'; return to Profile, toggle off, refresh debug, assert SCHEDULED shows 'none'.",
+          "asserts": [
+            "reminder-toggle",
+            "lingostickers://__debug",
+            "review-reminder",
+            "19:00",
+            "debug-refresh",
+            "none"
+          ],
+          "screenshots": [
+            "reminder-on",
+            "debug-scheduled",
+            "reminder-off"
+          ]
+        }
+      ],
+      "budget": {
+        "max_attempts": 3,
+        "max_usd_per_attempt": 3
+      },
+      "verify_human": "On a phone, set the time 2 minutes ahead, background the app, confirm the banner shows the due count and tapping it opens the app on home."
+    },
+    {
+      "id": "onboarding-first-run",
+      "title": "First run reaches a first sticker in under 60 seconds",
+      "kind": "feature",
+      "executor": "loop",
+      "depends_on": [
+        "quick-add",
+        "funnel-events",
+        "post-save-handoff"
+      ],
+      "requires_human": [
+        "decide: anonymous scan-before-signup (needs Supabase anonymous auth + RLS review) or signup-first"
+      ],
+      "backend": "staging",
+      "seed": "empty",
+      "spec": {
+        "user_story": "As a new user, I understand the app by making my first sticker, not by reading about it.",
+        "acceptance": [
+          "1. Three screens max: language pick (fr, yue, ja) → AI consent naming every provider actually enabled → Quick Add with copy.prompt (camera offered after the first card)",
+          "2. First successful save goes through post-save-handoff",
+          "3. No notification permission asked during onboarding",
+          "4. Completion persisted per user; never shown again"
+        ],
+        "copy": {
+          "prompt": "Type a word you learned this week"
+        },
+        "out_of_scope": [
+          "No tutorial carousel",
+          "No paywall"
+        ]
+      },
+      "checks": {
+        "static": [],
+        "unit": [],
+        "events": [
+          "first_scan_started",
+          "sticker_saved"
+        ]
+      },
+      "flows": [
+        {
+          "path": ".maestro/agent/onboarding-first-run.yaml",
+          "owner": "agent",
+          "must_show": "Fresh account (seed empty): language, consent, Quick Add prompt, save a typed word, land on home with it.",
+          "asserts": [
+            "Type a word you learned this week",
+            "quick-add-input"
+          ],
+          "screenshots": [
+            "onboard-language",
+            "onboard-consent",
+            "onboard-today"
+          ]
+        }
+      ],
+      "budget": {
+        "max_attempts": 3,
+        "max_usd_per_attempt": 5
+      },
+      "verify_human": "Time it with a stopwatch on a phone with a new account."
+    }
+  ]
+}
