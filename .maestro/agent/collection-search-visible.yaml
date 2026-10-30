@@ -1,0 +1,40 @@
+# Collection search: the magnifier shows a pinned search bar with Cancel; results
+# appear while the keyboard stays up; Cancel removes the bar again.
+appId: com.iancheung228.lingostickers
+---
+- runFlow: ../sign-in.yaml
+
+- tapOn: "Collection"
+- extendedWaitUntil:
+    visible: "Search your collection"
+    timeout: 20000
+- tapOn: "Search your collection"
+- extendedWaitUntil:
+    visible:
+      id: "collection-search-input"
+    timeout: 10000
+
+# Type without dismissing the keyboard: the field is autofocused.
+- inputText: "pom"
+- extendedWaitUntil:
+    visible: ".*pomme.*"
+    timeout: 10000
+- assertVisible:
+    id: "collection-search-cancel"
+- assertVisible:
+    id: "collection-search-input"
+- takeScreenshot: 01-search-keyboard-up
+
+# Hero and Latest blocks must be hidden while searching.
+- assertNotVisible: "Latest stickers"
+- assertNotVisible: "Latest finds"
+
+# Cancel restores the screen and removes the search field.
+- tapOn:
+    id: "collection-search-cancel"
+- assertNotVisible:
+    id: "collection-search-input"
+- extendedWaitUntil:
+    visible: "Latest stickers"
+    timeout: 10000
+- takeScreenshot: 02-search-cancelled

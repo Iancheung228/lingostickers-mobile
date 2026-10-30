@@ -5,6 +5,7 @@ import {
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { useFocusEffect } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Heart, ArrowUpDown, Check, Search, X } from 'lucide-react-native';
 import { useAuth } from '@/hooks/useAuth';
 import { useProfile } from '@/hooks/useProfile';
@@ -61,6 +62,7 @@ export default function CollectionScreen() {
   const [sortMode, setSortMode] = useState<SortMode>('newest');
   const [sortMenuVisible, setSortMenuVisible] = useState(false);
   const [selectedSticker, setSelectedSticker] = useState<Sticker | null>(null);
+  const insets = useSafeAreaInsets();
   const [searchActive, setSearchActive] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   // A review session is just the due queue plus a cursor into it: closing
@@ -237,79 +239,50 @@ export default function CollectionScreen() {
 
   const listHeader = (
     <>
-      <HomeHeader
-        foundToday={foundToday}
-        goal={DAILY_GOAL}
-        dueCount={due.length}
-        reviewMinutes={reviewMinutes(due.length)}
-        onStartReview={startReview}
-        onSearch={openSearch}
-      />
+      {!searchActive && (
+        <>
+        <HomeHeader
+          foundToday={foundToday}
+          goal={DAILY_GOAL}
+          dueCount={due.length}
+          reviewMinutes={reviewMinutes(due.length)}
+          onStartReview={startReview}
+          onSearch={openSearch}
+        />
 
-      {/* ── Mini sticker wall preview, lifted into the rose band above ── */}
-      <View style={styles.wallLift}>
-        <MiniStickerWall
-          borderStyle={profile?.cutout_border_style ?? 'shadow'}
-          stickers={stickers}
-          userId={user?.id}
-          backgroundPath={profile?.home_background_path}
-          backgroundDim="none"
-          onChangeBackground={setHomeBackground}
-          arranged={profile?.home_wall_arranged ?? false}
-          onArranged={setHomeWallArranged}
+        {/* ── Mini sticker wall preview, lifted into the rose band above ── */}
+        <View style={styles.wallLift}>
+          <MiniStickerWall
+            borderStyle={profile?.cutout_border_style ?? 'shadow'}
+            stickers={stickers}
+            userId={user?.id}
+            backgroundPath={profile?.home_background_path}
+            backgroundDim="none"
+            onChangeBackground={setHomeBackground}
+            arranged={profile?.home_wall_arranged ?? false}
+            onArranged={setHomeWallArranged}
+            onPressSticker={setSelectedSticker}
+          />
+        </View>
+
+        <FeedRail
+          items={feedItems}
+          languages={languages}
+          activeLanguage={langFilter}
+          onSelectLanguage={setLangFilter}
+          getUrl={getUrl}
+          getAuthor={getAuthor}
           onPressSticker={setSelectedSticker}
         />
-      </View>
 
-      <FeedRail
-        items={feedItems}
-        languages={languages}
-        activeLanguage={langFilter}
-        onSelectLanguage={setLangFilter}
-        getUrl={getUrl}
-        getAuthor={getAuthor}
-        onPressSticker={setSelectedSticker}
-      />
-
-      <LatestStickers
-        stickers={sorted}
-        sortLabel={SORT_LABELS[sortMode]}
-        onCycleSort={cycleSort}
-        getUrl={getUrl}
-        onPressSticker={setSelectedSticker}
-      />
-
-      {/* ── Search bar, shown only while searching. There's no view-mode
-          switcher any more — the grid is the only view — so this row simply
-          isn't rendered at rest rather than swapping places with one. ── */}
-      {searchActive && (
-        <View style={styles.searchBar}>
-          <View style={styles.searchInputWrap}>
-            <Search size={14} color={colors.inkFaint} />
-            <TextInput
-              autoFocus
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-              placeholder="Search word, meaning, notes…"
-              placeholderTextColor={colors.inkFaint}
-              style={styles.searchInput}
-              returnKeyType="search"
-            />
-            {searchQuery.length > 0 && (
-              <TouchableOpacity
-                onPress={() => setSearchQuery('')}
-                hitSlop={8}
-                accessibilityRole="button"
-                accessibilityLabel="Clear the search box"
-              >
-                <X size={14} color={colors.inkFaint} />
-              </TouchableOpacity>
-            )}
-          </View>
-          <TouchableOpacity onPress={closeSearch} hitSlop={8}>
-            <Text style={styles.searchCancel}>Cancel</Text>
-          </TouchableOpacity>
-        </View>
+        <LatestStickers
+          stickers={sorted}
+          sortLabel={SORT_LABELS[sortMode]}
+          onCycleSort={cycleSort}
+          getUrl={getUrl}
+          onPressSticker={setSelectedSticker}
+        />
+        </>
       )}
 
       {/* ── Category filter — sort/favorites live in the fixed icon cluster
@@ -374,6 +347,37 @@ export default function CollectionScreen() {
 
   return (
     <View style={styles.screen}>
+      {searchActive && (
+        <View style={[styles.searchBar, { marginTop: insets.top + spacing.sm }]}>
+          <View style={styles.searchInputWrap}>
+            <Search size={14} color={colors.inkFaint} />
+            <TextInput
+              testID="collection-search-input"
+              autoFocus
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              placeholder="Search word, meaning, notes…"
+              placeholderTextColor={colors.inkFaint}
+              style={styles.searchInput}
+              returnKeyType="search"
+            />
+            {searchQuery.length > 0 && (
+              <TouchableOpacity
+                onPress={() => setSearchQuery('')}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel="Clear the search box"
+              >
+                <X size={14} color={colors.inkFaint} />
+              </TouchableOpacity>
+            )}
+          </View>
+          <TouchableOpacity testID="collection-search-cancel" onPress={closeSearch} hitSlop={8}>
+            <Text style={styles.searchCancel}>Cancel</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
       {/* One list for the whole screen: the masthead, the two feature
           sections and the filter row all ride along as its header, so the
           rose band scrolls away with the content instead of being pinned
