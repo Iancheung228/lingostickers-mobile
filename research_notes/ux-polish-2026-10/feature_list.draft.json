@@ -1,0 +1,318 @@
+{
+  "goal": "Fix the UX-polish sweep's findings (research_notes/ux-polish-2026-10/FINDINGS.md) that a Simulator can prove: the P0 core-path breakages first, then trust/hygiene, then the confusing-but-working screens. Each feature is one finding (or a few in the same file), small enough for one iteration.",
+  "rules": "A feature passes only when scripts/test-drivable.mts says so AND init.sh is green. Every feature names a flow under .maestro/agent/ that must have PASSED in the latest harness/qa.sh run. Never edit this file, scripts/test-drivable.mts, the human-approved flows .maestro/*.yaml, or .maestro/run.sh|seed.mjs. The approved flows match these strings, so they must keep matching: 'WELCOME BACK', 'Email', 'Password', 'Sign In', 'Not Now', 'FOUND', 'Start reviewing — 1 card due.*', 'Tap to reveal.*', 'What did you call this\\?', 'Good — next review in.*', 'Again — next review in.*', 'Easy — next review in.*', '2 / 2', 'Close this card', 'Session done', '1 card reviewed', 'Done'. Change only the copy and behaviour the feature names. The QA account has a budget of 100 AI calls per UTC day across all endpoints: run `node scripts/qa-budget.mjs` before any flow that scans or looks up a word, and if fewer than 15 remain, stop and write it to HUMAN_REQUESTS.md. No native changes or new native dependencies (they need a dev-client rebuild). The three features that spend AI calls are last on purpose: every flow re-runs in the full regression after each iteration, so they only cost budget in the final iterations.",
+  "features": [
+    {
+      "id": "collection-search-visible",
+      "description": "FINDINGS P0-1. Tapping the Collection header's magnifier must put the search field, its Cancel and the results on screen above the keyboard. Today the field is rendered inside the scroll content below the hero, Latest finds and Latest stickers (app/(tabs)/collection.tsx ~285), so it is ~1.3 screens down and under the keyboard. While search is active, render the search bar pinned at the top (outside the scroll content) and hide the hero / Latest finds / Latest stickers blocks so results start right under it. Cancel restores the screen exactly as before.",
+      "checks": [
+        {
+          "file": "app/(tabs)/collection.tsx",
+          "testIDs": [
+            "collection-search-input",
+            "collection-search-cancel"
+          ]
+        }
+      ],
+      "verify": "On the Collection tab tap the magnifier: the field, Cancel and the first result row are all visible with the keyboard up. Type 'pom': the seeded 'pomme' card is visible. Tap Cancel: the hero and Latest blocks are back.",
+      "flow": ".maestro/agent/collection-search-visible.yaml",
+      "flow_must_show": "Sign in, open the Collection tab, tap the search control, type 'pom' without dismissing the keyboard, assert the 'pomme' card AND the Cancel control are visible (screenshot with the keyboard up), tap Cancel, assert the search field is gone."
+    },
+    {
+      "id": "signin-keyboard",
+      "description": "FINDINGS P0-4. On sign-in, once both fields are filled and the keyboard is up, the Sign In button must be visible and tappable without dismissing the keyboard, including when the error banner is showing. app/(auth)/sign-in.tsx already wraps a ScrollView in KeyboardAvoidingView: fix the offset / contentContainer so the button stays above the keyboard (scroll the focused field and the button into view), and set keyboardShouldPersistTaps=\"handled\" so one tap on Sign In submits. Keep 'WELCOME BACK', 'Email', 'Password' and 'Sign In' exactly — .maestro/sign-in.yaml uses them.",
+      "checks": [
+        {
+          "file": "app/(auth)/sign-in.tsx",
+          "includes": [
+            "keyboardShouldPersistTaps"
+          ]
+        }
+      ],
+      "verify": "Fill email and password, leave the keyboard up, screenshot: Sign In is fully visible above the keyboard. Enter a wrong password and submit: the error banner and Sign In are both visible.",
+      "flow": ".maestro/agent/signin-keyboard.yaml",
+      "flow_must_show": "Do NOT reuse sign-in.yaml's keyboard-dismiss tap. Launch to sign-in, type a wrong password for the QA email, keep the keyboard up, assert 'Sign In' is visible and tap it once; assert an error message appears and 'Sign In' is still visible. Then type the real password (keyboard still up), tap 'Sign In' once and assert 'FOUND'."
+    },
+    {
+      "id": "learning-requeue-copy",
+      "description": "FINDINGS P0-5. Grading Good on a new card says 'next review in 10 minutes', then the same card comes straight back, which reads as a bug. The re-show is the intended learn-ahead (lib/review.ts:91, components/StudySessionHost.tsx:64) — keep the scheduler and the 'N / M' counter. On a card that is coming round again in the same session, show a one-line note above the prompt: 'Still learning — one more look', and include it in the card's accessibility label. Also fix the plural in components/HomeHeader.tsx:78 so it reads 'about 1 minute'.",
+      "checks": [
+        {
+          "file": "components/StudyCard.tsx",
+          "strings": [
+            "Still learning"
+          ]
+        },
+        {
+          "file": "components/HomeHeader.tsx",
+          "includes": [
+            "minute"
+          ]
+        }
+      ],
+      "verify": "Review the seeded 'pomme' card, grade Good: on the 2 / 2 card the 'Still learning' note is visible above the prompt; on the 1 / 1 card it is not.",
+      "flow": ".maestro/agent/learning-requeue-copy.yaml",
+      "flow_must_show": "Same journey as .maestro/study-grade.yaml up to '2 / 2'. Assert 'Still learning.*' is NOT visible on the first card and IS visible on the requeued card; screenshot both. Also assert the home due pill's label matches 'Start reviewing — 1 card due, about 1 minute$' (no 'minutes')."
+    },
+    {
+      "id": "auth-error-copy",
+      "description": "FINDINGS P1-7. Sign-in shows Supabase's raw 'Invalid login credentials' (app/(auth)/sign-in.tsx:38). Map known auth errors to friendly copy in one place (lib/authErrors.ts, the same idea as lib/functionError.ts, skills #3): invalid credentials → 'That email and password don't match. Check them, or reset your password.'; unknown errors → a generic line, never error.message. Add client-side email validation on sign-in and forgot-password: the submit button stays disabled until the email looks like an address (something@something.tld), and forgot-password's 'Send Reset Code' is disabled for 'notanemail'.",
+      "checks": [
+        {
+          "file": "lib/authErrors.ts",
+          "strings": [
+            "don't match"
+          ]
+        },
+        {
+          "file": "app/(auth)/sign-in.tsx",
+          "includes": [
+            "authErrors"
+          ]
+        },
+        {
+          "file": "app/(auth)/forgot-password.tsx",
+          "includes": [
+            "isEmail"
+          ]
+        }
+      ],
+      "verify": "Wrong password shows the friendly copy, never 'Invalid login credentials'. On forgot-password, 'notanemail' leaves Send Reset Code disabled; 'a@b.co' enables it.",
+      "flow": ".maestro/agent/auth-error-copy.yaml",
+      "flow_must_show": "Sign in with the QA email and a wrong password: assert 'That email and password don't match.*' visible and 'Invalid login credentials' not visible. Open forgot-password, type 'notanemail', tap Send Reset Code and assert the screen did not advance; screenshot. Do not submit a valid address (it sends a real email)."
+    },
+    {
+      "id": "username-format",
+      "description": "FINDINGS P1-8. Sign-up accepts 'a b!tabc' as 'Username available', which friend search can never find. Validate on the client before the availability check: 3–20 characters, lowercase letters, digits, '_' and '.', lowercased as typed; otherwise show 'Use 3–20 letters, numbers, _ or .' in the existing hint slot and disable Sign Up. One exported function (lib/username.ts) so profile editing can reuse it later. The matching database constraint needs a migration — write that request to HUMAN_REQUESTS.md, don't attempt it.",
+      "checks": [
+        {
+          "file": "lib/username.ts",
+          "includes": [
+            "export function"
+          ]
+        },
+        {
+          "file": "app/(auth)/sign-up.tsx",
+          "strings": [
+            "Use 3–20 letters, numbers, _ or ."
+          ]
+        }
+      ],
+      "verify": "On sign-up type 'a b!tabc': the hint shows the format rule, not 'Username available', and Sign Up is disabled.",
+      "flow": ".maestro/agent/username-format.yaml",
+      "flow_must_show": "From sign-in open Sign Up, type 'a b!tabc' in the username field, assert 'Use 3–20 letters, numbers, _ or .' visible and 'Username available' not visible; screenshot. Never submit the form (no real sign-ups)."
+    },
+    {
+      "id": "hide-card-id",
+      "description": "FINDINGS P1-12. The review card back and sticker detail show 'CARD 9668 · FR', an internal id (components/StudyCard.tsx:1168). Replace it with the language name alone ('FRENCH'), using whatever language-name helper the app already has. Remove cardNumber() if nothing else uses it.",
+      "checks": [
+        {
+          "file": "components/StudyCard.tsx",
+          "strings": []
+        }
+      ],
+      "verify": "Flip the seeded card: the meta line reads the language name, no 'CARD' and no number.",
+      "flow": ".maestro/agent/hide-card-id.yaml",
+      "flow_must_show": "Start reviewing the seeded card, flip it, assert 'CARD [0-9]+.*' is NOT visible and 'FRENCH' is visible; screenshot the back."
+    },
+    {
+      "id": "profile-cleanup",
+      "description": "FINDINGS P1-10 (version only), P2, P3. In app/profile.tsx: (1) the blank circle top-right (the spacer <View style={styles.backBtn} /> at ~190) must not draw a circle — keep the width, drop the background/border; (2) 'watercolor memories' (~242) becomes 'stickers'; (3) add an 'App version' row at the bottom with the version from expo-constants (Constants.expoConfig?.version); (4) Log Out (~429) uses the destructive red at full opacity so it doesn't read disabled. Also components/FriendsEmpty.tsx: the 'Find a friend' CTA (~36, ~68) gets enabled-button contrast.",
+      "checks": [
+        {
+          "file": "app/profile.tsx",
+          "testIDs": [
+            "profile-version"
+          ],
+          "includes": [
+            "expo-constants"
+          ]
+        },
+        {
+          "file": "app/profile.tsx",
+          "strings": [
+            "App version"
+          ]
+        }
+      ],
+      "verify": "Screenshot My Profile: no empty circle at top-right, copy says stickers, version row at the bottom, Log Out reads as a red button. Screenshot the Friends empty state: Find a friend reads as tappable.",
+      "flow": ".maestro/agent/profile-cleanup.yaml",
+      "flow_must_show": "Sign in, open My Profile, assert 'watercolor' not visible and '.*sticker.*' visible, scroll to the bottom, assert 'App version' visible, screenshot. Open the Friends tab, screenshot the empty state. Do not tap Log Out's confirm."
+    },
+    {
+      "id": "home-caught-up",
+      "description": "FINDINGS P2 (Home / habit loop). When nothing is due the due pill in components/HomeHeader.tsx (~72) just vanishes. In its place show a quiet, non-button line: 'All caught up · next due in <compact interval>' using the scheduler's existing formatting (formatInterval/formatMinutes in lib/review.ts), or 'All caught up' when nothing is scheduled. It must not start with 'Start reviewing' (.maestro/study-grade.yaml asserts that label is gone).",
+      "checks": [
+        {
+          "file": "components/HomeHeader.tsx",
+          "strings": [
+            "All caught up"
+          ]
+        }
+      ],
+      "verify": "After finishing the seeded review, home shows 'All caught up · next due in …' where the pill was.",
+      "flow": ".maestro/agent/home-caught-up.yaml",
+      "flow_must_show": "Same journey as .maestro/study-grade.yaml through 'Done', then assert 'All caught up.*' visible and 'Start reviewing.*' not visible; screenshot the header."
+    },
+    {
+      "id": "collection-filter-empty",
+      "description": "FINDINGS P2 (Collection). With the Favourites filter and zero matches the screen says 'No stickers yet' and the hero / Latest finds / Latest stickers above stay unfiltered, so the filter looks broken. While any filter other than 'all' is active, hide those three blocks, and show a filter-specific empty state ('No favourites yet — tap the heart on a card to add it.'). 'No stickers yet' stays for a truly empty collection.",
+      "checks": [
+        {
+          "file": "app/(tabs)/collection.tsx",
+          "strings": [
+            "No favourites yet"
+          ]
+        }
+      ],
+      "verify": "On Collection select Favourites (the seed has none): the favourites empty state is the only content under the filters.",
+      "flow": ".maestro/agent/collection-filter-empty.yaml",
+      "flow_must_show": "Sign in, open Collection, tap the Favourites filter, assert 'No favourites yet.*' visible and 'No stickers yet' not visible, screenshot; switch back to All and assert the 'pomme' card is visible."
+    },
+    {
+      "id": "collection-sort-menu",
+      "description": "FINDINGS P2 (Collection sort). The sort icon tap-cycles modes with no visible current mode, and 'Latest first' vs 'Recently added' are indistinguishable. Replace the cycle with a small menu (a BottomSheet, components/BottomSheet.tsx, skills #8) listing the modes with a check on the current one, renamed to say what they sort by: 'Photo date — newest', 'Photo date — oldest', 'Date added — newest'. Keep the existing sort logic (collection.tsx ~144); show the current mode's name next to the icon.",
+      "checks": [
+        {
+          "file": "app/(tabs)/collection.tsx",
+          "strings": [
+            "Photo date — newest",
+            "Date added — newest"
+          ],
+          "testIDs": [
+            "collection-sort"
+          ]
+        }
+      ],
+      "verify": "Tap the sort control: a sheet lists the three modes with a check on the current one; picking 'Date added — newest' closes the sheet and the label next to the icon updates.",
+      "flow": ".maestro/agent/collection-sort-menu.yaml",
+      "flow_must_show": "Sign in, open Collection, tap the sort control, assert all three mode names visible (screenshot), tap 'Date added — newest', assert the sheet closed and 'Date added — newest' is shown next to the sort icon."
+    },
+    {
+      "id": "scan-consent-layout",
+      "description": "FINDINGS P2 (Scan consent). On the scan consent screen 'Read the privacy policy' sits under the floating tab bar and 'Agree and start scanning' is jammed against it. Pad the consent content by the tab bar's height + safe-area inset so both controls are fully visible and separated by at least 12 pt.",
+      "checks": [
+        {
+          "file": "app/(tabs)/scan.tsx",
+          "testIDs": [
+            "scan-consent-privacy",
+            "scan-consent-agree"
+          ]
+        }
+      ],
+      "verify": "Screenshot the consent screen: both controls fully above the tab bar, visibly apart.",
+      "flow": ".maestro/agent/scan-consent-layout.yaml",
+      "flow_must_show": "Sign in with clearState so consent shows again, open the Scan tab, assert 'Read the privacy policy' and 'Agree and start scanning' are visible, screenshot. If consent is stored server-side and doesn't reappear, report NOT RUN with that reason rather than faking it."
+    },
+    {
+      "id": "tap-targets",
+      "description": "FINDINGS P2 (tap targets). Home search and settings icons are ~15×15 pt and calendar month arrows ~20 pt. Give each a 44×44 pt hit area with hitSlop, following skills #9 (hitSlop is anisotropic; in a row, gap >= left_slop + right_slop so neighbours never overlap). Read docs/lessons.md §9 first. No visual change.",
+      "checks": [
+        {
+          "file": "components/HomeHeader.tsx",
+          "includes": [
+            "hitSlop"
+          ],
+          "testIDs": [
+            "home-search",
+            "home-settings"
+          ]
+        },
+        {
+          "file": "app/(tabs)/calendar.tsx",
+          "includes": [
+            "hitSlop"
+          ],
+          "testIDs": [
+            "calendar-prev-month",
+            "calendar-next-month"
+          ]
+        }
+      ],
+      "verify": "Screenshots of home and calendar unchanged; the arrows and icons respond to taps a few points outside the drawn glyph.",
+      "flow": ".maestro/agent/tap-targets.yaml",
+      "flow_must_show": "Sign in. Use harness/qa-hierarchy.sh to read the bounds of home-search and calendar-next-month, then tap a point ~10 pt outside each drawn icon (inside the slop, outside the glyph) and assert the action happened (search opens; month label changes). Screenshot both screens for the unchanged-layout check."
+    },
+    {
+      "id": "a11y-selected-state",
+      "description": "FINDINGS Accessibility. Language and wall-style option rows don't announce which one is selected. Add accessibilityRole and accessibilityState={{ selected }} to those rows (find them from the Profile screen), and give the crop screen's 'Extract Sticker' title and button different accessibility labels (title: 'Crop your sticker', button keeps 'Extract Sticker').",
+      "checks": [
+        {
+          "file": "app/profile.tsx",
+          "includes": [
+            "selected:"
+          ]
+        },
+        {
+          "file": "components/PhotoExtractor.tsx",
+          "strings": [
+            "Crop your sticker"
+          ]
+        }
+      ],
+      "verify": "harness/qa-hierarchy.sh on the language picker shows the current language as selected; on the crop screen only one element is labelled 'Extract Sticker'.",
+      "flow": ".maestro/agent/a11y-selected-state.yaml",
+      "flow_must_show": "Sign in, open My Profile's language rows and assert the current one has selected state (Maestro `selected: true`). Then open Scan, import the seeded gallery photo, wait for 'Extract Sticker' and assert 'Crop your sticker' is present; stop there (no extraction, no AI call)."
+    },
+    {
+      "id": "add-cards-confirmation",
+      "description": "FINDINGS P0-6. After 'Add N cards' / 'Add to Collection' in DiscoveryReveal, the sheet closes onto a black camera with no feedback. Show a confirmation on the scan screen for ~4 s: '<N> card(s) added' with a 'View' action that opens the Collection tab. Build it as a small reusable component (components/Toast.tsx, there is none yet) with accessibilityLiveRegion/announceForAccessibility so VoiceOver reads it. Match the app's existing palette (lib theme colours), no new dependencies.",
+      "checks": [
+        {
+          "file": "components/Toast.tsx",
+          "testIDs": [
+            "toast-action"
+          ]
+        },
+        {
+          "file": "app/(tabs)/scan.tsx",
+          "includes": [
+            "Toast"
+          ]
+        }
+      ],
+      "verify": "Scan the gallery photo, select one scene chip, tap 'Add 2 cards': the scan screen shows '2 cards added' with View. Tap View: the Collection tab shows the new cards.",
+      "flow": ".maestro/agent/add-cards-confirmation.yaml",
+      "flow_must_show": "Scan the seeded gallery photo the way scene-prompts.yaml does (AI calls: 1 scan), select one scene chip, tap 'Add 2 cards', assert '2 cards added' is visible (screenshot), tap the toast's View action, assert the Collection tab is showing."
+    },
+    {
+      "id": "new-card-found-today",
+      "description": "FINDINGS P0-3. Cards made today from an old photo count as found in the past: 'FOUND TODAY' stays 0 and they sort below yesterday's. discovered_at is deliberately the photo's date ('when the memory happened', lib/types.ts:74) — keep it for the calendar, Day screen and the card's 'DAY n' stamp. Change only the 'today' signals to use created_at: findsToday() in lib/review.ts:136, the home Latest finds rail (components/FeedRail.tsx) and Latest stickers (components/LatestStickers.tsx, its 'time ago' label too). Do not change the scheduler's clock (lib/review.ts:378).",
+      "checks": [
+        {
+          "file": "lib/review.ts",
+          "includes": [
+            "created_at"
+          ]
+        },
+        {
+          "file": "components/LatestStickers.tsx",
+          "includes": [
+            "created_at"
+          ]
+        }
+      ],
+      "verify": "Note the 'N FOUND TODAY' count, scan the gallery photo (dated Sep 2025) and add it: the count goes up by one and the new card is first in Latest finds.",
+      "flow": ".maestro/agent/new-card-found-today.yaml",
+      "flow_must_show": "Sign in, assert '0 FOUND TODAY' (the seed's only card is old), scan the seeded gallery photo (AI calls: 1 scan), tap 'Add to Collection', go to the Collection tab, assert '1 FOUND TODAY' and screenshot the Latest finds rail with the new card first."
+    },
+    {
+      "id": "type-a-word-entry",
+      "description": "FINDINGS P2 (Scan / create). Typing a word to make a card exists (commit 4756580) but is only reachable from scene chips after a scan. Add a visible 'Type a word' control on the Scan screen next to 'Import a photo from your library' that opens the same typed-word flow the scene chips use. Reuse that flow; no new lookup code.",
+      "checks": [
+        {
+          "file": "app/(tabs)/scan.tsx",
+          "testIDs": [
+            "scan-type-word"
+          ],
+          "strings": [
+            "Type a word"
+          ]
+        }
+      ],
+      "verify": "On the Scan tab, tap Type a word, enter 'chat', reach the card preview and add it; it appears in Collection.",
+      "flow": ".maestro/agent/type-a-word-entry.yaml",
+      "flow_must_show": "Sign in, open Scan (accept the consent if shown), tap 'Type a word', type 'chat', submit (AI calls: 1 lookup), assert the preview for 'chat' is visible, screenshot, add it, open Collection and assert 'chat' is visible."
+    }
+  ]
+}
