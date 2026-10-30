@@ -1,6 +1,9 @@
 # Sign-in with the keyboard up: Sign In stays visible and tappable while the
 # keyboard is open, both before and after the error banner appears. Does NOT
 # dismiss the keyboard between steps (no "WELCOME BACK" tap).
+# Focus is made deterministic: each field is tapped, the keyboard/autofill bar
+# is allowed to settle, then tapped again before typing (a single tap raced the
+# animation and left focus in Email).
 appId: com.iancheung228.lingostickers
 ---
 - launchApp:
@@ -15,7 +18,13 @@ appId: com.iancheung228.lingostickers
 
 # Fill both fields. The keyboard stays up from here on.
 - tapOn: "Email"
+- waitForAnimationToEnd:
+    timeout: 1500
+- tapOn: "Email"
 - inputText: ${MAESTRO_EMAIL}
+- tapOn: "Password"
+- waitForAnimationToEnd:
+    timeout: 1500
 - tapOn: "Password"
 - inputText: "definitely-wrong-password"
 - takeScreenshot: 01-filled-keyboard-up
@@ -30,6 +39,9 @@ appId: com.iancheung228.lingostickers
 - takeScreenshot: 02-error-keyboard-up
 
 # Replace the wrong password with the real one, still without dismissing the keyboard.
+- tapOn: "Password"
+- waitForAnimationToEnd:
+    timeout: 1500
 - tapOn: "Password"
 - eraseText: 40
 - inputText: ${MAESTRO_PASSWORD}
