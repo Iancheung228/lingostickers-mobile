@@ -19,9 +19,20 @@ STATUS=harness/logs/qa-status.json
 not_ready() { echo "QA NOT RUN: $1"; echo '{"ready": false}' > "$STATUS"; exit 2; }
 
 # --- Preflight: every check here is a way we have already been fooled ---------
-xcrun simctl list devices booted 2>/dev/null | grep -q Booted || not_ready "no booted Simulator"
-xcrun simctl get_app_container booted com.iancheung228.lingostickers >/dev/null 2>&1 \
-  || not_ready "Tabi Stickers dev build not installed on the Simulator"
+# MAESTRO_DEVICE (set by run-loop.sh) is the loop's own Simulator; unset means
+# whichever one is booted.
+DEVICE=${MAESTRO_DEVICE:-booted}
+if [ "$DEVICE" = booted ]; then
+  xcrun simctl list devices booted 2>/dev/null | grep -q Booted || not_ready "no booted Simulator"
+else
+  xcrun simctl list devices 2>/dev/null | grep "$DEVICE" | grep -q Booted || not_ready "Simulator $DEVICE is not booted"
+fi
+xcrun simctl get_app_container "$DEVICE" com.iancheung228.lingostickers >/dev/null 2>&1 \
+  || not_ready "Tabi Stickers dev build not installed on Simulator $DEVICE"
+# A flow-level `env:` default beats `maestro -e`, so a pinned METRO_PORT
+# silently sends the app to another Metro's code.
+pinned=$(grep -lE '^[[:space:]]+METRO_PORT:' .maestro/*.yaml .maestro/agent/*.yaml 2>/dev/null)
+[ -z "$pinned" ] || not_ready "these flows pin METRO_PORT in env:, which overrides :$PORT — remove it: $pinned"
 pid=$(lsof -nP -iTCP:"$PORT" -sTCP:LISTEN -t 2>/dev/null | head -1)
 [ -n "$pid" ] || not_ready "no Metro on :$PORT"
 cwd=$(lsof -a -p "$pid" -d cwd -Fn 2>/dev/null | grep '^n' | cut -c2-)

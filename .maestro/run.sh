@@ -15,6 +15,10 @@ node .maestro/seed.mjs
 args=()
 while IFS='=' read -r k v; do [ -n "$k" ] && args+=(-e "$k=$v"); done < .maestro/qa.env
 args+=(-e "METRO_PORT=${METRO_PORT:-8081}")
+# MAESTRO_DEVICE (a Simulator UDID) pins the run to one device — the harness
+# loop has its own, so it never reinstalls the app on yours.
+device=()
+[ -n "${MAESTRO_DEVICE:-}" ] && device=(--device "$MAESTRO_DEVICE")
 # Screenshots and logs land in .maestro/output/ (gitignored), flat, overwritten per run.
-exec maestro test --test-output-dir .maestro/output --debug-output .maestro/output --flatten-debug-output \
+exec maestro ${device[@]+"${device[@]}"} test --test-output-dir .maestro/output --debug-output .maestro/output --flatten-debug-output \
   "${args[@]}" "${@:-.maestro/}"

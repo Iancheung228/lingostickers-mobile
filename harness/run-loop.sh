@@ -25,6 +25,8 @@ BUDGET=${2:-3}
 BUILDER_MODEL=${BUILDER_MODEL:-sonnet}
 ESCALATION_MODEL=${ESCALATION_MODEL:-opus}
 export METRO_PORT=${METRO_PORT:-8082}   # 8081 stays free for your phone session
+# The loop's own Simulator: clearState reinstalls the app, so it must not be yours.
+HARNESS_SIM=${HARNESS_SIM:-Tabi Harness}
 notify() { osascript -e "display notification \"$1\" with title \"Tabi harness\"" 2>/dev/null; echo ">> $1"; }
 
 # Files that define "done". Byte-identical to the scaffold commit, or the run stops.
@@ -46,6 +48,12 @@ else
   echo "No .env.staging. Re-run with ALLOW_PROD_BACKEND=1 to test against production as the QA account."; exit 1
 fi
 [ -f "$REPO/.maestro/qa.env" ] || { echo "Missing .maestro/qa.env — run .maestro/create-qa-user.sh"; exit 1; }
+
+# --- Simulator: a dedicated one, found by name, booted if needed -------------
+MAESTRO_DEVICE=$(xcrun simctl list devices available | grep -F "    $HARNESS_SIM (" | head -1 | sed -E 's/.*\(([0-9A-F-]{36})\).*/\1/')
+[ -n "$MAESTRO_DEVICE" ] || { echo "No Simulator named \"$HARNESS_SIM\". Create one and install the dev build (see harness/README.md)."; exit 1; }
+export MAESTRO_DEVICE
+xcrun simctl boot "$MAESTRO_DEVICE" 2>/dev/null; xcrun simctl bootstatus "$MAESTRO_DEVICE" >/dev/null
 
 # --- Worktree -----------------------------------------------------------------
 if [ ! -d "$WT" ]; then

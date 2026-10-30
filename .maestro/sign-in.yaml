@@ -1,9 +1,9 @@
 # First Maestro flow: open the dev build, load JS from Metro, sign in, land on the tabs.
 # Needs: Metro on METRO_PORT (default 8081), and MAESTRO_EMAIL / MAESTRO_PASSWORD
 # for a test account. Run it through .maestro/run.sh, which supplies all three.
+# No `env:` default for METRO_PORT here: a flow's env wins over `maestro -e`,
+# so a default pinned every run (the harness's :8082 included) to :8081.
 appId: com.iancheung228.lingostickers
-env:
-  METRO_PORT: "8081"
 ---
 - launchApp:
     clearState: true

@@ -7,7 +7,9 @@ cd "$(dirname "$0")/.."
 export JAVA_HOME="$HOME/.local/jdk-21/Contents/Home"
 export PATH="$JAVA_HOME/bin:$HOME/.maestro/bin:$PATH"
 mkdir -p harness/logs
-maestro hierarchy 2>/dev/null > harness/logs/hierarchy.json || { echo "maestro hierarchy failed"; exit 1; }
+device=()
+[ -n "${MAESTRO_DEVICE:-}" ] && device=(--device "$MAESTRO_DEVICE")
+maestro "${device[@]}" hierarchy 2>/dev/null > harness/logs/hierarchy.json || { echo "maestro hierarchy failed"; exit 1; }
 /usr/bin/python3 - <<'EOF'
 import json
 def walk(n):

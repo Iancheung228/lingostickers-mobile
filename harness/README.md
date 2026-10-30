@@ -35,8 +35,15 @@ iteration the loop re-runs the full Maestro suite as a regression check.
 1. **Commit your work.** The loop branches from your last commit (it runs in
    `../tabi-harness`), so uncommitted fixes — and the approved flows that test
    them — won't be there.
-2. Simulator booted with the Tabi Stickers dev build installed (see the Maestro
-   notes in `.maestro/run.sh`).
+2. A Simulator named **Tabi Harness** with the Tabi Stickers dev build
+   installed. The loop runs every flow on it (`MAESTRO_DEVICE`), so yours is
+   never touched. Once:
+   ```bash
+   UDID=$(xcrun simctl create "Tabi Harness" com.apple.CoreSimulator.SimDeviceType.iPhone-18-Pro com.apple.CoreSimulator.SimRuntime.iOS-27-0)
+   xcrun simctl boot "$UDID"
+   xcrun simctl install "$UDID" "$(xcrun simctl get_app_container booted com.iancheung228.lingostickers app)"
+   ```
+   Reinstall it the same way after rebuilding the dev client.
 3. Backend: either create `.env.staging` (a second Supabase project), or pass
    `ALLOW_PROD_BACKEND=1` to run against production as the QA account only.
 
@@ -49,8 +56,7 @@ ALLOW_PROD_BACKEND=1 harness/run-loop.sh 6 3         # up to 6 iterations, $3 ca
 ```
 
 The loop uses Metro on **:8082**, so your own `npx expo start` on :8081 (and
-your phone) keep working. It does share the one Simulator: don't run your own
-Maestro tests while it's going.
+your phone) keep working, and on its own Simulator, so yours does too.
 
 Review with `cd ../tabi-harness && git log -p harness/drivable`, the QA
 screenshots in `.maestro/output/`, `harness-progress.md` (including any app bugs
