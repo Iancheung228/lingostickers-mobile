@@ -13,6 +13,10 @@
 # Stops when every feature passes, at the iteration cap, if the agent touches a
 # protected file, or after two iterations in a row with no new commit.
 set -uo pipefail
+# The whole body is one { } block so bash parses all of it before running any:
+# bash otherwise reads a script as it goes, and editing this file mid-run
+# (it lives in the main checkout, not the worktree) corrupted a live loop.
+{
 REPO=$(cd "$(dirname "$0")/.." && pwd)
 WT="$REPO/../tabi-harness"
 BRANCH=harness/drivable
@@ -128,3 +132,5 @@ for l in sys.stdin:
     except: pass
 print("%.2f"%t)')
 notify "Done. Spent \$$total. Review: cd $WT && git log $SCAFFOLD..HEAD"
+exit
+}

@@ -11,20 +11,23 @@ payload=$(echo "$input" | /usr/bin/python3 -c 'import json,sys; d=json.load(sys.
 # the human-approved Maestro flows + tooling. Agents may add flows under
 # .maestro/agent/ only.
 PROTECTED='harness/|scripts/test-|skills\.md|docs/lessons\.md|AGENTS\.md|CLAUDE\.md|\.env|\.claude/agents/|\.maestro/[^/]+\.(yaml|sh|mjs)$|\.maestro/[^/]+\.(yaml|sh|mjs)[ "]|\.maestro/qa\.env|\.maestro/fixtures/'
+# Anchored to a path boundary: the loop's worktree is ../tabi-harness, and an
+# unanchored `harness/` matched every file in it.
+P="(^|[/[:space:]\"'=])($PROTECTED)"
 
 case "$tool" in
   Bash)
     if echo "$payload" | grep -Eq '(^|[^a-z-])(eas|eas-cli)( |$)|supabase +(db|functions|link|secrets|projects)|git +push|git +reset +--hard|rm +-rf +/|xcrun +altool|fastlane|maestro +cloud'; then
       echo "Blocked by harness guard: outward-facing or destructive command. Write the request to HUMAN_REQUESTS.md instead." >&2; exit 2
     fi
-    if echo "$payload" | grep -Eq "(>|\\btee\\b|\\bsed +-i|\\bmv\\b|\\bcp\\b|\\brm\\b)[^|;&]*($PROTECTED)"; then
+    if echo "$payload" | grep -Eq "(>|\\btee\\b|\\bsed +-i|\\bmv\\b|\\bcp\\b|\\brm\\b)[^|;&]*$P"; then
       echo "Blocked by harness guard: that path is owned by the human (feature list, tests, lessons, env)." >&2; exit 2
     fi
     if echo "$payload" | grep -Eq '(cat|less|head|tail|grep|source|\.)[^|;&]*\.env'; then
       echo "Blocked by harness guard: env files are off limits." >&2; exit 2
     fi ;;
   Edit|Write|MultiEdit|NotebookEdit)
-    if echo "$payload" | grep -Eq "($PROTECTED)"; then
+    if echo "$payload" | grep -Eq "$P"; then
       echo "Blocked by harness guard: $payload is owned by the human. If you think it is wrong, say so in HUMAN_REQUESTS.md." >&2; exit 2
     fi ;;
   Read)
