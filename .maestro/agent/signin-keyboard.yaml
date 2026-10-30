@@ -1,0 +1,48 @@
+# Sign-in with the keyboard up: Sign In stays visible and tappable while the
+# keyboard is open, both before and after the error banner appears. Does NOT
+# dismiss the keyboard between steps (no "WELCOME BACK" tap).
+appId: com.iancheung228.lingostickers
+---
+- launchApp:
+    clearState: true
+- openLink: "exp+lingostickers-mobile://expo-development-client/?url=http%3A%2F%2Flocalhost%3A${METRO_PORT}"
+- tapOn:
+    text: "Open"
+    optional: true
+- extendedWaitUntil:
+    visible: "WELCOME BACK"
+    timeout: 60000
+
+# Fill both fields. The keyboard stays up from here on.
+- tapOn: "Email"
+- inputText: ${MAESTRO_EMAIL}
+- tapOn: "Password"
+- inputText: "definitely-wrong-password"
+- takeScreenshot: 01-filled-keyboard-up
+
+# Sign In must be on screen with the keyboard up (no dismiss tap).
+- assertVisible: "Sign In"
+- tapOn: "Sign In"
+- extendedWaitUntil:
+    visible: "Invalid login credentials.*"
+    timeout: 20000
+- assertVisible: "Sign In"
+- takeScreenshot: 02-error-keyboard-up
+
+# Replace the wrong password with the real one, still without dismissing the keyboard.
+- tapOn: "Password"
+- eraseText: 40
+- inputText: ${MAESTRO_PASSWORD}
+- assertVisible: "Sign In"
+- takeScreenshot: 03-retyped-keyboard-up
+
+- tapOn: "Sign In"
+# iOS offers to save the password after a successful sign-in.
+- tapOn:
+    text: "Not Now"
+    optional: true
+- extendedWaitUntil:
+    visible: "FOUND"
+    timeout: 30000
+- assertNotVisible: "WELCOME BACK"
+- takeScreenshot: 04-home
