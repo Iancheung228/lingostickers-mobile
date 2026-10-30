@@ -10,8 +10,6 @@ cd "$(dirname "$0")/.."
 export JAVA_HOME="$HOME/.local/jdk-21/Contents/Home"
 export PATH="$JAVA_HOME/bin:$HOME/.maestro/bin:$PATH"
 [ -f .maestro/qa.env ] || { echo "Missing .maestro/qa.env; run .maestro/create-qa-user.sh"; exit 1; }
-# Reset the QA account to a known state (one card, due now) before every run.
-node .maestro/seed.mjs
 args=()
 while IFS='=' read -r k v; do [ -n "$k" ] && args+=(-e "$k=$v"); done < .maestro/qa.env
 args+=(-e "METRO_PORT=${METRO_PORT:-8081}")
@@ -19,6 +17,15 @@ args+=(-e "METRO_PORT=${METRO_PORT:-8081}")
 # loop has its own, so it never reinstalls the app on yours.
 device=()
 [ -n "${MAESTRO_DEVICE:-}" ] && device=(--device "$MAESTRO_DEVICE")
-# Screenshots and logs land in .maestro/output/ (gitignored), flat, overwritten per run.
-exec maestro ${device[@]+"${device[@]}"} test --test-output-dir .maestro/output --debug-output .maestro/output --flatten-debug-output \
-  "${args[@]}" "${@:-.maestro/}"
+# Reset the QA account to a known state (one card, due now) before EVERY flow,
+# not once per run: a flow that grades the card leaves nothing due for the next.
+# Screenshots and logs land in .maestro/output/<flow>/ (gitignored), overwritten per run.
+flows=("$@")
+[ ${#flows[@]} -eq 0 ] && flows=(.maestro/*.yaml)
+code=0
+for flow in "${flows[@]}"; do
+  node .maestro/seed.mjs
+  maestro ${device[@]+"${device[@]}"} test --test-output-dir .maestro/output --debug-output .maestro/output --flatten-debug-output \
+    "${args[@]}" "$flow" || code=1
+done
+exit $code
