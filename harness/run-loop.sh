@@ -88,6 +88,13 @@ first_failing() {
   node --experimental-strip-types scripts/test-drivable.mts --json 2>/dev/null \
     | /usr/bin/python3 -c 'import json,sys; print(next((k for k,v in json.load(sys.stdin).items() if not v["passes"]), ""))'
 }
+# Progress is features passing, not commits: a blocked builder that commits a
+# note to HUMAN_REQUESTS.md moves HEAD, and that once hid 1.5 h of no progress.
+passing() {
+  node --experimental-strip-types scripts/test-drivable.mts --json 2>/dev/null \
+    | /usr/bin/python3 -c 'import json,sys; print(sum(v["passes"] for v in json.load(sys.stdin).values()))'
+}
+requests() { [ -f HUMAN_REQUESTS.md ] && wc -l < HUMAN_REQUESTS.md | tr -d ' ' || echo 0; }
 
 # --- Loop ---------------------------------------------------------------------
 stale=0; last_target=""; attempts=0
@@ -96,8 +103,8 @@ for i in $(seq 1 "$ITERS"); do
   [ -z "$target" ] && { notify "All features pass."; break; }
   if [ "$target" = "$last_target" ]; then attempts=$((attempts+1)); else attempts=1; last_target=$target; fi
   model=$BUILDER_MODEL; [ $attempts -ge 3 ] && model=$ESCALATION_MODEL
-  before=$(git rev-parse HEAD)
-  echo "=== iteration $i/$ITERS: $target (attempt $attempts, $model, \$$BUDGET cap) ==="
+  pass_before=$(passing); req_before=$(requests)
+  echo "=== $(date +%H:%M) iteration $i/$ITERS: $target (attempt $attempts, $model, \$$BUDGET cap; $pass_before passing) ==="
 
   HARNESS=1 claude -p "$(cat harness/PROMPT.md)" \
     --model "$model" --settings harness/settings.json \
@@ -119,9 +126,6 @@ for line in sys.stdin:
     notify "Iteration $i modified protected files. Stopped; see git diff $SCAFFOLD."; exit 2
   fi
 
-  if [ "$(git rev-parse HEAD)" = "$before" ]; then stale=$((stale+1)); else stale=0; fi
-  [ $stale -ge 2 ] && { notify "Two iterations without a commit. Stopped."; break; }
-
   harness/init.sh > "harness/logs/gate-$i.txt" 2>&1 || notify "Gate red after iteration $i (next iteration repairs it)."
   # Full regression on the Simulator after every iteration; the next one reads it.
   harness/qa.sh > harness/logs/last-qa.txt 2>&1
@@ -130,6 +134,21 @@ for line in sys.stdin:
     mv harness/logs/last-qa.tmp harness/logs/last-qa.txt
   fi
   cat harness/logs/last-qa.txt
+
+  # Stop rather than retry what no builder may fix: a human-approved flow
+  # failing (agents can't edit .maestro/*.yaml) is yours, every time.
+  if grep -qE '^FAIL  \.maestro/[^/]+\.yaml' harness/logs/last-qa.txt; then
+    notify "A human-approved flow fails after iteration $i; the builder can't fix it. Stopped — see harness/logs/last-qa.txt."; break
+  fi
+  pass_after=$(passing)
+  if [ "$pass_after" -gt "$pass_before" ]; then
+    stale=0
+  else
+    stale=$((stale+1))
+    # No progress and a new request: the builder is waiting on you, not on a retry.
+    [ "$(requests)" -gt "$req_before" ] && { notify "Iteration $i is blocked on you (no progress, new HUMAN_REQUESTS.md entry). Stopped."; break; }
+  fi
+  [ $stale -ge 2 ] && { notify "Two iterations with no new passing feature. Stopped."; break; }
 done
 
 [ -f HUMAN_REQUESTS.md ] && notify "The loop left requests in HUMAN_REQUESTS.md"

@@ -67,6 +67,21 @@ screenshots in `.maestro/output/`, `harness-progress.md` (including any app bugs
 QA found outside the feature) and `HUMAN_REQUESTS.md`. Merge or cherry-pick
 into main yourself.
 
+## When it stops
+
+All features pass; the iteration cap; a protected file changed; two
+iterations with no new *passing feature* (commits don't count — a blocked
+builder commits notes); a human-approved flow failing the regression (no
+builder may fix it); or an iteration that made no progress and added to
+`HUMAN_REQUESTS.md`. Every iteration header in the log carries the time and
+the passing count, so a stall is visible at a glance.
+
+## Changing the harness or an approved flow
+
+Run the full `harness/qa.sh` **twice** on the harness Simulator before
+restarting the loop. One green run can't show a flaky flow, and a flaky
+approved flow makes every iteration fail in a way no builder may fix.
+
 ## What the loop can't verify
 
 The camera and the Vision cutout don't exist on the Simulator; native changes
