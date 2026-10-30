@@ -43,7 +43,7 @@ type CameraCapture = { discoveredAt: string; rawUri: string; rawWidth: number; r
 export default function ScanScreen() {
   const { user } = useAuth();
   const { accepted: aiConsented, accept: acceptAiConsent } = useAiConsent(user?.id);
-  const { profile } = useProfile(user?.id);
+  const { profile } = useProfile();
   const language = profile?.target_language ?? 'fr';
   const [permission, requestPermission, getPermission] = useCameraPermissions();
 

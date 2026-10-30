@@ -51,7 +51,7 @@ export default function ProfileScreen() {
   const {
     profile, setTargetLanguage, setWallDisplayStyle, setCutoutBorderStyle,
     setAvatar, removeAvatar,
-  } = useProfile(user?.id);
+  } = useProfile();
   const [stickers, setStickers] = useState<Sticker[]>([]);
   const [loading, setLoading] = useState(true);
   // The stat cards and the welcome note both quote a sticker count. A failed

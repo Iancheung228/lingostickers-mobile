@@ -16,7 +16,7 @@ import { TAB_BAR_CLEARANCE } from '@/constants/tabBar';
 
 export default function WallScreen() {
   const { user } = useAuth();
-  const { profile, refetch: refetchProfile } = useProfile(user?.id);
+  const { profile, refetch: refetchProfile } = useProfile();
   const { boards, createBoard, deleteBoard, renameBoard, setBoardBackground, setBoardBackgroundDim } = useBoards(user?.id);
   const { previews, refetch: refetchPreviews } = useBoardPreviews(user?.id);
   const { width: screenWidth } = useWindowDimensions();

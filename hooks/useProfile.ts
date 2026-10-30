@@ -1,9 +1,26 @@
-import { useState, useEffect, useCallback } from 'react';
+import { createContext, createElement, useCallback, useContext, useEffect, useState, ReactNode } from 'react';
 import { supabase } from '@/lib/supabase';
 import { Profile, Language, WallDisplayStyle, CutoutBorderStyle } from '@/lib/types';
 import { uploadAvatar, deleteAvatarFile } from '@/lib/avatars';
+import { useAuth } from '@/hooks/useAuth';
 
-export function useProfile(userId: string | undefined) {
+// ---------------------------------------------------------------------------
+// The signed-in user's profile, as ONE shared instance.
+//
+// This was a plain hook called from five places — profile, collection, wall,
+// scan and StudyCard — and a plain hook is just a function: each call site got
+// its own useState and its own private copy. So changing your avatar in
+// Profile updated Profile's copy and nothing else, and the home screen went on
+// drawing the old face on every card until it happened to remount. Exactly the
+// failure skills.md §1 is about, for the third time.
+//
+// Reads the user id from useAuth() rather than taking it as an argument, so no
+// call site can pass the wrong one or forget it — same shape as useFriends and
+// useChallenges.
+// ---------------------------------------------------------------------------
+function useProfileState() {
+  const { user } = useAuth();
+  const userId = user?.id;
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -133,4 +150,17 @@ export function useProfile(userId: string | undefined) {
     setHomeBackground, setHomeWallArranged, setAvatar, removeAvatar,
     refetch: fetchProfile,
   };
+}
+
+const ProfileContext = createContext<ReturnType<typeof useProfileState> | null>(null);
+
+export function ProfileProvider({ children }: { children: ReactNode }) {
+  const value = useProfileState();
+  return createElement(ProfileContext.Provider, { value }, children);
+}
+
+export function useProfile() {
+  const ctx = useContext(ProfileContext);
+  if (!ctx) throw new Error('useProfile must be used within a ProfileProvider');
+  return ctx;
 }

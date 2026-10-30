@@ -48,7 +48,7 @@ const WALL_OVERLAP = 56;
 
 export default function CollectionScreen() {
   const { user } = useAuth();
-  const { profile, setHomeBackground, setHomeWallArranged } = useProfile(user?.id);
+  const { profile, setHomeBackground, setHomeWallArranged } = useProfile();
   const [stickers, setStickers] = useState<Sticker[]>([]);
   const [loading, setLoading] = useState(true);
   // Distinguishes "you have no stickers" from "we couldn't ask". Without it a

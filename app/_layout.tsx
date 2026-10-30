@@ -19,6 +19,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { StatusBar } from 'expo-status-bar';
 import * as Notifications from 'expo-notifications';
 import { useAuth, AuthProvider } from '@/hooks/useAuth';
+import { ProfileProvider } from '@/hooks/useProfile';
 import { FriendsProvider } from '@/hooks/useFriends';
 import { ChallengesProvider } from '@/hooks/useChallenges';
 import { configureNotificationHandler, syncPushToken } from '@/lib/notifications';
@@ -235,11 +236,13 @@ export default function Root() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <AuthProvider>
-        <FriendsProvider>
+        <ProfileProvider>
+          <FriendsProvider>
           <ChallengesProvider>
             <RootLayout />
           </ChallengesProvider>
-        </FriendsProvider>
+          </FriendsProvider>
+        </ProfileProvider>
       </AuthProvider>
     </GestureHandlerRootView>
   );

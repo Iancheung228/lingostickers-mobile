@@ -16,7 +16,6 @@ import { X, Volume2, HelpCircle, Mic, Play, Trash2, PenLine, PinOff, Download, S
 import { Sticker } from '@/lib/types';
 import { supabase } from '@/lib/supabase';
 import { speak } from '@/lib/speech';
-import { useAuth } from '@/hooks/useAuth';
 import { useProfile } from '@/hooks/useProfile';
 import { useSignedUrls } from '@/hooks/useSignedUrls';
 import { useStickerAuthors } from '@/hooks/useStickerAuthors';
@@ -234,8 +233,7 @@ export default function StudyCard({
   sticker, mode = 'browse', onClose, onGraded, progress, onDeleted, onUpdate, onRemoveFromBoard,
 }: StudyCardProps) {
   const insets = useSafeAreaInsets();
-  const { user } = useAuth();
-  const { profile } = useProfile(user?.id);
+  const { profile } = useProfile();
   const [flipped, setFlipped] = useState(false);
   const [hintShown, setHintShown] = useState(false);
   const [reducedMotion, setReducedMotion] = useState(false);
