@@ -1,0 +1,32 @@
+# First Maestro flow: open the dev build, load JS from Metro, sign in, land on the tabs.
+# Needs: Metro on METRO_PORT (default 8081), and MAESTRO_EMAIL / MAESTRO_PASSWORD
+# for a test account. Run it through .maestro/run.sh, which supplies all three.
+appId: com.iancheung228.lingostickers
+env:
+  METRO_PORT: "8081"
+---
+- launchApp:
+    clearState: true
+- openLink: "exp+lingostickers-mobile://expo-development-client/?url=http%3A%2F%2Flocalhost%3A${METRO_PORT}"
+- tapOn:
+    text: "Open"
+    optional: true
+- extendedWaitUntil:
+    visible: "WELCOME BACK"
+    timeout: 60000
+- takeScreenshot: 01-sign-in
+- tapOn: "Email"
+- inputText: ${MAESTRO_EMAIL}
+- tapOn: "Password"
+- inputText: ${MAESTRO_PASSWORD}
+- tapOn: "WELCOME BACK"   # dismisses the keyboard; hideKeyboard is unreliable on RN
+- tapOn: "Sign In"
+# iOS offers to save the password after a successful sign-in.
+- tapOn:
+    text: "Not Now"
+    optional: true
+- extendedWaitUntil:
+    visible: "FOUND"   # home header: "<n> FOUND TODAY"
+    timeout: 30000
+- assertNotVisible: "WELCOME BACK"
+- takeScreenshot: 02-home

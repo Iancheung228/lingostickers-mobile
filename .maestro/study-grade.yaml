@@ -1,0 +1,58 @@
+# Review one due card and grade it "Good".
+# Needs the seed (.maestro/seed.mjs): the QA account has exactly one card,
+# "pomme", due now. run.sh re-seeds before every run.
+appId: com.iancheung228.lingostickers
+---
+- runFlow: sign-in.yaml
+
+# Home header shows the due pill once the queue has loaded. Buttons are matched
+# by their accessibility label (what VoiceOver reads), not the visible text:
+# on iOS the label replaces the children's text.
+- extendedWaitUntil:
+    visible: "Start reviewing — 1 card due.*"
+    timeout: 20000
+- tapOn: "Start reviewing — 1 card due.*"
+
+# Front of the card: a recall prompt, with the answer hidden.
+- extendedWaitUntil:
+    visible: "Tap to reveal.*"
+    timeout: 10000
+# The card is one accessibility element labelled with the face that is
+# showing, so the answer must not be readable before the flip.
+- assertVisible: "What did you call this\\?"
+- assertNotVisible: ".*pomme.*"
+- takeScreenshot: 03-card-front
+- tapOn: "What did you call this\\?"   # anywhere on the card flips it
+
+# Back of the card: the meaning and the four grade buttons.
+- extendedWaitUntil:
+    visible: "Good — next review in.*"
+    timeout: 10000
+- assertVisible: "pomme, pɔm, means apple.*"
+- assertVisible: "Again — next review in.*"
+- assertVisible: "Easy — next review in.*"
+- takeScreenshot: 04-card-back
+- tapOn: "Good — next review in.*"
+
+# A new card graded Good goes to a 10-minute learning step, inside the
+# session's 20-minute learn-ahead window, so the same card comes back as 2 / 2.
+# It must come back on its question side, not with the answer showing.
+- extendedWaitUntil:
+    visible: "2 / 2"
+    timeout: 10000
+- takeScreenshot: 05-requeued
+- assertVisible: "What did you call this\\?"
+- assertNotVisible: "Good — next review in.*"
+
+# Leave the session: a summary counts the card, and home has nothing left due.
+- tapOn: "Close this card"
+- extendedWaitUntil:
+    visible: "Session done"
+    timeout: 10000
+- assertVisible: "1 card reviewed"
+- takeScreenshot: 06-session-done
+- tapOn: "Done"
+- extendedWaitUntil:
+    visible: "FOUND"
+    timeout: 10000
+- assertNotVisible: "Start reviewing.*"

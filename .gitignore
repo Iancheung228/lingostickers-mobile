@@ -33,6 +33,7 @@ yarn-error.*
 # local env files
 .env
 .env*.local
+.env.staging
 # Local-only API keys for scripts/ validation harnesses — never committed.
 .env.groq
 
@@ -54,3 +55,10 @@ scripts/fixtures/.cache/
 
 # Created by `deno check` (local typecheck gate only; Supabase bundles its own deps)
 deno.lock
+
+# Maestro (Simulator UI tests): run output, and the QA account's password
+.maestro/output/
+.maestro/qa.env
+
+# Local run logs (Metro, xcodebuild)
+.run/
