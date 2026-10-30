@@ -8,3 +8,6 @@
 - No app change: sign-in.tsx already had keyboardShouldPersistTaps="handled" in KeyboardAvoidingView. Added .maestro/agent/signin-keyboard.yaml (wrong password -> banner -> real password -> FOUND).
 - QA: new flow PASS, full harness/qa.sh PASS. Shots 01-03 show Sign In visible with and without the error banner.
 - GAP: no software keyboard was drawn (hardware keyboard connected), so "above the keyboard" is NOT proven; assertVisible doesn't check occlusion. Human: Simulator I/O > Keyboard > uncheck Connect Hardware Keyboard, rerun the flow, check shots 01-03.
+
+## collection-search-visible (re-verify)
+- No app change; code was already in place. QA status had gone stale, so reran: flow PASS, full harness/qa.sh PASS (5 flows). Shots 01 (search bar pinned, hero/Latest hidden) and 02 (Cancel restores) judged OK. No new bugs.
