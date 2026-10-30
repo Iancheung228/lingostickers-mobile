@@ -15,8 +15,17 @@ appId: com.iancheung228.lingostickers
     visible: "WELCOME BACK"
     timeout: 60000
 - takeScreenshot: 01-sign-in
+# With the on-screen keyboard up, a tap during its slide-in animation can
+# miss and leave focus where it was (the password then lands in Email). Tap,
+# let it settle, tap again.
+- tapOn: "Email"
+- waitForAnimationToEnd:
+    timeout: 1500
 - tapOn: "Email"
 - inputText: ${MAESTRO_EMAIL}
+- tapOn: "Password"
+- waitForAnimationToEnd:
+    timeout: 1500
 - tapOn: "Password"
 - inputText: ${MAESTRO_PASSWORD}
 - tapOn: "WELCOME BACK"   # dismisses the keyboard; hideKeyboard is unreliable on RN
