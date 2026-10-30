@@ -30,6 +30,15 @@ cwd=$(lsof -a -p "$pid" -d cwd -Fn 2>/dev/null | grep '^n' | cut -c2-)
 ps eww -p "$pid" 2>/dev/null | grep -qE '(^| )CI=(1|true)( |$)' \
   && not_ready "Metro on :$PORT runs in CI mode (stale bundle). Restart it with: env -u CI npx expo start --dev-client --port $PORT"
 
+# The dev client loads the manifest's launch asset. If that bundle doesn't
+# build, the app keeps showing whatever it ran last and every flow tests stale
+# code — so build it here, and refuse to test if it fails.
+launch=$(curl -sf -H "Accept: application/expo+json,application/json" -H "expo-platform: ios" "http://localhost:$PORT/" \
+  | /usr/bin/python3 -c 'import json,sys; print(json.load(sys.stdin)["launchAsset"]["url"])' 2>/dev/null)
+[ -n "$launch" ] || not_ready "Metro on :$PORT returned no manifest"
+bundle=$(curl -s -o /dev/null -w '%{http_code}' --max-time 300 "$launch")
+[ "$bundle" = "200" ] || not_ready "the app bundle from Metro on :$PORT fails to build (HTTP $bundle): $launch"
+
 # --- Run --------------------------------------------------------------------
 flows=("$@")
 if [ ${#flows[@]} -eq 0 ]; then

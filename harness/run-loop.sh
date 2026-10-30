@@ -50,9 +50,11 @@ fi
 # --- Worktree -----------------------------------------------------------------
 if [ ! -d "$WT" ]; then
   git -C "$REPO" worktree add "$WT" -b "$BRANCH" HEAD || exit 1
-  ln -s "$REPO/node_modules" "$WT/node_modules"
-  # .gitignore's `node_modules/` doesn't match a symlink; keep it out of commits.
-  echo "node_modules" >> "$(git -C "$WT" rev-parse --git-path info/exclude)"
+  # A real directory, not a symlink: through a symlink Expo resolves the app's
+  # entry to a path outside the project, Metro 404s the bundle, and the
+  # Simulator silently keeps running stale code. `cp -c` is an APFS clone:
+  # near-instant, and no extra disk until a file changes.
+  cp -cR "$REPO/node_modules" "$WT/node_modules" || exit 1
   # The harness is committed, so the scaffold is just a marker: the protected
   # files must stay byte-identical to this commit for the whole run.
   git -C "$WT" commit -q --allow-empty -m "harness: scaffold" || exit 1
