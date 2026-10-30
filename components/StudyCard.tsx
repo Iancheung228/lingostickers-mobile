@@ -54,6 +54,9 @@ interface StudyCardProps {
   onGraded?: (grade: Grade, patch: SchedulePatch) => void;
   /// Position in the current study session, if there is one.
   progress?: { index: number; total: number };
+  /// This card was graded earlier in the session and has come round again
+  /// (the learn-ahead re-show), so say so rather than let it read as a bug.
+  stillLearning?: boolean;
   /// Fired after the sticker and every file it owns are gone, so the screen
   /// behind can drop it from its list.
   onDeleted?: () => void;
@@ -302,7 +305,7 @@ export function splitAroundWord(sentence: string, word: string): [string, string
 }
 
 export default function StudyCard({
-  sticker, mode = 'browse', onClose, onGraded, progress, onDeleted, onUpdate, onRemoveFromBoard,
+  sticker, mode = 'browse', onClose, onGraded, progress, stillLearning, onDeleted, onUpdate, onRemoveFromBoard,
 }: StudyCardProps) {
   const insets = useSafeAreaInsets();
   const { profile } = useProfile();
@@ -858,7 +861,7 @@ export default function StudyCard({
           style={styles.cardArea}
           onPress={toggleFlip}
           accessibilityRole="button"
-          accessibilityLabel={flipped ? answerLabel(sticker) : promptLabel(sticker, hintShown)}
+          accessibilityLabel={flipped ? answerLabel(sticker) : `${stillLearning ? `${STILL_LEARNING}. ` : ''}${promptLabel(sticker, hintShown)}`}
           accessibilityHint={flipped ? 'Double-tap to see the question again' : 'Double-tap to reveal the answer'}
           // Being one element also hides every edit pencil inside it from
           // VoiceOver. These put them back as the card's own actions (swipe
@@ -881,6 +884,7 @@ export default function StudyCard({
               authorAvatarPath={author?.avatar_path ?? null}
               imageUrl={imageUrl}
               hintShown={hintShown}
+              stillLearning={!!stillLearning}
               onHint={() => { Haptics.selectionAsync(); setHintShown(true); }}
               // Mid-session the note is part of the prompt, so tapping it
               // should flip the card like the rest of the face. Editing is a
@@ -988,6 +992,8 @@ function frontQuestion(sticker: Sticker): string {
     : 'What did you call this?';
 }
 
+const STILL_LEARNING = 'Still learning — one more look';
+
 function promptLabel(sticker: Sticker, hintShown: boolean): string {
   return hintShown
     ? `${frontQuestion(sticker)} Starts with ${hintLetter(sticker)}`
@@ -1003,9 +1009,9 @@ function answerLabel(sticker: Sticker): string {
   return label;
 }
 
-function FrontFace({ sticker, authorName, authorAvatarPath, imageUrl, hintShown, onHint, onEditNote, onScroll }: {
+function FrontFace({ sticker, authorName, authorAvatarPath, imageUrl, hintShown, stillLearning, onHint, onEditNote, onScroll }: {
   sticker: Sticker; authorName: string; authorAvatarPath: string | null; imageUrl: string | null;
-  hintShown: boolean; onHint: () => void; onEditNote?: () => void;
+  hintShown: boolean; stillLearning: boolean; onHint: () => void; onEditNote?: () => void;
   onScroll: (e: NativeSyntheticEvent<NativeScrollEvent>) => void;
 }) {
   const found = new Date(sticker.discovered_at);
@@ -1106,6 +1112,7 @@ function FrontFace({ sticker, authorName, authorAvatarPath, imageUrl, hintShown,
           </View>
         </ScrollView>
 
+        {stillLearning && <Text style={styles.stillLearning}>{STILL_LEARNING}</Text>}
         <View style={styles.promptRow}>
           <Text style={styles.prompt}>
             {hintShown ? `Starts with ${hint}` : frontQuestion(sticker)}
@@ -1441,6 +1448,7 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     paddingVertical: spacing.md,
   },
+  stillLearning: { fontSize: 13, fontFamily: fonts.text, color: colors.inkLight, paddingTop: spacing.sm },
   prompt: { flex: 1, fontSize: 20, fontFamily: fonts.display, color: colors.inkDark },
   hintPill: {
     flexDirection: 'row',

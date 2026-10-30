@@ -27,6 +27,8 @@ interface StudySessionHostProps {
 export default function StudySessionHost({ queue, onExit, onUpdate, onDeleted }: StudySessionHostProps) {
   const [cards, setCards] = useState<Sticker[] | null>(null);
   const [index, setIndex] = useState(0);
+  // Cards graded this sitting; one showing again is being re-learned.
+  const [seen, setSeen] = useState<Set<string>>(new Set());
   const [stats, setStats] = useState<{ graded: number; again: number } | null>(null);
 
   // A new queue starts a session; null ends one. The summary is kept alive
@@ -35,6 +37,7 @@ export default function StudySessionHost({ queue, onExit, onUpdate, onDeleted }:
     if (!queue) { setCards(null); return; }
     setCards(queue);
     setIndex(0);
+    setSeen(new Set());
     setStats({ graded: 0, again: 0 });
   }, [queue]);
 
@@ -52,6 +55,7 @@ export default function StudySessionHost({ queue, onExit, onUpdate, onDeleted }:
     // off the pre-grading card would compute from the wrong rung of the
     // learning ladder (or think a card that has just lapsed is still a review
     // card, and hand it a multiplied interval instead of graduating it).
+    setSeen(prev => new Set(prev).add(current.id));
     const graded = { ...current, ...patch };
 
     // Anything the scheduler booked inside the learn-ahead window is still
@@ -95,6 +99,7 @@ export default function StudySessionHost({ queue, onExit, onUpdate, onDeleted }:
       <StudyCard
         sticker={current}
         mode="review"
+        stillLearning={!!current && seen.has(current.id)}
         progress={cards ? { index, total: cards.length } : undefined}
         onClose={handleClose}
         onGraded={handleGraded}

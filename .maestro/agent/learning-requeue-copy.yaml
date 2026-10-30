@@ -1,0 +1,43 @@
+appId: com.iancheung228.lingostickers
+---
+# Same journey as .maestro/study-grade.yaml up to the requeued "2 / 2" card.
+# A card graded Good in a session comes back inside the learn-ahead window;
+# that re-show must say "Still learning — one more look" above the prompt, and
+# the first showing must not.
+- runFlow: ../sign-in.yaml
+
+# Home due pill: singular minute when the estimate is one minute.
+- extendedWaitUntil:
+    visible: "Start reviewing — 1 card due.*"
+    timeout: 20000
+- assertVisible: "Start reviewing — 1 card due, about 1 minute$"
+- assertNotVisible: "Start reviewing — 1 card due, about 1 minutes$"
+- tapOn: "Start reviewing — 1 card due.*"
+
+# First showing of the card: front face, no learning note.
+- extendedWaitUntil:
+    visible: "Tap to reveal.*"
+    timeout: 10000
+- assertVisible: "What did you call this\\?"
+- assertNotVisible: "Still learning.*"
+- assertNotVisible: ".*pomme.*"
+- takeScreenshot: 10-first-showing-front
+- tapOn: "What did you call this\\?"
+
+# Back of the card, grade Good.
+- extendedWaitUntil:
+    visible: "Good — next review in.*"
+    timeout: 10000
+- takeScreenshot: 11-first-showing-back
+- tapOn: "Good — next review in.*"
+
+# Requeued card at 2 / 2: question side, with the learning note.
+- extendedWaitUntil:
+    visible: "2 / 2"
+    timeout: 10000
+- extendedWaitUntil:
+    visible: "Still learning.*"
+    timeout: 10000
+- assertVisible: "Still learning — one more look\\. What did you call this\\?"
+- assertNotVisible: "Good — next review in.*"
+- takeScreenshot: 12-requeued-still-learning

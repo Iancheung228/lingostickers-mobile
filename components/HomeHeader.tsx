@@ -75,7 +75,7 @@ export default function HomeHeader({
             onPress={onStartReview}
             activeOpacity={0.85}
             accessibilityRole="button"
-            accessibilityLabel={`Start reviewing — ${dueCount} card${dueCount === 1 ? '' : 's'} due, about ${reviewMinutes} minutes`}
+            accessibilityLabel={`Start reviewing — ${dueCount} card${dueCount === 1 ? '' : 's'} due, about ${reviewMinutes} minute${reviewMinutes === 1 ? '' : 's'}`}
           >
             <View>
               <Text style={styles.dueCount}>{dueCount} due</Text>
