@@ -47,11 +47,11 @@ fi
 if [ ! -d "$WT" ]; then
   git -C "$REPO" worktree add "$WT" -b "$BRANCH" HEAD || exit 1
   ln -s "$REPO/node_modules" "$WT/node_modules"
-  # Bring the harness and the QA tooling in as they are now, committed as one scaffold.
-  (cd "$REPO" && tar cf - harness/{feature_list.json,guard.sh,init.sh,PROMPT.md,settings.json,run-loop.sh,qa.sh,qa-hierarchy.sh,README.md,.gitignore} \
-     scripts/test-drivable.mts .maestro/{sign-in.yaml,study-grade.yaml,run.sh,seed.mjs,create-qa-user.sh,fixtures} \
-     .claude/agents/qa-tester.md .gitignore) | (cd "$WT" && tar xf -)
-  git -C "$WT" add -A && git -C "$WT" commit -qm "harness: scaffold" || exit 1
+  # .gitignore's `node_modules/` doesn't match a symlink; keep it out of commits.
+  echo "node_modules" >> "$(git -C "$WT" rev-parse --git-path info/exclude)"
+  # The harness is committed, so the scaffold is just a marker: the protected
+  # files must stay byte-identical to this commit for the whole run.
+  git -C "$WT" commit -q --allow-empty -m "harness: scaffold" || exit 1
 fi
 cp "$ENV_SRC" "$WT/.env"
 cp "$REPO/.maestro/qa.env" "$WT/.maestro/qa.env"
