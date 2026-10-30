@@ -387,6 +387,12 @@ export default function StudyCard({
     return () => { mounted = false; sub.remove(); };
   }, []);
 
+  // One showing of a card. A session re-queues a card it booked inside the
+  // learn-ahead window, so the same sticker can come straight back at the next
+  // position. Keying on the id alone treated that as "nothing changed" and
+  // reopened it with the answer showing.
+  const visit = `${sticker?.id}:${progress?.index ?? ''}`;
+
   // Every card opens on its prompt side, with no hint spent.
   useEffect(() => {
     if (!sticker) return;
@@ -396,11 +402,11 @@ export default function StudyCard({
     setEditing(null);
     flip.setValue(0);
     dragY.setValue(0);
-    // True because the faces are keyed on the sticker id below and therefore
+    // True because the faces are keyed on the visit below and therefore
     // remount with a fresh scroll view — asserting it without that would be a
     // guess about where the previous card had been left.
     atTop.current = { front: true, back: true };
-  }, [sticker?.id]);
+  }, [visit]);
 
   // Grading is what advances the schedule — flipping on its own no longer
   // counts as a pass. An earlier version logged a review on flip, which meant
@@ -750,10 +756,20 @@ export default function StudyCard({
           </View>
         </View>
 
-        <Pressable style={styles.cardArea} onPress={toggleFlip}>
+        {/* The card is one accessibility element, and iOS builds such an
+            element's label from every descendant's text — including the face
+            that is turned away, so VoiceOver read the answer aloud before the
+            flip. Say only what is showing. */}
+        <Pressable
+          style={styles.cardArea}
+          onPress={toggleFlip}
+          accessibilityRole="button"
+          accessibilityLabel={flipped ? answerLabel(sticker) : promptLabel(sticker, hintShown)}
+          accessibilityHint={flipped ? 'Double-tap to see the question again' : 'Double-tap to reveal the answer'}
+        >
           <Animated.View style={[styles.face, frontFace]} pointerEvents={flipped ? 'none' : 'auto'}>
             <FrontFace
-              key={`front-${sticker.id}`}
+              key={`front-${visit}`}
               onScroll={onFaceScroll('front')}
               sticker={sticker}
               authorName={authorName}
@@ -770,7 +786,7 @@ export default function StudyCard({
 
           <Animated.View style={[styles.face, backFace]} pointerEvents={flipped ? 'auto' : 'none'}>
             <BackFace
-              key={`back-${sticker.id}`}
+              key={`back-${visit}`}
               onScroll={onFaceScroll('back')}
               sticker={sticker}
               mode={mode}
@@ -851,13 +867,33 @@ export default function StudyCard({
 // Front — the prompt. Everything you recorded about the moment, and nothing
 // that would give the word away.
 // ---------------------------------------------------------------------------
+function hintLetter(sticker: Sticker): string {
+  return Array.from(sticker.word.trim())[0] ?? '';
+}
+
+/** What VoiceOver reads for the card's front: the prompt as written on it. */
+function promptLabel(sticker: Sticker, hintShown: boolean): string {
+  return hintShown
+    ? `What did you call this? Starts with ${hintLetter(sticker)}`
+    : 'What did you call this?';
+}
+
+/** What VoiceOver reads for the card's back: the answer and its example. */
+function answerLabel(sticker: Sticker): string {
+  const parts = [sticker.word];
+  if (sticker.reading) parts.push(sticker.reading);
+  let label = `${parts.join(', ')}, means ${sticker.translation}`;
+  if (sticker.sentence) label += `. ${sticker.sentence} ${sticker.sentence_translation}`.trimEnd();
+  return label;
+}
+
 function FrontFace({ sticker, authorName, authorAvatarPath, imageUrl, hintShown, onHint, onEditNote, onScroll }: {
   sticker: Sticker; authorName: string; authorAvatarPath: string | null; imageUrl: string | null;
   hintShown: boolean; onHint: () => void; onEditNote?: () => void;
   onScroll: (e: NativeSyntheticEvent<NativeScrollEvent>) => void;
 }) {
   const found = new Date(sticker.discovered_at);
-  const hint = Array.from(sticker.word.trim())[0] ?? '';
+  const hint = hintLetter(sticker);
   const note = sticker.notes?.trim() ?? '';
   const [frameHeight, setFrameHeight] = useState(0);
   const [contentHeight, setContentHeight] = useState(0);

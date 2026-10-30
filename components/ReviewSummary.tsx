@@ -22,15 +22,17 @@ export default function ReviewSummary({ stats, onDone }: ReviewSummaryProps) {
       {/* A card floating on a dimmed backdrop is read as "tap outside to
           close" everywhere else on a phone, and there is nothing here to lose
           by leaving — the session is already over and every grade is written.
-          The inner Pressable is what stops a tap on the card itself from
-          falling through to the scrim. */}
-      <Pressable
-        style={styles.overlay}
-        onPress={onDone}
-        accessibilityRole="button"
-        accessibilityLabel="Close the session summary"
-      >
-        <Pressable style={styles.card} onPress={() => {}} accessible={false}>
+          The scrim is a sibling behind the card, not its parent: an accessible
+          button hides everything inside it from VoiceOver, which left the
+          title, the counts and Done unreachable. */}
+      <View style={styles.overlay}>
+        <Pressable
+          style={StyleSheet.absoluteFill}
+          onPress={onDone}
+          accessibilityRole="button"
+          accessibilityLabel="Close the session summary"
+        />
+        <View style={styles.card}>
           <View style={styles.badge}>
             <Check size={26} color={colors.white} strokeWidth={3} />
           </View>
@@ -49,8 +51,8 @@ export default function ReviewSummary({ stats, onDone }: ReviewSummaryProps) {
           <TouchableOpacity style={styles.doneBtn} onPress={onDone} activeOpacity={0.85}>
             <Text style={styles.doneText}>Done</Text>
           </TouchableOpacity>
-        </Pressable>
-      </Pressable>
+        </View>
+      </View>
     </Modal>
   );
 }
