@@ -41,7 +41,8 @@ appId: com.iancheung228.lingostickers
     visible: "2 / 2"
     timeout: 10000
 - takeScreenshot: 05-requeued
-- assertVisible: "What did you call this\\?"
+# A requeued card may lead with a note ("Still learning — …") in its label.
+- assertVisible: ".*What did you call this\\?"
 - assertNotVisible: "Good — next review in.*"
 
 # Leave the session: a summary counts the card, and home has nothing left due.

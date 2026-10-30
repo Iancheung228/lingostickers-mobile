@@ -42,6 +42,10 @@ iteration the loop re-runs the full Maestro suite as a regression check.
    UDID=$(xcrun simctl create "Tabi Harness" com.apple.CoreSimulator.SimDeviceType.iPhone-18-Pro com.apple.CoreSimulator.SimRuntime.iOS-27-0)
    xcrun simctl boot "$UDID"
    xcrun simctl install "$UDID" "$(xcrun simctl get_app_container booted com.iancheung228.lingostickers app)"
+   # Show the on-screen keyboard even after a hardware one was seen, so
+   # keyboard-occlusion features can be tested; reboot once to apply.
+   xcrun simctl spawn "$UDID" defaults write com.apple.keyboard.preferences AutomaticMinimizationEnabled -bool false
+   xcrun simctl shutdown "$UDID" && xcrun simctl boot "$UDID"
    ```
    Reinstall it the same way after rebuilding the dev client.
 3. Backend: either create `.env.staging` (a second Supabase project), or pass
