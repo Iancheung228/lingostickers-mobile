@@ -100,7 +100,7 @@ function DayIcon({ sticker, size, url }: { sticker: Sticker; size: number; url: 
     <View style={[styles.dayIcon, { width: size, height: size }]}>
       {url ? (
         <Image
-          source={{ uri: url, cacheKey: sticker.image_path }}
+          source={{ uri: url, cacheKey: sticker.image_path ?? undefined }}
           cachePolicy="memory-disk"
           style={styles.dayIconImage}
           contentFit="contain"
@@ -330,7 +330,7 @@ export default function CalendarScreen() {
                   <DayIcon
                     sticker={dayStickers[0]}
                     size={dayIconSize}
-                    url={dayIconUrls.get(dayStickers[0].image_path) ?? null}
+                    url={dayStickers[0].image_path ? dayIconUrls.get(dayStickers[0].image_path) ?? null : null}
                   />
                 ) : (
                   <Text style={[styles.dayNumber, isToday && styles.dayNumberToday]}>{cell.day}</Text>

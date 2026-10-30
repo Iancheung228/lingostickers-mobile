@@ -76,7 +76,7 @@ export default function StickerCard({ sticker, onPress, onToggleFavorite, select
       <View style={styles.imageContainer}>
         {imageUrl ? (
           <Image
-            source={{ uri: imageUrl, cacheKey: sticker.image_path }}
+            source={{ uri: imageUrl, cacheKey: sticker.image_path ?? undefined }}
             cachePolicy="memory-disk"
             style={styles.image}
             contentFit="contain"

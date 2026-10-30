@@ -33,6 +33,7 @@ import { debugLog, debugWarn } from '@/lib/debug';
 import { alertPermissionDenied } from '@/lib/permissions';
 import { useAiConsent } from '@/lib/aiConsent';
 import { AiConsentGate } from '@/components/AiConsentGate';
+import { SceneChip, addSceneCards, newSceneId } from '@/lib/sceneCards';
 
 // The photo a scan is working from, and — for live captures only — the moment
 // and raw sensor frame the shutter caught. Named so the direct-capture path can
@@ -69,6 +70,10 @@ export default function ScanScreen() {
   // segmentation and network work that follows it).
   const [capturing, setCapturing] = useState(false);
   const [draft, setDraft] = useState<StickerDraft | null>(null);
+  // The small scene copy sent with the scan, kept for scene prompts on the
+  // reveal, and the extra words picked there. Both belong to the draft.
+  const [sceneBase64, setSceneBase64] = useState<string | null>(null);
+  const [sceneChips, setSceneChips] = useState<SceneChip[]>([]);
   const [saving, setSaving] = useState(false);
   const [retranslating, setRetranslating] = useState(false);
   const [retranslatingSentence, setRetranslatingSentence] = useState(false);
@@ -455,6 +460,8 @@ export default function ScanScreen() {
       }
 
       setStage('word');
+      setSceneBase64(contextBase64 ?? null);
+      setSceneChips([]);
       const submitStarted = Date.now();
       try {
         await submitImageForSticker({
@@ -649,8 +656,11 @@ export default function ScanScreen() {
     // origin_author_id is deliberately NOT sent: a BEFORE INSERT trigger
     // (042) stamps it from auth.uid(), so a card can never claim an author
     // it did not have. Read it back rather than assuming it.
+    const extras = sceneBase64 ? sceneChips : [];
+    const sceneId = extras.length ? newSceneId() : null;
     const { error } = await supabase.from('stickers').insert({
       user_id: user.id,
+      scene_id: sceneId,
       language: draft.language,
       word: draft.word,
       translation: draft.translation,
@@ -678,10 +688,33 @@ export default function ScanScreen() {
     }
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setDraft(null);
+    setSceneChips([]);
+    setSceneBase64(null);
     // Committed for good — the source photo retained for a possible "Retry
     // Extraction" is no longer needed.
     setImportedAsset(null);
     setCameraCaptureContext(null);
+
+    // The extra words are written in the background: each needs a sentence
+    // (a few seconds), and the learner has already seen and chosen them, so
+    // nothing here is worth holding the screen for. Only a failure speaks up.
+    if (extras.length && sceneId && sceneBase64) {
+      addSceneCards({
+        userId: user.id,
+        language: draft.language,
+        sceneBase64,
+        sceneId,
+        chips: extras,
+        discoveredAt: draft.discoveredAt,
+      }).then(({ failed }) => {
+        if (failed) {
+          Alert.alert(
+            failed === extras.length ? "Couldn't add the extra words" : `Couldn't add ${failed} of the extra words`,
+            'Your scanned word was saved. Try those words again from a new scan.',
+          );
+        }
+      });
+    }
   };
 
   // Deletes the just-created sticker's storage files for good — gated
@@ -703,6 +736,8 @@ export default function ScanScreen() {
               await supabase.storage.from('sticker-images').remove(paths);
             }
             setDraft(null);
+            setSceneChips([]);
+            setSceneBase64(null);
             setImportedAsset(null);
             setCameraCaptureContext(null);
           },
@@ -987,6 +1022,9 @@ export default function ScanScreen() {
         saving={saving}
         retranslating={retranslating}
         retranslatingSentence={retranslatingSentence}
+        sceneBase64={sceneBase64}
+        sceneSelected={sceneChips}
+        onSceneSelected={setSceneChips}
       />
     </SafeAreaView>
   );

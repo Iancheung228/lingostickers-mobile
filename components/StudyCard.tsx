@@ -23,7 +23,8 @@ import { ageInDays, intervalPreview, schedule, spokenDelay, Grade, SchedulePatch
 import { computeTrimOffsets, MeteringSample } from '@/lib/audioTrim';
 import { useTrimmedVoicePlayback } from '@/hooks/useTrimmedVoicePlayback';
 import Avatar from '@/components/Avatar';
-import FieldEditor, { EditorSpec } from '@/components/FieldEditor';
+import FieldEditor, { EditorSpec, Suggestion } from '@/components/FieldEditor';
+import { languageLabel } from '@/lib/languages';
 import { SentenceGloss, SentenceInsight } from '@/components/SentenceGloss';
 import { getFunctionErrorMessage } from '@/lib/functionError';
 import { saveStickerToPhotos, shareSticker } from '@/lib/exportSticker';
@@ -101,6 +102,17 @@ function ordinal(n: number): string {
   }
 }
 
+/** The back face's edit pencils, as VoiceOver actions on the card. */
+const EDIT_ACTIONS_BACK: { name: EditTarget; label: string }[] = [
+  { name: 'word', label: 'Edit the word' },
+  { name: 'reading', label: 'Edit the reading' },
+  { name: 'meaning', label: 'Edit the meaning' },
+  { name: 'sentence', label: 'Edit the example sentence' },
+];
+
+/** Kana or CJK ideographs: text that is not an English meaning. */
+const CJK = /[\u3040-\u30ff\u3400-\u9fff\uf900-\ufaff]/;
+
 export type EditTarget = 'note' | 'word' | 'reading' | 'meaning' | 'sentence';
 
 // Columns that are genuinely nullable — anything else keeps its old value
@@ -124,8 +136,29 @@ function editorSpecFor(target: EditTarget, sticker: Sticker): EditorSpec {
     case 'word':
       return {
         title: 'The word',
-        subtitle: 'As it is written in the target language. Correcting a spelling here changes nothing else on the card.',
-        inputs: [{ key: 'word', label: 'WORD', value: sticker.word, fontFamily: wordFontFor(sticker.language) }],
+        subtitle: `As it is written in ${languageLabel(sticker.language)}. Change it and how it's said and what it means follow.`,
+        inputs: [
+          { key: 'word', label: 'WORD', value: sticker.word, fontFamily: wordFontFor(sticker.language), maxLength: 60 },
+        ],
+        // The reading and meaning change with the word: a new word under the
+        // old reading teaches the wrong sound, and for Japanese and Cantonese
+        // the reading is the part a learner cannot check for themselves.
+        follow: {
+          from: 'word',
+          fetch: (text) => readingForWord(text, sticker.language),
+          copy: {
+            looking: 'Looking up how it’s said and what it means…',
+            heading: 'Update how it’s said and what it means to',
+            failed: 'Couldn’t look that word up',
+            kept: 'Keeping the old reading and meaning.',
+            failedKeep: 'Saving changes only the word, so check SAY IT and MEANS after.',
+          },
+          fontFamily: fonts.mono,
+          note: 'Your example sentence stays as it is.',
+          skip: (text) => sticker.language !== 'fr' && !CJK.test(text)
+            ? `That looks like English. To change the meaning, edit MEANS and the ${languageLabel(sticker.language)} word will follow.`
+            : null,
+        },
       };
     case 'reading':
       return {
@@ -135,14 +168,28 @@ function editorSpecFor(target: EditTarget, sticker: Sticker): EditorSpec {
     case 'meaning':
       return {
         title: 'What it means',
-        subtitle: 'If the scan identified the wrong object, this is the field to fix — everything else on the card follows from it.',
+        subtitle: `In English. Change it and the ${languageLabel(sticker.language)} word follows.`,
         inputs: [
-          { key: 'translation', label: 'MEANS', value: sticker.translation },
+          { key: 'translation', label: 'MEANS', value: sticker.translation, maxLength: 60 },
           { key: 'part_of_speech', label: 'PART OF SPEECH', value: sticker.part_of_speech ?? '', placeholder: 'noun, verb, adjective…' },
         ],
-        regenerate: {
-          label: 'Update the word and reading to match',
-          hint: 'Re-derives the word, reading and part of speech from the new meaning. Your sentence is left alone — it describes your actual photo, and a regenerated one would not.',
+        follow: {
+          from: 'translation',
+          fetch: (text) => wordForMeaning(text, sticker.language),
+          copy: {
+            looking: `Finding the ${languageLabel(sticker.language)} word…`,
+            heading: `Change the ${languageLabel(sticker.language)} word to`,
+            failed: `Couldn’t find the ${languageLabel(sticker.language)} word`,
+            kept: `Keeping ${sticker.word}.`,
+            failedKeep: `Saving keeps the word as ${sticker.word}.`,
+          },
+          fontFamily: wordFontFor(sticker.language),
+          // The sentence was written about the actual photo; translate-word
+          // only sees a bare English word, so it is never regenerated here.
+          note: 'Your example sentence stays as it is.',
+          skip: (text) => sticker.language !== 'fr' && CJK.test(text)
+            ? `MEANS is the English. To change the ${languageLabel(sticker.language)} word itself, edit WORD.`
+            : null,
         },
       };
     case 'sentence':
@@ -158,7 +205,8 @@ function editorSpecFor(target: EditTarget, sticker: Sticker): EditorSpec {
 }
 
 /**
- * Re-derives the target-language fields from a corrected English meaning.
+ * The target-language word for a corrected English meaning, shown in the
+ * editor before anything is saved.
  *
  * Deliberately does NOT touch `sentence`/`sentence_translation`: the stored
  * sentence was generated against the actual photo and names real things in
@@ -166,20 +214,44 @@ function editorSpecFor(target: EditTarget, sticker: Sticker): EditorSpec {
  * returns a generic example. Overwriting would trade something specific to
  * that moment for something anyone could have written.
  */
-async function regenerateFromMeaning(englishWord: string, language: Sticker['language']) {
+async function wordForMeaning(englishWord: string, language: Sticker['language']): Promise<Suggestion> {
   const { data, error } = await supabase.functions.invoke('translate-word', {
     body: { englishWord, language },
   });
   if (error) throw new Error(await getFunctionErrorMessage(error));
   if (data?.error) throw new Error(String(data.error));
+  if (!data?.word) throw new Error('No word came back.');
   // Only keys the model actually returned — an `undefined` in the patch would
   // travel to Supabase as a column being set, not as one being left alone.
-  const derived: Record<string, unknown> = {};
-  if (data.word) derived.word = String(data.word);
-  if (data.reading) derived.reading = String(data.reading);
-  if (data.part_of_speech) derived.part_of_speech = String(data.part_of_speech);
-  if (data.category) derived.category = data.category;
-  return derived;
+  const fields: Record<string, string> = { word: String(data.word) };
+  if (data.reading) fields.reading = String(data.reading);
+  if (data.part_of_speech) fields.part_of_speech = String(data.part_of_speech);
+  if (data.category) fields.category = String(data.category);
+  return { fields, title: fields.word, detail: fields.reading };
+}
+
+/**
+ * The reading, meaning and part of speech for a word the learner typed in
+ * the target language: the other direction of `wordForMeaning`.
+ */
+async function readingForWord(word: string, language: Sticker['language']): Promise<Suggestion> {
+  const { data, error } = await supabase.functions.invoke('translate-word', {
+    body: { word, language },
+  });
+  if (error) throw new Error(await getFunctionErrorMessage(error));
+  if (data?.error) throw new Error(String(data.error));
+  if (!data?.reading && !data?.translation) throw new Error('Nothing came back.');
+  // The word stays exactly as typed: the learner was correcting it, and a
+  // model "fixing" their fix back would be maddening.
+  const fields: Record<string, string> = {};
+  if (data.reading) fields.reading = String(data.reading);
+  if (data.translation) fields.translation = String(data.translation);
+  if (data.part_of_speech) fields.part_of_speech = String(data.part_of_speech);
+  return {
+    fields,
+    title: fields.reading ?? fields.translation,
+    detail: fields.reading && fields.translation ? `means ${fields.translation}` : undefined,
+  };
 }
 
 /**
@@ -328,7 +400,7 @@ export default function StudyCard({
     () => (sticker ? [sticker.image_path] : []),
     [sticker?.image_path]
   ));
-  const imageUrl = sticker ? urls.get(sticker.image_path) ?? null : null;
+  const imageUrl = sticker?.image_path ? urls.get(sticker.image_path) ?? null : null;
 
   const { play: playVoice, pause: pauseVoice } = useTrimmedVoicePlayback(
     voiceUrl, sticker?.voice_note_start_ms, sticker?.voice_note_end_ms
@@ -441,10 +513,10 @@ export default function StudyCard({
   const openEditor = (target: EditTarget) => {
     if (!sticker) return;
     Haptics.selectionAsync();
-    setEditing({ target, spec: editorSpecFor(target, sticker) });
+    setEditing({ target, spec: { ...editorSpecFor(target, sticker), id: sticker.id } });
   };
 
-  const handleSaveField = async (values: Record<string, string>, regenerate: boolean) => {
+  const handleSaveField = async (values: Record<string, string>, follow: Record<string, string> | null) => {
     if (!sticker || !editing) return;
     setSavingField(true);
     // Clearing a nullable field stores null, so "no note" and "a note that is
@@ -471,13 +543,19 @@ export default function StudyCard({
       patch.grammar_key = null;
     }
 
-    try {
-      // Re-derive before writing, so one update carries both the correction
-      // and everything downstream of it — a half-applied card that says
-      // "ramen" over a reading of "noodles" is worse than a failed save.
-      if (regenerate && values.translation) {
-        Object.assign(patch, await regenerateFromMeaning(values.translation, sticker.language));
+    // The word that followed the meaning. One update carries both, because a
+    // half-applied card that says "ramen" over a reading of "noodles" is worse
+    // than a failed save. A field the learner changed by hand in this same
+    // sheet (the part of speech) beats the lookup's guess at it.
+    if (follow) {
+      const current = sticker as unknown as Record<string, unknown>;
+      for (const [key, value] of Object.entries(follow)) {
+        const typedByHand = key in patch && patch[key] !== current[key];
+        if (!typedByHand) patch[key] = value;
       }
+    }
+
+    try {
       if (Object.keys(patch).length === 0) { setEditing(null); return; }
 
       const before = sticker as unknown as Record<string, unknown>;
@@ -491,6 +569,21 @@ export default function StudyCard({
         throw error;
       }
       setEditing(null);
+
+      // The word moved on and the example sentence did not. Its bolded
+      // headword silently disappears and the card shows "pear" over a
+      // sentence about an apple, so ask now, while the learner is here.
+      const newWord = typeof patch.word === 'string' ? patch.word : null;
+      if (newWord && newWord !== sticker.word && !splitAroundWord(sticker.sentence, newWord)) {
+        Alert.alert(
+          'Update the sentence too?',
+          `Your example sentence doesn't use ${newWord} yet.`,
+          [
+            { text: 'Leave it', style: 'cancel' },
+            { text: 'Edit sentence', onPress: () => openEditor('sentence') },
+          ],
+        );
+      }
     } catch (err: any) {
       Alert.alert("Couldn't save", err?.message ?? 'Something went wrong.');
     } finally {
@@ -607,7 +700,8 @@ export default function StudyCard({
           text: 'Delete',
           style: 'destructive',
           onPress: async () => {
-            const paths = [sticker.image_path];
+            const paths: string[] = [];
+            if (sticker.image_path) paths.push(sticker.image_path);
             if (sticker.memory_photo_path) paths.push(sticker.memory_photo_path);
             if (sticker.voice_note_path) paths.push(sticker.voice_note_path);
             const [{ error }] = await Promise.all([
@@ -766,6 +860,17 @@ export default function StudyCard({
           accessibilityRole="button"
           accessibilityLabel={flipped ? answerLabel(sticker) : promptLabel(sticker, hintShown)}
           accessibilityHint={flipped ? 'Double-tap to see the question again' : 'Double-tap to reveal the answer'}
+          // Being one element also hides every edit pencil inside it from
+          // VoiceOver. These put them back as the card's own actions (swipe
+          // up or down to pick one), and only the ones on the showing face.
+          accessibilityActions={mode !== 'browse' ? undefined : flipped
+            ? EDIT_ACTIONS_BACK.map(({ name, label }) => ({ name, label }))
+            : [{ name: 'note', label: 'Edit what happened' }]}
+          onAccessibilityAction={(e) => {
+            const name = e.nativeEvent.actionName;
+            if (name === 'activate') toggleFlip();
+            else openEditor(name as EditTarget);
+          }}
         >
           <Animated.View style={[styles.face, frontFace]} pointerEvents={flipped ? 'none' : 'auto'}>
             <FrontFace
@@ -872,10 +977,21 @@ function hintLetter(sticker: Sticker): string {
 }
 
 /** What VoiceOver reads for the card's front: the prompt as written on it. */
+/**
+ * The question on the front. A scan's photo shows one object, so the photo
+ * is the cue. A scene card shares its photo with its siblings (a verb, an
+ * adjective, an idiom from the same picture), so it has to say which word.
+ */
+function frontQuestion(sticker: Sticker): string {
+  return sticker.source === 'scene'
+    ? `How do you say “${sticker.translation}”?`
+    : 'What did you call this?';
+}
+
 function promptLabel(sticker: Sticker, hintShown: boolean): string {
   return hintShown
-    ? `What did you call this? Starts with ${hintLetter(sticker)}`
-    : 'What did you call this?';
+    ? `${frontQuestion(sticker)} Starts with ${hintLetter(sticker)}`
+    : frontQuestion(sticker);
 }
 
 /** What VoiceOver reads for the card's back: the answer and its example. */
@@ -978,7 +1094,7 @@ function FrontFace({ sticker, authorName, authorAvatarPath, imageUrl, hintShown,
             <View style={styles.well}>
               {imageUrl ? (
                 <Image
-                  source={{ uri: imageUrl, cacheKey: sticker.image_path }}
+                  source={{ uri: imageUrl, cacheKey: sticker.image_path ?? undefined }}
                   cachePolicy="memory-disk"
                   contentFit="contain"
                   style={styles.wellImage}
@@ -992,7 +1108,7 @@ function FrontFace({ sticker, authorName, authorAvatarPath, imageUrl, hintShown,
 
         <View style={styles.promptRow}>
           <Text style={styles.prompt}>
-            {hintShown ? `Starts with ${hint}` : 'What did you call this?'}
+            {hintShown ? `Starts with ${hint}` : frontQuestion(sticker)}
           </Text>
           {!hintShown && (
             <TouchableOpacity style={styles.hintPill} onPress={onHint} hitSlop={8}>
@@ -1150,7 +1266,7 @@ function BackFace({ sticker, mode, onEditField, imageUrl, voice, onScroll }: {
         <View style={styles.footerThumb}>
           {imageUrl && (
             <Image
-              source={{ uri: imageUrl, cacheKey: sticker.image_path }}
+              source={{ uri: imageUrl, cacheKey: sticker.image_path ?? undefined }}
               cachePolicy="memory-disk"
               contentFit="cover"
               style={styles.wellImage}

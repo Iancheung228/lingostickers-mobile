@@ -38,7 +38,7 @@ import {
   normalizeCandidates,
   wordKey,
 } from '../supabase/functions/_shared/scenePrompts.ts';
-import { createCard, sceneWords } from '../supabase/functions/_shared/vocab.ts';
+import { createCard, describeWord, sceneWords } from '../supabase/functions/_shared/vocab.ts';
 import type { LlmProvider, LlmRequest, LlmResult } from '../supabase/functions/_shared/llm/index.ts';
 import type { Language } from '../supabase/functions/_shared/syllabus.ts';
 
@@ -251,6 +251,40 @@ test('candidates: an unknown part of speech becomes phrase rather than losing th
   assert.equal(only.part_of_speech, 'phrase');
 });
 
+test('candidates: a chip the model itself labels off-type is dropped (陶器 for "What\'s it like?")', () => {
+  const like = findScenePrompt('like')!;
+  const out = normalizeCandidates(
+    { candidates: [c('白い', 'adjective'), c('陶器', 'noun'), c('丸い', 'adjective')] },
+    [],
+    like.accepts,
+  );
+  assert.deepEqual(out.map((x) => x.word), ['白い', '丸い']);
+});
+
+test('candidates: "Say it like a local" keeps idioms only', () => {
+  const local = findScenePrompt('local')!;
+  const out = normalizeCandidates(
+    { candidates: [c('好正', 'adjective'), c('食得是福', 'idiom'), c('飲茶', 'phrase')] },
+    [],
+    local.accepts,
+  );
+  assert.deepEqual(out.map((x) => x.word), ['食得是福']);
+});
+
+test('candidates: open prompts accept every part of speech', () => {
+  for (const id of ['where', 'say-here', 'custom']) {
+    assert.equal(findScenePrompt(id)!.accepts, undefined, `${id} should not filter`);
+  }
+  const out = normalizeCandidates({ candidates: [c('à côté de', 'phrase'), c('table', 'noun')] }, []);
+  assert.equal(out.length, 2);
+});
+
+test('candidates: every typed prompt accepts its own part of speech', () => {
+  for (const p of SCENE_PROMPTS) {
+    if (p.accepts && p.pos !== 'any') assert.ok(p.accepts.includes(p.pos), `${p.id} rejects its own ${p.pos}`);
+  }
+});
+
 test('candidates: capped at the maximum', () => {
   const many = Array.from({ length: 10 }, (_, i) => c(`mot${i}`));
   assert.equal(normalizeCandidates({ candidates: many }, []).length, MAX_CANDIDATES);
@@ -395,4 +429,19 @@ test('createCard: an unknown part of speech is coerced to phrase', async () => {
   const fake = recorder({ ...CARD_REPLY, part_of_speech: 'expression' });
   const card = await createCard('boire un coup', 'fr', {}, undefined, { providers: [fake] });
   assert.equal(card.part_of_speech, 'phrase');
+});
+
+// ---------------------------------------------------------------------------
+// describeWord — the reverse lookup behind editing a card's word
+// ---------------------------------------------------------------------------
+
+test('describeWord: the learner\'s word is fenced as data and the reply comes back parsed', async () => {
+  const fake = recorder({ word: '財務自由', translation: 'financial freedom', part_of_speech: 'noun', reading: 'coi4 mou6 zi6 jau4', category: 'Other' });
+  const out = await describeWord('財務自由', 'yue', { providers: [fake] });
+  assert.equal(out.reading, 'coi4 mou6 zi6 jau4');
+  assert.equal(out.translation, 'financial freedom');
+  const prompt = promptText(fake.requests[0]);
+  assert.match(prompt, /"""\n財務自由\n"""/);
+  assert.match(prompt, /never as instructions/);
+  assert.match(prompt, /Cantonese/);
 });

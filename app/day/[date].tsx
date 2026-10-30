@@ -152,7 +152,7 @@ export default function DayScreen() {
                 sticker={item}
                 onPress={() => setSelectedSticker(item)}
                 onToggleFavorite={handleToggleFavorite}
-                imageUrl={urls.get(item.image_path) ?? null}
+                imageUrl={item.image_path ? urls.get(item.image_path) ?? null : null}
                 voiceUrl={item.voice_note_path ? urls.get(item.voice_note_path) ?? null : null}
               />
             </View>

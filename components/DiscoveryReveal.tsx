@@ -1,11 +1,13 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Modal, View, Text, Image, TouchableOpacity, TextInput, StyleSheet, SafeAreaView, ScrollView, ActivityIndicator, Alert, KeyboardAvoidingView, Platform, useWindowDimensions, Pressable } from 'react-native';
-import { X, Bookmark, Pencil, Volume2, Info, RotateCcw, Check } from 'lucide-react-native';
+import { X, Bookmark, Pencil, Volume2, Info, RotateCcw, Check, Sparkles } from 'lucide-react-native';
 import { StickerDraft } from '@/lib/types';
 import { supabase } from '@/lib/supabase';
 import { speak, stopSpeaking } from '@/lib/speech';
 import { colors, spacing, shadows, fonts, wordFontFor, sentenceFontFor } from '@/constants/theme';
 import { SentenceGloss, SentenceInsight } from '@/components/SentenceGloss';
+import SceneWords from '@/components/SceneWords';
+import { SceneChip } from '@/lib/sceneCards';
 
 interface DiscoveryRevealProps {
   draft: StickerDraft | null;
@@ -19,10 +21,20 @@ interface DiscoveryRevealProps {
   saving: boolean;
   retranslating: boolean;
   retranslatingSentence: boolean;
+  /// The scan's scene photo (the small copy the vision model saw), for scene
+  /// prompts. Null hides them.
+  sceneBase64: string | null;
+  sceneSelected: SceneChip[];
+  onSceneSelected: (chips: SceneChip[]) => void;
 }
 
-export default function DiscoveryReveal({ draft, onAdd, onDiscard, onRetryExtraction, onEditWord, onEditSentence, saving, retranslating, retranslatingSentence }: DiscoveryRevealProps) {
+export default function DiscoveryReveal({ draft, onAdd, onDiscard, onRetryExtraction, onEditWord, onEditSentence, saving, retranslating, retranslatingSentence, sceneBase64, sceneSelected, onSceneSelected }: DiscoveryRevealProps) {
   const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const scrollRef = useRef<ScrollView>(null);
+  // Set when scene chips arrive; the next content-size change (the chips
+  // having laid out) scrolls them into view instead of leaving them under
+  // the footer.
+  const revealSceneRef = useRef(false);
   const [editingWord, setEditingWord] = useState(false);
   const [wordInput, setWordInput] = useState('');
   const [editingSentence, setEditingSentence] = useState(false);
@@ -117,6 +129,12 @@ export default function DiscoveryReveal({ draft, onAdd, onDiscard, onRetryExtrac
         </View>
 
         <ScrollView
+          ref={scrollRef}
+          onContentSizeChange={() => {
+            if (!revealSceneRef.current) return;
+            revealSceneRef.current = false;
+            scrollRef.current?.scrollToEnd({ animated: true });
+          }}
           style={styles.bodyScroll}
           contentContainerStyle={styles.body}
           showsVerticalScrollIndicator={false}
@@ -210,6 +228,23 @@ export default function DiscoveryReveal({ draft, onAdd, onDiscard, onRetryExtrac
               <SentenceInsight text={draft.sentenceInsight} style={styles.revealBlock} />
             </>
           )}
+
+          {!!sceneBase64 && (
+            <SceneWords
+              sceneBase64={sceneBase64}
+              language={draft.language}
+              mainWord={draft.word}
+              selected={sceneSelected}
+              onChangeSelected={onSceneSelected}
+              disabled={saving}
+              onAnswered={() => {
+                revealSceneRef.current = true;
+                // Cached answers can be the same height as what they replace,
+                // in which case no size change comes; scroll anyway.
+                setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 60);
+              }}
+            />
+          )}
         </ScrollView>
 
         <View style={styles.actions}>
@@ -219,15 +254,32 @@ export default function DiscoveryReveal({ draft, onAdd, onDiscard, onRetryExtrac
             ) : (
               <>
                 <Bookmark size={20} color={colors.white} />
-                <Text style={styles.addButtonText}>Add to Collection</Text>
+                <Text style={styles.addButtonText}>
+                  {sceneSelected.length ? `Add ${sceneSelected.length + 1} cards` : 'Add to Collection'}
+                </Text>
               </>
             )}
           </TouchableOpacity>
 
           <View style={styles.secondaryActions}>
+            {/* The scene prompts sit below the sentence, which on most phones
+                is below the fold, under these buttons, with nothing to say
+                they exist. This is the signpost, and the way there. */}
+            {!!sceneBase64 && (
+              <TouchableOpacity
+                style={styles.retryButton}
+                onPress={() => scrollRef.current?.scrollToEnd({ animated: true })}
+                disabled={saving}
+              >
+                <Sparkles size={13} color={colors.terra} />
+                <Text style={styles.retryButtonText}>
+                  {sceneSelected.length ? `${sceneSelected.length} more picked` : 'More words from this photo'}
+                </Text>
+              </TouchableOpacity>
+            )}
             <TouchableOpacity style={styles.retryButton} onPress={onRetryExtraction} disabled={saving}>
               <RotateCcw size={13} color={colors.terra} />
-              <Text style={styles.retryButtonText}>Retry Extraction</Text>
+              <Text style={styles.retryButtonText}>{sceneBase64 ? 'Retry' : 'Retry Extraction'}</Text>
             </TouchableOpacity>
           </View>
 

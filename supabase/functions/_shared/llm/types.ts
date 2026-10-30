@@ -132,7 +132,8 @@ export interface LlmProvider {
   readonly model: string;
   /** False when the provider's key is absent, so the chain can skip it. */
   isConfigured(): boolean;
-  send(request: LlmRequest): Promise<LlmResult>;
+  /** `signal` aborts the request when the client's per-attempt timer fires. */
+  send(request: LlmRequest, signal?: AbortSignal): Promise<LlmResult>;
 }
 
 /** Injectable so tests can drive providers without a network. */

@@ -88,7 +88,7 @@ function Row({ sticker, last, imageUrl, voiceUrl, onPress }: {
       <View style={styles.thumb}>
         {imageUrl ? (
           <Image
-            source={{ uri: imageUrl, cacheKey: sticker.image_path }}
+            source={{ uri: imageUrl, cacheKey: sticker.image_path ?? undefined }}
             cachePolicy="memory-disk"
             contentFit="contain"
             style={styles.thumbImage}

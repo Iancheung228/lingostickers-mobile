@@ -9,15 +9,20 @@
 //
 // The prompts are data. Adding one is a new entry here; nothing else changes.
 // The label is what the learner taps; `ask` is the question the model is
-// given, and `pos` is a hint, not a constraint — "What would you say here?"
-// legitimately returns whole phrases, and a scene that only supports one verb
-// should not be forced to produce five.
+// given. `pos` is what the prompt is for, and `accepts` is enforced: the model
+// labels every chip, and a chip whose own label is off-type is dropped (see
+// docs/lessons.md §13). Asking alone was not enough. Measured 2026-10-30,
+// "What's it like?" in Japanese returned 陶器 (a noun) and "Say it like a
+// local" in Cantonese returned slang. Fewer chips is the right failure: a
+// scene that only supports one verb should not be forced to produce five.
 //
 // No Deno APIs at module scope, so `node --experimental-strip-types` can
 // import this directly (scripts/test-any-word.mts).
 // ---------------------------------------------------------------------------
 
 import { PARTS_OF_SPEECH } from './cardSchema.ts';
+
+type PartOfSpeech = (typeof PARTS_OF_SPEECH)[number];
 
 export type ScenePromptId =
   | 'what-is-it'
@@ -34,7 +39,9 @@ export interface ScenePrompt {
   /** What the learner taps. */
   label: string;
   /** Which part of speech this prompt usually yields. */
-  pos: (typeof PARTS_OF_SPEECH)[number] | 'any';
+  pos: PartOfSpeech | 'any';
+  /** The labels a chip may carry and still answer this prompt. Absent = any. */
+  accepts?: PartOfSpeech[];
   /** The question put to the model, about the scene or the marked part of it. */
   ask: string;
 }
@@ -44,24 +51,29 @@ export const SCENE_PROMPTS: ScenePrompt[] = [
     id: 'what-is-it',
     label: 'What is it?',
     pos: 'noun',
+    accepts: ['noun'],
     ask: 'Name the distinct, clearly visible objects. One noun per object; never two words for the same thing.',
   },
   {
     id: 'happening',
     label: "What's happening?",
     pos: 'verb',
+    // A verb-object compound (飲茶, faire la vaisselle) is honestly a phrase.
+    accepts: ['verb', 'phrase'],
     ask: 'Give the actions going on, or the actions a person would naturally do with what is here (pour, sip, wipe, wait). Verbs only.',
   },
   {
     id: 'like',
     label: "What's it like?",
     pos: 'adjective',
-    ask: 'Describe what you can actually see: colour, material, texture, condition, size, temperature, mood. Adjectives only, and only ones the photo genuinely shows.',
+    accepts: ['adjective'],
+    ask: 'Describe what you can actually see: colour, material, texture, condition, size, temperature, mood. Adjectives only, and only ones the photo genuinely shows. An adjective describes a thing; it never names one. Where the language says a quality with a noun (a material, in Japanese or Cantonese), leave that quality out rather than give the noun.',
   },
   {
     id: 'how',
     label: 'How?',
     pos: 'adverb',
+    accepts: ['adverb', 'phrase'],
     ask: 'Give adverbs of manner, time or degree that fit what is happening or would happen here (slowly, carefully, already, too). Adverbs only.',
   },
   {
@@ -74,7 +86,8 @@ export const SCENE_PROMPTS: ScenePrompt[] = [
     id: 'local',
     label: 'Say it like a local',
     pos: 'idiom',
-    ask: 'Give idioms and set expressions a native speaker would genuinely use in or about this situation. Real, common expressions only — never a literal phrase dressed up as an idiom.',
+    accepts: ['idiom'],
+    ask: 'Give idioms and set expressions a native speaker would genuinely use in or about this situation: fixed expressions whose meaning is more than their words, of the kind an idiom dictionary lists (French expressions idiomatiques, Japanese 慣用句 and ことわざ, Cantonese 俗語 and spoken 成語). Real, common expressions only. Never a literal phrase dressed up as an idiom, and never slang: a single trendy word or an intensifier is not an idiom.',
   },
   {
     id: 'say-here',
@@ -148,10 +161,11 @@ export interface SceneCandidate {
 /**
  * The model's chips, made safe to show: well-formed entries only, nothing the
  * learner already has (the avoid list) or was already offered in this reply,
- * and at most MAX_CANDIDATES. An unknown part of speech is coerced to
- * 'phrase' rather than dropping a good word over a label.
+ * nothing whose own label is outside `accepts`, and at most MAX_CANDIDATES.
+ * An unknown part of speech is coerced to 'phrase' rather than dropping a good
+ * word over a label.
  */
-export function normalizeCandidates(raw: unknown, avoid: string[]): SceneCandidate[] {
+export function normalizeCandidates(raw: unknown, avoid: string[], accepts?: PartOfSpeech[]): SceneCandidate[] {
   const list = Array.isArray((raw as any)?.candidates) ? (raw as any).candidates : [];
   const seen = new Set(avoid.map(wordKey).filter(Boolean));
   const out: SceneCandidate[] = [];
@@ -164,6 +178,7 @@ export function normalizeCandidates(raw: unknown, avoid: string[]): SceneCandida
     if (!key || seen.has(key)) continue;
     seen.add(key);
     const pos = (PARTS_OF_SPEECH as readonly string[]).includes(c?.part_of_speech) ? c.part_of_speech : 'phrase';
+    if (accepts && !accepts.includes(pos)) continue;
     const reading = typeof c?.reading === 'string' ? c.reading.trim() : '';
     out.push({ word, translation, part_of_speech: pos, reading });
   }

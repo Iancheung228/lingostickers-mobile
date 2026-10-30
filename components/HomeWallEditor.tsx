@@ -197,7 +197,7 @@ export default function HomeWallEditor({
                   key={item.sticker_id}
                   item={item}
                   canvas={canvas}
-                  url={canvasUrls.get(item.sticker.image_path) ?? null}
+                  url={item.sticker.image_path ? canvasUrls.get(item.sticker.image_path) ?? null : null}
                   onMove={onMove}
                   onRemove={onRemove}
                   dragActive={dragActive}
@@ -283,7 +283,7 @@ export default function HomeWallEditor({
               contentContainerStyle={styles.tray}
               renderItem={({ item }) => {
                 const placed = placedIds.has(item.id);
-                const url = trayUrls.get(item.image_path) ?? null;
+                const url = item.image_path ? trayUrls.get(item.image_path) ?? null : null;
                 return (
                   <TouchableOpacity
                     style={[
@@ -296,7 +296,7 @@ export default function HomeWallEditor({
                   >
                     <View style={styles.trayImage}>
                       {url ? (
-                        <CutoutSticker uri={url} cacheKey={item.image_path} borderStyle={borderStyle} />
+                        <CutoutSticker uri={url} cacheKey={item.image_path ?? undefined} borderStyle={borderStyle} />
                       ) : (
                         <ActivityIndicator size="small" color={colors.terra} />
                       )}

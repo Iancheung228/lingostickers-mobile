@@ -439,6 +439,82 @@ test('client: a provider asking for 34 minutes is capped at 6 seconds', async ()
   assert.deepEqual(waits, [6000], 'an unbounded provider hint became an unbounded request');
 });
 
+/** A provider whose first `stalls` calls never answer, honouring abort the way fetch does. */
+function stallingProvider(stalls: number): LlmProvider & { calls: number; aborted: number } {
+  const provider = {
+    name: 'stalls',
+    model: 'stalls-test',
+    calls: 0,
+    aborted: 0,
+    isConfigured: () => true,
+    send(_request: LlmRequest, signal?: AbortSignal): Promise<LlmResult> {
+      provider.calls++;
+      if (provider.calls > stalls) {
+        return Promise.resolve({ text: '{"from":"stalls"}', usage: { promptTokens: 1, outputTokens: 1 }, provider: 'stalls', model: 'stalls' });
+      }
+      return new Promise((_, reject) => {
+        signal?.addEventListener('abort', () => {
+          provider.aborted++;
+          reject(new Error('aborted'));
+        });
+      });
+    },
+  };
+  return provider;
+}
+
+test('client: a stalled attempt is cut, aborted and retried — not waited out', async () => {
+  const primary = stallingProvider(1);
+  const startedAt = Date.now();
+  const result = await callModel(REQUEST, { providers: [primary], sleep: noSleep, attemptTimeoutMs: 30 });
+  assert.equal(result.text, '{"from":"stalls"}');
+  assert.equal(primary.calls, 2);
+  assert.equal(primary.aborted, 1, 'the stalled request was left running');
+  assert.ok(Date.now() - startedAt < 500, 'the stall was waited out');
+});
+
+test('client: a stall everywhere ends at the deadline as a timeout', async () => {
+  const primary = stallingProvider(Infinity);
+  const startedAt = Date.now();
+  const thrown = await callModel(REQUEST, {
+    providers: [primary],
+    sleep: noSleep,
+    attemptTimeoutMs: 40,
+    deadlineMs: 100,
+  }).catch((e) => e);
+  assert.equal(thrown.kind, 'timeout');
+  assert.ok(Date.now() - startedAt < 300, 'ran past the deadline');
+  assert.ok(primary.calls <= 3);
+});
+
+test('client: a backoff that would overrun the deadline is not slept', async () => {
+  const waits: number[] = [];
+  const primary = fakeProvider('primary', [err('rate_limit', 'p', { retryAfterMs: 6_000 }), 'ok']);
+  const thrown = await callModel(REQUEST, {
+    providers: [primary],
+    sleep: async (ms) => { waits.push(ms); },
+    deadlineMs: 5_000,
+  }).catch((e) => e);
+  assert.deepEqual(waits, [], 'slept past the deadline');
+  assert.equal(thrown.kind, 'rate_limit');
+});
+
+test('client: Groq is not in the default chain unless LLM_FALLBACK=groq', async () => {
+  const { defaultProviders } = await import('../supabase/functions/_shared/llm/index.ts');
+  const saved = (globalThis as any).Deno;
+  const env: Record<string, string> = {};
+  (globalThis as any).Deno = { env: { get: (k: string) => env[k] } };
+  try {
+    assert.deepEqual(defaultProviders().map((p) => p.name), ['gemini'], 'photos would reach an undisclosed processor');
+    env.LLM_FALLBACK = 'off';
+    assert.deepEqual(defaultProviders().map((p) => p.name), ['gemini']);
+    env.LLM_FALLBACK = 'groq';
+    assert.deepEqual(defaultProviders().map((p) => p.name), ['gemini', 'groq']);
+  } finally {
+    (globalThis as any).Deno = saved;
+  }
+});
+
 test('client: surfaces the last error when everything fails', async () => {
   const primary = fakeProvider('primary', [err('unavailable', 'primary')]);
   const fallback = fakeProvider('fallback', [err('rate_limit', 'fallback')]);

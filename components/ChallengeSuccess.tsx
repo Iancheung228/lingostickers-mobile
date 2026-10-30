@@ -42,8 +42,11 @@ export default function ChallengeSuccess({ challenge, wonStickerId, onClose }: C
       const won = data as Sticker;
       setSticker(won);
 
-      supabase.storage.from('sticker-images').createSignedUrl(won.image_path, 3600)
-        .then(({ data: signed }) => { if (signed) setImageUrl(signed.signedUrl); });
+      // send-challenge refuses a card with no picture, so this is belt and braces.
+      if (won.image_path) {
+        supabase.storage.from('sticker-images').createSignedUrl(won.image_path, 3600)
+          .then(({ data: signed }) => { if (signed) setImageUrl(signed.signedUrl); });
+      }
 
       if (won.memory_photo_path) {
         supabase.storage.from('sticker-images').createSignedUrl(won.memory_photo_path, 3600)

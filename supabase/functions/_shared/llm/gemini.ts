@@ -119,7 +119,7 @@ export function createGeminiProvider(options: GeminiOptions = {}): LlmProvider {
     model,
     isConfigured: () => resolveKey().length > 0,
 
-    async send(request: LlmRequest): Promise<LlmResult> {
+    async send(request: LlmRequest, signal?: AbortSignal): Promise<LlmResult> {
       const apiKey = resolveKey();
       if (!apiKey) throw new LlmError('auth', 'gemini', 'GEMINI_API_KEY not set');
 
@@ -148,6 +148,7 @@ export function createGeminiProvider(options: GeminiOptions = {}): LlmProvider {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(body),
+          signal,
         });
       } catch (cause) {
         throw new LlmError('timeout', 'gemini', 'network error calling Gemini', { cause });

@@ -44,7 +44,7 @@ export default function HomeWallTile({
         ]}
       />
       {url ? (
-        <CutoutSticker uri={url} cacheKey={sticker.image_path} borderStyle={borderStyle} />
+        <CutoutSticker uri={url} cacheKey={sticker.image_path ?? undefined} borderStyle={borderStyle} />
       ) : (
         <ActivityIndicator size="small" color={colors.terra} style={styles.loader} />
       )}

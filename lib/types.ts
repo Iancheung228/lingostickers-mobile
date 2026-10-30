@@ -56,7 +56,9 @@ export interface Sticker {
   // render the row without it.
   part_of_speech: string | null;
   category: Category;
-  image_path: string;
+  // The cut-out. Null for a card made from a typed word or a scene chip
+  // (043_any_word_cards.sql) — every render path must have a no-picture state.
+  image_path: string | null;
   memory_photo_path: string | null;
   // Dominant color of the memory photo (hex), extracted server-side at
   // upload time — see supabase/functions/_shared/imageColor.ts. Null when
@@ -77,7 +79,13 @@ export interface Sticker {
   latitude: number | null;
   longitude: number | null;
   location_label: string | null;
-  source: 'scan' | 'challenge';
+  // How the card was made (043). 'scene' cards come from a scene prompt on a
+  // scan's photo; one photo has several, so the photo alone is not the cue.
+  source: 'scan' | 'challenge' | 'scene' | 'text' | 'mined' | 'onboarding';
+  /// Cards from the same photo share this. Null for a card that stands alone.
+  scene_id?: string | null;
+  /// Conjugations, gender, agreement, an idiom's literal meaning (043).
+  forms?: { l: string; v: string }[] | null;
   /// Who first scanned this card, carried unchanged through every challenge
   /// win so it survives any number of hops. Stamped by a trigger, never by the
   /// client (migration 042). Null only on pre-042 rows that could not be

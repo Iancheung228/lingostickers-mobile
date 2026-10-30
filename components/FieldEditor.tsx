@@ -17,15 +17,57 @@ export interface EditableInput {
   /// a face that has those characters, a reading is always Latin
   /// romanization, and a translation is English. Defaults to the text role.
   fontFamily?: string;
+  maxLength?: number;
+}
+
+/// What a follow-up lookup derived from the edited input.
+export interface Suggestion {
+  /// Written into the row on save, if the learner keeps the suggestion.
+  fields: Record<string, string>;
+  /// The new headword, shown large, and its reading under it.
+  title: string;
+  detail?: string;
+}
+
+/// Fields that follow another one. When `from` changes and typing pauses,
+/// `fetch` derives the rest of the card from it, and the sheet shows the
+/// result before anything is saved, ticked by default. It used to be an
+/// unticked box that applied blind on save: people changed the meaning and
+/// were left with a word that no longer matched it.
+export interface FollowSpec {
+  from: string;
+  fetch: (text: string) => Promise<Suggestion>;
+  /// What the sheet says at each step. Written by the caller, who knows
+  /// what follows what ("the Cantonese word", "the reading and meaning").
+  copy: {
+    /// "Finding the Cantonese word…"
+    looking: string;
+    /// "Change the Cantonese word to", above the suggestion.
+    heading: string;
+    /// "Couldn't find the Cantonese word"
+    failed: string;
+    /// Unticked: "Keeping 杯."
+    kept: string;
+    /// After a failure: "Saving keeps the word as 杯."
+    failedKeep: string;
+  };
+  /// Face for the suggestion's title.
+  fontFamily?: string;
+  /// One line under a found suggestion, about what it does not change.
+  note?: string;
+  /// A reason not to look this text up at all (it is in the wrong language,
+  /// say), shown in place of a suggestion. Null to look it up.
+  skip?: (text: string) => string | null;
 }
 
 export interface EditorSpec {
+  /// What is being edited, when the same field can be opened on different
+  /// rows: two cards' meaning sheets share a title and inputs, not a draft.
+  id?: string;
   title: string;
   subtitle?: string;
   inputs: EditableInput[];
-  /// An optional opt-in shown under the inputs — used by the meaning field to
-  /// offer re-deriving everything downstream of it.
-  regenerate?: { label: string; hint: string };
+  follow?: FollowSpec;
 }
 
 interface FieldEditorProps {
@@ -34,7 +76,8 @@ interface FieldEditorProps {
   spec: EditorSpec | null;
   saving?: boolean;
   onCancel: () => void;
-  onSave: (values: Record<string, string>, regenerate: boolean) => void;
+  /// `follow` is the accepted suggestion's fields, or null for none.
+  onSave: (values: Record<string, string>, follow: Record<string, string> | null) => void;
 }
 
 interface Draft {
@@ -42,18 +85,31 @@ interface Draft {
   /// what re-seeds the form when a different field is opened.
   key: string;
   values: Record<string, string>;
-  regenerate: boolean;
 }
+
+type FollowState =
+  | { status: 'idle' }
+  | { status: 'looking'; text: string }
+  | { status: 'ready'; text: string; suggestion: Suggestion }
+  | { status: 'failed'; text: string; message: string }
+  | { status: 'skipped'; text: string; message: string };
+
+/// Long enough that a lookup waits for the end of a word, not each letter:
+/// "a kettle" then "kettle" should be one call, not two.
+const FOLLOW_DEBOUNCE_MS = 900;
+/// The server gives up at 30s; nobody holding a sheet open waits that long.
+const FOLLOW_TIMEOUT_MS = 12_000;
+/// A meaning, not a sentence. Longer text is not looked up.
+const FOLLOW_MAX_WORDS = 6;
 
 /// Identity won't do: one caller builds its spec inline in JSX, so the object
 /// is new on every render even though the field being edited hasn't changed.
 const keyOf = (spec: EditorSpec | null) =>
-  spec ? spec.title + spec.inputs.map(i => i.key).join(',') : '';
+  spec ? `${spec.id ?? ''}|${spec.title}|${spec.inputs.map(i => i.key).join(',')}` : '';
 
 const draftFor = (spec: EditorSpec, key: string): Draft => ({
   key,
   values: Object.fromEntries(spec.inputs.map(i => [i.key, i.value])),
-  regenerate: false,
 });
 
 // A sheet rather than inline inputs on the card. The card faces are
@@ -71,7 +127,7 @@ export default function FieldEditor({ spec, saving, onCancel, onSave }: FieldEdi
   const specKey = keyOf(live);
   if (spec && keyOf(spec) !== specKey) setLive(spec);
 
-  const [draft, setDraft] = useState<Draft>(() => spec ? draftFor(spec, keyOf(spec)) : { key: '', values: {}, regenerate: false });
+  const [draft, setDraft] = useState<Draft>(() => spec ? draftFor(spec, keyOf(spec)) : { key: '', values: {} });
   const sheet = useRef<BottomSheetHandle>(null);
 
   // Re-seeded during render rather than in an effect, so the inputs are never
@@ -88,6 +144,99 @@ export default function FieldEditor({ spec, saving, onCancel, onSave }: FieldEdi
     [specKey],
   );
 
+  // --- follow-up lookup ----------------------------------------------------
+  // Debounced, and every lookup takes a ticket so a slow reply for "ket" can
+  // never land on top of the one for "kettle" (docs/lessons.md §11). Replies
+  // are cached for as long as the sheet is open: typing a word, changing it
+  // and changing it back must not cost three calls against a daily quota.
+  const followSpec = live?.follow;
+  const followOriginal = followSpec
+    ? (live!.inputs.find(i => i.key === followSpec.from)?.value ?? '').trim()
+    : '';
+  const followText = followSpec && draft.key === specKey
+    ? (draft.values[followSpec.from] ?? '').trim()
+    : '';
+  const followWanted = !!followSpec && followText.length > 0 && followText !== followOriginal;
+  const followSkip = !followWanted ? null
+    : followText.split(/\s+/).length > FOLLOW_MAX_WORDS
+      ? `That's too long to look up. ${followSpec!.copy.failedKeep}`
+      : followSpec!.skip?.(followText) ?? null;
+
+  const [follow, setFollow] = useState<FollowState>({ status: 'idle' });
+  const [keepFollow, setKeepFollow] = useState(true);
+  const [resolving, setResolving] = useState(false);
+  const followSeq = useRef(0);
+  const followTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const followCache = useRef(new Map<string, Suggestion>());
+  const followPending = useRef<{ text: string; promise: Promise<Suggestion | null> } | null>(null);
+  // Bumped when the learner cancels out of a save that is waiting on a lookup.
+  const saveTicket = useRef(0);
+
+  const lookup = (text: string): Promise<Suggestion | null> => {
+    if (followPending.current?.text === text) return followPending.current.promise;
+    const seq = ++followSeq.current;
+    const cached = followCache.current.get(text);
+    if (cached) {
+      setFollow({ status: 'ready', text, suggestion: cached });
+      return Promise.resolve(cached);
+    }
+    setFollow({ status: 'looking', text });
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timeout = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error('That took too long.')), FOLLOW_TIMEOUT_MS);
+    });
+    const promise = Promise.race([followSpec!.fetch(text), timeout]).then(
+      (suggestion) => {
+        followCache.current.set(text, suggestion);
+        if (seq === followSeq.current) {
+          setFollow({ status: 'ready', text, suggestion });
+          setKeepFollow(true);
+        }
+        return suggestion;
+      },
+      (err: unknown) => {
+        // The reason, when there is one worth reading (a spent daily limit);
+        // fetch() is expected to have made it human already.
+        const message = err instanceof Error && err.message ? err.message : 'Something went wrong.';
+        if (seq === followSeq.current) setFollow({ status: 'failed', text, message });
+        return null;
+      },
+    ).finally(() => {
+      clearTimeout(timer);
+      if (followPending.current?.promise === promise) followPending.current = null;
+    });
+    followPending.current = { text, promise };
+    return promise;
+  };
+
+  useEffect(() => {
+    clearTimeout(followTimer.current);
+    // Anything still in flight is about text that is no longer there. Without
+    // this, its reply could land and show a word for the previous text.
+    followSeq.current++;
+    followPending.current = null;
+    setKeepFollow(true);
+    if (!followWanted) {
+      setFollow({ status: 'idle' });
+      return;
+    }
+    if (followSkip) {
+      setFollow({ status: 'skipped', text: followText, message: followSkip });
+      return;
+    }
+    const cached = followCache.current.get(followText);
+    if (cached) {
+      setFollow({ status: 'ready', text: followText, suggestion: cached });
+      return;
+    }
+    // "Looking" shows at once, so the row answers the keystroke; the call
+    // itself waits for a pause.
+    setFollow({ status: 'looking', text: followText });
+    followTimer.current = setTimeout(() => { lookup(followText); }, FOLLOW_DEBOUNCE_MS);
+    return () => clearTimeout(followTimer.current);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [followText, followWanted, followSkip, specKey]);
+
   if (!live) return null;
   const values = draft.key === specKey ? draft.values : {};
 
@@ -95,11 +244,27 @@ export default function FieldEditor({ spec, saving, onCancel, onSave }: FieldEdi
     Object.fromEntries(Object.entries(values).map(([k, v]) => [k, v.trim()]));
 
   const edited = draft.key === specKey
-    && (draft.regenerate || live.inputs.some(i => (values[i.key] ?? '') !== i.value));
+    && live.inputs.some(i => (values[i.key] ?? '') !== i.value);
 
-  const handleSave = () => {
-    if (saving) return;
-    onSave(trimmed(), draft.regenerate);
+  const handleSave = async () => {
+    if (saving || resolving) return;
+    if (!followWanted || followSkip) { onSave(trimmed(), null); return; }
+
+    // Saving mid-lookup waits for it rather than saving a meaning whose word
+    // has not caught up — the whole point is that the two arrive together.
+    let suggestion = follow.status === 'ready' && follow.text === followText ? follow.suggestion : null;
+    if (!suggestion && !(follow.status === 'failed' && follow.text === followText)) {
+      const ticket = ++saveTicket.current;
+      clearTimeout(followTimer.current);
+      setResolving(true);
+      suggestion = await lookup(followText);
+      if (ticket !== saveTicket.current) return; // cancelled while waiting
+      setResolving(false);
+      // A failure is now on screen, saying the word stays. Let it be read;
+      // the next tap on Save saves the meaning alone.
+      if (!suggestion) return;
+    }
+    onSave(trimmed(), suggestion && keepFollow ? suggestion.fields : null);
   };
 
   // The single gate every exit passes through — scrim tap, drag-down, Android
@@ -107,6 +272,8 @@ export default function FieldEditor({ spec, saving, onCancel, onSave }: FieldEdi
   // never changes what happens to your edits.
   const requestClose = () => {
     if (saving) { sheet.current?.settle(); return; }
+    // Waiting on a lookup is not a commitment: leaving abandons the save.
+    if (resolving) { saveTicket.current++; setResolving(false); }
     if (!edited) { sheet.current?.close(); return; }
     sheet.current?.settle();
     Alert.alert(
@@ -114,7 +281,14 @@ export default function FieldEditor({ spec, saving, onCancel, onSave }: FieldEdi
       "What you typed here won't be saved.",
       [
         { text: 'Keep editing', style: 'cancel' },
-        { text: 'Discard', style: 'destructive', onPress: () => sheet.current?.close() },
+        {
+          text: 'Discard',
+          style: 'destructive',
+          // Discard means discard: reopening must not bring the text back, and
+          // with it a paid lookup the learner never asked for. (A sheet the OS
+          // closes keeps its draft — docs/lessons.md §10 — but this is not that.)
+          onPress: () => { setDraft({ key: '', values: {} }); sheet.current?.close(); },
+        },
       ],
     );
   };
@@ -128,7 +302,11 @@ export default function FieldEditor({ spec, saving, onCancel, onSave }: FieldEdi
       onRequestClose={requestClose}
       // `spec` is already null when the parent was the one that closed us, so
       // a completed save doesn't also report itself as a cancel.
-      onClosed={() => { setLive(null); if (spec) onCancel(); }}
+      onClosed={() => {
+        setLive(null);
+        followCache.current.clear();
+        if (spec) onCancel();
+      }}
       maxHeight="86%"
       header={
         <>
@@ -143,6 +321,7 @@ export default function FieldEditor({ spec, saving, onCancel, onSave }: FieldEdi
         // nothing, which is the same direction the sheet's own dismiss uses.
         keyboardDismissMode="on-drag"
         showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
       >
         {live.inputs.map((input, i) => {
           const isLast = i === live.inputs.length - 1;
@@ -157,6 +336,7 @@ export default function FieldEditor({ spec, saving, onCancel, onSave }: FieldEdi
               onChangeText={t => setValue(input.key, t)}
               placeholder={input.placeholder}
               placeholderTextColor={colors.inkFaint}
+              maxLength={input.maxLength}
               // A multiline field keeps its newline; single-line fields hand
               // you to the next one, and the last one saves — so the keyboard
               // covering the buttons no longer means there's no way to commit.
@@ -177,20 +357,68 @@ export default function FieldEditor({ spec, saving, onCancel, onSave }: FieldEdi
           );
         })}
 
-        {!!live.regenerate && (
+        {!!followSpec && follow.status === 'looking' && (
+          <View style={styles.regenRow} accessibilityLiveRegion="polite">
+            <ActivityIndicator size="small" color={colors.inkLight} style={styles.followSpinner} />
+            <View style={styles.regenText}>
+              <Text style={styles.regenLabel}>{followSpec.copy.looking}</Text>
+            </View>
+          </View>
+        )}
+
+        {!!followSpec && follow.status === 'ready' && follow.text === followText && (
           <TouchableOpacity
             style={styles.regenRow}
-            onPress={() => setDraft(d => ({ ...d, regenerate: !d.regenerate }))}
+            onPress={() => setKeepFollow(k => !k)}
             activeOpacity={0.75}
+            accessibilityRole="checkbox"
+            accessibilityState={{ checked: keepFollow }}
+            accessibilityLabel={keepFollow
+              ? `${followSpec.copy.heading} ${follow.suggestion.title}`
+              : `${followSpec.copy.kept} Double-tap to change it to ${follow.suggestion.title}`}
           >
-            <View style={[styles.checkbox, draft.regenerate && styles.checkboxOn]}>
-              {draft.regenerate && <Check size={13} color={colors.white} strokeWidth={3} />}
+            <View style={[styles.checkbox, keepFollow && styles.checkboxOn]}>
+              {keepFollow && <Check size={13} color={colors.white} strokeWidth={3} />}
             </View>
             <View style={styles.regenText}>
-              <Text style={styles.regenLabel}>{live.regenerate.label}</Text>
-              <Text style={styles.regenHint}>{live.regenerate.hint}</Text>
+              <Text style={styles.regenHint}>{followSpec.copy.heading}</Text>
+              <Text style={[styles.followWord, !!followSpec.fontFamily && { fontFamily: followSpec.fontFamily }]}>
+                {follow.suggestion.title}
+              </Text>
+              {!!follow.suggestion.detail && (
+                <Text style={styles.followDetail}>{follow.suggestion.detail}</Text>
+              )}
+              <Text style={styles.regenHint}>
+                {keepFollow ? followSpec.note : followSpec.copy.kept}
+              </Text>
             </View>
           </TouchableOpacity>
+        )}
+
+        {!!followSpec && follow.status === 'failed' && follow.text === followText && (
+          <View style={styles.regenRow} accessibilityLiveRegion="polite">
+            <View style={styles.regenText}>
+              <Text style={styles.regenLabel}>{followSpec.copy.failed}</Text>
+              <Text style={styles.regenHint}>
+                {follow.message} {followSpec.copy.failedKeep}
+              </Text>
+              <TouchableOpacity
+                onPress={() => { lookup(followText); }}
+                hitSlop={{ top: 10, bottom: 10, left: 0, right: 16 }}
+                accessibilityRole="button"
+              >
+                <Text style={styles.followRetry}>Try again</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
+        {!!followSpec && follow.status === 'skipped' && follow.text === followText && (
+          <View style={styles.regenRow} accessibilityLiveRegion="polite">
+            <View style={styles.regenText}>
+              <Text style={styles.regenHint}>{follow.message}</Text>
+            </View>
+          </View>
         )}
       </ScrollView>
 
@@ -198,8 +426,8 @@ export default function FieldEditor({ spec, saving, onCancel, onSave }: FieldEdi
         <TouchableOpacity style={styles.cancelBtn} onPress={requestClose} disabled={saving}>
           <Text style={styles.cancelText}>Cancel</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.saveBtn} onPress={handleSave} disabled={saving}>
-          {saving
+        <TouchableOpacity style={styles.saveBtn} onPress={handleSave} disabled={saving || resolving}>
+          {saving || resolving
             ? <ActivityIndicator size="small" color={colors.white} />
             : <Text style={styles.saveText}>Save</Text>}
         </TouchableOpacity>
@@ -248,6 +476,11 @@ const styles = StyleSheet.create({
   regenText: { flex: 1, gap: 2 },
   regenLabel: { fontSize: 14, fontFamily: fonts.display, color: colors.inkDark },
   regenHint: { fontSize: 12, fontFamily: fonts.text, color: colors.inkLight, lineHeight: 17 },
+  followSpinner: { width: 22, height: 22 },
+  followWord: { fontSize: 22, fontFamily: fonts.display, color: colors.inkDark, marginTop: 2 },
+  scrollContent: { paddingBottom: spacing.md },
+  followRetry: { fontSize: 13, fontFamily: fonts.display, color: colors.terra, marginTop: spacing.xs },
+  followDetail: { fontSize: 13, fontFamily: fonts.mono, color: colors.inkMid, marginBottom: 2 },
 
   actions: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.md },
   cancelBtn: {

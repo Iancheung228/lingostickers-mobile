@@ -171,7 +171,7 @@ function FeedCard({ sticker, width, url, author, onPress }: {
       <View style={styles.well}>
         {url ? (
           <Image
-            source={{ uri: url, cacheKey: sticker.image_path }}
+            source={{ uri: url, cacheKey: sticker.image_path ?? undefined }}
             cachePolicy="memory-disk"
             contentFit="contain"
             style={StyleSheet.absoluteFillObject}

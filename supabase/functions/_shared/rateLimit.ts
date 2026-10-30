@@ -18,6 +18,11 @@ import { LlmError, httpStatusFor } from './llm/index.ts';
 //
 // Each can be overridden without a code change by setting the matching env var
 // on the function (e.g. `npx supabase secrets set DAILY_LIMIT_CREATE_STICKER=25`).
+//
+// `DAILY_LIMIT_OVERRIDES` raises the cap for named accounts only, as JSON
+// {"<user uuid>": 100}, applied to every endpoint. It exists for the QA
+// account, whose probes would otherwise exhaust a real user's allowance in
+// one run. Its owner budgets it (scripts/qa-budget.mjs); this is the backstop.
 // send-challenge belongs here too: it calls the model once per challenge to build
 // the accepted-answer list. Abuse is already bounded by needing an accepted
 // friendship and an owned sticker, so its bucket is generous — this is here so
@@ -91,7 +96,7 @@ export async function consumeQuota(
   userId: string,
   endpoint: Endpoint
 ): Promise<{ used: number; limit: number; remaining: number }> {
-  const limit = dailyLimit(endpoint);
+  const limit = dailyLimit(endpoint, userId);
 
   const { data, error } = await admin
     .rpc('consume_api_quota', { p_user_id: userId, p_endpoint: endpoint, p_limit: limit });
@@ -117,10 +122,25 @@ export async function consumeQuota(
   return { used: row.used, limit, remaining: Math.max(0, limit - row.used) };
 }
 
-function dailyLimit(endpoint: Endpoint): number {
+function dailyLimit(endpoint: Endpoint, userId: string): number {
+  const perUser = userOverride(userId);
+  if (perUser !== null) return perUser;
   const envKey = `DAILY_LIMIT_${endpoint.toUpperCase().replace(/-/g, '_')}`;
   const override = Number(Deno.env.get(envKey));
   return Number.isFinite(override) && override >= 0 ? override : DEFAULT_DAILY_LIMITS[endpoint];
+}
+
+function userOverride(userId: string): number | null {
+  const raw = Deno.env.get('DAILY_LIMIT_OVERRIDES');
+  if (!raw) return null;
+  try {
+    const value = Number(JSON.parse(raw)?.[userId]);
+    return Number.isFinite(value) && value >= 0 ? value : null;
+  } catch {
+    // A malformed secret must not take every paid endpoint down with it.
+    console.error('DAILY_LIMIT_OVERRIDES is not valid JSON; ignoring it');
+    return null;
+  }
 }
 
 function limitMessage(endpoint: Endpoint, limit: number): string {

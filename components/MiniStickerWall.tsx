@@ -164,7 +164,7 @@ function TileFan({
           isHero={slots[i] === 0}
           heroScale={heroScale}
           opacity={opacities[i]}
-          url={urls.get(sticker.image_path) ?? null}
+          url={sticker.image_path ? urls.get(sticker.image_path) ?? null : null}
           onPress={() => onPressSticker(sticker)}
           borderStyle={borderStyle}
         />
@@ -272,7 +272,7 @@ export default function MiniStickerWall({
                 <HomeWallTile
                   sticker={item.sticker}
                   size={side}
-                  url={urls.get(item.sticker.image_path) ?? null}
+                  url={item.sticker.image_path ? urls.get(item.sticker.image_path) ?? null : null}
                   borderStyle={borderStyle}
                 />
               </TouchableOpacity>

@@ -76,7 +76,7 @@ export default function BoardCanvas({
         <CanvasTile
           key={item.sticker_id}
           item={item}
-          imageUrl={imageUrls.get(item.sticker.image_path) ?? null}
+          imageUrl={item.sticker.image_path ? imageUrls.get(item.sticker.image_path) ?? null : null}
           canvasSize={canvasSize}
           displayStyle={displayStyle}
           borderStyle={borderStyle}
@@ -216,10 +216,10 @@ function CanvasTile({
         <View style={styles.imageWrap}>
           {imageUrl ? (
             displayStyle === 'cutout' && borderStyle === 'outline' ? (
-              <CutoutSticker uri={imageUrl} cacheKey={item.sticker.image_path} borderStyle="outline" />
+              <CutoutSticker uri={imageUrl} cacheKey={item.sticker.image_path ?? undefined} borderStyle="outline" />
             ) : (
               <Image
-                source={{ uri: imageUrl, cacheKey: item.sticker.image_path }}
+                source={{ uri: imageUrl, cacheKey: item.sticker.image_path ?? undefined }}
                 cachePolicy="memory-disk"
                 style={styles.image}
                 contentFit="contain"

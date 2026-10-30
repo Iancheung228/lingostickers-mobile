@@ -43,6 +43,7 @@ function fileNameFor(sticker: Sticker): string {
  * BoardCarouselPage's reposition path).
  */
 async function downloadCutoutUri(sticker: Sticker): Promise<string> {
+  if (!sticker.image_path) throw new Error('This card has no picture to export.');
   const { data, error } = await supabase.storage
     .from('sticker-images')
     .createSignedUrl(sticker.image_path, 3600);
