@@ -1,0 +1,149 @@
+{
+  "goal": "Make Tabi Stickers drivable by an automated agent in the iOS Simulator: stable testIDs on every control a test needs, and a simulator-only cutout fixture so the scan flow can be exercised end to end without Apple Vision.",
+  "rules": "A feature passes only when scripts/test-drivable.mts says so AND init.sh is green. If a feature names a flow, that flow must exist and have PASSED in the latest harness/qa.sh run (harness/logs/qa-status.json). Write feature flows under .maestro/agent/. Never edit this file, scripts/test-drivable.mts, the human-approved flows .maestro/*.yaml, or .maestro/run.sh|seed.mjs. Never rename user-visible copy or change behaviour while adding testIDs.",
+  "features": [
+    {
+      "id": "auth-ids",
+      "description": "Sign-in and sign-up controls carry testIDs, and PasswordField forwards testID to its inner TextInput.",
+      "checks": [
+        {
+          "file": "app/(auth)/sign-in.tsx",
+          "testIDs": [
+            "signin-email",
+            "signin-password",
+            "signin-submit"
+          ]
+        },
+        {
+          "file": "app/(auth)/sign-up.tsx",
+          "testIDs": [
+            "signup-username",
+            "signup-email",
+            "signup-password",
+            "signup-submit"
+          ]
+        },
+        {
+          "file": "components/PasswordField.tsx",
+          "includes": [
+            "testID"
+          ]
+        }
+      ],
+      "verify": "Screenshot the sign-in screen in the Simulator; it must look unchanged.",
+      "flow": ".maestro/agent/auth-ids.yaml",
+      "flow_must_show": "Sign in through the testIDs (signin-email, signin-password, signin-submit) instead of placeholder text, and land on home."
+    },
+    {
+      "id": "tab-ids",
+      "description": "Each bottom tab button has a testID via tabBarButtonTestID.",
+      "checks": [
+        {
+          "file": "app/(tabs)/_layout.tsx",
+          "includes": [
+            "tabBarButtonTestID"
+          ],
+          "strings": [
+            "tab-collection",
+            "tab-calendar",
+            "tab-scan",
+            "tab-wall",
+            "tab-friends"
+          ]
+        }
+      ],
+      "verify": "Screenshot the home screen; the tab bar must look unchanged.",
+      "flow": ".maestro/agent/tab-ids.yaml",
+      "flow_must_show": "After sign-in, tap every tab by its testID and assert something unique to each screen is visible."
+    },
+    {
+      "id": "scan-ids",
+      "description": "Scan screen controls (import photo, shutter, torch, permission button), the PhotoExtractor close/extract buttons, and DiscoveryReveal add/retry/discard carry testIDs.",
+      "checks": [
+        {
+          "file": "app/(tabs)/scan.tsx",
+          "testIDs": [
+            "scan-import",
+            "scan-shutter",
+            "scan-torch",
+            "scan-permission"
+          ]
+        },
+        {
+          "file": "components/PhotoExtractor.tsx",
+          "testIDs": [
+            "extractor-close",
+            "extractor-extract"
+          ]
+        },
+        {
+          "file": "components/DiscoveryReveal.tsx",
+          "testIDs": [
+            "reveal-add",
+            "reveal-retry",
+            "reveal-discard"
+          ]
+        }
+      ],
+      "verify": "Screenshot the scan tab; it must look unchanged.",
+      "flow": ".maestro/agent/scan-ids.yaml",
+      "flow_must_show": "After sign-in, open the scan tab by testID and assert scan-import and scan-shutter are visible (or scan-permission when camera access is not granted)."
+    },
+    {
+      "id": "study-ids",
+      "description": "StudyCard: flip area, close, and each grade button carry testIDs; grade IDs are built from the grade name (grade-again, grade-hard, grade-good, grade-easy).",
+      "checks": [
+        {
+          "file": "components/StudyCard.tsx",
+          "testIDs": [
+            "study-card-flip",
+            "study-close"
+          ],
+          "strings": [
+            "grade-"
+          ]
+        }
+      ],
+      "verify": "Open a sticker's study card; screenshot both faces; layout unchanged.",
+      "flow": ".maestro/agent/study-ids.yaml",
+      "flow_must_show": "Same journey as .maestro/study-grade.yaml but every tap uses the new testIDs (study-card-flip, grade-good, study-close)."
+    },
+    {
+      "id": "sheet-ids",
+      "description": "BottomSheet scrim and sheet body carry testIDs; FieldEditor save/cancel carry testIDs.",
+      "checks": [
+        {
+          "file": "components/BottomSheet.tsx",
+          "testIDs": [
+            "sheet-scrim",
+            "sheet-body"
+          ]
+        },
+        {
+          "file": "components/FieldEditor.tsx",
+          "testIDs": [
+            "field-editor-save",
+            "field-editor-cancel"
+          ]
+        }
+      ],
+      "verify": "Open a field editor from a study card; screenshot; unchanged.",
+      "flow": ".maestro/agent/sheet-ids.yaml",
+      "flow_must_show": "Open a sticker from the collection, open a field editor, dismiss it with field-editor-cancel, and assert the card is still showing."
+    },
+    {
+      "id": "cutout-sim-fixture",
+      "description": "In modules/subject-cutout/index.ts, when running a __DEV__ build on the iOS Simulator (native.isAvailable() false or reason 'simulator'), cutout() returns a CutoutSuccess built from the input image cropped to the selection's bounding box, so the scan flow can continue past segmentation. Must be impossible to reach in release builds. Gate it behind a single exported constant SIMULATOR_CUTOUT_FIXTURE.",
+      "checks": [
+        {
+          "file": "modules/subject-cutout/index.ts",
+          "includes": [
+            "__DEV__",
+            "SIMULATOR_CUTOUT_FIXTURE"
+          ]
+        }
+      ],
+      "verify": "In the Simulator, import a seeded photo on the scan tab, draw a box, extract: you must reach DiscoveryReveal instead of a cutout failure. Screenshot it."
+    }
+  ]
+}
