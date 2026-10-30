@@ -95,7 +95,9 @@
         }
       ],
       "expo-asset",
-      "expo-font"
+      "expo-font",
+      "./plugins/withPodDeploymentTargetFloor",
+      "./plugins/withSceneLifecycle"
     ],
     "extra": {
       "router": {},
