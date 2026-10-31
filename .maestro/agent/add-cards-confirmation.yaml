@@ -1,0 +1,94 @@
+# Add-cards confirmation: after "Add N cards" in the discovery reveal, the scan screen
+# shows a toast "N cards added" with a "View" action that opens the Collection tab.
+# Uses one scan (extract) plus one scene question ("What's happening?") to get a chip.
+appId: com.iancheung228.lingostickers
+---
+- runFlow: ../sign-in.yaml
+
+# Open the Scan tab from the floating tab bar.
+- tapOn:
+    text: "Scan a new sticker"
+- extendedWaitUntil:
+    visible: ".*(One quick thing|Agree and start scanning|Import a photo from your library).*"
+    timeout: 15000
+# Consent gate may appear on a fresh account; agreeing only records consent, no AI call.
+- runFlow:
+    when:
+      visible: "Agree and start scanning"
+    commands:
+      - tapOn: "Agree and start scanning"
+- extendedWaitUntil:
+    visible: "Import a photo from your library"
+    timeout: 15000
+
+# Import the library photo from the iOS picker (permission prompt optional).
+- tapOn:
+    text: "Import a photo from your library"
+- tapOn:
+    text: "Allow Full Access|Allow Access to All Photos|OK"
+    optional: true
+- tapOn:
+    text: "Photo, March 30, 2018.*"
+- extendedWaitUntil:
+    visible: "Extract Sticker"
+    timeout: 30000
+- assertVisible: "Crop your sticker"
+- tapOn: "Extract Sticker"
+
+# Discovery reveal: the primary button reads "Add to Collection" until scene chips are picked.
+- extendedWaitUntil:
+    visible: "Add to Collection"
+    timeout: 90000
+- takeScreenshot: 01-reveal-before-scene-pick
+
+# Scene prompt: scroll to "More from this photo", ask one question, pick one chip.
+- tapOn:
+    text: "More words from this photo"
+- extendedWaitUntil:
+    visible: "MORE FROM THIS PHOTO"
+    timeout: 20000
+- tapOn:
+    text: "What's happening\\?"
+- extendedWaitUntil:
+    visible: "Tap the words you want as cards\\."
+    timeout: 30000
+# Chips are "word, translation" checkboxes under the caption. The word-by-word
+# row also has commas ("J', I"), so only take labels below the caption. The chips
+# sit below the fold of the reveal sheet, so scroll them into view first.
+- takeScreenshot: 01b-scene-chips-shown
+- scrollUntilVisible:
+    element:
+      text: ".+, .+"
+      below: "Tap the words you want as cards\\."
+    direction: DOWN
+    timeout: 15000
+- tapOn:
+    text: ".+, .+"
+    below: "Tap the words you want as cards\\."
+    index: 0
+- extendedWaitUntil:
+    visible: "Add 2 cards"
+    timeout: 10000
+- takeScreenshot: 02-reveal-two-cards-selected
+
+# Add: the reveal closes and the toast confirms the count.
+- tapOn: "Add 2 cards"
+- extendedWaitUntil:
+    visible: "2 cards added"
+    timeout: 15000
+- assertVisible:
+    id: "toast-message"
+- assertVisible:
+    id: "toast-action"
+- takeScreenshot: 03-toast-2-cards-added
+
+# The View action opens the Collection tab.
+- tapOn:
+    id: "toast-action"
+- extendedWaitUntil:
+    visible: "Latest stickers.*"
+    timeout: 20000
+- assertVisible:
+    id: "collection-sort"
+- assertNotVisible: "2 cards added"
+- takeScreenshot: 04-collection-after-view

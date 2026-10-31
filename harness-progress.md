@@ -46,3 +46,8 @@
 - app/profile.tsx: language, wall-style and border-style rows get accessibilityRole="button" + accessibilityState={{ selected: active }}. PhotoExtractor.tsx: header title has accessibilityLabel "Crop your sticker"; button keeps "Extract Sticker".
 - QA: new flow .maestro/agent/a11y-selected-state.yaml PASS, full harness/qa.sh PASS (15 flows). Shots judged: profile with French row selected, crop screen with title + button, no extraction run.
 - GAP: sim photo library has no seeded sticker, so flow picks the first library photo; selected assertion is a regex over language names (proves some row is selected, not the account's own).
+
+## add-cards-confirmation
+- components/Toast.tsx (new, "N cards added" + View, announces to VoiceOver, 4 s). scan.tsx shows it after handleAdd; View navigates to Collection. Toast is lifted to insets.bottom + TAB_BAR_CLEARANCE: first version sat under the floating tab bar and View tap hit the Boards tab.
+- QA: new flow .maestro/agent/add-cards-confirmation.yaml PASS, full harness/qa.sh PASS (16 flows). Shots judged: toast above tab bar, Collection tab active after View.
+- Surprising: toast overlaps the lower edge of the shutter and nearly touches "Flash Off". One full run failed with a transient "Extraction failed" alert (passed on rerun). Another loop session was using the same Simulator and harness/logs concurrently.

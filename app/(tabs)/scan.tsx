@@ -3,7 +3,8 @@ import {
   View, Text, TouchableOpacity, StyleSheet, Alert, Linking, AppState,
   ActivityIndicator, useWindowDimensions,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import * as ImagePicker from 'expo-image-picker';
@@ -26,6 +27,7 @@ import { getImportedPhotoMetadata } from '@/lib/photoMetadata';
 import { attemptLocalCutout, uploadCutout, cutoutPath, discardCutout, CUTOUT_DRY_RUN, type UploadOutcome } from '@/lib/cutout';
 import { trackEvent } from '@/lib/analytics';
 import DiscoveryReveal from '@/components/DiscoveryReveal';
+import Toast from '@/components/Toast';
 import PhotoExtractor, { ExtractResult, renderWholePhotoExtract } from '@/components/PhotoExtractor';
 import ScanProgress, { ScanStage } from '@/components/ScanProgress';
 import GhostCutoutReveal from '@/components/GhostCutoutReveal';
@@ -650,6 +652,12 @@ export default function ScanScreen() {
   }, [processing]);
 
 
+  // Confirmation shown on the camera after the reveal sheet closes.
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const [addedCount, setAddedCount] = useState(0);
+  const dismissAdded = useCallback(() => setAddedCount(0), []);
+
   const handleAdd = async () => {
     if (!draft || !user) return;
     setSaving(true);
@@ -694,6 +702,7 @@ export default function ScanScreen() {
     // Extraction" is no longer needed.
     setImportedAsset(null);
     setCameraCaptureContext(null);
+    setAddedCount(1 + extras.length);
 
     // The extra words are written in the background: each needs a sentence
     // (a few seconds), and the learner has already seen and chosen them, so
@@ -1026,6 +1035,16 @@ export default function ScanScreen() {
         sceneSelected={sceneChips}
         onSceneSelected={setSceneChips}
       />
+
+      {addedCount > 0 && (
+        <Toast
+          message={addedCount === 1 ? '1 card added' : `${addedCount} cards added`}
+          bottom={insets.bottom + TAB_BAR_CLEARANCE}
+          actionLabel="View"
+          onAction={() => { setAddedCount(0); router.navigate('/(tabs)/collection'); }}
+          onDismiss={dismissAdded}
+        />
+      )}
     </SafeAreaView>
   );
 }
