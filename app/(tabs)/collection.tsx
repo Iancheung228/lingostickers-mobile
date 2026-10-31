@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useRef } from 'react';
 import {
   View, Text, TextInput, FlatList, StyleSheet, TouchableOpacity,
   RefreshControl, ScrollView, ActivityIndicator, Modal, Pressable,
@@ -13,6 +13,7 @@ import { supabase } from '@/lib/supabase';
 import { Sticker, Category, Language } from '@/lib/types';
 import { useSignedUrls } from '@/hooks/useSignedUrls';
 import { useStickerAuthors } from '@/hooks/useStickerAuthors';
+import BottomSheet, { BottomSheetHandle } from '@/components/BottomSheet';
 import StickerCard from '@/components/StickerCard';
 import StudyCard from '@/components/StudyCard';
 import MiniStickerWall from '@/components/MiniStickerWall';
@@ -35,9 +36,9 @@ const CATEGORIES: Array<'All' | Category> = ['All', 'Kitchen', 'Animals', 'Study
 type SortMode = 'newest' | 'oldest' | 'recentlyAdded';
 const SORT_CYCLE: SortMode[] = ['newest', 'oldest', 'recentlyAdded'];
 const SORT_LABELS: Record<SortMode, string> = {
-  newest: 'Latest first',
-  oldest: 'Oldest first',
-  recentlyAdded: 'Recently added',
+  newest: 'Photo date \u2014 newest',
+  oldest: 'Photo date \u2014 oldest',
+  recentlyAdded: 'Date added \u2014 newest',
 };
 
 // The wall card lifts up into the rose band rather than sitting below it,
@@ -61,6 +62,7 @@ export default function CollectionScreen() {
   const [favoritesOnly, setFavoritesOnly] = useState(false);
   const [sortMode, setSortMode] = useState<SortMode>('newest');
   const [sortMenuVisible, setSortMenuVisible] = useState(false);
+  const sortSheet = useRef<BottomSheetHandle>(null);
   const [selectedSticker, setSelectedSticker] = useState<Sticker | null>(null);
   const insets = useSafeAreaInsets();
   const [searchActive, setSearchActive] = useState(false);
@@ -250,9 +252,14 @@ export default function CollectionScreen() {
     setReviewQueue(due);
   };
 
+  // Search and the category/favourites filters narrow the grid only; the hero,
+  // Latest finds and Latest stickers above it ignore them, so while one is on
+  // they're hidden rather than left looking like the filter is broken.
+  const hideFeatured = searchActive || activeCategory !== 'All' || favoritesOnly;
+
   const listHeader = (
     <>
-      {!searchActive && (
+      {!hideFeatured && (
         <>
         <HomeHeader
           foundToday={foundToday}
@@ -304,7 +311,7 @@ export default function CollectionScreen() {
           (category) ever shares the scroll row. While searching, category no
           longer applies (search spans everything), so the chips are swapped
           for a result count instead. ── */}
-      <View style={styles.filterRow}>
+      <View style={[styles.filterRow, hideFeatured && !searchActive && { marginTop: insets.top + spacing.sm }]}>
         {isSearching ? (
           <View style={styles.searchResultsLabelWrap}>
             <Text style={styles.searchResultsLabel}>
@@ -331,18 +338,18 @@ export default function CollectionScreen() {
         )}
         <View style={styles.iconCluster}>
           <TouchableOpacity
-            style={[styles.iconBtnSmall, sortMode !== 'newest' && styles.iconBtnSmallSortActive]}
-            onPress={cycleSort}
-            accessibilityRole="button"
-            accessibilityLabel={`Sort: ${SORT_LABELS[sortMode]}. Tap to change, hold for all options.`}
-            onLongPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+            testID="collection-sort"
+            style={[styles.iconBtnSmall, styles.sortPill, sortMode !== 'newest' && styles.iconBtnSmallSortActive]}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
               setSortMenuVisible(true);
             }}
-            delayLongPress={350}
+            accessibilityRole="button"
+            accessibilityLabel={`Sort: ${SORT_LABELS[sortMode]}. Tap to change.`}
             hitSlop={8}
           >
             <ArrowUpDown size={14} color={sortMode !== 'newest' ? colors.inkDark : colors.inkMid} />
+            <Text style={styles.sortPillText} numberOfLines={1}>{SORT_LABELS[sortMode]}</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.iconBtnSmall, favoritesOnly && styles.iconBtnSmallFavActive]}
@@ -416,6 +423,7 @@ export default function CollectionScreen() {
             <EmptyState
               title={
                 isSearching ? `No matches for "${searchQuery.trim()}"`
+                : favoritesOnly ? 'No favourites yet'
                 : langFilter ? `No ${languageLabel(langFilter)} stickers here`
                 : 'No stickers yet'
               }
@@ -424,8 +432,8 @@ export default function CollectionScreen() {
                 // The language chips are up in the due rail, possibly
                 // scrolled off the top by the time you reach an empty grid —
                 // so say which filter is doing this, and undo it from here.
+                : favoritesOnly ? 'Tap the heart on a card to add it.'
                 : langFilter ? 'The language filter above is narrowing this screen.'
-                : favoritesOnly ? 'Tap the heart on a sticker to favorite it!'
                 : 'Tap the Scan tab to discover your first word!'
               }
               actionLabel={!isSearching && langFilter ? 'Show all languages' : undefined}
@@ -466,34 +474,34 @@ export default function CollectionScreen() {
         onDeleted={fetchStickers}
       />
 
-      <Modal
-        visible={sortMenuVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setSortMenuVisible(false)}
-      >
-        <Pressable style={styles.modalOverlay} onPress={() => setSortMenuVisible(false)}>
-          <Pressable style={styles.sortModalCard} onPress={() => {}}>
-            <Text style={styles.sortModalTitle}>Sort by</Text>
-            {SORT_CYCLE.map((mode, i) => (
-              <TouchableOpacity
-                key={mode}
-                style={[styles.sortOption, i === SORT_CYCLE.length - 1 && styles.sortOptionLast]}
-                onPress={() => {
-                  Haptics.selectionAsync();
-                  setSortMode(mode);
-                  setSortMenuVisible(false);
-                }}
-              >
-                <Text style={[styles.sortOptionText, sortMode === mode && styles.sortOptionTextActive]}>
-                  {SORT_LABELS[mode]}
-                </Text>
-                {sortMode === mode && <Check size={16} color={colors.terra} />}
-              </TouchableOpacity>
-            ))}
-          </Pressable>
-        </Pressable>
-      </Modal>
+      {sortMenuVisible && (
+        <BottomSheet
+          ref={sortSheet}
+          onRequestClose={() => sortSheet.current?.close()}
+          onClosed={() => setSortMenuVisible(false)}
+          header={<Text style={styles.sortModalTitle}>Sort by</Text>}
+        >
+          {SORT_CYCLE.map((mode, i) => (
+            <TouchableOpacity
+              key={mode}
+              testID={`collection-sort-${mode}`}
+              style={[styles.sortOption, i === SORT_CYCLE.length - 1 && styles.sortOptionLast]}
+              accessibilityRole="button"
+              accessibilityState={{ selected: sortMode === mode }}
+              onPress={() => {
+                Haptics.selectionAsync();
+                setSortMode(mode);
+                sortSheet.current?.close();
+              }}
+            >
+              <Text style={[styles.sortOptionText, sortMode === mode && styles.sortOptionTextActive]}>
+                {SORT_LABELS[mode]}
+              </Text>
+              {sortMode === mode && <Check size={16} color={colors.terra} />}
+            </TouchableOpacity>
+          ))}
+        </BottomSheet>
+      )}
     </View>
   );
 }
@@ -584,6 +592,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  sortPill: { width: undefined, flexDirection: 'row', gap: spacing.xs, paddingHorizontal: spacing.sm },
+  sortPillText: { fontSize: 12, fontFamily: fonts.display, color: colors.inkMid },
   iconBtnSmallSortActive: { backgroundColor: colors.terraLight, borderColor: colors.terra },
   iconBtnSmallFavActive: { backgroundColor: colors.error, borderColor: colors.error },
 

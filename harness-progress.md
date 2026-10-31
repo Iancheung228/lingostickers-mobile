@@ -26,3 +26,8 @@
 - app/profile.tsx: header spacer no longer draws a circle (headerSpacer), copy says "sticker(s)", "App version X" row (testID profile-version, expo-constants) at bottom, Log Out icon/text in colors.error. components/FriendsEmpty.tsx: Find a friend CTA is white text/icon on rose.
 - QA: new flow .maestro/agent/profile-cleanup.yaml PASS, full harness/qa.sh PASS (9 flows). Shots judged: profile top (no circle, "1 sticker"), bottom (red Log Out, "App version 1.0.0"), Friends empty (filled rose CTA).
 - Note: flow branches on Find a friend visibility, so passes either way; colour judged by eye only. Commit also includes the pending StudyCard.tsx / hide-card-id.yaml changes already in the tree.
+
+## collection-sort-menu
+- collection.tsx: sort control is now a pill (testID collection-sort) showing the current mode; tap opens a BottomSheet ("Sort by", check on current) instead of cycling; labels renamed to "Photo date — newest/oldest", "Date added — newest". Old long-press Modal removed. Also commits the pending favourites-empty change (collection-filter-empty).
+- QA: new flow .maestro/agent/collection-sort-menu.yaml PASS, full harness/qa.sh PASS (12 flows). Shots judged: default pill, sheet open with check/scrim/grabber, label updated after picking "Date added — newest".
+- Surprising: the pill is wide and crowds the category chip row (third chip clipped). Acceptable but cramped; consider a shorter label or moving the control. LatestStickers header sort label still taps cycleSort (cycles, doesn't open sheet).
