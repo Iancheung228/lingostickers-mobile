@@ -16,3 +16,8 @@
 - New lib/authErrors.ts (getAuthErrorMessage, isEmail). sign-in.tsx maps errors (incl. resend) to friendly copy and disables Sign In until the email looks like an address; forgot-password.tsx disables Send Reset Code until isEmail.
 - QA: new flow .maestro/agent/auth-error-copy.yaml PASS, full harness/qa.sh PASS (6 flows). Shot 02 judged: 'notanemail' leaves Send Reset Code faded, subtitle unchanged. Shot 01 asserted by text only, not viewed.
 - Surprising: iOS "Save Password?" sheet appears over sign-in/forgot-password; flows need an optional "Not Now". signin-keyboard.yaml asserted the old raw copy, updated to the friendly text. Resend-failure fallback copy says "signing in" (minor wording).
+
+## username-format
+- New lib/username.ts (isValidUsername, normalizeUsername, USERNAME_RULE). sign-up.tsx lowercases as typed, shows "Use 3–20 letters, numbers, _ or ." in the hint slot for invalid names, skips the availability check for them, and disables Create Account. DB CHECK constraint requested in HUMAN_REQUESTS.md.
+- QA: new flow .maestro/agent/username-format.yaml PASS, full harness/qa.sh PASS (7 flows). Shot 01 judged: "a b!tabc" with the red rule hint, no "Username available".
+- GAP: Create Account's disabled state is below the fold and not asserted/screenshotted; the positive case (valid name -> "Username available") isn't covered by a flow.

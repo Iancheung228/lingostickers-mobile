@@ -16,3 +16,7 @@ Feature was already implemented. Targeted flow PASSED once, but the final full `
 - Screenshot `.maestro/output/sign-in/screenshots/step-015-assertCondition-FOUND.png`: the Email field holds `maestro-qa@tabi.testgQa-5WWRMn55...` and Password is empty, so `tapOn: "Password"` did not move focus and the password was typed into Email. Sign-in screen code (`app/(auth)/sign-in.tsx`, `PasswordField`) is unchanged since the last green run, so this looks like a tap/focus race in the flow, not an app regression.
 - I can't edit `.maestro/*.yaml`. Suggested fix: after `tapOn: "Password"`, add an `extendedWaitUntil`/short wait, or give the inputs testIDs and tap those. The agent flow `signin-keyboard.yaml` shows a pattern that passed.
 - No feature work done this iteration.
+
+## username-format: database constraint (migration)
+Client now enforces `^[a-z0-9_.]{3,20}$` (lib/username.ts). Please add a migration with the matching
+CHECK on `profiles.username` (and the signup trigger), after checking existing rows for violations.

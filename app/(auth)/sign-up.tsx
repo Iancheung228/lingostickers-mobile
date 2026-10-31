@@ -9,6 +9,7 @@ import { Camera } from 'lucide-react-native';
 import { useAuth } from '@/hooks/useAuth';
 import { useUsernameAvailability } from '@/hooks/useUsernameAvailability';
 import { supabase } from '@/lib/supabase';
+import { USERNAME_RULE, isValidUsername, normalizeUsername } from '@/lib/username';
 import { pickAvatarImage, uploadAvatar } from '@/lib/avatars';
 import { stashPendingAvatar, clearPendingAvatar } from '@/lib/pendingAvatar';
 import AuthIntro from '@/components/AuthIntro';
@@ -49,10 +50,12 @@ export default function SignUpScreen() {
   // keyboard over the field you were about to fill in.
   const emailRef = useRef<TextInput>(null);
   const passwordRef = useRef<TextInput>(null);
-  const usernameAvailability = useUsernameAvailability(username);
+  const usernameValid = isValidUsername(username);
+  // An invalid name is never sent for an availability check.
+  const usernameAvailability = useUsernameAvailability(usernameValid ? username : '');
 
   const isFormValid =
-    username.trim().length > 0 &&
+    usernameValid &&
     email.trim().length > 0 &&
     password.length >= 6 &&
     usernameAvailability !== 'taken';
@@ -200,7 +203,7 @@ export default function SignUpScreen() {
               placeholder="Username"
               placeholderTextColor={colors.inkFaint}
               value={username}
-              onChangeText={setUsername}
+              onChangeText={(text) => setUsername(normalizeUsername(text))}
               autoCapitalize="none"
               autoCorrect={false}
               textContentType="nickname"
@@ -209,7 +212,10 @@ export default function SignUpScreen() {
               submitBehavior="submit"
               onSubmitEditing={() => emailRef.current?.focus()}
             />
-            {usernameAvailability !== 'idle' && (
+            {username.length > 0 && !usernameValid && (
+              <Text style={[styles.usernameHint, styles.usernameHintTaken]}>{USERNAME_RULE}</Text>
+            )}
+            {usernameValid && usernameAvailability !== 'idle' && (
               <Text style={[
                 styles.usernameHint,
                 usernameAvailability === 'taken' && styles.usernameHintTaken,
