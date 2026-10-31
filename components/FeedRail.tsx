@@ -147,9 +147,9 @@ function FeedCard({ sticker, width, url, author, onPress }: {
   sticker: Sticker; width: number; url: string | null;
   author: PersonSummary | null; onPress: () => void;
 }) {
-  const discovered = new Date(sticker.discovered_at);
+  const discovered = new Date(sticker.created_at);
   const day = discovered.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric' });
-  const age = ageInDays(sticker.discovered_at);
+  const age = ageInDays(sticker.created_at);
 
   return (
     <TouchableOpacity style={[styles.card, { width }]} onPress={onPress} activeOpacity={0.9}>

@@ -1004,7 +1004,9 @@ function FrontFace({ sticker, authorName, authorAvatarPath, imageUrl, hintShown,
   hintShown: boolean; stillLearning: boolean; onHint: () => void; onEditNote?: () => void;
   onScroll: (e: NativeSyntheticEvent<NativeScrollEvent>) => void;
 }) {
-  const found = new Date(sticker.discovered_at);
+  const found = new Date(sticker.created_at);
+  // The footer's WHEN is the photo's own moment, which an import backdates.
+  const shot = new Date(sticker.discovered_at);
   const hint = hintLetter(sticker);
   const note = sticker.notes?.trim() ?? '';
   const [frameHeight, setFrameHeight] = useState(0);
@@ -1027,7 +1029,7 @@ function FrontFace({ sticker, authorName, authorAvatarPath, imageUrl, hintShown,
           <View style={styles.frontAuthor}>
             <View style={styles.frontAuthorText}>
               <Text style={styles.authorName} numberOfLines={1}>{authorName}</Text>
-              <Text style={styles.dayCount}>DAY {ageInDays(sticker.discovered_at)}</Text>
+              <Text style={styles.dayCount}>DAY {ageInDays(sticker.created_at)}</Text>
             </View>
             <Avatar name={authorName} avatarPath={authorAvatarPath} size={38} />
           </View>
@@ -1121,7 +1123,7 @@ function FrontFace({ sticker, authorName, authorAvatarPath, imageUrl, hintShown,
         <FooterField label="WHERE" value={sticker.location_label ?? 'Not recorded'} />
         <FooterField
           label="WHEN"
-          value={`${found.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: false })}, ${found.toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}`}
+          value={`${shot.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: false })}, ${shot.toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}`}
           align="right"
         />
       </View>

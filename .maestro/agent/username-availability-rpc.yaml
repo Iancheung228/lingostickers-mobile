@@ -1,0 +1,38 @@
+# Sign-up asks the username_available RPC (migration 044), not profiles, which a
+# signed-out user can't read: an existing name ("maestro_qa", the QA account's
+# own) must show "Username taken", never "Username available". The form is never
+# submitted: no real sign-up.
+appId: com.iancheung228.lingostickers
+---
+- launchApp:
+    clearState: true
+- openLink: "exp+lingostickers-mobile://expo-development-client/?url=http%3A%2F%2Flocalhost%3A${METRO_PORT}"
+- tapOn:
+    text: "Open"
+    optional: true
+- extendedWaitUntil:
+    visible: "WELCOME BACK"
+    timeout: 60000
+
+# Sign-in footer link: "Don't have an account?  Sign Up".
+- tapOn: ".*Sign Up.*"
+- extendedWaitUntil:
+    visible: "Create your collection"
+    timeout: 15000
+- tapOn:
+    text: "Not Now"
+    optional: true
+
+# Same tap-settle-tap as username-format (keyboard slide-in can eat the first tap).
+- tapOn: "Username"
+- waitForAnimationToEnd:
+    timeout: 1500
+- tapOn: "Username"
+- inputText: "maestro_qa"
+- tapOn: "Create your collection"   # non-interactive label: dismisses the keyboard
+
+- extendedWaitUntil:
+    visible: "Username taken"
+    timeout: 15000
+- assertNotVisible: ".*Username available.*"
+- takeScreenshot: 01-username-taken

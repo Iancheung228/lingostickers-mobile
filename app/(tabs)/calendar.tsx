@@ -141,7 +141,7 @@ export default function CalendarScreen() {
       .from('stickers')
       .select('*')
       .eq('user_id', user.id)
-      .order('discovered_at', { ascending: false });
+      .order('created_at', { ascending: false });
     if (error) {
       setLoadError(true);
     } else if (data) {
@@ -155,7 +155,9 @@ export default function CalendarScreen() {
   const stickersByDate = useMemo(() => {
     const map = new Map<string, Sticker[]>();
     for (const sticker of stickers) {
-      const key = dateKey(sticker.discovered_at);
+      // The day the card was made, not the photo's date (an import of an
+      // old photo is still today's find).
+      const key = dateKey(sticker.created_at);
       const list = map.get(key) ?? [];
       list.push(sticker);
       map.set(key, list);

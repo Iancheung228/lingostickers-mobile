@@ -59,6 +59,7 @@ deno.lock
 # Maestro (Simulator UI tests): run output, and the QA account's password
 .maestro/output/
 .maestro/qa.env
+.maestro/demo.env
 
 # Local run logs (Metro, xcodebuild)
 .run/

@@ -35,9 +35,9 @@ export default function DayScreen() {
       .from('stickers')
       .select('*')
       .eq('user_id', user.id)
-      .gte('discovered_at', dayStart.toISOString())
-      .lt('discovered_at', dayEnd.toISOString())
-      .order('discovered_at', { ascending: false });
+      .gte('created_at', dayStart.toISOString())
+      .lt('created_at', dayEnd.toISOString())
+      .order('created_at', { ascending: false });
     if (error) {
       setLoadError(true);
     } else if (data) {

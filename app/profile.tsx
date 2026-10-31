@@ -12,6 +12,7 @@ import { pickAvatarImage } from '@/lib/avatars';
 import { isLocalCutoutAvailable } from '@/lib/cutout';
 import Avatar from '@/components/Avatar';
 import BlockedAccounts from '@/components/BlockedAccounts';
+import { SOCIAL_ENABLED } from '@/lib/features';
 import { colors, shadows, radii, spacing, fonts, wordFontFor } from '@/constants/theme';
 import { LANGUAGES } from '@/lib/languages';
 
@@ -351,9 +352,12 @@ export default function ProfileScreen() {
               and by a reviewer looking for them specifically. Reporting and
               blocking themselves live where the person is (a friend's profile,
               a challenge, an incoming request); this section is where you
-              review what you've done and how to reach a human. */}
-          <Text style={styles.sectionLabel}>SAFETY</Text>
+              review what you've done and how to reach a human. With social
+              features off (lib/features.ts) only the way to reach a human is
+              left, so the section is named for that. */}
+          <Text style={styles.sectionLabel}>{SOCIAL_ENABLED ? 'SAFETY' : 'SUPPORT'}</Text>
           <View style={styles.card}>
+            {SOCIAL_ENABLED && (
             <TouchableOpacity
               style={styles.infoRow}
               onPress={() => setBlockedOpen(true)}
@@ -372,9 +376,10 @@ export default function ProfileScreen() {
               </View>
               <Text style={styles.rowChevron}>›</Text>
             </TouchableOpacity>
+            )}
 
             <TouchableOpacity
-              style={[styles.infoRow, styles.rowDivider]}
+              style={[styles.infoRow, SOCIAL_ENABLED && styles.rowDivider]}
               onPress={() => Linking.openURL(
                 `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent('Tabi Stickers — report a problem')}`,
               )}

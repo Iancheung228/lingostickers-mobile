@@ -30,6 +30,8 @@ interface PhotoExtractorProps {
   // used only for on-device segmentation (see SEGMENT_CONTEXT_PAD_RATIO).
   onExtract: (result: ExtractResult) => Promise<void> | void;
   processing: boolean;
+  /** Stops the in-flight scan; the X does this instead of closing while one runs. */
+  onCancelProcessing?: () => void;
   /// Which stage the scan is on, once one is running.
   stage?: ScanStage | null;
   usingServerCutout?: boolean;
@@ -159,7 +161,7 @@ export async function renderWholePhotoExtract(
   };
 }
 
-export default function PhotoExtractor({ imageUri, imageWidth, imageHeight, onClose, onExtract, processing, stage, usingServerCutout }: PhotoExtractorProps) {
+export default function PhotoExtractor({ imageUri, imageWidth, imageHeight, onClose, onExtract, processing, onCancelProcessing, stage, usingServerCutout }: PhotoExtractorProps) {
   const [mode, setMode] = useState<ToolMode>('box');
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
   const [cropping, setCropping] = useState(false);
@@ -349,12 +351,19 @@ export default function PhotoExtractor({ imageUri, imageWidth, imageHeight, onCl
         <View style={styles.header}>
           <Text style={styles.headerTitle} accessibilityLabel="Crop your sticker">Extract Sticker</Text>
           <TouchableOpacity
-            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onClose(); }}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              // While a scan is running the X stops it and leaves the photo
+              // and selection in place; it used to be silently disabled.
+              if (processing) onCancelProcessing?.(); else onClose();
+            }}
             style={styles.closeButton}
             hitSlop={8}
-            disabled={busy}
+            // `cropping` stays true until onExtract resolves — i.e. through the
+            // whole scan — so it can't gate the X once processing has begun.
+            disabled={processing ? !onCancelProcessing : cropping}
             accessibilityRole="button"
-            accessibilityLabel="Close without extracting a sticker"
+            accessibilityLabel={processing ? 'Stop this scan' : 'Close without extracting a sticker'}
           >
             <X size={24} color={colors.inkDark} />
           </TouchableOpacity>

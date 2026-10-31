@@ -1,5 +1,5 @@
 # Profile cleanup: no watercolor copy, "stickers" in the note, an "App version" row at the
-# bottom, and the Friends empty-state CTA. Never taps Log Out's confirm or any delete action.
+# bottom. Never taps Log Out's confirm or any delete action.
 appId: com.iancheung228.lingostickers
 ---
 - launchApp:
@@ -53,25 +53,11 @@ appId: com.iancheung228.lingostickers
 - assertVisible: "Log Out"
 - takeScreenshot: 02-profile-bottom
 
-# Friends tab: the empty state, if the QA account has no friends.
-# Profile is a pushed screen without the tab bar: leave it first.
+# Friends is switched off for v1 (lib/features.ts SOCIAL_ENABLED), so the
+# Friends empty state is no longer reachable; hide-social-v1.yaml covers the
+# tab being gone. Leave Profile and confirm the home screen is back.
 - tapOn:
     text: "Go back"
 - extendedWaitUntil:
     visible: "FOUND"
     timeout: 15000
-- tapOn: "Friends.*"
-- extendedWaitUntil:
-    visible: ".*(Find a friend|Learn alongside someone|Friends).*"
-    timeout: 15000
-- runFlow:
-    when:
-      visible: "Find a friend"
-    commands:
-      - assertVisible: "Find a friend"
-      - takeScreenshot: 03-friends-empty-cta
-- runFlow:
-    when:
-      notVisible: "Find a friend"
-    commands:
-      - takeScreenshot: 03-friends-not-empty-no-cta

@@ -1,0 +1,41 @@
+# The extractor's X stops a scan that is still running: no alert, the photo and
+# selection stay, and Extract Sticker can be tapped again. Spends at most ONE
+# create-sticker call (the stopped one) — check scripts/qa-budget.mjs first.
+appId: com.iancheung228.lingostickers
+---
+- runFlow: ../sign-in.yaml
+- tapOn:
+    text: "Close this card"
+    optional: true
+- tapOn: "Scan a new sticker"
+- tapOn:
+    text: "Agree and start scanning"
+    optional: true
+- extendedWaitUntil:
+    visible: "Import a photo from your library"
+    timeout: 15000
+- tapOn: "Import a photo from your library"
+- waitForAnimationToEnd:
+    timeout: 3000
+# Any photo: the first cell of the picker grid.
+- tapOn:
+    id: "PXGGridLayout-Info"
+    index: 0
+- extendedWaitUntil:
+    visible: "Extract Sticker"
+    timeout: 20000
+- tapOn:
+    point: "50%,91%"
+# Stop while the scan is still running.
+- extendedWaitUntil:
+    visible: "Stop this scan"
+    timeout: 10000
+- takeScreenshot: 01-scanning
+- tapOn: "Stop this scan"
+- waitForAnimationToEnd:
+    timeout: 2000
+- assertNotVisible: ".*failed.*"
+- assertNotVisible: "Couldn't find the word"
+- assertNotVisible: "Add to Collection"
+- assertVisible: "Close without extracting a sticker"
+- takeScreenshot: 02-stopped-photo-kept

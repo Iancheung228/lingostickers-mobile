@@ -1,4 +1,5 @@
 import { spacing } from './theme';
+import { SOCIAL_ENABLED } from '@/lib/features';
 
 // Floating pill tab bar dimensions — shared between the tab layout (which
 // positions the pill) and every tab screen (which needs to pad its own
@@ -13,7 +14,8 @@ export const TAB_BAR_BOTTOM_MARGIN = spacing.sm;
 // render time (see _layout.tsx), not pinned to fixed side margins.
 export const TAB_BAR_ITEM_WIDTH = 62;
 export const TAB_BAR_SCAN_ITEM_WIDTH = 74;
-export const TAB_BAR_WIDTH = TAB_BAR_ITEM_WIDTH * 4 + TAB_BAR_SCAN_ITEM_WIDTH;
+// Four regular tabs, or three while Friends is switched off (lib/features.ts).
+export const TAB_BAR_WIDTH = TAB_BAR_ITEM_WIDTH * (SOCIAL_ENABLED ? 4 : 3) + TAB_BAR_SCAN_ITEM_WIDTH;
 // Total clearance a screen's bottom-most content needs to reserve: the
 // pill's own height and margin, plus a little breathing room above it.
 export const TAB_BAR_CLEARANCE = TAB_BAR_HEIGHT + TAB_BAR_BOTTOM_MARGIN + spacing.sm;

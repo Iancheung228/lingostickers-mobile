@@ -28,13 +28,12 @@ import { languageLabel } from '@/lib/languages';
 
 const CATEGORIES: Array<'All' | Category> = ['All', 'Kitchen', 'Animals', 'Study', 'Nature', 'Other'];
 
-// 'newest'/'oldest' sort by discovered_at (when the memory happened —
-// backdated to the photo's own date on import). 'recentlyAdded' sorts by
-// created_at (when it actually landed in your collection) instead, for
-// people who want to see today's imports at the top regardless of how old
-// the photo itself is.
+// 'recentlyAdded' (the default) sorts by created_at, when the card landed in
+// your collection. 'newest'/'oldest' sort by discovered_at, the photo's own
+// date, which an import backdates — for browsing by when the moment happened.
 type SortMode = 'newest' | 'oldest' | 'recentlyAdded';
-const SORT_CYCLE: SortMode[] = ['newest', 'oldest', 'recentlyAdded'];
+const SORT_CYCLE: SortMode[] = ['recentlyAdded', 'newest', 'oldest'];
+const DEFAULT_SORT: SortMode = 'recentlyAdded';
 const SORT_LABELS: Record<SortMode, string> = {
   newest: 'Photo date — newest',
   oldest: 'Photo date — oldest',
@@ -60,7 +59,7 @@ export default function CollectionScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [activeCategory, setActiveCategory] = useState<'All' | Category>('All');
   const [favoritesOnly, setFavoritesOnly] = useState(false);
-  const [sortMode, setSortMode] = useState<SortMode>('newest');
+  const [sortMode, setSortMode] = useState<SortMode>(DEFAULT_SORT);
   const [sortMenuVisible, setSortMenuVisible] = useState(false);
   const sortSheet = useRef<BottomSheetHandle>(null);
   const [selectedSticker, setSelectedSticker] = useState<Sticker | null>(null);
@@ -89,7 +88,7 @@ export default function CollectionScreen() {
       .from('stickers')
       .select('*')
       .eq('user_id', user.id)
-      .order('discovered_at', { ascending: false });
+      .order('created_at', { ascending: false });
 
     if (error) {
       setLoadError(true);
@@ -339,7 +338,7 @@ export default function CollectionScreen() {
         <View style={styles.iconCluster}>
           <TouchableOpacity
             testID="collection-sort"
-            style={[styles.iconBtnSmall, styles.sortPill, sortMode !== 'newest' && styles.iconBtnSmallSortActive]}
+            style={[styles.iconBtnSmall, styles.sortPill, sortMode !== DEFAULT_SORT && styles.iconBtnSmallSortActive]}
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
               setSortMenuVisible(true);
@@ -348,7 +347,7 @@ export default function CollectionScreen() {
             accessibilityLabel={`Sort: ${SORT_LABELS[sortMode]}. Tap to change.`}
             hitSlop={8}
           >
-            <ArrowUpDown size={14} color={sortMode !== 'newest' ? colors.inkDark : colors.inkMid} />
+            <ArrowUpDown size={14} color={sortMode !== DEFAULT_SORT ? colors.inkDark : colors.inkMid} />
             <Text style={styles.sortPillText} numberOfLines={1}>{SORT_LABELS[sortMode]}</Text>
           </TouchableOpacity>
           <TouchableOpacity

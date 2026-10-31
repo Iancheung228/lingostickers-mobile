@@ -29,7 +29,7 @@
  * still turns over overnight rather than reshuffling through the afternoon.
  * Only cards on a step are scheduled to the minute.
  */
-import { Language, Sticker } from '@/lib/types';
+import type { Language, Sticker } from '@/lib/types';
 
 // How many finds a day counts as a full day. Shown as "GOAL 5" on the home
 // header; purely a target to aim at, nothing is gated on hitting it.
@@ -133,7 +133,8 @@ export function ageInDays(dateStr: string, now: number = Date.now()): number {
 
 /** Stickers made today — the numerator of the header's "N found today".
  *  created_at, not discovered_at: a card made today from an old photo is still
- *  a find of today (discovered_at is the photo's date, kept for the calendar). */
+ *  a find of today. discovered_at is the photo's own date and is used only
+ *  where the card describes the photo (its WHEN line, the photo-date sort). */
 export function findsToday(stickers: Sticker[], now: number = Date.now()): number {
   return stickers.filter(s => ageInDays(s.created_at, now) === 0).length;
 }
@@ -369,7 +370,9 @@ export function formatInterval(days: number): string {
  * date_trunc would have shifted the due day for anyone west of GMT) — those
  * fall back to 029's inference, computed here in the user's own timezone
  * exactly as it always was: local midnight of last_reviewed_at (or of
- * discovered_at, for a card never studied) plus the interval.
+ * created_at, for a card never studied) plus the interval. created_at, not
+ * the photo's date: a card made today from a 2018 photo was otherwise due the
+ * moment it was made, and years overdue.
  */
 export function dueAtMs(sticker: Sticker): number {
   if (sticker.due_at) {
@@ -377,7 +380,7 @@ export function dueAtMs(sticker: Sticker): number {
     if (!Number.isNaN(at)) return at;
   }
   const studied = !!sticker.last_reviewed_at;
-  const clockStart = studied ? sticker.last_reviewed_at! : sticker.discovered_at;
+  const clockStart = studied ? sticker.last_reviewed_at! : sticker.created_at;
   const interval = studied ? (sticker.interval_days ?? 0) : NEW_CARD_REST_DAYS;
   const from = new Date(clockStart).getTime();
   return midnightIn(Number.isNaN(from) ? Date.now() : from, interval);
@@ -521,7 +524,7 @@ export function weekActivity(
   const reviews = new Array<number>(days).fill(0);
   for (const sticker of stickers) {
     if (opts.language && sticker.language !== opts.language) continue;
-    const foundSlot = slotOf.get(dateKeyOf(new Date(sticker.discovered_at)));
+    const foundSlot = slotOf.get(dateKeyOf(new Date(sticker.created_at)));
     if (foundSlot !== undefined) finds[foundSlot] += 1;
     if (sticker.last_reviewed_at) {
       const reviewSlot = slotOf.get(dateKeyOf(new Date(sticker.last_reviewed_at)));
@@ -541,7 +544,7 @@ export function weekActivity(
 /**
  * Local-time date key, `YYYY-MM-DD`. Local rather than UTC so a card due late
  * in the evening isn't bucketed into tomorrow — the same reasoning the
- * calendar screen uses for `discovered_at`.
+ * calendar screen uses for `created_at`.
  */
 export function dateKeyOf(date: Date): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;

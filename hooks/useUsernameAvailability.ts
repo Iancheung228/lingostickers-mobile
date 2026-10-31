@@ -14,16 +14,19 @@ export function useUsernameAvailability(username: string): UsernameAvailability 
     }
 
     setStatus('checking');
+    let current = true;
     const handle = setTimeout(async () => {
-      const { data } = await supabase
-        .from('profiles')
-        .select('id')
-        .ilike('username', trimmed)
-        .maybeSingle();
-      setStatus(data ? 'taken' : 'available');
+      // An RPC, not a profiles query: sign-up runs signed out, and profiles
+      // are readable only when signed in (033), so the old query returned
+      // nothing and called every name "available". See migration 044.
+      const { data, error } = await supabase.rpc('username_available', { q: trimmed });
+      if (!current) return;
+      // Say nothing rather than a false "available"; the unique constraint
+      // still has the last word on submit.
+      setStatus(error ? 'idle' : data ? 'available' : 'taken');
     }, 400);
 
-    return () => clearTimeout(handle);
+    return () => { current = false; clearTimeout(handle); };
   }, [username]);
 
   return status;

@@ -122,6 +122,9 @@ export default function ScanScreen() {
   // cleaned up (its now-orphaned storage files removed) once the retry
   // actually succeeds. Null outside of a retry.
   const draftBeforeRetryRef = useRef<StickerDraft | null>(null);
+  // The in-flight create-sticker call, so the extractor's X can stop a scan
+  // that is taking too long, and so a scan can give up on its own.
+  const scanAbortRef = useRef<{ controller: AbortController; byUser: boolean } | null>(null);
   // Dry-run only: the device's cutout for the scan in flight, shown in the
   // reveal instead of the saved image. Cleared each scan so a failed device
   // cutout never shows the previous scan's preview.
@@ -208,7 +211,9 @@ export default function ScanScreen() {
     discoveredAt,
     lassoPolygon,
     precutImagePath,
+    signal,
   }: {
+    signal?: AbortSignal;
     base64: string;
     memoryBase64: string | null | undefined;
     // A small copy of the same scene, for the vision model. See
@@ -223,7 +228,7 @@ export default function ScanScreen() {
   }) => {
     if (!user) throw new Error('Not signed in');
 
-    const { data, error } = await supabase.functions.invoke('create-sticker', {
+    const invoked = supabase.functions.invoke('create-sticker', {
       body: {
         image: `data:image/jpeg;base64,${base64}`,
         userId: user.id,
@@ -233,7 +238,27 @@ export default function ScanScreen() {
         ...(lassoPolygon ? { lassoPolygon } : {}),
         ...(precutImagePath ? { precutImagePath } : {}),
       },
+      signal,
     });
+    // The signal alone doesn't stop the request on the device (verified on the
+    // Simulator 2026-10-31: a stopped scan still produced its card), so race
+    // it: Stop or the time limit frees the screen at once, and a result that
+    // lands afterwards is dropped — with the files the server saved for it.
+    let stopped: Promise<never> | null = null;
+    if (signal) {
+      stopped = new Promise<never>((_, reject) => {
+        const onAbort = () => reject(new Error('Scan stopped'));
+        if (signal.aborted) onAbort(); else signal.addEventListener('abort', onAbort);
+      });
+      invoked.then(({ data: late }) => {
+        if (!signal.aborted || !late?.imagePath) return;
+        const paths = [late.imagePath, late.memoryPhotoPath].filter(Boolean) as string[];
+        supabase.storage.from('sticker-images').remove(paths).then(({ error: cleanupError }) => {
+          if (cleanupError) debugWarn('Failed to clean up a stopped scan', cleanupError);
+        });
+      });
+    }
+    const { data, error } = await (stopped ? Promise.race([invoked, stopped]) : invoked);
 
     if (error) {
       const status = (error as any).context?.status;
@@ -376,6 +401,16 @@ export default function ScanScreen() {
       metadataPromiseRef.current = getImportedPhotoMetadata(asset.assetId);
     }
 
+    // Set once the cutout is done and the word lookup starts, so a failure
+    // after that point isn't reported as a failed extraction — the cutout
+    // worked; it's the word that didn't come back.
+    let lookingUpWord = false;
+    const scanAbort = { controller: new AbortController(), byUser: false };
+    scanAbortRef.current = scanAbort;
+    // The server gives each model attempt 12s with retries and a failover;
+    // past this, waiting longer has never produced a card.
+    const giveUp = setTimeout(() => scanAbort.controller.abort(), SCAN_TIMEOUT_MS);
+
     try {
       // Checked here rather than left to submitImageForSticker, because the
       // upload below runs first and would otherwise write to `undefined/…`.
@@ -463,6 +498,7 @@ export default function ScanScreen() {
       }
 
       setStage('word');
+      lookingUpWord = true;
       setSceneBase64(contextBase64 ?? null);
       setSceneChips([]);
       const submitStarted = Date.now();
@@ -474,6 +510,7 @@ export default function ScanScreen() {
           discoveredAt: fallbackDiscoveredAt,
           lassoPolygon,
           precutImagePath,
+          signal: scanAbort.controller.signal,
         });
         const serverMs = Date.now() - submitStarted;
         debugLog(
@@ -537,11 +574,23 @@ export default function ScanScreen() {
         } : prev);
       }
     } catch (err: any) {
+      // Stopped with the X: they know, and the photo is still on screen.
+      if (scanAbort.byUser) return;
+      if (scanAbort.controller.signal.aborted) {
+        Alert.alert(
+          "Couldn't find the word",
+          'The word service is taking too long right now. Your photo is still here — tap Extract Sticker to try again.',
+        );
+        return;
+      }
       const title = err?.isRateLimit
         ? 'Daily limit reached'
+        : lookingUpWord ? "Couldn't find the word"
         : camera ? 'Scan failed' : 'Extraction failed';
       Alert.alert(title, err?.message ?? 'Something went wrong. Please try again.');
     } finally {
+      clearTimeout(giveUp);
+      if (scanAbortRef.current === scanAbort) scanAbortRef.current = null;
       setProcessing(false);
     }
   }, [processing, importedAsset, cameraCaptureContext, submitImageForSticker, prepareMemoryPhoto, user]);
@@ -1021,6 +1070,12 @@ export default function ScanScreen() {
           }
         }}
         onExtract={handleExtractFromPhoto}
+        onCancelProcessing={() => {
+          const scan = scanAbortRef.current;
+          if (!scan) return;
+          scan.byUser = true;
+          scan.controller.abort();
+        }}
         processing={processing}
         stage={stage}
         usingServerCutout={usingServerCutout}
@@ -1079,6 +1134,7 @@ const FRAME_RADIUS = 28;
 const FRAME_MARGIN = 16;
 // Viewfinder + capture-crop aspect ratio, expressed as width/height (3:4 portrait).
 const ASPECT_RATIO = 3 / 4;
+const SCAN_TIMEOUT_MS = 60_000;
 const RETICLE_SIZE = 72;
 
 const styles = StyleSheet.create({

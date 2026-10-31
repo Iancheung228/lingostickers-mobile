@@ -1,0 +1,27 @@
+# Friends is off for the first release (lib/features.ts SOCIAL_ENABLED = false):
+# no Friends tab in the bar, and Profile's SAFETY section becomes SUPPORT with
+# only "Report a problem" (no Blocked accounts). Never taps the mail link.
+appId: com.iancheung228.lingostickers
+---
+- runFlow: ../sign-in.yaml
+- tapOn:
+    text: "Close this card"
+    optional: true
+- assertVisible: "Collection"
+- assertVisible: "Calendar"
+- assertVisible: "Scan a new sticker"
+- assertVisible: "Boards"
+- assertNotVisible: "Friends.*"
+- takeScreenshot: 01-tab-bar
+
+- tapOn: "Open your profile and settings"
+- extendedWaitUntil:
+    visible: "My Profile"
+    timeout: 15000
+- scrollUntilVisible:
+    element: "Email us about a problem"
+    direction: DOWN
+- assertNotVisible: "SAFETY"
+- assertNotVisible: "Blocked accounts"
+- assertVisible: "Email us about a problem"
+- takeScreenshot: 02-profile-support

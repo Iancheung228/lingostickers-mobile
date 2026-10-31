@@ -6,6 +6,7 @@ import type { LucideIcon } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useChallenges } from '@/hooks/useChallenges';
 import { useFriends } from '@/hooks/useFriends';
+import { SOCIAL_ENABLED } from '@/lib/features';
 import { colors, shadows, radii, fonts } from '@/constants/theme';
 import { TAB_BAR_HEIGHT, TAB_BAR_BOTTOM_MARGIN, TAB_BAR_WIDTH, TAB_BAR_ITEM_WIDTH, TAB_BAR_SCAN_ITEM_WIDTH } from '@/constants/tabBar';
 
@@ -148,6 +149,9 @@ export default function TabLayout() {
       <Tabs.Screen
         name="friends"
         options={{
+          // Off for the first release — see lib/features.ts. href: null
+          // keeps the route but takes it out of the bar.
+          ...(SOCIAL_ENABLED ? {} : { href: null }),
           title: 'Friends',
           tabBarAccessibilityLabel: friendsBadge > 0
             ? `Friends, ${friendsBadge} waiting on you`
