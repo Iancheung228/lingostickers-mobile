@@ -79,7 +79,11 @@ if ! lsof -nP -iTCP:"$METRO_PORT" -sTCP:LISTEN >/dev/null 2>&1; then
   env -u CI nohup npx expo start --dev-client --port "$METRO_PORT" > harness/logs/metro.log 2>&1 &
   for _ in $(seq 60); do curl -sf "http://localhost:$METRO_PORT/status" >/dev/null && break; sleep 1; done
 fi
-harness/qa.sh .maestro/sign-in.yaml > harness/logs/last-qa.txt; rc=$?
+# Baseline is the FULL suite: qa-status.json holds only the flows of the last
+# run, so a sign-in-only check here made every finished feature read "not run"
+# and the loop redo them after each restart.
+if [ "${DRY_RUN:-}" = "1" ]; then harness/qa.sh .maestro/sign-in.yaml > harness/logs/last-qa.txt
+else harness/qa.sh > harness/logs/last-qa.txt; fi; rc=$?
 [ $rc -eq 2 ] && { cat harness/logs/last-qa.txt; notify "QA environment not ready; fix it before looping."; exit 1; }
 cat harness/logs/last-qa.txt
 [ "${DRY_RUN:-}" = "1" ] && { echo "DRY RUN: worktree, backend, Metro :$METRO_PORT and QA all ready. No tokens spent."; exit 0; }
