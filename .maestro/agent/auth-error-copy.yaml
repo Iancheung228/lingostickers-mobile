@@ -1,0 +1,62 @@
+# Auth error copy: a wrong password shows the friendly line from lib/authErrors.ts,
+# never Supabase's "Invalid login credentials". Forgot-password keeps Send Reset
+# Code disabled for "notanemail" (no email shape), so the screen does not advance.
+# Does NOT submit a valid address on forgot-password (that sends a real email).
+appId: com.iancheung228.lingostickers
+---
+- launchApp:
+    clearState: true
+- openLink: "exp+lingostickers-mobile://expo-development-client/?url=http%3A%2F%2Flocalhost%3A${METRO_PORT}"
+- tapOn:
+    text: "Open"
+    optional: true
+- extendedWaitUntil:
+    visible: "WELCOME BACK"
+    timeout: 60000
+
+# Fill the QA email and a deliberately wrong password.
+- tapOn: "Email"
+- waitForAnimationToEnd:
+    timeout: 1500
+- tapOn: "Email"
+- inputText: ${MAESTRO_EMAIL}
+- tapOn: "Password"
+- waitForAnimationToEnd:
+    timeout: 1500
+- tapOn: "Password"
+- inputText: "definitely-wrong-password"
+- tapOn: "WELCOME BACK"   # dismisses the keyboard so the links below are not covered
+
+- tapOn: "Sign In"
+- extendedWaitUntil:
+    visible: ".*That email and password don't match.*"
+    timeout: 20000
+- assertNotVisible: ".*Invalid login credentials.*"
+- takeScreenshot: 01-friendly-auth-error
+# iOS may offer "Save Password?" even after a failed attempt; it covers the screen.
+- tapOn:
+    text: "Not Now"
+    optional: true
+
+# Forgot-password: an address without a TLD keeps Send Reset Code disabled.
+- tapOn: "Forgot password\\?"
+# The "Save Password?" sheet can arrive after navigation too; clear it first.
+- tapOn:
+    text: "Not Now"
+    optional: true
+- extendedWaitUntil:
+    visible: "We'll email you a code to reset it"
+    timeout: 15000
+- tapOn: "Email"
+- waitForAnimationToEnd:
+    timeout: 1500
+- tapOn: "Email"
+- inputText: "notanemail"
+- tapOn: "We'll email you a code to reset it"   # non-interactive label: dismisses the keyboard
+- tapOn: "Send Reset Code"
+- waitForAnimationToEnd:
+    timeout: 1500
+- assertVisible: "We'll email you a code to reset it"
+- assertNotVisible: "Enter the code we emailed you"
+- assertNotVisible: "Code from email"
+- takeScreenshot: 02-forgot-disabled-notanemail

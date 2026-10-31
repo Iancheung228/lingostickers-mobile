@@ -7,6 +7,7 @@ import { Link } from 'expo-router';
 import { useAuth } from '@/hooks/useAuth';
 import CozyBackground from '@/components/CozyBackground';
 import { colors, shadows, radii, spacing, typography, fonts } from '@/constants/theme';
+import { isEmail } from '@/lib/authErrors';
 import { debugWarn } from '@/lib/debug';
 
 export default function ForgotPasswordScreen() {
@@ -19,7 +20,7 @@ export default function ForgotPasswordScreen() {
   const [verifyError, setVerifyError] = useState<string | null>(null);
   const [resent, setResent] = useState(false);
 
-  const isFormValid = email.trim().length > 0;
+  const isFormValid = isEmail(email);
   const isCodeValid = code.trim().length > 0;
 
   const handleSend = async () => {

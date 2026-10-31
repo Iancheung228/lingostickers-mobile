@@ -6,6 +6,7 @@ import {
 import { Link } from 'expo-router';
 import { useAuth } from '@/hooks/useAuth';
 import PasswordField from '@/components/PasswordField';
+import { getAuthErrorMessage, isEmail } from '@/lib/authErrors';
 import AuthIntro from '@/components/AuthIntro';
 import { colors, typography, shadows, radii, spacing, fonts } from '@/constants/theme';
 
@@ -21,7 +22,7 @@ export default function SignInScreen() {
   // keyboard and leaving the password box untouched two rows below it.
   const passwordRef = useRef<TextInput>(null);
 
-  const isFormValid = email.trim().length > 0 && password.length > 0;
+  const isFormValid = isEmail(email) && password.length > 0;
 
   const handleSignIn = async () => {
     if (!isFormValid) return;
@@ -35,7 +36,7 @@ export default function SignInScreen() {
       if (error.message === 'Email not confirmed') {
         setUnconfirmed(true);
       } else {
-        setError(error.message);
+        setError(getAuthErrorMessage(error));
       }
     }
   };
@@ -44,7 +45,7 @@ export default function SignInScreen() {
     setLoading(true);
     const { error } = await resendSignupEmail(email.trim());
     setLoading(false);
-    setResendMessage(error ? error.message : 'Confirmation email resent.');
+    setResendMessage(error ? getAuthErrorMessage(error) : 'Confirmation email resent.');
   };
 
   return (

@@ -11,3 +11,8 @@
 
 ## collection-search-visible (re-verify)
 - No app change; code was already in place. QA status had gone stale, so reran: flow PASS, full harness/qa.sh PASS (5 flows). Shots 01 (search bar pinned, hero/Latest hidden) and 02 (Cancel restores) judged OK. No new bugs.
+
+## auth-error-copy
+- New lib/authErrors.ts (getAuthErrorMessage, isEmail). sign-in.tsx maps errors (incl. resend) to friendly copy and disables Sign In until the email looks like an address; forgot-password.tsx disables Send Reset Code until isEmail.
+- QA: new flow .maestro/agent/auth-error-copy.yaml PASS, full harness/qa.sh PASS (6 flows). Shot 02 judged: 'notanemail' leaves Send Reset Code faded, subtitle unchanged. Shot 01 asserted by text only, not viewed.
+- Surprising: iOS "Save Password?" sheet appears over sign-in/forgot-password; flows need an optional "Not Now". signin-keyboard.yaml asserted the old raw copy, updated to the friendly text. Resend-failure fallback copy says "signing in" (minor wording).

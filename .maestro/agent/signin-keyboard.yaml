@@ -33,7 +33,7 @@ appId: com.iancheung228.lingostickers
 - assertVisible: "Sign In"
 - tapOn: "Sign In"
 - extendedWaitUntil:
-    visible: "Invalid login credentials.*"
+    visible: ".*That email and password don't match.*"
     timeout: 20000
 - assertVisible: "Sign In"
 - takeScreenshot: 02-error-keyboard-up
