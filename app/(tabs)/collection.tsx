@@ -36,9 +36,9 @@ const CATEGORIES: Array<'All' | Category> = ['All', 'Kitchen', 'Animals', 'Study
 type SortMode = 'newest' | 'oldest' | 'recentlyAdded';
 const SORT_CYCLE: SortMode[] = ['newest', 'oldest', 'recentlyAdded'];
 const SORT_LABELS: Record<SortMode, string> = {
-  newest: 'Photo date \u2014 newest',
-  oldest: 'Photo date \u2014 oldest',
-  recentlyAdded: 'Date added \u2014 newest',
+  newest: 'Photo date — newest',
+  oldest: 'Photo date — oldest',
+  recentlyAdded: 'Date added — newest',
 };
 
 // The wall card lifts up into the rose band rather than sitting below it,
