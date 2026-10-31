@@ -24,7 +24,9 @@ Do NOT drive Maestro yourself; screenshots are expensive in your context.
 Spawn the `qa-tester` subagent (it runs on a cheaper model) in the FOREGROUND
 (`run_in_background: false`). This session ends the moment you end your turn,
 so a background QA run is lost along with everything you haven't committed.
-Never end your turn "waiting for QA". Give it:
+Never end your turn "waiting for QA". For a rerun, spawn a NEW foreground
+qa-tester; don't SendMessage the old one (that returns at once, and the reply
+arrives after you're gone). Give it:
 - the feature id, its description and `flow_must_show`,
 - the flow path to write (`flow` field, under `.maestro/agent/`),
 - `METRO_PORT=$METRO_PORT` (the loop's Metro; the value is in your environment).
