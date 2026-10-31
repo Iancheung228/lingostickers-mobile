@@ -9,7 +9,7 @@ import { Camera } from 'lucide-react-native';
 import { useAuth } from '@/hooks/useAuth';
 import { useUsernameAvailability } from '@/hooks/useUsernameAvailability';
 import { supabase } from '@/lib/supabase';
-import { USERNAME_RULE, isValidUsername, normalizeUsername } from '@/lib/username';
+import { isValidUsername, normalizeUsername } from '@/lib/username';
 import { pickAvatarImage, uploadAvatar } from '@/lib/avatars';
 import { stashPendingAvatar, clearPendingAvatar } from '@/lib/pendingAvatar';
 import AuthIntro from '@/components/AuthIntro';
@@ -213,7 +213,7 @@ export default function SignUpScreen() {
               onSubmitEditing={() => emailRef.current?.focus()}
             />
             {username.length > 0 && !usernameValid && (
-              <Text style={[styles.usernameHint, styles.usernameHintTaken]}>{USERNAME_RULE}</Text>
+              <Text style={[styles.usernameHint, styles.usernameHintTaken]}>Use 3–20 letters, numbers, _ or .</Text>
             )}
             {usernameValid && usernameAvailability !== 'idle' && (
               <Text style={[
