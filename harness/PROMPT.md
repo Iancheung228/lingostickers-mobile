@@ -21,7 +21,10 @@ says to. TypeScript changes hot-reload on the Simulator; you never need an EAS b
 
 ## 4. Verify like a user — delegate to the `qa-tester` subagent
 Do NOT drive Maestro yourself; screenshots are expensive in your context.
-Spawn the `qa-tester` subagent (it runs on a cheaper model) with:
+Spawn the `qa-tester` subagent (it runs on a cheaper model) in the FOREGROUND
+(`run_in_background: false`). This session ends the moment you end your turn,
+so a background QA run is lost along with everything you haven't committed.
+Never end your turn "waiting for QA". Give it:
 - the feature id, its description and `flow_must_show`,
 - the flow path to write (`flow` field, under `.maestro/agent/`),
 - `METRO_PORT=$METRO_PORT` (the loop's Metro; the value is in your environment).
