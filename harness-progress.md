@@ -41,3 +41,8 @@
 - HomeHeader.tsx: testIDs home-search / home-settings (SettingsButton gained an optional testID prop), vertical slop 15 (=45pt tall). calendar.tsx: month arrows hitSlop 14 (=44x44) with testIDs calendar-prev-month / calendar-next-month. No visual change.
 - QA: new flow .maestro/agent/tap-targets.yaml PASS, full harness/qa.sh PASS (14 flows). Shots judged: home and calendar layout unchanged; search opened from a tap 10pt left of the glyph, month changed from taps 10pt outside the arrows.
 - GAP: home icons are only ~35pt wide (slop capped by the 12pt gap, skills #9), not 44; the 6pt inner slop is untested. Flow date assertions assume the simulator is in October 2026.
+
+## a11y-selected-state
+- app/profile.tsx: language, wall-style and border-style rows get accessibilityRole="button" + accessibilityState={{ selected: active }}. PhotoExtractor.tsx: header title has accessibilityLabel "Crop your sticker"; button keeps "Extract Sticker".
+- QA: new flow .maestro/agent/a11y-selected-state.yaml PASS, full harness/qa.sh PASS (15 flows). Shots judged: profile with French row selected, crop screen with title + button, no extraction run.
+- GAP: sim photo library has no seeded sticker, so flow picks the first library photo; selected assertion is a regex over language names (proves some row is selected, not the account's own).
