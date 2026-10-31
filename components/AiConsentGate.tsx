@@ -30,12 +30,12 @@ const PRIVACY_URL = 'https://tabistickers.com/privacy.html';
 
 export function AiConsentGate({
   onAccept,
-  agreeTestID,
-  privacyTestID,
+  agree_testID,
+  privacy_testID,
 }: {
   onAccept: () => void;
-  agreeTestID?: string;
-  privacyTestID?: string;
+  agree_testID?: string;
+  privacy_testID?: string;
 }) {
   const insets = useSafeAreaInsets();
   return (
@@ -63,7 +63,7 @@ export function AiConsentGate({
         <TouchableOpacity
           style={styles.button}
           onPress={onAccept}
-          testID={agreeTestID}
+          testID={agree_testID}
           accessibilityRole="button"
           accessibilityLabel="Agree and start scanning"
         >
@@ -71,7 +71,7 @@ export function AiConsentGate({
         </TouchableOpacity>
         <TouchableOpacity
           onPress={() => Linking.openURL(PRIVACY_URL)}
-          testID={privacyTestID}
+          testID={privacy_testID}
           accessibilityRole="link"
           accessibilityLabel="Read the privacy policy"
           hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
