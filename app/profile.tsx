@@ -255,6 +255,8 @@ export default function ProfileScreen() {
                   key={code}
                   style={[styles.langRow, i > 0 && styles.rowDivider]}
                   onPress={() => handleSelectLanguage(code)}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: active }}
                   disabled={!profile}
                   activeOpacity={0.8}
                 >
@@ -284,6 +286,8 @@ export default function ProfileScreen() {
                   key={code}
                   style={[styles.langRow, i > 0 && styles.rowDivider]}
                   onPress={() => handleSelectWallStyle(code)}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: active }}
                   disabled={!profile}
                   activeOpacity={0.8}
                 >
@@ -315,6 +319,8 @@ export default function ProfileScreen() {
                       key={code}
                       style={[styles.langRow, i > 0 && styles.rowDivider]}
                       onPress={() => handleSelectBorderStyle(code)}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: active }}
                       disabled={!profile}
                       activeOpacity={0.8}
                     >

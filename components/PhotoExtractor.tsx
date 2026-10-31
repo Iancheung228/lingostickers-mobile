@@ -347,7 +347,7 @@ export default function PhotoExtractor({ imageUri, imageWidth, imageHeight, onCl
     <Modal visible animationType="slide" presentationStyle="fullScreen" onRequestClose={busy ? undefined : onClose}>
       <SafeAreaView style={styles.container}>
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>Extract Sticker</Text>
+          <Text style={styles.headerTitle} accessibilityLabel="Crop your sticker">Extract Sticker</Text>
           <TouchableOpacity
             onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onClose(); }}
             style={styles.closeButton}

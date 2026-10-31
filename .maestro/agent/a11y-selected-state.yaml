@@ -1,0 +1,65 @@
+# Accessibility state: the learning-language rows in My Profile are buttons with
+# selected state, and the one matching the account's language reports selected: true.
+# The crop screen title reads "Crop your sticker" (its button keeps "Extract Sticker").
+# Stops on the crop screen: never taps Extract Sticker, so no AI call is made.
+appId: com.iancheung228.lingostickers
+---
+- runFlow: ../sign-in.yaml
+
+# Open My Profile through the settings chip in the top row.
+- tapOn:
+    text: "Open your profile and settings"
+- extendedWaitUntil:
+    visible: "My Profile"
+    timeout: 15000
+- extendedWaitUntil:
+    visible: ".*(Français|日本語|廣東話).*"
+    timeout: 15000
+
+# Exactly one language row is the current one; it must report selected.
+- assertVisible:
+    text: ".*(Français|日本語|廣東話).*"
+    selected: true
+- takeScreenshot: 01-profile-language-selected
+
+# Back to the tabs, then Scan.
+- tapOn:
+    text: "Go back"
+- extendedWaitUntil:
+    visible: "FOUND"
+    timeout: 15000
+- tapOn:
+    text: "Scan a new sticker"
+- extendedWaitUntil:
+    visible: ".*(One quick thing|Agree and start scanning|Import a photo from your library).*"
+    timeout: 15000
+# Consent gate may appear on a fresh account; agreeing only records consent, no AI call.
+- runFlow:
+    when:
+      visible: "Agree and start scanning"
+    commands:
+      - tapOn: "Agree and start scanning"
+- extendedWaitUntil:
+    visible: "Import a photo from your library"
+    timeout: 15000
+- takeScreenshot: 02-scan-ready
+
+# Import a library photo from the iOS picker. The library permission
+# prompt may come first; accept it if shown.
+- tapOn:
+    text: "Import a photo from your library"
+- tapOn:
+    text: "Allow Full Access|Allow Access to All Photos|OK"
+    optional: true
+- takeScreenshot: 02b-picker-open
+# The simulator library holds no seeded sticker (qa-sticker.png is uploaded to the
+# server, not saved to Photos), so any library photo reaches the crop screen.
+- tapOn:
+    text: "Photo, March 30, 2018.*"
+- extendedWaitUntil:
+    visible: "Extract Sticker"
+    timeout: 30000
+- assertVisible: "Crop your sticker"
+- takeScreenshot: 03-crop-screen
+
+# Stop here: no Extract Sticker tap, no AI call.
