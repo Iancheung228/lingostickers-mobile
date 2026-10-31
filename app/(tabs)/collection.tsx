@@ -19,7 +19,7 @@ import MiniStickerWall from '@/components/MiniStickerWall';
 import HomeHeader from '@/components/HomeHeader';
 import FeedRail from '@/components/FeedRail';
 import LatestStickers, { MAX_ROWS as LATEST_FEED_ROWS } from '@/components/LatestStickers';
-import { DAILY_GOAL, FEED_PREVIEW, dueToday, findsToday, reviewMinutes } from '@/lib/review';
+import { DAILY_GOAL, FEED_PREVIEW, dueAtMs, dueToday, findsToday, formatInterval, formatMinutes, reviewMinutes } from '@/lib/review';
 import StudySessionHost from '@/components/StudySessionHost';
 import { colors, shadows, radii, spacing, typography, fonts } from '@/constants/theme';
 import { TAB_BAR_CLEARANCE } from '@/constants/tabBar';
@@ -168,6 +168,19 @@ export default function CollectionScreen() {
     () => dueToday(stickers, { language: langFilter ?? undefined }),
     [stickers, langFilter]
   );
+  // When nothing is due, the soonest card's wait in the scheduler's compact
+  // scale (minutes/hours under a day, days beyond). null = nothing scheduled.
+  const nextDue = useMemo(() => {
+    if (due.length > 0) return null;
+    const now = Date.now();
+    const times = stickers
+      .filter(s => !langFilter || s.language === langFilter)
+      .map(dueAtMs)
+      .filter(t => t > now);
+    if (times.length === 0) return null;
+    const minutes = (Math.min(...times) - now) / 60_000;
+    return minutes < 1440 ? formatMinutes(Math.max(1, minutes)) : formatInterval(Math.round(minutes / 1440));
+  }, [stickers, langFilter, due.length]);
   // The rail is a feed of recent finds, NOT a preview of the review queue.
   // Deliberately built from the whole collection rather than from `due`: a
   // card scanned a minute ago is the newest thing you have and is correctly
@@ -246,6 +259,7 @@ export default function CollectionScreen() {
           goal={DAILY_GOAL}
           dueCount={due.length}
           reviewMinutes={reviewMinutes(due.length)}
+          nextDue={nextDue}
           onStartReview={startReview}
           onSearch={openSearch}
         />

@@ -9,6 +9,8 @@ interface HomeHeaderProps {
   goal: number;
   dueCount: number;
   reviewMinutes: number;
+  /** Compact wait until the next card, e.g. "3h"; null when nothing is scheduled. */
+  nextDue: string | null;
   onStartReview: () => void;
   onSearch: () => void;
 }
@@ -22,7 +24,7 @@ interface HomeHeaderProps {
 // rose-brown is only a couple of steps darker than the band itself and
 // washes out completely against it.
 export default function HomeHeader({
-  foundToday, goal, dueCount, reviewMinutes, onStartReview, onSearch,
+  foundToday, goal, dueCount, reviewMinutes, nextDue, onStartReview, onSearch,
 }: HomeHeaderProps) {
   const insets = useSafeAreaInsets();
   const today = new Date()
@@ -86,6 +88,11 @@ export default function HomeHeader({
             </View>
           </TouchableOpacity>
         )}
+        {dueCount === 0 && (
+          <Text style={styles.caughtUp} testID="home-caught-up">
+            {nextDue ? `All caught up · next due in ${nextDue}` : 'All caught up'}
+          </Text>
+        )}
       </View>
     </View>
   );
@@ -125,6 +132,15 @@ const styles = StyleSheet.create({
     fontFamily: fonts.monoBold,
     color: colors.maroon,
     letterSpacing: 1.4,
+  },
+
+  caughtUp: {
+    flexShrink: 1,
+    marginLeft: spacing.md,
+    textAlign: 'right',
+    fontSize: 11,
+    fontFamily: fonts.mono,
+    color: colors.maroon,
   },
 
   duePill: {

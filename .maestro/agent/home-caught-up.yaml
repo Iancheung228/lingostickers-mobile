@@ -1,0 +1,57 @@
+appId: com.iancheung228.lingostickers
+# Same journey as .maestro/study-grade.yaml through "Done". Once the only due
+# card is graded Good (learning, ~10 min), home must show the quiet caught-up
+# line where the due pill was, and must not show a "Start reviewing" button.
+---
+- runFlow: ../sign-in.yaml
+
+# Home header shows the due pill once the queue has loaded.
+- extendedWaitUntil:
+    visible: "Start reviewing — 1 card due.*"
+    timeout: 20000
+- tapOn: "Start reviewing — 1 card due.*"
+
+# Front of the card: a recall prompt, with the answer hidden.
+- extendedWaitUntil:
+    visible: "Tap to reveal.*"
+    timeout: 10000
+- assertVisible: "What did you call this\\?"
+- assertNotVisible: ".*pomme.*"
+- takeScreenshot: 03-card-front
+- tapOn: "What did you call this\\?"
+
+# Back of the card: the meaning and the four grade buttons.
+- extendedWaitUntil:
+    visible: "Good — next review in.*"
+    timeout: 10000
+- assertVisible: "pomme, pɔm, means apple.*"
+- takeScreenshot: 04-card-back
+- tapOn: "Good — next review in.*"
+
+# Requeued inside the learn-ahead window: 2 / 2, question side.
+- extendedWaitUntil:
+    visible: "2 / 2"
+    timeout: 10000
+- takeScreenshot: 05-requeued
+- assertVisible: ".*What did you call this\\?"
+- assertNotVisible: "Good — next review in.*"
+
+# Leave the session and return home.
+- tapOn: "Close this card"
+- extendedWaitUntil:
+    visible: "Session done"
+    timeout: 10000
+- assertVisible: "1 card reviewed"
+- tapOn: "Done"
+- extendedWaitUntil:
+    visible: "FOUND"
+    timeout: 10000
+
+# Nothing due: the quiet line replaces the pill; no start button.
+- extendedWaitUntil:
+    visible: "All caught up.*"
+    timeout: 10000
+- assertVisible: "All caught up.*"
+- assertVisible: "All caught up · next due in 10m"
+- assertNotVisible: "Start reviewing.*"
+- takeScreenshot: 07-home-caught-up
