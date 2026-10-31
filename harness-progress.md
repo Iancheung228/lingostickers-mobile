@@ -61,3 +61,8 @@
 - findsToday() (lib/review.ts), the Latest finds feed sort (collection.tsx) and the Latest stickers "time ago" (LatestStickers.tsx) now use created_at. discovered_at is untouched for calendar, Day screen, DAY n stamp and the scheduler.
 - QA: new flow .maestro/agent/new-card-found-today.yaml PASS, full harness/qa.sh PASS (17 flows). Shots judged: "0 FOUND TODAY" before; after adding a 2018-dated photo, "1 FOUND TODAY" with the new card first in the rail and "just now" in Latest stickers.
 - Surprising: header numbers are separate accessibility labels ("0","FOUND","TODAY"), so flow asserts them separately. The rail's card still shows the photo's weekday/date and DAY n (kept on purpose). A foreground full qa.sh exceeds the 600s limit; it needs to run in the background.
+
+## type-a-word-entry
+- No typed-word UI existed (only the create-card edge function), so added components/TypeWordSheet.tsx (input → create-card → preview → Add, saves source 'text', image_path null) and a "Type a word" link (testID scan-type-word) above the capture row in scan.tsx. Reuses the "N cards added" toast.
+- QA: new flow .maestro/agent/type-a-word-entry.yaml PASS, full harness/qa.sh PASS (18 flows). Shots judged: preview for "chat" (discuter), Latest stickers showing it "just now". Lint fix (&apos;) after QA was copy-escape only.
+- APP BUG (not fixed): picture-less cards show a spinner where the image goes in Latest stickers / Latest finds; should be a placeholder. Also Look up button a11y label "Look up word" vs visible "Look up". Keyboard-return submit not covered by the flow.

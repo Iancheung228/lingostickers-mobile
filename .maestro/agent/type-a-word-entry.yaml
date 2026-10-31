@@ -1,0 +1,73 @@
+# Type a word: the Scan screen's "Type a word" control opens a sheet. Typing "chat"
+# and looking it up shows a picture-less preview; "Add card" saves it, closes the
+# sheet and toasts "1 card added" with a View action that opens the Collection tab.
+# Costs ONE AI lookup (budget-tight: do not add more lookups here).
+# Selectors use testIDs (scan-type-word, type-word-*, toast-action) because the
+# button label "Look up word" differs from its visible text "Look up".
+appId: com.iancheung228.lingostickers
+---
+- runFlow: ../sign-in.yaml
+
+# Open the Scan tab from the floating tab bar.
+- tapOn:
+    text: "Scan a new sticker"
+- extendedWaitUntil:
+    visible: ".*(One quick thing|Agree and start scanning|Import a photo from your library).*"
+    timeout: 15000
+# Consent gate may appear on a fresh account; agreeing only records consent, no AI call.
+- runFlow:
+    when:
+      visible: "Agree and start scanning"
+    commands:
+      - tapOn: "Agree and start scanning"
+- extendedWaitUntil:
+    visible:
+      id: "scan-type-word"
+    timeout: 15000
+
+# Open the sheet from the control above the Gallery/shutter/Flash row.
+- tapOn:
+    id: "scan-type-word"
+- extendedWaitUntil:
+    visible:
+      id: "type-word-input"
+    timeout: 15000
+- takeScreenshot: 01-type-word-sheet-empty
+- tapOn:
+    id: "type-word-input"
+- inputText: "chat"
+
+# Submit with the Look up button (it is also wired to the keyboard return key).
+- tapOn:
+    id: "type-word-lookup"
+- extendedWaitUntil:
+    visible:
+      id: "type-word-preview"
+    timeout: 90000
+- assertVisible: "chat"
+- takeScreenshot: 02-type-word-preview-chat
+
+# Add: the sheet closes and the toast confirms the single card.
+- tapOn:
+    id: "type-word-add"
+- extendedWaitUntil:
+    visible: "1 card added"
+    timeout: 15000
+- assertNotVisible:
+    id: "type-word-preview"
+- assertVisible:
+    id: "toast-action"
+- takeScreenshot: 03-toast-1-card-added
+
+# The View action opens the Collection tab, which should list "chat".
+- tapOn:
+    id: "toast-action"
+- extendedWaitUntil:
+    visible: "Latest stickers.*"
+    timeout: 20000
+- assertVisible:
+    id: "collection-sort"
+- extendedWaitUntil:
+    visible: ".*chat.*"
+    timeout: 20000
+- takeScreenshot: 04-collection-chat

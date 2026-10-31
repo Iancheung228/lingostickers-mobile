@@ -28,6 +28,7 @@ import { attemptLocalCutout, uploadCutout, cutoutPath, discardCutout, CUTOUT_DRY
 import { trackEvent } from '@/lib/analytics';
 import DiscoveryReveal from '@/components/DiscoveryReveal';
 import Toast from '@/components/Toast';
+import TypeWordSheet from '@/components/TypeWordSheet';
 import PhotoExtractor, { ExtractResult, renderWholePhotoExtract } from '@/components/PhotoExtractor';
 import ScanProgress, { ScanStage } from '@/components/ScanProgress';
 import GhostCutoutReveal from '@/components/GhostCutoutReveal';
@@ -656,6 +657,7 @@ export default function ScanScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [addedCount, setAddedCount] = useState(0);
+  const [typeWordOpen, setTypeWordOpen] = useState(false);
   const dismissAdded = useCallback(() => setAddedCount(0), []);
 
   const handleAdd = async () => {
@@ -936,6 +938,17 @@ export default function ScanScreen() {
       ) : (
       <View style={styles.controls}>
         <Text style={styles.hint}>Pinch to zoom · Tap frame to focus</Text>
+        <TouchableOpacity
+          testID="scan-type-word"
+          style={styles.typeWordBtn}
+          onPress={() => setTypeWordOpen(true)}
+          disabled={processing || capturing}
+          accessibilityRole="button"
+          accessibilityLabel="Type a word"
+          hitSlop={8}
+        >
+          <Text style={styles.typeWordText}>Type a word</Text>
+        </TouchableOpacity>
         <View style={styles.captureRow}>
           {/* Gallery */}
           <TouchableOpacity
@@ -1035,6 +1048,16 @@ export default function ScanScreen() {
         sceneSelected={sceneChips}
         onSceneSelected={setSceneChips}
       />
+
+      {user && (
+        <TypeWordSheet
+          visible={typeWordOpen}
+          language={language}
+          userId={user.id}
+          onClose={() => setTypeWordOpen(false)}
+          onAdded={() => { setTypeWordOpen(false); setAddedCount(1); }}
+        />
+      )}
 
       {addedCount > 0 && (
         <Toast
@@ -1154,6 +1177,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.sageLight,
   },
   sideBtnCircleDisabled: { opacity: 0.45 },
+  typeWordBtn: { alignSelf: 'center', paddingVertical: 6, paddingHorizontal: spacing.md },
+  typeWordText: { fontSize: 14, fontFamily: fonts.display, color: colors.terra },
   sideBtnLabel: { fontSize: 11, fontFamily: fonts.display, color: colors.inkLight },
   sideBtnLabelActive: { color: colors.sageDark },
 
