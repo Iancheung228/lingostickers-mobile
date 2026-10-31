@@ -74,7 +74,7 @@ function Row({ sticker, last, imageUrl, voiceUrl, onPress }: {
   const { play } = useTrimmedVoicePlayback(
     voiceUrl, sticker.voice_note_start_ms, sticker.voice_note_end_ms
   );
-  const when = timeAgo(sticker.discovered_at);
+  const when = timeAgo(sticker.created_at);
   // One helper, in one place — the family a headword needs depends entirely
   // on which language it is in. See wordFontFor in constants/theme.ts.
   const wordFont = wordFontFor(sticker.language);

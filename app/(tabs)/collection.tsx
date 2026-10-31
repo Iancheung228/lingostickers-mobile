@@ -195,7 +195,7 @@ export default function CollectionScreen() {
     () => stickers
       .filter(s => !langFilter || s.language === langFilter)
       .slice()
-      .sort((a, b) => Date.parse(b.discovered_at) - Date.parse(a.discovered_at))
+      .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))
       .slice(0, FEED_PREVIEW),
     [stickers, langFilter]
   );

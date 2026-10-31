@@ -131,9 +131,11 @@ export function ageInDays(dateStr: string, now: number = Date.now()): number {
   return Math.max(0, Math.round((startOfDay(now) - startOfDay(then)) / 86_400_000));
 }
 
-/** Stickers discovered today — the numerator of the header's "N found today". */
+/** Stickers made today — the numerator of the header's "N found today".
+ *  created_at, not discovered_at: a card made today from an old photo is still
+ *  a find of today (discovered_at is the photo's date, kept for the calendar). */
 export function findsToday(stickers: Sticker[], now: number = Date.now()): number {
-  return stickers.filter(s => ageInDays(s.discovered_at, now) === 0).length;
+  return stickers.filter(s => ageInDays(s.created_at, now) === 0).length;
 }
 
 // ---------------------------------------------------------------------------

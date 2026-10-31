@@ -1,0 +1,70 @@
+# New card found today: a card made today from an old photo (the gallery photo is
+# dated 2018) must count as a find of today. The header's "N FOUND TODAY" and the
+# Latest finds rail use created_at, not discovered_at.
+# Uses one scan (extract) only: no scene question, so one AI call.
+appId: com.iancheung228.lingostickers
+---
+- runFlow: ../sign-in.yaml
+
+# Seed's only card is old, so the home header reads 0 found today.
+# The header count and its two label lines are separate accessibility elements.
+- extendedWaitUntil:
+    visible: "0"
+    timeout: 15000
+- assertVisible: "FOUND"
+- assertVisible: "TODAY"
+- takeScreenshot: 01-home-zero-found-today
+
+# Open the Scan tab from the floating tab bar.
+- tapOn:
+    text: "Scan a new sticker"
+- extendedWaitUntil:
+    visible: ".*(One quick thing|Agree and start scanning|Import a photo from your library).*"
+    timeout: 15000
+# Consent gate may appear on a fresh account; agreeing only records consent, no AI call.
+- runFlow:
+    when:
+      visible: "Agree and start scanning"
+    commands:
+      - tapOn: "Agree and start scanning"
+- extendedWaitUntil:
+    visible: "Import a photo from your library"
+    timeout: 15000
+
+# Import the library photo from the iOS picker (permission prompt optional).
+- tapOn:
+    text: "Import a photo from your library"
+- tapOn:
+    text: "Allow Full Access|Allow Access to All Photos|OK"
+    optional: true
+- tapOn:
+    text: "Photo, March 30, 2018.*"
+- extendedWaitUntil:
+    visible: "Extract Sticker"
+    timeout: 30000
+- assertVisible: "Crop your sticker"
+- tapOn: "Extract Sticker"
+
+# Discovery reveal: with no scene chips picked, the primary button is "Add to Collection".
+- extendedWaitUntil:
+    visible: "Add to Collection"
+    timeout: 90000
+- takeScreenshot: 02-reveal-before-add
+
+- tapOn: "Add to Collection"
+- extendedWaitUntil:
+    visible: "1 card added"
+    timeout: 15000
+- takeScreenshot: 03-toast-1-card-added
+
+# Collection tab from the floating tab bar.
+- tapOn:
+    text: "Collection"
+- extendedWaitUntil:
+    visible: "Latest finds"
+    timeout: 20000
+- assertVisible: "1"
+- assertVisible: "FOUND"
+- assertVisible: "TODAY"
+- assertNotVisible: "0"
+- takeScreenshot: 04-collection-1-found-today-latest-finds

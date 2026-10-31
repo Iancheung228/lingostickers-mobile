@@ -56,3 +56,8 @@
 - Orient showed tap-targets FAIL (screenshot: "Couldn't load your collection", a network error). No code changed. Fresh qa-tester rerun: tap-targets PASS (alone and in a full run); the full run's one failure was add-cards-confirmation ("Extraction failed" alert, the same transient as before), which PASSed on a single rerun.
 - GAP: the last qa run was single-flow, so qa-status.json holds only add-cards-confirmation. The most recent full run was 15/16 with that flow the only failure. No app code changed since, and no full run was repeated.
 - Both flaky failures are backend/network transients, not app bugs. Another unattended loop was running on the same Simulator/Metro, so collisions are possible. Next feature is new-card-found-today.
+
+## new-card-found-today
+- findsToday() (lib/review.ts), the Latest finds feed sort (collection.tsx) and the Latest stickers "time ago" (LatestStickers.tsx) now use created_at. discovered_at is untouched for calendar, Day screen, DAY n stamp and the scheduler.
+- QA: new flow .maestro/agent/new-card-found-today.yaml PASS, full harness/qa.sh PASS (17 flows). Shots judged: "0 FOUND TODAY" before; after adding a 2018-dated photo, "1 FOUND TODAY" with the new card first in the rail and "just now" in Latest stickers.
+- Surprising: header numbers are separate accessibility labels ("0","FOUND","TODAY"), so flow asserts them separately. The rail's card still shows the photo's weekday/date and DAY n (kept on purpose). A foreground full qa.sh exceeds the 600s limit; it needs to run in the background.
