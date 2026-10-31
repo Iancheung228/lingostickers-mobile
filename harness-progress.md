@@ -51,3 +51,8 @@
 - components/Toast.tsx (new, "N cards added" + View, announces to VoiceOver, 4 s). scan.tsx shows it after handleAdd; View navigates to Collection. Toast is lifted to insets.bottom + TAB_BAR_CLEARANCE: first version sat under the floating tab bar and View tap hit the Boards tab.
 - QA: new flow .maestro/agent/add-cards-confirmation.yaml PASS, full harness/qa.sh PASS (16 flows). Shots judged: toast above tab bar, Collection tab active after View.
 - Surprising: toast overlaps the lower edge of the shutter and nearly touches "Flash Off". One full run failed with a transient "Extraction failed" alert (passed on rerun). Another loop session was using the same Simulator and harness/logs concurrently.
+
+## iteration note (no feature)
+- Orient showed tap-targets FAIL (screenshot: "Couldn't load your collection", a network error). No code changed. Fresh qa-tester rerun: tap-targets PASS (alone and in a full run); the full run's one failure was add-cards-confirmation ("Extraction failed" alert, the same transient as before), which PASSed on a single rerun.
+- GAP: the last qa run was single-flow, so qa-status.json holds only add-cards-confirmation. The most recent full run was 15/16 with that flow the only failure. No app code changed since, and no full run was repeated.
+- Both flaky failures are backend/network transients, not app bugs. Another unattended loop was running on the same Simulator/Metro, so collisions are possible. Next feature is new-card-found-today.
