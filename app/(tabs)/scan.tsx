@@ -832,7 +832,7 @@ export default function ScanScreen() {
   // after it. `undefined` means the stored answer has not been read yet;
   // rendering the gate then would flash it at people who already agreed.
   if (user && aiConsented === false) {
-    return <AiConsentGate onAccept={acceptAiConsent} />;
+    return <AiConsentGate onAccept={acceptAiConsent} agreeTestID="scan-consent-agree" privacyTestID="scan-consent-privacy" />;
   }
 
   if (!permission.granted) {

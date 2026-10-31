@@ -1,5 +1,5 @@
 import { Linking, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { TAB_BAR_CLEARANCE } from '@/constants/tabBar';
 import { colors, fonts, radii, shadows, spacing } from '@/constants/theme';
 import { AI_PROCESSORS } from '@/lib/aiConsent';
@@ -28,7 +28,16 @@ import { AI_PROCESSORS } from '@/lib/aiConsent';
 
 const PRIVACY_URL = 'https://tabistickers.com/privacy.html';
 
-export function AiConsentGate({ onAccept }: { onAccept: () => void }) {
+export function AiConsentGate({
+  onAccept,
+  agreeTestID,
+  privacyTestID,
+}: {
+  onAccept: () => void;
+  agreeTestID?: string;
+  privacyTestID?: string;
+}) {
+  const insets = useSafeAreaInsets();
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
@@ -50,10 +59,11 @@ export function AiConsentGate({ onAccept }: { onAccept: () => void }) {
         </Text>
       </ScrollView>
 
-      <View style={styles.footer}>
+      <View style={[styles.footer, { paddingBottom: insets.bottom + TAB_BAR_CLEARANCE }]}>
         <TouchableOpacity
           style={styles.button}
           onPress={onAccept}
+          testID={agreeTestID}
           accessibilityRole="button"
           accessibilityLabel="Agree and start scanning"
         >
@@ -61,6 +71,7 @@ export function AiConsentGate({ onAccept }: { onAccept: () => void }) {
         </TouchableOpacity>
         <TouchableOpacity
           onPress={() => Linking.openURL(PRIVACY_URL)}
+          testID={privacyTestID}
           accessibilityRole="link"
           accessibilityLabel="Read the privacy policy"
           hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
@@ -104,9 +115,9 @@ const styles = StyleSheet.create({
   },
   footer: {
     paddingHorizontal: spacing.xl,
-    // Clears the floating tab bar this screen renders behind.
-    paddingBottom: TAB_BAR_CLEARANCE,
-    gap: spacing.md,
+    // paddingBottom (tab bar + safe-area inset) is applied at render time.
+    paddingTop: spacing.md,
+    gap: spacing.lg,
     alignItems: 'center',
   },
   button: {

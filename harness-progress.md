@@ -31,3 +31,8 @@
 - collection.tsx: sort control is now a pill (testID collection-sort) showing the current mode; tap opens a BottomSheet ("Sort by", check on current) instead of cycling; labels renamed to "Photo date — newest/oldest", "Date added — newest". Old long-press Modal removed. Also commits the pending favourites-empty change (collection-filter-empty).
 - QA: new flow .maestro/agent/collection-sort-menu.yaml PASS, full harness/qa.sh PASS (12 flows). Shots judged: default pill, sheet open with check/scrim/grabber, label updated after picking "Date added — newest".
 - Surprising: the pill is wide and crowds the category chip row (third chip clipped). Acceptable but cramped; consider a shorter label or moving the control. LatestStickers header sort label still taps cycleSort (cycles, doesn't open sheet).
+
+## scan-consent-layout
+- components/AiConsentGate.tsx: footer padding is now insets.bottom + TAB_BAR_CLEARANCE (applied at render), more gap between Agree and Privacy link; optional agreeTestID/privacyTestID props, passed from scan.tsx (scan-consent-agree / scan-consent-privacy).
+- QA: new flow .maestro/agent/scan-consent-layout.yaml PASS, full harness/qa.sh PASS (13 flows). Shot judged: Agree button and Privacy link both above the tab bar, ~23pt apart (estimated from image, not measured); Agree never tapped.
+- Note: the Scan tab's accessibility label is "Scan a new sticker" (not "Scan"); flows must use that.

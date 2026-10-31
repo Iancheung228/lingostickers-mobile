@@ -1,0 +1,52 @@
+# Scan consent layout: both controls ("Agree and start scanning", "Read the privacy policy")
+# are visible and sit above the floating tab bar, with a visible gap between them.
+# Never taps Agree. If consent is stored server-side and does not reappear, the
+# assertion on the consent screen fails and the run is reported as NOT RUN.
+appId: com.iancheung228.lingostickers
+---
+- launchApp:
+    clearState: true
+- openLink: "exp+lingostickers-mobile://expo-development-client/?url=http%3A%2F%2Flocalhost%3A${METRO_PORT}"
+- tapOn:
+    text: "Open"
+    optional: true
+- extendedWaitUntil:
+    visible: "WELCOME BACK"
+    timeout: 60000
+
+- tapOn: "Email"
+- waitForAnimationToEnd:
+    timeout: 1500
+- tapOn: "Email"
+- inputText: ${MAESTRO_EMAIL}
+- tapOn: "Password"
+- waitForAnimationToEnd:
+    timeout: 1500
+- tapOn: "Password"
+- inputText: ${MAESTRO_PASSWORD}
+- tapOn: "WELCOME BACK"   # dismisses the keyboard
+- tapOn: "Sign In"
+- tapOn:
+    text: "Not Now"
+    optional: true
+- extendedWaitUntil:
+    visible: "FOUND"
+    timeout: 30000
+
+# Open the Scan tab from the floating tab bar.
+- tapOn:
+    text: "Scan a new sticker"
+- extendedWaitUntil:
+    visible: ".*(One quick thing|Agree and start scanning|Scan what the camera).*"
+    timeout: 15000
+
+# Consent gate: both controls must be visible.
+- extendedWaitUntil:
+    visible:
+      id: "scan-consent-agree"
+    timeout: 15000
+- assertVisible:
+    id: "scan-consent-privacy"
+- assertVisible: "Agree and start scanning"
+- assertVisible: "Read the privacy policy"
+- takeScreenshot: 01-scan-consent-layout
