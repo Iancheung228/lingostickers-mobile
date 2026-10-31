@@ -1,0 +1,79 @@
+# Tap targets: the home search icon (testID home-search) and the Calendar month arrows
+# (calendar-prev-month, calendar-next-month) have hitSlop, so a tap ~10pt OUTSIDE the drawn
+# glyph still acts. Bounds were read from harness/logs/hierarchy.json:
+#   home-search   glyph [336,66][351,81]   hitSlop left 14, right 6, top/bottom 15
+#   calendar-next glyph [349,291][365,307] hitSlop 14 on all sides
+#   calendar-prev glyph [37,291][53,307]   hitSlop 14 on all sides
+# Points are chosen inside the slop and outside the glyph:
+#   search  (326,73): 10pt left of the glyph, inside the 14pt left slop
+#   next    (375,299): 10pt right of the glyph, inside the 14pt slop
+#   prev    (27,299): 10pt left of the glyph, inside the 14pt slop
+# Control: (300,73) is 36pt left of the search glyph, outside any slop; it must do nothing.
+appId: com.iancheung228.lingostickers
+---
+- runFlow: ../sign-in.yaml
+
+# Home: the search icon is present before we tap near it.
+- extendedWaitUntil:
+    visible:
+      id: "home-search"
+    timeout: 15000
+- takeScreenshot: 01-home-before
+
+# Control: a point well outside the search hit area does not open search.
+- tapOn:
+    point: "300,73"
+- waitForAnimationToEnd:
+    timeout: 1500
+- assertNotVisible:
+    id: "collection-search-input"
+
+# Inside the slop, outside the glyph: search opens.
+- tapOn:
+    point: "326,73"
+- extendedWaitUntil:
+    visible:
+      id: "collection-search-input"
+    timeout: 10000
+- assertVisible:
+    id: "collection-search-cancel"
+- takeScreenshot: 02-home-search-opened-via-slop
+
+# Cancel restores the home screen.
+- tapOn:
+    id: "collection-search-cancel"
+- assertNotVisible:
+    id: "collection-search-input"
+- extendedWaitUntil:
+    visible: "Latest stickers"
+    timeout: 10000
+- takeScreenshot: 03-home-after-cancel
+
+# Calendar tab: the month label starts on the current month.
+- tapOn: "Calendar"
+- extendedWaitUntil:
+    visible: "OCTOBER 2026"
+    timeout: 15000
+- assertVisible:
+    id: "calendar-prev-month"
+- assertVisible:
+    id: "calendar-next-month"
+- takeScreenshot: 04-calendar-before
+
+# Next arrow, tapped 10pt to the right of its glyph: month advances.
+- tapOn:
+    point: "375,299"
+- extendedWaitUntil:
+    visible: "NOVEMBER 2026"
+    timeout: 10000
+- assertNotVisible: "OCTOBER 2026"
+- takeScreenshot: 05-calendar-next-slop
+
+# Previous arrow, tapped 10pt to the left of its glyph: month goes back.
+- tapOn:
+    point: "27,299"
+- extendedWaitUntil:
+    visible: "OCTOBER 2026"
+    timeout: 10000
+- assertNotVisible: "NOVEMBER 2026"
+- takeScreenshot: 06-calendar-prev-slop

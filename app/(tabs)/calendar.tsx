@@ -406,7 +406,8 @@ export default function CalendarScreen() {
           <View style={styles.monthNav}>
             <TouchableOpacity
               onPress={() => commitMonth(-1)}
-              hitSlop={12}
+              hitSlop={14}
+              testID="calendar-prev-month"
               accessibilityRole="button"
               accessibilityLabel="Previous month"
             >
@@ -417,7 +418,8 @@ export default function CalendarScreen() {
             </Text>
             <TouchableOpacity
               onPress={() => commitMonth(1)}
-              hitSlop={12}
+              hitSlop={14}
+              testID="calendar-next-month"
               accessibilityRole="button"
               accessibilityLabel="Next month"
             >

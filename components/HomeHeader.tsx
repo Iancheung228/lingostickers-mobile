@@ -45,7 +45,8 @@ export default function HomeHeader({
               there is nothing to collide with, so it reaches much further. */}
           <TouchableOpacity
             onPress={onSearch}
-            hitSlop={{ top: 14, bottom: 14, left: 14, right: 6 }}
+            hitSlop={{ top: 15, bottom: 15, left: 14, right: 6 }}
+            testID="home-search"
             accessibilityRole="button"
             accessibilityLabel="Search your collection"
           >
@@ -55,7 +56,8 @@ export default function HomeHeader({
             variant="bare"
             size={15}
             color={colors.maroon}
-            hitSlop={{ top: 14, bottom: 14, left: 6, right: 14 }}
+            hitSlop={{ top: 15, bottom: 15, left: 6, right: 14 }}
+            testID="home-settings"
           />
         </View>
       </View>

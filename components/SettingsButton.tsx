@@ -19,6 +19,7 @@ interface SettingsButtonProps {
   /// them — see skills.md #9 — and this button is often the last thing in a
   /// tight row of icons.
   hitSlop?: TouchableOpacityProps['hitSlop'];
+  testID?: string;
 }
 
 // The one way into Profile/Settings, so it looks and behaves the same
@@ -31,12 +32,14 @@ export default function SettingsButton({
   color = colors.inkDark,
   style,
   hitSlop = 10,
+  testID,
 }: SettingsButtonProps) {
   return (
     <TouchableOpacity
       onPress={() => router.push('/profile')}
       style={[variant === 'chip' && styles.chip, style]}
       hitSlop={hitSlop}
+      testID={testID}
       activeOpacity={0.7}
       accessibilityRole="button"
       accessibilityLabel="Open your profile and settings"

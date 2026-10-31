@@ -36,3 +36,8 @@
 - components/AiConsentGate.tsx: footer padding is now insets.bottom + TAB_BAR_CLEARANCE (applied at render), more gap between Agree and Privacy link; optional agreeTestID/privacyTestID props, passed from scan.tsx (scan-consent-agree / scan-consent-privacy).
 - QA: new flow .maestro/agent/scan-consent-layout.yaml PASS, full harness/qa.sh PASS (13 flows). Shot judged: Agree button and Privacy link both above the tab bar, ~23pt apart (estimated from image, not measured); Agree never tapped.
 - Note: the Scan tab's accessibility label is "Scan a new sticker" (not "Scan"); flows must use that.
+
+## tap-targets
+- HomeHeader.tsx: testIDs home-search / home-settings (SettingsButton gained an optional testID prop), vertical slop 15 (=45pt tall). calendar.tsx: month arrows hitSlop 14 (=44x44) with testIDs calendar-prev-month / calendar-next-month. No visual change.
+- QA: new flow .maestro/agent/tap-targets.yaml PASS, full harness/qa.sh PASS (14 flows). Shots judged: home and calendar layout unchanged; search opened from a tap 10pt left of the glyph, month changed from taps 10pt outside the arrows.
+- GAP: home icons are only ~35pt wide (slop capped by the 12pt gap, skills #9), not 44; the 6pt inner slop is untested. Flow date assertions assume the simulator is in October 2026.
