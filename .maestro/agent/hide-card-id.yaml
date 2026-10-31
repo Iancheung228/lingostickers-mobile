@@ -1,0 +1,29 @@
+# Back of a study card shows the language name alone ("FRENCH"), not the
+# internal card id ("CARD 9668 · FR"). Needs the seed: the QA account has one
+# card, "pomme", due now. run.sh re-seeds before every run.
+appId: com.iancheung228.lingostickers
+---
+- runFlow: ../sign-in.yaml
+
+- extendedWaitUntil:
+    visible: "Start reviewing — 1 card due.*"
+    timeout: 20000
+- tapOn: "Start reviewing — 1 card due.*"
+
+# Front of the card: recall prompt, answer hidden.
+- extendedWaitUntil:
+    visible: "Tap to reveal.*"
+    timeout: 10000
+- tapOn: "What did you call this\\?"   # anywhere on the card flips it
+
+# Back of the card. The card face is one accessibility element whose label is
+# the answer text only; the header meta line ("FRENCH") is NOT in that label, so
+# Maestro cannot match it. FRENCH is confirmed from the screenshot instead.
+- extendedWaitUntil:
+    visible: "Good — next review in.*"
+    timeout: 10000
+- assertNotVisible: ".*CARD [0-9]+.*"
+- takeScreenshot: 01-back-language-only
+- tapOn:
+    text: "Not Now"
+    optional: true

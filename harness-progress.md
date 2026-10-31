@@ -21,3 +21,8 @@
 - New lib/username.ts (isValidUsername, normalizeUsername, USERNAME_RULE). sign-up.tsx lowercases as typed, shows "Use 3–20 letters, numbers, _ or ." in the hint slot for invalid names, skips the availability check for them, and disables Create Account. DB CHECK constraint requested in HUMAN_REQUESTS.md.
 - QA: new flow .maestro/agent/username-format.yaml PASS, full harness/qa.sh PASS (7 flows). Shot 01 judged: "a b!tabc" with the red rule hint, no "Username available".
 - GAP: Create Account's disabled state is below the fold and not asserted/screenshotted; the positive case (valid name -> "Username available") isn't covered by a flow.
+
+## profile-cleanup
+- app/profile.tsx: header spacer no longer draws a circle (headerSpacer), copy says "sticker(s)", "App version X" row (testID profile-version, expo-constants) at bottom, Log Out icon/text in colors.error. components/FriendsEmpty.tsx: Find a friend CTA is white text/icon on rose.
+- QA: new flow .maestro/agent/profile-cleanup.yaml PASS, full harness/qa.sh PASS (9 flows). Shots judged: profile top (no circle, "1 sticker"), bottom (red Log Out, "App version 1.0.0"), Friends empty (filled rose CTA).
+- Note: flow branches on Find a friend visibility, so passes either way; colour judged by eye only. Commit also includes the pending StudyCard.tsx / hide-card-id.yaml changes already in the tree.

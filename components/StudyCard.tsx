@@ -84,16 +84,6 @@ const DRAG_SLOP = 14;
 // Shorter than this and it's an accidental brush of the mic, not a take.
 const MIN_RECORDING_MS = 300;
 
-// A stable four-digit label. Deliberately hashed from the id rather than
-// taken from the sticker's position in the collection: an index would
-// renumber every card behind one you delete, and a card number that moves
-// is worse than no card number.
-function cardNumber(id: string): string {
-  let h = 0;
-  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
-  return String(h % 10000).padStart(4, '0');
-}
-
 function ordinal(n: number): string {
   const rem100 = n % 100;
   if (rem100 >= 11 && rem100 <= 13) return `${n}TH`;
@@ -1172,7 +1162,7 @@ function BackFace({ sticker, mode, onEditField, imageUrl, voice, onScroll }: {
     <View style={styles.card}>
       <View style={styles.cardBody}>
         <View style={styles.backHead}>
-          <Text style={styles.backMeta}>CARD {cardNumber(sticker.id)} · {sticker.language.toUpperCase()}</Text>
+          <Text style={styles.backMeta}>{languageLabel(sticker.language).toUpperCase()}</Text>
           <Text style={styles.backMeta}>{badge}</Text>
         </View>
 

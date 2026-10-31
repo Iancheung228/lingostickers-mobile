@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView, ScrollView, ActivityIndicator, Alert, Linking } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
+import Constants from 'expo-constants';
 import { ArrowLeft, Camera, LogOut, BookOpen, Heart, Check, Trash2, Shield, ExternalLink, Ban, Mail } from 'lucide-react-native';
 import { useAuth } from '@/hooks/useAuth';
 import { useProfile } from '@/hooks/useProfile';
@@ -188,7 +189,7 @@ export default function ProfileScreen() {
           <ArrowLeft size={18} color={colors.inkMid} />
         </TouchableOpacity>
         <Text style={styles.title}>My Profile</Text>
-        <View style={styles.backBtn} />
+        <View style={styles.headerSpacer} />
       </View>
 
       {loading ? (
@@ -239,7 +240,7 @@ export default function ProfileScreen() {
               <Text style={styles.noteText}>
                 {loadError
                   ? "We couldn't reach your collection just now, so the counts above are blank. Nothing has been lost — pull back and open this again once you're online."
-                  : `Welcome back to your cozy corner! You've captured ${stickers.length} watercolor memor${stickers.length === 1 ? 'y' : 'ies'} so far. Keep it up! 🌸`}
+                  : `Welcome back to your cozy corner! You've captured ${stickers.length} sticker${stickers.length === 1 ? '' : 's'} so far. Keep it up! 🌸`}
               </Text>
             </View>
           </View>
@@ -425,7 +426,7 @@ export default function ProfileScreen() {
 
           {/* Logout */}
           <TouchableOpacity style={styles.logoutButton} onPress={handleLogout} disabled={deletingAccount}>
-            <LogOut size={16} color={colors.inkFaint} />
+            <LogOut size={16} color={colors.error} />
             <Text style={styles.logoutText}>Log Out</Text>
           </TouchableOpacity>
 
@@ -446,6 +447,10 @@ export default function ProfileScreen() {
               {deletingAccount ? 'Deleting Account…' : 'Delete Account'}
             </Text>
           </TouchableOpacity>
+
+          <Text style={styles.versionText} testID="profile-version">
+            App version {Constants.expoConfig?.version ?? '—'}
+          </Text>
         </ScrollView>
       )}
 
@@ -473,6 +478,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     ...shadows.card,
   },
+  headerSpacer: { width: 36, height: 36 },
   title: { fontSize: 15, fontFamily: fonts.display, color: colors.inkDark },
   loader: { flex: 1 },
 
@@ -591,7 +597,9 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
     ...shadows.card,
   },
-  logoutText: { fontSize: 14, fontFamily: fonts.display, color: colors.inkFaint },
+  logoutText: { fontSize: 14, fontFamily: fonts.display, color: colors.error },
+
+  versionText: { fontSize: 12, fontFamily: fonts.display, color: colors.inkLight, textAlign: 'center', marginTop: spacing.md },
 
   deleteAccountButton: {
     flexDirection: 'row',
