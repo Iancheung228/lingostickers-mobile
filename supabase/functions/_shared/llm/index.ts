@@ -13,8 +13,15 @@
 //               at all, just a spinner: scene prompts measured 1.6-2s
 //               normally and 23-46s three times, with nothing in between.
 //               A stall cut at 12s and retried costs ~14s, not 46.
-//   failover  — next provider, once retries are spent. Protects against a
-//               sustained outage of one vendor.
+//   failover  — next provider. Protects against a sustained outage of one
+//               vendor, and against one model being out of capacity: on
+//               2026-11-01 Flash-Lite answered 503 "high demand" to whole
+//               scans (three tries in 4s, all refused) while Gemini 3 Flash
+//               served the same requests. Each model has its own capacity,
+//               so when a next provider exists the first one gets a short
+//               leash: a stall fails over at once (retrying an overloaded
+//               model just waits out a second 12s timer), a 503 or 429 after
+//               one retry. The last provider keeps the full 3 attempts.
 //
 // What must NOT fail over is as important as what must. A malformed request
 // ('invalid') is our own bug, and failing over would hide it behind a
@@ -33,6 +40,9 @@ export { createGeminiProvider } from './gemini.ts';
 export { createGroqProvider } from './groq.ts';
 
 const MAX_ATTEMPTS = 3;
+/** Attempts on a provider that has another behind it, for a 503 or 429. */
+const ATTEMPTS_BEFORE_FAILOVER = 2;
+const DEFAULT_GEMINI_FALLBACKS = 'gemini-3-flash-preview,gemini-3.5-flash';
 const MAX_BACKOFF_MS = 6_000;
 /** p50 is ~2s and a cold function ~5.6s; 12s is a stall, not a slow answer. */
 const ATTEMPT_TIMEOUT_MS = 12_000;
@@ -94,19 +104,32 @@ async function withTimeout(provider: LlmProvider, request: LlmRequest, ms: numbe
  * `GEMINI_MODEL`, `GEMINI_MEDIA_RESOLUTION` and `GEMINI_THINKING_BUDGET` are
  * env-tunable on purpose: they are the settings most likely to need changing
  * against real traffic, and a secret change is far cheaper than a redeploy.
+ *
+ * `GEMINI_FALLBACK_MODELS` (comma-separated, `none` to disable) are tried in
+ * order when the primary is out of capacity. Same vendor, so no new processor
+ * to disclose. The defaults were picked by `scripts/test-gemini-live.mts` on
+ * 2026-11-01: 3 Flash Preview matched Flash-Lite's cards (one plural slip in
+ * 22) with no 503s; 3.5 Flash dropped the headword from 3 sentences, so it is
+ * last. 2.5 Flash-Lite is closed to new users and 3.5 Flash-Lite rejects this
+ * request shape, so neither is here.
+ *
  * Groq joins only with `LLM_FALLBACK=groq`: it is not a disclosed processor
  * (see the header of groq.ts), so the safe default is to fail rather than
  * send a photo there.
  */
 export function defaultProviders(): LlmProvider[] {
   const thinking = Number(Deno.env.get('GEMINI_THINKING_BUDGET') ?? '0');
-  const chain: LlmProvider[] = [
+  const gemini = (model: string | undefined) =>
     createGeminiProvider({
-      model: Deno.env.get('GEMINI_MODEL') ?? undefined,
+      model,
       mediaResolution: Deno.env.get('GEMINI_MEDIA_RESOLUTION') ?? undefined,
       thinkingBudget: Number.isFinite(thinking) ? thinking : 0,
-    }),
-  ];
+    });
+  const fallbacks = (Deno.env.get('GEMINI_FALLBACK_MODELS') ?? DEFAULT_GEMINI_FALLBACKS)
+    .split(',')
+    .map((m) => m.trim())
+    .filter((m) => m && m !== 'none');
+  const chain: LlmProvider[] = [gemini(Deno.env.get('GEMINI_MODEL') ?? undefined), ...fallbacks.map(gemini)];
   if (Deno.env.get('LLM_FALLBACK') === 'groq') {
     chain.push(createGroqProvider({ model: Deno.env.get('GROQ_MODEL') ?? undefined }));
   }
@@ -146,8 +169,10 @@ export async function callModel(request: LlmRequest, options: CallOptions = {}):
     return error;
   };
 
-  for (const provider of providers) {
-    for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+  for (const [index, provider] of providers.entries()) {
+    const hasNext = index < providers.length - 1;
+    const attempts = hasNext ? ATTEMPTS_BEFORE_FAILOVER : MAX_ATTEMPTS;
+    for (let attempt = 0; attempt < attempts; attempt++) {
       if (lastError && remaining() < minAttempt) {
         throw giveUp(lastError, 'deadline reached');
       }
@@ -176,7 +201,10 @@ export async function callModel(request: LlmRequest, options: CallOptions = {}):
         // Our bug, or a decision about the content — stop the whole chain.
         if (!error.failoverable && !error.retryable) throw giveUp(error, 'not retryable');
 
-        const canRetry = error.retryable && attempt < MAX_ATTEMPTS - 1;
+        // A stall is the overload too, just slower to say so: with somewhere
+        // else to go, a second 12s timer here is the worst use of the deadline.
+        if (hasNext && error.kind === 'timeout') break;
+        const canRetry = error.retryable && attempt < attempts - 1;
         if (!canRetry) break; // fall through to the next provider
 
         // A wait that would eat the time the next attempt needs is not a wait.

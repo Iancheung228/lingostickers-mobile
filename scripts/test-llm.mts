@@ -371,20 +371,36 @@ test('client: returns the first success without touching the fallback', async ()
 });
 
 test('client: retries a transient fault on the same provider', async () => {
-  const primary = fakeProvider('primary', [err('unavailable'), err('unavailable'), 'ok']);
+  const primary = fakeProvider('primary', [err('unavailable'), 'ok']);
   const fallback = fakeProvider('fallback', ['ok']);
   const result = await callModel(REQUEST, { providers: [primary, fallback], sleep: noSleep });
-  assert.equal(primary.calls, 3);
+  assert.equal(primary.calls, 2);
   assert.equal(result.text, '{"from":"primary"}');
   assert.equal(fallback.calls, 0);
 });
 
-test('client: fails over only after retries are spent', async () => {
+test('client: with a fallback behind it, an overloaded model gets one retry, not two', async () => {
   const primary = fakeProvider('primary', [err('unavailable')]);
   const fallback = fakeProvider('fallback', ['ok']);
   const result = await callModel(REQUEST, { providers: [primary, fallback], sleep: noSleep });
-  assert.equal(primary.calls, 3, 'gave up before exhausting retries');
+  assert.equal(primary.calls, 2, 'kept retrying a model that was out of capacity');
   assert.equal(result.text, '{"from":"fallback"}');
+});
+
+test('client: the last provider in the chain keeps all three attempts', async () => {
+  const only = fakeProvider('only', [err('unavailable'), err('unavailable'), 'ok']);
+  const result = await callModel(REQUEST, { providers: [only], sleep: noSleep });
+  assert.equal(only.calls, 3);
+  assert.equal(result.text, '{"from":"only"}');
+});
+
+test('client: a stall fails over at once when there is somewhere to go', async () => {
+  const primary = stallingProvider(Infinity);
+  const fallback = fakeProvider('fallback', ['ok']);
+  const result = await callModel(REQUEST, { providers: [primary, fallback], sleep: noSleep, attemptTimeoutMs: 30 });
+  assert.equal(result.text, '{"from":"fallback"}');
+  assert.equal(primary.calls, 1, 'waited out a second timer on a stalled model');
+  assert.equal(primary.aborted, 1);
 });
 
 test('client: a malformed request never falls back — that would hide our bug', async () => {
@@ -505,11 +521,31 @@ test('client: Groq is not in the default chain unless LLM_FALLBACK=groq', async 
   const env: Record<string, string> = {};
   (globalThis as any).Deno = { env: { get: (k: string) => env[k] } };
   try {
-    assert.deepEqual(defaultProviders().map((p) => p.name), ['gemini'], 'photos would reach an undisclosed processor');
+    const names = () => defaultProviders().map((p) => p.name);
+    assert.ok(names().every((n) => n === 'gemini'), 'photos would reach an undisclosed processor');
     env.LLM_FALLBACK = 'off';
-    assert.deepEqual(defaultProviders().map((p) => p.name), ['gemini']);
+    assert.ok(names().every((n) => n === 'gemini'));
     env.LLM_FALLBACK = 'groq';
-    assert.deepEqual(defaultProviders().map((p) => p.name), ['gemini', 'groq']);
+    assert.equal(names().at(-1), 'groq');
+    assert.equal(names().filter((n) => n === 'groq').length, 1);
+  } finally {
+    (globalThis as any).Deno = saved;
+  }
+});
+
+test('client: Gemini fallback models come from GEMINI_FALLBACK_MODELS, in order', async () => {
+  const { defaultProviders } = await import('../supabase/functions/_shared/llm/index.ts');
+  const saved = (globalThis as any).Deno;
+  const env: Record<string, string> = {};
+  (globalThis as any).Deno = { env: { get: (k: string) => env[k] } };
+  try {
+    const models = () => defaultProviders().map((p) => p.model);
+    assert.deepEqual(models(), ['gemini-3.1-flash-lite', 'gemini-3-flash-preview', 'gemini-3.5-flash']);
+    env.GEMINI_MODEL = 'primary-x';
+    env.GEMINI_FALLBACK_MODELS = ' a , b ,';
+    assert.deepEqual(models(), ['primary-x', 'a', 'b']);
+    env.GEMINI_FALLBACK_MODELS = 'none';
+    assert.deepEqual(models(), ['primary-x']);
   } finally {
     (globalThis as any).Deno = saved;
   }
