@@ -97,7 +97,13 @@ function classify(response: Response, body: GeminiErrorBody): LlmError {
     });
   }
   if (status >= 500) {
-    return new LlmError('unavailable', 'gemini', message, { status });
+    // Google's own status and any retry hint, so the logs can tell a capacity
+    // shed from an outage. Not acted on yet: the hint is only logged.
+    const hint = retryAfterMs(response, body);
+    const detail = [err.status, ...reasons, hint !== undefined ? `retry-after ${hint}ms` : ''].filter(Boolean);
+    return new LlmError('unavailable', 'gemini', detail.length ? `${message} (${detail.join(', ')})` : message, {
+      status,
+    });
   }
   if (status === 404) {
     // A model id that does not exist is a config fault, not a bad request we

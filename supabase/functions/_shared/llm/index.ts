@@ -134,12 +134,22 @@ export async function callModel(request: LlmRequest, options: CallOptions = {}):
   }
 
   let lastError: LlmError | undefined;
+  // Every failed attempt, so a give-up can say what it gave up on. The 503s
+  // cluster on the bigger requests, so the request's shape goes in each line.
+  const failures: string[] = [];
+  const images = request.parts.filter((p) => p.kind === 'image');
+  const shape =
+    `[${images.length} img, ` +
+    `${Math.round(request.parts.reduce((n, p) => n + (p.kind === 'text' ? p.text.length : p.data.length), 0) / 1024)}KB]`;
+  const giveUp = (error: LlmError, why: string): LlmError => {
+    console.warn(`${tag}failed ${shape} after ${Date.now() - calledAt}ms, ${why}: ${failures.join(', ')}`);
+    return error;
+  };
 
   for (const provider of providers) {
     for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
       if (lastError && remaining() < minAttempt) {
-        console.warn(`${tag}gave up after ${Date.now() - calledAt}ms: deadline reached`);
-        throw lastError;
+        throw giveUp(lastError, 'deadline reached');
       }
       const startedAt = Date.now();
       try {
@@ -157,13 +167,14 @@ export async function callModel(request: LlmRequest, options: CallOptions = {}):
             ? raw
             : new LlmError('unavailable', provider.name, String((raw as Error)?.message ?? raw), { cause: raw });
         lastError = error;
+        failures.push(`${provider.model} ${error.status ?? error.kind} ${Date.now() - startedAt}ms`);
         console.warn(
           `${tag}${provider.name} ${error.kind}${error.status ? ` ${error.status}` : ''} ` +
-            `after ${Date.now() - startedAt}ms: ${error.message}`,
+            `after ${Date.now() - startedAt}ms ${shape}: ${error.message}`,
         );
 
         // Our bug, or a decision about the content — stop the whole chain.
-        if (!error.failoverable && !error.retryable) throw error;
+        if (!error.failoverable && !error.retryable) throw giveUp(error, 'not retryable');
 
         const canRetry = error.retryable && attempt < MAX_ATTEMPTS - 1;
         if (!canRetry) break; // fall through to the next provider
@@ -176,5 +187,6 @@ export async function callModel(request: LlmRequest, options: CallOptions = {}):
     }
   }
 
-  throw lastError ?? new LlmError('unavailable', 'none', 'all providers failed');
+  if (lastError) throw giveUp(lastError, 'out of attempts');
+  throw new LlmError('unavailable', 'none', 'all providers failed');
 }
