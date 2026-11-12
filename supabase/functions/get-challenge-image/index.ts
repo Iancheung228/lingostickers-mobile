@@ -86,6 +86,8 @@ Deno.serve(async (req) => {
 
   } catch (err: any) {
     console.error('get-challenge-image error:', err);
-    return json({ error: err?.message ?? 'Internal server error' }, 500);
+    // Logged above; the client shows any string body verbatim, so a raw
+    // Postgres or storage message must not reach it.
+    return json({ error: 'Something went wrong. Please try again.' }, 500);
   }
 });

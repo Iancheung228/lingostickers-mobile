@@ -11,7 +11,7 @@
 # Deterministic work (gate, Maestro runs, summaries) is shell, not tokens.
 #
 # Stops when every feature passes, at the iteration cap, if the agent touches a
-# protected file, or after two iterations in a row with no new commit.
+# protected file, or after two iterations in a row with no new passing feature.
 set -uo pipefail
 # The whole body is one { } block so bash parses all of it before running any:
 # bash otherwise reads a script as it goes, and editing this file mid-run

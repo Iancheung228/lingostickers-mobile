@@ -99,12 +99,14 @@ and the old key had neither:
 | User Content → Photos or Videos | Yes | Yes | No | App Functionality |
 | **User Content → Audio Data** *(new: pronunciation recordings, stored as voice notes)* | Yes | Yes | No | App Functionality |
 | **User Content → Other User Content** *(new: card notes and edits the user types)* | Yes | Yes | No | App Functionality |
-| Location → Precise Location *(optional, per sticker)* | Yes | Yes | No | App Functionality |
+| Location → Precise Location *(optional, per sticker; also GPS read from an imported library photo)* | Yes | Yes | No | App Functionality |
 | Identifiers → User ID | Yes | Yes | No | App Functionality |
 | Identifiers → Device ID *(Expo push token)* | Yes | Yes | No | App Functionality |
 | Usage Data → Product Interaction *(Aptabase)* | Yes | **No** | No | Analytics |
+| Usage Data → Other Usage Data *(Aptabase: cutout timings/error text)* | Yes | **No** | No | Analytics |
 
-Everything else: Not Collected. "Used to track you across apps/companies": **No**.
+Everything else: Not Collected (no crash reporting SDK is installed; no advertising identifier; no contacts access).
+Third-party processors that receive photos (Google Gemini, Replicate, remove.bg) act as processors with explicit in-app consent. Account deletion removes sticker-images and avatars files plus all rows (delete-account function). "Used to track you across apps/companies": **No**.
 
 Device ID: with Friends off, v1 never asks for notifications, so in practice no
 push token is stored. Declaring it anyway keeps the label true for the update

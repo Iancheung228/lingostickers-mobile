@@ -24,6 +24,7 @@ import { StickerDraft } from '@/lib/types';
 import { Point } from '@/lib/cropGeometry';
 import { captureLocation, CapturedLocation } from '@/lib/location';
 import { getImportedPhotoMetadata } from '@/lib/photoMetadata';
+import { withThumbPath } from '@/lib/thumbnails';
 import { attemptLocalCutout, uploadCutout, cutoutPath, discardCutout, CUTOUT_DRY_RUN, type UploadOutcome } from '@/lib/cutout';
 import { trackEvent } from '@/lib/analytics';
 import DiscoveryReveal from '@/components/DiscoveryReveal';
@@ -211,6 +212,7 @@ export default function ScanScreen() {
     discoveredAt,
     lassoPolygon,
     precutImagePath,
+    precutThumbPath,
     signal,
   }: {
     signal?: AbortSignal;
@@ -225,6 +227,8 @@ export default function ScanScreen() {
     // function then skips background removal entirely and only does
     // vocabulary.
     precutImagePath?: string | null;
+    // The thumbnail uploaded beside the device cutout, if it made one.
+    precutThumbPath?: string | null;
   }) => {
     if (!user) throw new Error('Not signed in');
 
@@ -304,6 +308,9 @@ export default function ScanScreen() {
       partOfSpeech: data.partOfSpeech ?? null,
       category: data.category ?? 'Other',
       imagePath: String(data.imagePath ?? ''),
+      // Only trusted when the server kept the device's cutout; a server-made
+      // cutout has a different name and no thumbnail.
+      thumbPath: precutThumbPath && precutImagePath && data.imagePath === precutImagePath ? precutThumbPath : null,
       memoryPhotoPath: data.memoryPhotoPath ?? null,
       memoryPhotoColor: data.memoryPhotoColor ?? null,
       // Shown as an inline banner on DiscoveryReveal rather than an
@@ -443,6 +450,7 @@ export default function ScanScreen() {
       // through to the server exactly as before. The user sees no difference
       // beyond the wait.
       let precutImagePath: string | null = null;
+      let precutThumbPath: string | null = null;
       let upload: UploadOutcome | null = null;
       previewCutoutRef.current = null;
 
@@ -481,6 +489,7 @@ export default function ScanScreen() {
         try {
           upload = await uploadCutout(local.uri, cutoutPath(user.id));
           precutImagePath = upload.path;
+          precutThumbPath = upload.thumbPath;
         } catch (uploadErr: any) {
           // The cutout itself was fine; only getting it to storage failed.
           // Fall back to the server rather than fail the scan.
@@ -510,6 +519,7 @@ export default function ScanScreen() {
           discoveredAt: fallbackDiscoveredAt,
           lassoPolygon,
           precutImagePath,
+          precutThumbPath,
           signal: scanAbort.controller.signal,
         });
         const serverMs = Date.now() - submitStarted;
@@ -524,7 +534,7 @@ export default function ScanScreen() {
         // claims *after* this upload has happened. Nothing else will ever
         // collect it, so collect it here.
         if (precutImagePath) {
-          supabase.storage.from('sticker-images').remove([precutImagePath]).then(({ error }) => {
+          supabase.storage.from('sticker-images').remove(withThumbPath(precutImagePath)).then(({ error }) => {
             if (error) debugWarn('Failed to clean up unused cutout', error);
           });
         }
@@ -537,7 +547,7 @@ export default function ScanScreen() {
       const staleDraft = draftBeforeRetryRef.current;
       draftBeforeRetryRef.current = null;
       if (staleDraft) {
-        const stalePaths = [staleDraft.imagePath, ...(staleDraft.memoryPhotoPath ? [staleDraft.memoryPhotoPath] : [])];
+        const stalePaths = [...withThumbPath(staleDraft.imagePath), ...(staleDraft.memoryPhotoPath ? [staleDraft.memoryPhotoPath] : [])];
         supabase.storage.from('sticker-images').remove(stalePaths).then(({ error }) => {
           if (error) debugWarn('Failed to clean up previous extraction attempt', error);
         });
@@ -732,6 +742,7 @@ export default function ScanScreen() {
       part_of_speech: draft.partOfSpeech,
       category: draft.category,
       image_path: draft.imagePath,
+      thumb_path: draft.thumbPath,
       memory_photo_path: draft.memoryPhotoPath,
       memory_photo_color: draft.memoryPhotoColor,
       discovered_at: draft.discoveredAt,
@@ -791,7 +802,7 @@ export default function ScanScreen() {
           text: 'Discard', style: 'destructive',
           onPress: async () => {
             if (draft) {
-              const paths = [draft.imagePath];
+              const paths = withThumbPath(draft.imagePath);
               if (draft.memoryPhotoPath) paths.push(draft.memoryPhotoPath);
               await supabase.storage.from('sticker-images').remove(paths);
             }

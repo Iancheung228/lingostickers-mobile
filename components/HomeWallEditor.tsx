@@ -20,6 +20,8 @@ import WallBackground from '@/components/WallBackground';
 import BackgroundCropper, { CropResult } from '@/components/BackgroundCropper';
 import CutoutSticker from '@/components/CutoutSticker';
 import HomeWallTile from '@/components/HomeWallTile';
+import StickerImageFallback from '@/components/StickerImageFallback';
+import { listImagePath } from '@/lib/thumbnails';
 import { colors, radii, fonts, spacing, shadows, wordFontFor } from '@/constants/theme';
 
 const HOME_BACKGROUND_MAX_SIDE = 1600;
@@ -66,8 +68,8 @@ export default function HomeWallEditor({
   const placedIds = useMemo(() => new Set(items.map(i => i.sticker_id)), [items]);
   const atCap = items.length >= HOME_WALL_CAP;
 
-  const trayUrls = useSignedUrls(useMemo(() => stickers.map(s => s.image_path), [stickers]));
-  const canvasUrls = useSignedUrls(useMemo(() => items.map(i => i.sticker.image_path), [items]));
+  const trayUrls = useSignedUrls(useMemo(() => stickers.map(listImagePath), [stickers]));
+  const canvasUrls = useSignedUrls(useMemo(() => items.map(i => listImagePath(i.sticker)), [items]));
 
   // Shared across every tile so whichever one is being dragged can reveal
   // the trash zone and report hovering it — only one drag at a time matters.
@@ -197,7 +199,7 @@ export default function HomeWallEditor({
                   key={item.sticker_id}
                   item={item}
                   canvas={canvas}
-                  url={item.sticker.image_path ? canvasUrls.get(item.sticker.image_path) ?? null : null}
+                  url={canvasUrls.get(listImagePath(item.sticker) ?? '') ?? null}
                   onMove={onMove}
                   onRemove={onRemove}
                   dragActive={dragActive}
@@ -283,7 +285,7 @@ export default function HomeWallEditor({
               contentContainerStyle={styles.tray}
               renderItem={({ item }) => {
                 const placed = placedIds.has(item.id);
-                const url = item.image_path ? trayUrls.get(item.image_path) ?? null : null;
+                const url = trayUrls.get(listImagePath(item) ?? '') ?? null;
                 return (
                   <TouchableOpacity
                     style={[
@@ -296,9 +298,9 @@ export default function HomeWallEditor({
                   >
                     <View style={styles.trayImage}>
                       {url ? (
-                        <CutoutSticker uri={url} cacheKey={item.image_path ?? undefined} borderStyle={borderStyle} />
+                        <CutoutSticker uri={url} cacheKey={listImagePath(item) ?? undefined} borderStyle={borderStyle} />
                       ) : (
-                        <ActivityIndicator size="small" color={colors.terra} />
+                        <StickerImageFallback sticker={item} size={22} />
                       )}
                     </View>
                     {placed && (

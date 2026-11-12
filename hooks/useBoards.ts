@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
+import { listImagePath } from '@/lib/thumbnails';
 import { BackgroundCrop, Board, BoardStickerWithSticker } from '@/lib/types';
 import { computeAutoLayout } from '@/lib/boardLayout';
 import { debugWarn } from '@/lib/debug';
@@ -236,17 +237,20 @@ export function useBoardPreviews(userId: string | undefined) {
     if (!userId) { setPreviews(new Map()); return; }
     const { data, error } = await supabase
       .from('board_stickers')
-      .select('board_id, added_at, sticker:stickers(image_path)')
+      .select('board_id, added_at, sticker:stickers(image_path, thumb_path)')
       .eq('user_id', userId)
       .order('added_at', { ascending: false });
     if (error || !data) return;
 
     const next = new Map<string, BoardPreview>();
-    for (const row of data as unknown as Array<{ board_id: string; sticker: { image_path: string } | null }>) {
+    for (const row of data as unknown as Array<{ board_id: string; sticker: { image_path: string | null; thumb_path: string | null } | null }>) {
       const entry = next.get(row.board_id) ?? { paths: [], count: 0 };
       entry.count += 1;
-      if (entry.paths.length < BOARD_PREVIEW_COUNT && row.sticker?.image_path) {
-        entry.paths.push(row.sticker.image_path);
+      // Rail tiles are small, so the thumbnail when there is one. BoardRail
+      // caches by this same path, so it never collides with a full image.
+      const path = row.sticker ? listImagePath(row.sticker) : null;
+      if (entry.paths.length < BOARD_PREVIEW_COUNT && path) {
+        entry.paths.push(path);
       }
       next.set(row.board_id, entry);
     }

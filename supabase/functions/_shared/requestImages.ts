@@ -1,5 +1,6 @@
 // ---------------------------------------------------------------------------
-// Request-body images for the scene paths (create-card, scene-words).
+// Request-body images for every endpoint that takes one (create-sticker,
+// create-card, scene-words).
 //
 // The client sends JPEGs as base64, with or without a data-URL prefix. These
 // are forwarded to a paid model, so they are bounded here before any spend:

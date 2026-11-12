@@ -12,6 +12,7 @@ import { useProfile } from '@/hooks/useProfile';
 import { supabase } from '@/lib/supabase';
 import { Sticker, Category, Language } from '@/lib/types';
 import { useSignedUrls } from '@/hooks/useSignedUrls';
+import { listImagePath } from '@/lib/thumbnails';
 import { useStickerAuthors } from '@/hooks/useStickerAuthors';
 import BottomSheet, { BottomSheetHandle } from '@/components/BottomSheet';
 import StickerCard from '@/components/StickerCard';
@@ -220,14 +221,14 @@ export default function CollectionScreen() {
     // images belong in the fast batch even though they aren't drawn from
     // `filtered` — otherwise the first thing on screen is the last to load.
     () => [
-      ...feedItems.map(s => s.image_path),
-      ...sorted.slice(0, LATEST_FEED_ROWS).map(s => s.image_path),
-      ...filtered.slice(0, PRIORITY_COUNT).map(s => s.image_path),
+      ...feedItems.map(listImagePath),
+      ...sorted.slice(0, LATEST_FEED_ROWS).map(listImagePath),
+      ...filtered.slice(0, PRIORITY_COUNT).map(listImagePath),
     ],
     [feedItems, sorted, filtered]
   ));
   const deferredUrls = useSignedUrls(useMemo(() => [
-    ...filtered.slice(PRIORITY_COUNT).map(s => s.image_path),
+    ...filtered.slice(PRIORITY_COUNT).map(listImagePath),
     ...stickers.map(s => s.voice_note_path),
     ...stickers.map(s => s.memory_photo_path),
   ], [filtered, stickers]));
@@ -446,7 +447,7 @@ export default function CollectionScreen() {
               sticker={item}
               onPress={() => setSelectedSticker(item)}
               onToggleFavorite={handleToggleFavorite}
-              imageUrl={getUrl(item.image_path)}
+              imageUrl={getUrl(listImagePath(item))}
               voiceUrl={getUrl(item.voice_note_path)}
             />
           </View>

@@ -1,0 +1,96 @@
+# Typed card placeholder: a card made with the Scan screen's "Type a word" sheet has
+# no image_path. It must show its word's first character (faint ink), not a spinner,
+# in the Collection grid, the "Latest stickers" row and the StudyCard front face.
+# The seeded picture card "pomme" must still show its picture.
+# Costs ONE AI lookup (create-card). Budget-tight: do not add more lookups here.
+# Selectors are from the code (not yet run on the Simulator): see the report.
+appId: com.iancheung228.lingostickers
+---
+- runFlow: ../sign-in.yaml
+- takeScreenshot: 10-signed-in-home
+
+# Open the Scan tab from the floating tab bar.
+- tapOn:
+    text: "Scan a new sticker"
+- extendedWaitUntil:
+    visible: ".*(One quick thing|Agree and start scanning|Import a photo from your library).*"
+    timeout: 15000
+# Consent gate may appear on a fresh account; agreeing only records consent, no AI call.
+- runFlow:
+    when:
+      visible: "Agree and start scanning"
+    commands:
+      - tapOn: "Agree and start scanning"
+- extendedWaitUntil:
+    visible:
+      id: "scan-type-word"
+    timeout: 15000
+
+# Open the "Type a word" sheet, type a distinctive word ("q" is not the seeded "p").
+- tapOn:
+    id: "scan-type-word"
+- extendedWaitUntil:
+    visible:
+      id: "type-word-input"
+    timeout: 15000
+- tapOn:
+    id: "type-word-input"
+- inputText: "quokka"
+- tapOn:
+    id: "type-word-lookup"
+- extendedWaitUntil:
+    visible:
+      id: "type-word-preview"
+    timeout: 90000
+- assertVisible: "quokka"
+- takeScreenshot: 11-typed-preview-quokka
+
+# Save the picture-less card. The toast confirms it.
+- tapOn:
+    id: "type-word-add"
+- extendedWaitUntil:
+    visible: "1 card added"
+    timeout: 15000
+- assertNotVisible:
+    id: "type-word-preview"
+
+# The toast's View action opens the Collection tab.
+- tapOn:
+    id: "toast-action"
+- extendedWaitUntil:
+    visible: "Latest stickers.*"
+    timeout: 20000
+- assertVisible:
+    id: "collection-sort"
+- extendedWaitUntil:
+    visible: ".*quokka.*"
+    timeout: 20000
+- extendedWaitUntil:
+    visible: ".*pomme.*"
+    timeout: 20000
+
+# LOCATIONS 1-2 (top of Collection): the hero wall tile and "Latest finds" cards, and
+# the "Latest stickers" row with its picture-less thumbnail.
+- takeScreenshot: 12-collection-latest-and-grid
+
+# LOCATION 4: the collection grid card. The card is ONE element whose label joins its
+# texts ("q, un quokka, ..., Hear un quokka pronounced, Add un quokka to favorites"),
+# so match the full string. Only the grid card has "Hear ... pronounced" on this screen.
+# centerElement brings the whole card into view.
+- scrollUntilVisible:
+    element: ".*Hear un quokka pronounced.*"
+    direction: DOWN
+    timeout: 20000
+    centerElement: true
+- waitForAnimationToEnd:
+    timeout: 800
+- takeScreenshot: 12b-grid
+
+# Tapping the grid card opens the StudyCard in browse mode (location 5): its front face.
+- tapOn:
+    text: ".*quokka.*"
+    index: 1
+    optional: true
+- waitForAnimationToEnd:
+    timeout: 1500
+- takeScreenshot: 13-study-front-quokka

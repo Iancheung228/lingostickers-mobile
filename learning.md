@@ -3,6 +3,18 @@
 Three bugs we hit this session, explained plainly. Each one teaches a
 fundamental idea that will come up again in other apps, not just this one.
 
+> Checked against the code 2026-11-11. The technical claims still hold:
+> `get-challenge-image` mints the signed URL server-side after its own
+> sender/receiver check, `submit-challenge-answer` copies the photo with the
+> service-role client, `FriendsProvider`/`ChallengesProvider` are mounted once
+> in `app/_layout.tsx`, and `getFunctionErrorMessage` (`lib/functionError.ts`)
+> is used wherever an edge function error is shown (e.g. `TypeWordSheet.tsx`,
+> `StudyCard.tsx`). One caveat: Friends and challenges are switched off for the
+> v1 release (`SOCIAL_ENABLED = false`, `lib/features.ts`), so the Friends tab,
+> its badge and the Challenge button in Parts 1 and 2 are hidden in the shipped
+> app; the code and the lessons stay valid for when they return. The short
+> versions of these lessons are items 1-3 in `skills.md`.
+
 ---
 
 ## Part 1: The image bug — how file storage permissions work

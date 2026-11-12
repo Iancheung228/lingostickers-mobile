@@ -22,12 +22,14 @@ iteration the loop re-runs the full Maestro suite as a regression check.
 | `feature_list.json` | you | what to build; each UI feature names the Maestro flow that proves it |
 | `../scripts/test-drivable.mts` | you | PASS only when static checks pass AND the feature's flow passed on the Simulator |
 | `init.sh` | you | the gate: typecheck → lint → tests → deno check |
-| `qa.sh` | you | preflight (Simulator, dev build, Metro serving *this* tree, not stale) → Maestro → short summary + `logs/qa-status.json` |
+| `qa.sh` | you | preflight (Simulator, dev build, Metro serving *this* tree, not in CI mode, bundle builds, no flow pins `METRO_PORT` in `env:`) → Maestro → short summary + `logs/qa-status.json`. Exit 0 pass, 1 flow failed, 2 environment not ready |
 | `qa-hierarchy.sh` | you | what Maestro can see right now, as matchable labels — instead of guessing selectors |
 | `PROMPT.md` | you | the builder's per-iteration instruction |
 | `guard.sh` + `settings.json` | you | blocks deploys/pushes/`maestro cloud`, `.env` reads, and edits to everything above and to the approved flows |
 | `run-loop.sh` | you | worktree, Metro on :8082, loop, model escalation, regression, tamper check, cost total |
-| `../.maestro/*.yaml`, `run.sh`, `seed.mjs` | you | human-approved flows and test tooling |
+| `../.maestro/*.yaml`, `run.sh`, `seed.mjs`, `fixtures/` | you | human-approved flows and test tooling |
+| `../.maestro/qa.env`, `create-qa-user.sh` | you | QA account credentials (gitignored; the loop copies `qa.env` into the worktree) and the script that creates the account |
+| `../scripts/qa-budget.mjs` | you | how many AI calls the QA account has left today (cap: 100 per UTC day); builders check it before any scan or lookup flow |
 | `../.maestro/agent/*.yaml` | agents | flows the QA agent writes for new features |
 
 ## Before the first run
@@ -54,13 +56,15 @@ iteration the loop re-runs the full Maestro suite as a regression check.
 ## Run
 
 ```bash
-DRY_RUN=1 ALLOW_PROD_BACKEND=1 harness/run-loop.sh   # set up + QA baseline, no tokens
+DRY_RUN=1 ALLOW_PROD_BACKEND=1 harness/run-loop.sh   # set up + one sign-in flow, no tokens (a real run starts with the full suite)
 ALLOW_PROD_BACKEND=1 harness/run-loop.sh 1           # first time: one iteration, watch it
 ALLOW_PROD_BACKEND=1 harness/run-loop.sh 6 3         # up to 6 iterations, $3 cap each
 ```
 
-The loop uses Metro on **:8082**, so your own `npx expo start` on :8081 (and
+The loop uses Metro on **:8082** (`METRO_PORT`; started from the worktree if nothing is listening there), so your own `npx expo start` on :8081 (and
 your phone) keep working, and on its own Simulator, so yours does too.
+
+The worktree and branch (`../tabi-harness`, `harness/drivable`) are created once and then reused: later runs do not pick up new commits from main, and the protected files stay as they were at the `harness: scaffold` commit. To start over, remove the worktree (`git worktree remove --force ../tabi-harness && git branch -D harness/drivable`).
 
 Review with `cd ../tabi-harness && git log -p harness/drivable`, the QA
 screenshots in `.maestro/output/`, `harness-progress.md` (including any app bugs
@@ -69,7 +73,7 @@ into main yourself.
 
 ## When it stops
 
-All features pass; the iteration cap; a protected file changed; two
+All features pass; the iteration cap; a protected file changed (the list is `PROTECTED` in `run-loop.sh`); two
 iterations with no new *passing feature* (commits don't count — a blocked
 builder commits notes); a human-approved flow failing the regression (no
 builder may fix it); or an iteration that made no progress and added to

@@ -3,6 +3,7 @@ import { supabase } from '@/lib/supabase';
 import { ChallengeWithSender, ChallengeWithReceiver, SubmitAnswerResult } from '@/lib/types';
 import { getFunctionErrorMessage } from '@/lib/functionError';
 import { useAuth } from '@/hooks/useAuth';
+import { SOCIAL_ENABLED } from '@/lib/features';
 
 // The edge function's literal duplicate-challenge message, remapped to
 // something a user can actually act on.
@@ -85,7 +86,10 @@ function useChallengesState() {
   }, [userId]);
 
   useEffect(() => {
-    if (!userId) { setLoading(false); return; }
+    // With social off nothing can show the inbox, and this provider mounts
+    // at the root — so the fetch would be two wasted queries on every
+    // launch, competing with the collection for the same connection.
+    if (!userId || !SOCIAL_ENABLED) { setLoading(false); return; }
     fetchInbox().then(() => setLoading(false));
   }, [fetchInbox]);
 

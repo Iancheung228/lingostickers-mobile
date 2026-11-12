@@ -7,7 +7,7 @@ lines are the trigger, not the whole lesson.
 
 1. **Cross-screen state** — two components must agree on a value (auth, profile, friends, challenges) → one Context provider mounted in `app/_layout.tsx`, never a bare hook per call site.
 2. **One user sees another user's file** — Storage RLS is per-owner folder; signed URLs don't bypass it → copy via service-role edge function, or mint the URL server-side after your own auth check.
-3. **`supabase.functions.invoke` errors** — never show `error.message`; unwrap the body with `getFunctionErrorMessage` (`lib/functionError.ts`) and remap copy there.
+3. **`supabase.functions.invoke` errors** — never show `error.message`; unwrap the body with `getFunctionErrorMessage` (`lib/functionError.ts`) and remap friendlier copy once, in the calling hook (e.g. `hooks/useChallenges.ts`).
 4. **Build/test loop** — dev client + Metro hot reload; EAS builds are rationed (15/month, ask first); phone connects over LAN, not tunnel; edge functions deploy separately.
 5. **Any Expo API** — this is SDK 54; check https://docs.expo.dev/versions/v54.0.0/ before assuming an API's shape.
 6. **Cutout picks the wrong object** — the model must be told the selection (promptable Vision instances), not corrected after; segment with padding; keep gate thresholds in TS (`lib/cutout.ts`).
@@ -21,3 +21,4 @@ lines are the trigger, not the whole lesson.
 14. **LLM providers** — adapters behind `_shared/llm/`; retry/failover decided by `LlmError.kind`; never fail over on `invalid` or `blocked`; cap backoff.
 15. **Response shape** — one registry (`_shared/cardSchema.ts`) renders prose and JSON Schema; field order is load-bearing; assert the rendered block `JSON.parse`s.
 16. **Edge-function types** — `npm run typecheck:functions` (deno check) is the gate; probe esm.sh module shape at runtime before "fixing" an import; verify image code by running it.
+17. **Sticker images on a list surface** — sign, load and `cacheKey` the same path, via `listImagePath()` (`lib/thumbnails.ts`); never cache a thumbnail under `image_path`; removing a cutout removes its thumbnail too (`withThumbPath`).

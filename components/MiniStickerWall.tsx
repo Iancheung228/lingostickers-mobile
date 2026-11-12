@@ -13,6 +13,7 @@ import { seededRandom } from '@/lib/seededRandom';
 import { homeCanvasSize, homeTileFraction, HOME_WALL_HEIGHT, HOME_WALL_INSET } from '@/lib/homeWall';
 import WallBackground from '@/components/WallBackground';
 import HomeWallTile from '@/components/HomeWallTile';
+import { listImagePath } from '@/lib/thumbnails';
 import HomeWallEditor from '@/components/HomeWallEditor';
 import { colors, radii, fonts, spacing, shadows } from '@/constants/theme';
 
@@ -164,7 +165,7 @@ function TileFan({
           isHero={slots[i] === 0}
           heroScale={heroScale}
           opacity={opacities[i]}
-          url={sticker.image_path ? urls.get(sticker.image_path) ?? null : null}
+          url={urls.get(listImagePath(sticker) ?? '') ?? null}
           onPress={() => onPressSticker(sticker)}
           borderStyle={borderStyle}
         />
@@ -211,7 +212,7 @@ export default function MiniStickerWall({
   // One batched sign request for whichever set is on screen, rather than
   // each tile minting its own — see hooks/useSignedUrls.ts.
   const shownPaths = useMemo(
-    () => (arranged ? items.map(i => i.sticker.image_path) : preview.map(s => s.image_path)),
+    () => (arranged ? items.map(i => listImagePath(i.sticker)) : preview.map(listImagePath)),
     [arranged, items, previewKey]
   );
   const urls = useSignedUrls(shownPaths);
@@ -272,7 +273,7 @@ export default function MiniStickerWall({
                 <HomeWallTile
                   sticker={item.sticker}
                   size={side}
-                  url={item.sticker.image_path ? urls.get(item.sticker.image_path) ?? null : null}
+                  url={urls.get(listImagePath(item.sticker) ?? '') ?? null}
                   borderStyle={borderStyle}
                 />
               </TouchableOpacity>

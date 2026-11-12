@@ -3,6 +3,7 @@ import { supabase } from '@/lib/supabase';
 import { getFunctionErrorMessage } from '@/lib/functionError';
 import { BlockedUser, FriendWithProfile, PersonSummary } from '@/lib/types';
 import { useAuth } from '@/hooks/useAuth';
+import { SOCIAL_ENABLED } from '@/lib/features';
 
 const SEARCH_DEBOUNCE_MS = 280;
 
@@ -90,8 +91,12 @@ function useFriendsState() {
     })));
   }, [userId]);
 
-  useEffect(() => { fetchFriends(); }, [fetchFriends]);
-  useEffect(() => { fetchBlocked(); }, [fetchBlocked]);
+  // Mounted at the root, so these run on every launch. With social off the
+  // only readers are the hidden Friends tab and the hidden blocked-accounts
+  // row, so the queries would be pure startup cost. The callbacks stay
+  // exported; flipping SOCIAL_ENABLED restores the eager load.
+  useEffect(() => { if (SOCIAL_ENABLED) fetchFriends(); }, [fetchFriends]);
+  useEffect(() => { if (SOCIAL_ENABLED) fetchBlocked(); }, [fetchBlocked]);
   // A search still pending when the screen closes has nothing left to update.
   useEffect(() => () => { if (searchTimer.current) clearTimeout(searchTimer.current); }, []);
 

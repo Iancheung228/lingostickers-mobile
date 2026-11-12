@@ -59,6 +59,10 @@ export interface Sticker {
   // The cut-out. Null for a card made from a typed word or a scene chip
   // (043_any_word_cards.sql) — every render path must have a no-picture state.
   image_path: string | null;
+  // A 512px WebP of the cut-out for list surfaces (047_sticker_thumbnails.sql,
+  // lib/thumbnails.ts). Null when there isn't one: read it through
+  // listImagePath(), which falls back to image_path.
+  thumb_path: string | null;
   memory_photo_path: string | null;
   // Dominant color of the memory photo (hex), extracted server-side at
   // upload time — see supabase/functions/_shared/imageColor.ts. Null when
@@ -252,6 +256,8 @@ export interface StickerDraft {
   partOfSpeech: string | null;
   category: Category;
   imagePath: string;
+  // Set only when the device made the cutout and its thumbnail uploaded.
+  thumbPath: string | null;
   memoryPhotoPath: string | null;
   memoryPhotoColor: string | null;
   bgIssue: { kind: string; message: string } | null;

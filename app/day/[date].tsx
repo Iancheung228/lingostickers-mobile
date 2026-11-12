@@ -6,6 +6,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
 import { Sticker } from '@/lib/types';
 import { useSignedUrls } from '@/hooks/useSignedUrls';
+import { listImagePath } from '@/lib/thumbnails';
 import StickerCard from '@/components/StickerCard';
 import StudyCard from '@/components/StudyCard';
 import SettingsButton from '@/components/SettingsButton';
@@ -70,7 +71,7 @@ export default function DayScreen() {
   // One batched sign request for the whole day's grid — see
   // hooks/useSignedUrls.ts.
   const urls = useSignedUrls(useMemo(
-    () => stickers.flatMap(s => [s.image_path, s.voice_note_path]),
+    () => stickers.flatMap(s => [listImagePath(s), s.voice_note_path]),
     [stickers]
   ));
 
@@ -152,7 +153,7 @@ export default function DayScreen() {
                 sticker={item}
                 onPress={() => setSelectedSticker(item)}
                 onToggleFavorite={handleToggleFavorite}
-                imageUrl={item.image_path ? urls.get(item.image_path) ?? null : null}
+                imageUrl={urls.get(listImagePath(item) ?? '') ?? null}
                 voiceUrl={item.voice_note_path ? urls.get(item.voice_note_path) ?? null : null}
               />
             </View>

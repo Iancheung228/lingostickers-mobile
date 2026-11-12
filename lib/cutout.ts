@@ -5,6 +5,7 @@ import { trackEvent } from '@/lib/analytics';
 import { supabase } from '@/lib/supabase';
 import type { Point } from '@/lib/cropGeometry';
 import { debugLog } from '@/lib/debug';
+import { uploadThumbnail } from '@/lib/thumbnails';
 
 export type { CutoutResult } from '@/modules/subject-cutout';
 
@@ -220,6 +221,8 @@ function runCutout(params: {
 // ---------------------------------------------------------------------------
 export interface UploadOutcome {
   path: string;
+  /** The list-size copy (lib/thumbnails.ts), or null if it couldn't be made. */
+  thumbPath: string | null;
   megabytes: number;
   ms: number;
 }
@@ -240,18 +243,29 @@ export async function uploadCutout(uri: string, path: string): Promise<UploadOut
   const file = new File(uri);
   const bytes = await file.arrayBuffer();
 
+  // Started first and awaited before the temp file is deleted below, since it
+  // renders from the same file. It runs alongside the full upload, so it adds
+  // little to the scan; it never throws.
+  const thumbPromise = uploadThumbnail(uri, path);
+
   const started = Date.now();
   const { error } = await supabase.storage
     .from('sticker-images')
     .upload(path, bytes, { contentType: 'image/png', upsert: false });
   const ms = Date.now() - started;
+  const thumbPath = await thumbPromise;
   const megabytes = bytes.byteLength / 1024 / 1024;
 
   // Size and duration together: a slow upload is either a fat file or a slow
   // link, and the fix is different for each.
   debugLog(`[cutout] upload ${megabytes.toFixed(2)}MB in ${ms}ms`);
 
-  if (error) throw new Error(`Cutout upload failed: ${error.message}`);
+  if (error) {
+    // The scan falls back to the server, which makes its own cutout under a
+    // different name, so this thumbnail would belong to nothing.
+    if (thumbPath) supabase.storage.from('sticker-images').remove([thumbPath]);
+    throw new Error(`Cutout upload failed: ${error.message}`);
+  }
 
   // The native module wrote this into the temp directory. iOS will clear it
   // eventually, but a user scanning all afternoon shouldn't accumulate a
@@ -262,7 +276,7 @@ export async function uploadCutout(uri: string, path: string): Promise<UploadOut
     // Losing a temp file is not worth failing a scan over.
   }
 
-  return { path, megabytes, ms };
+  return { path, thumbPath, megabytes, ms };
 }
 
 /**

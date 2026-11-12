@@ -26,50 +26,78 @@
 <body>
 
 <h1>Tabi Stickers Privacy Policy</h1>
-<p class="effective-date">Effective date: September 9, 2026</p>
+<p class="effective-date">Effective date: November 11, 2026</p>
 
 <p>Tabi Stickers ("we," "us," "the app") is a language-learning app that turns
-photos of real objects into vocabulary stickers. This policy explains what
-information we collect, why, and how it's handled.</p>
+photos of real objects into vocabulary stickers and flashcards. This policy
+explains what information we collect, why, who processes it, and how to delete it.</p>
 
 <h2>Information We Collect</h2>
 
-<p><strong>Account information.</strong> When you sign up, we collect your email
-address and password (handled by our backend provider, Supabase — we never
-see or store your raw password ourselves).</p>
+<p><strong>Account information.</strong> Your email address and password
+(handled by our backend provider, Supabase &mdash; we never see your raw
+password), a username, an optional profile picture, and your chosen learning
+language.</p>
 
-<p><strong>Photos.</strong> When you take or choose a photo to turn into a
-sticker, that image is uploaded and processed to create your sticker. Photos
-you capture are stored so your sticker collection persists across
-sessions.</p>
+<p><strong>Photos.</strong> When you scan an object, choose a photo from your
+library, or add an optional &ldquo;memory&rdquo; photo to a sticker, the image is
+uploaded to your private storage so your collection persists. Where possible
+the cutout is made on your device (using Apple's Vision framework). Before your
+first scan the app asks for your explicit permission to send the photo to the
+third-party services listed below. Your profile picture, if you set one, is
+stored in a <strong>publicly readable</strong> storage location; anyone who has
+its link can view it.</p>
 
-<p><strong>Voice recordings.</strong> If you choose to record yourself
-practicing a word's pronunciation, that audio is captured via your device's
-microphone. This only happens when you actively start a recording — the app
-does not record in the background.</p>
+<p><strong>Cards and study data.</strong> The words, translations, sentences,
+notes and edits you create or type, plus your review history and schedule.</p>
 
-<p><strong>Location (optional).</strong> If you choose to tag a sticker with
-where you made it, we store that location alongside the sticker. This is
-entirely optional and off by default — the app never accesses your location
-unless you tap to add it to a specific sticker.</p>
+<p><strong>Voice recordings.</strong> If you choose to record yourself practicing a
+word's pronunciation, the audio is captured via your microphone only while you
+record, and is saved to your private storage as a voice note attached to that
+sticker. Recordings are not sent to the AI services below.</p>
 
-<p><strong>Push notification token.</strong> If you enable notifications, we
-store a device push token (issued by Apple/Google via Expo's push service)
-so we can deliver challenge and friend-activity notifications to you.</p>
+<p><strong>Location (optional).</strong> If you tap to tag a sticker with where you
+made it, we store the coordinates (latitude and longitude) and a place name
+alongside the sticker. The place name is looked up from the coordinates using
+Apple's on-device geocoding service, which may send the coordinates to Apple.
+If you import a photo from your library that already contains GPS data, the app
+may read that location from the photo to tag the sticker the same way. Location is
+never collected in the background.</p>
 
-<p><strong>Friends &amp; social data.</strong> If you use the
-friends/challenge features, we store the connections you create (friend
-requests, challenge results) so those features work.</p>
+<p><strong>Push notification token.</strong> If you enable notifications, we store a
+device push token (issued by Apple via Expo's push service) so we can deliver
+notifications to you. Notifications are used only by the friends/challenge
+features, which are not enabled in this version of the app.</p>
+
+<p><strong>Friends &amp; social data.</strong> Friends, challenges, blocking and
+reporting are not enabled in this version of the app. If a later version enables
+them, we will store the connections you create (friend requests, challenge
+results, blocks and reports) so those features work, and this policy will be
+updated first.</p>
+
+<p><strong>Usage analytics.</strong> We use Aptabase, a privacy-focused
+analytics service, to count anonymous events such as app launches, a sticker being
+saved or shared, and whether a cutout was made on-device or needed a fallback
+service (with technical measurements of the cutout and, on failure, an error
+message). We do not attach your account, email or username to these events.
+Aptabase receives basic device context such as app version, OS version, device
+model and locale. We do not use advertising identifiers and do not track you
+across other companies' apps or websites.</p>
+
+<p><strong>Usage counters.</strong> To limit how many AI-assisted scans each
+account can make per day, our servers keep a per-account daily counter.</p>
+
+<p>We do not use a crash-reporting service.</p>
 
 <h2>How We Use This Information</h2>
 
 <ul>
-  <li>To create and store your sticker collection</li>
+  <li>To create and store your sticker collection and review schedule</li>
   <li>To generate vocabulary text and definitions for your stickers</li>
   <li>To remove image backgrounds so stickers look clean</li>
   <li>To let you optionally map where a sticker was made</li>
-  <li>To send you notifications about friend challenges, if enabled</li>
   <li>To operate account features like sign-in and password reset</li>
+  <li>To understand, in aggregate, whether the app works (anonymous analytics)</li>
 </ul>
 
 <p>We do not sell your personal information, and we do not use your photos,
@@ -82,48 +110,68 @@ the app:</p>
 
 <table>
   <tr><th>Provider</th><th>Purpose</th><th>Data involved</th></tr>
-  <tr><td>Supabase</td><td>Authentication, database, file storage</td><td>Email, photos, sticker data, friend/challenge data</td></tr>
-  <tr><td>Google (Gemini API)</td><td>Reads your photo to identify the object and generate the word, translation and example sentence</td><td>Photo content (processed, not used to train Google's models &mdash; we use the paid tier, under which Google does not use prompts or responses to improve its products)</td></tr>
-  <tr><td>Replicate</td><td>Removes image backgrounds for stickers, when your device cannot do it</td><td>Photo content (processed, not stored by Replicate)</td></tr>
-  <tr><td>remove.bg</td><td>Backup background removal, used only if Replicate is unavailable</td><td>Photo content (processed, not stored by remove.bg)</td></tr>
+  <tr><td>Supabase</td><td>Authentication, database, file storage, server functions</td><td>Email, username, photos, voice notes, location tags, card and study data</td></tr>
+  <tr><td>Google (Gemini API)</td><td>Reads your photo to identify the object and generate the word, translation and example sentence; translates words and sentences you type or edit</td><td>The photo you scan (with a smaller copy of the surrounding scene), any word or sentence you type or edit for translation, and the language you are learning. We use the paid tier, under which Google states it does not use prompts or responses to improve its products.</td></tr>
+  <tr><td>Replicate</td><td>Removes image backgrounds for stickers, when your device cannot do it</td><td>The photo being cut out</td></tr>
+  <tr><td>remove.bg</td><td>Backup background removal, used only if Replicate is unavailable</td><td>The photo being cut out</td></tr>
   <tr><td>Expo</td><td>Delivers push notifications</td><td>Push token</td></tr>
+  <tr><td>Aptabase</td><td>Anonymous usage analytics</td><td>Anonymous event names and technical measurements (see above)</td></tr>
+  <tr><td>Apple</td><td>Turns coordinates into a place name</td><td>Coordinates, only if you tag a location</td></tr>
 </table>
 
-<p>Each provider only receives the minimum data needed to perform its
-specific function, and is contractually restricted from using it for other
-purposes.</p>
+<p>How long these providers keep what they receive, under their published terms
+as of the effective date above:</p>
+<ul>
+  <li><strong>Google (Gemini API):</strong> Google keeps prompts, images and
+  responses for up to 55 days to detect abuse of its service and for legal
+  requirements. On the paid service we use, Google does not use them to improve
+  its products.</li>
+  <li><strong>Replicate:</strong> deletes the photo and the result about one hour
+  after processing.</li>
+  <li><strong>remove.bg:</strong> deletes the photo and the result after
+  processing, at the latest about one hour after upload.</li>
+</ul>
+
+<p>These providers act on our behalf to perform the specific function above.
+Each sees only what that function needs.</p>
 
 <h2>Sharing With Other Users</h2>
 
-<p>Tabi Stickers has social features. Adding someone as a friend lets you
-send each other challenges, but does <strong>not</strong> give them access to your
-collection &mdash; your notes, voice recordings, memory photos and location tags
-stay private to you.</p>
-
-<p><strong>Sending a challenge</strong> shares a snapshot of that sticker's word,
-translation, reading, sentence and image with the specific friend you send it
-to. This is the only way your sticker content becomes visible to another
-user.</p>
-
-<p><strong>Blocking and reporting.</strong> You can block another user or report
-content you believe breaks our rules. A report stores the reason you chose,
-any note you write, and a copy of the reported content (including the other
-user's image) so we can review it. Blocking is private &mdash; the other person is
-not told &mdash; and you can review or undo it under Settings &rarr; Safety.</p>
+<p>In this version of the app, nothing you create is shared with other users,
+with one exception: your profile picture, if you set one, is publicly readable
+by link. Social features (friends, challenges, blocking and reporting) are not
+enabled. If they are enabled in a future version, adding a friend will not give
+them access to your collection, and sending a challenge would share a copy of
+that sticker's word, translation, sentence and image with the friend you send it
+to.</p>
 
 <h2>Data Storage &amp; Retention</h2>
 
-<p>Your data is stored for as long as your account exists. You can delete
-your account at any time from Settings → Delete Account, which permanently
-removes your profile, stickers, photos, and account data from our
-systems.</p>
+<p>Your data is stored for as long as your account exists. You can delete your
+account at any time from Profile &rarr; Delete Account. Deletion removes your
+account, profile, stickers, cards, review history, and the files in your private
+photo and voice-note storage and your profile-picture storage.</p>
+<p>We do not currently keep database backups, so data you delete is not kept
+in a backup copy. If we start keeping backups, deleted data could remain in them
+for up to 30 days before they expire, and this policy will say so first. Our
+hosting provider keeps routine server logs (which can include your account ID
+and IP address) for at most 7 days.</p>
+<p>Reports of abusive content, a feature not enabled in this version, are kept
+so repeated abuse can be acted on. When you delete your account, reports you
+filed are deleted; a report about you is kept, but no longer linked to your
+account.</p>
+<p>Anonymous analytics events are held by Aptabase under its own retention
+policy and are not linked to your account, so they are not removed when you delete
+your account.</p>
 
 <h2>Your Choices</h2>
 
 <ul>
-  <li><strong>Location</strong> is opt-in per sticker — you decide each time.</li>
+  <li><strong>Location</strong> is opt-in per sticker, and your device asks for permission first.</li>
+  <li><strong>Microphone, camera and photos</strong> are used only after you grant permission, which you can withdraw in your device's Settings.</li>
   <li><strong>Notifications</strong> can be disabled anytime in your device's system settings.</li>
-  <li><strong>Account deletion</strong> is available in-app (Settings → Delete Account) and is permanent.</li>
+  <li><strong>Sending photos to AI services</strong> requires your permission before your first scan; without it, scanning is not available.</li>
+  <li><strong>Account deletion</strong> is available in-app (Profile &rarr; Delete Account) and is permanent.</li>
 </ul>
 
 <h2>Children's Privacy</h2>
@@ -134,8 +182,8 @@ knowingly collect information from children under 13.</p>
 <h2>Security</h2>
 
 <p>We use industry-standard practices to protect your information, including
-encrypted connections and per-user access controls, so that &mdash; outside of the
-friend-sharing described above &mdash; only you can access your own data.</p>
+encrypted connections and per-user access controls, so that only you can access
+your own account data (other than your public profile picture).</p>
 
 <h2>Changes to This Policy</h2>
 
@@ -146,6 +194,9 @@ use of the app after changes means you accept the updated policy.</p>
 
 <p>Questions about this policy or your data:
 <a href="mailto:iancheung228@gmail.com">iancheung228@gmail.com</a></p>
+<!-- Contact address: tabistickers.com has no MX record (checked 2026-11-11), so
+     it cannot receive mail. If a support@ address is set up later, change this,
+     docs/index.html and SUPPORT_EMAIL in app/profile.tsx together. -->
 
 </body>
 </html>

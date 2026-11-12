@@ -1,9 +1,10 @@
 import { useEffect, useMemo } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 import { Image } from 'expo-image';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { useSharedValue, useAnimatedStyle, runOnJS, withTiming, SharedValue } from 'react-native-reanimated';
 import { Trash2 } from 'lucide-react-native';
+import StickerImageFallback from '@/components/StickerImageFallback';
 import * as Haptics from 'expo-haptics';
 import { BoardStickerWithSticker, Sticker, WallDisplayStyle, CutoutBorderStyle } from '@/lib/types';
 import { useSignedUrls } from '@/hooks/useSignedUrls';
@@ -226,7 +227,7 @@ function CanvasTile({
               />
             )
           ) : (
-            <ActivityIndicator color={colors.terra} />
+            <StickerImageFallback sticker={item.sticker} size={Math.round(tileWidth * 0.4)} />
           )}
         </View>
         {displayStyle === 'cutout' ? (
@@ -295,7 +296,7 @@ const styles = StyleSheet.create({
   },
   tileCutoutShadow: { shadowOpacity: 0.22, elevation: 0 },
   tileCutoutFlat: { shadowOpacity: 0, elevation: 0 },
-  imageWrap: { flex: 1, marginBottom: 4 },
+  imageWrap: { flex: 1, marginBottom: 4, alignItems: 'center', justifyContent: 'center' },
   image: { width: '100%', height: '100%' },
   word: { fontSize: 11, color: colors.inkDark, textAlign: 'center' },
   // Frosted label: translucent paper chip + its own shadow, so the word

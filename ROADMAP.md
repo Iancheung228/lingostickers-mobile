@@ -4,6 +4,47 @@
 > and update "Open questions" as decisions get made. Pick up wherever you
 > left off.
 
+## Status as of 2026-11-11
+
+Checked against the code on this date. The phase write-ups below are history
+plus current notes; where an approach changed, the phase says "Superseded".
+
+**Shipped**
+- Language abstraction (Phase 1). The `Language` union is now
+  `'fr' | 'ja' | 'yue'` (`lib/types.ts`; Cantonese added in migration
+  `017_cantonese_language.sql`), not fr + ja.
+- On-device TTS (Phase 2, `lib/speech.ts`: `fr-FR`, `ja-JP`, `zh-HK`),
+  sentences with a grammar note and chunk gloss (Phase 3; migrations 004, 021,
+  041), location and photo metadata capture (Phase 4 capture half), memory photo
+  (Phase 5a), client-side collection search (Phase 6, `collection.tsx`).
+- Beyond the original plan: spaced repetition (SM-2 plus learning steps,
+  `lib/review.ts`, migrations 028/029/040), boards and home wall, calendar and
+  day screens, voice notes, scene prompts and any-word/typed cards (migration
+  043, `scene-words` and `create-card` functions), AI-consent gate, account
+  deletion, blocking/reports (034-038), per-user daily AI rate limits (027).
+- Cutout is on-device Apple Vision (`modules/subject-cutout`, gated by
+  `lib/cutout.ts`). The `rembg-server/` prototype is gone from the repo.
+- LLM is Gemini (Flash-Lite primary; failover to `gemini-3-flash-preview`,
+  `gemini-3.5-flash`), behind `supabase/functions/_shared/llm/`. Groq is
+  opt-in via `LLM_FALLBACK=groq` only. This supersedes every "Groq" mention below.
+- Friends and challenges are built but **off for v1** (`SOCIAL_ENABLED = false`,
+  `lib/features.ts`).
+
+**Open**
+- Story view / chapters: removed 2026-09-08 (see Phase 4); not planned.
+- Manual tags (`stickers.tags`) and the time-of-day badge: not built, no column.
+- Live sticker (Phase 5b) and full-text search: not started.
+- Android: no on-device cutout; no Android build profile in use.
+- Cloud TTS and Teochew: deferred (see Future).
+- Launch work (store listing, username CHECK constraint, migration 044 applied
+  to production, screenshots) is tracked in `research_notes/app-store-launch/`
+  and `HUMAN_REQUESTS.md`, not here.
+- Product direction has moved toward "a better, customisable Anki for language
+  learning" (`research_notes/launch-strategy-2026-10/00_PLAN_v3.md`). The
+  "scrapbook" language in the vision below is the original framing; do not read
+  it as a visual style (a travel-notebook / stamps / washi aesthetic was
+  rejected; personalisation is the route instead).
+
 ## The vision
 
 Stop building a vocabulary app with a camera bolted on. Build **a visual
@@ -13,7 +54,8 @@ sentence about what was happening, and where/when it happened. Reviewing
 your collection should feel like flipping through a scrapbook of your own
 life — in French, in Japanese, eventually in Teochew.
 
-Target languages for now: **French (fr) + Japanese (ja)**. Teochew is a
+Target languages today: **French (fr), Japanese (ja) and Cantonese (yue)**
+(originally fr + ja only). Teochew is a
 later, fundamentally different effort (low-resource — see "Future: Teochew"
 at the bottom) and shouldn't block this plan.
 
@@ -22,9 +64,13 @@ at the bottom) and shouldn't block this plan.
 Today a sticker is `{name, translation, pronunciation, category, image_path}`.
 Where we're going:
 
+The original sketch of the target shape is kept below, followed by what the
+`stickers` table actually holds today (`supabase/migrations/*.sql`,
+`lib/types.ts` `Sticker`).
+
 ```
 {
-  language: 'fr' | 'ja'
+  language: 'fr' | 'ja'     // today: 'fr' | 'ja' | 'yue'
   word: string              // target-language word/phrase, native script
   reading: string           // how to say it — see Phase 2 (real pronunciation)
   translation: string       // English meaning
@@ -33,14 +79,28 @@ Where we're going:
   // pronunciation: on-device TTS (expo-speech), see Phase 2 — no audio_path/storage needed
   image_path: string        // the cutout sticker (current pipeline)
   memory_photo_path: string // full uncropped original photo (Phase 5)
-  memory_video_path?: string// short clip / "live sticker" (Phase 5, stretch)
+  memory_video_path?: string// short clip / "live sticker" (Phase 5, stretch) — NOT built
   category: Category
-  tags: string[]            // user labels: "dorm room", "commute", "office"
-  latitude / longitude       // optional, for future map view
-  location_label: string     // reverse-geocoded place, e.g. "Montreal"
-  discovered_at: timestamptz // already exists — date + time-of-day
+  tags: string[]            // NOT built — no column
+  latitude / longitude       // built (005)
+  location_label: string     // built (005)
+  discovered_at: timestamptz // built; "when the memory happened", can be backdated
 }
 ```
+
+**The shape as built (2026-11):** `id`, `user_id`, `language`, `word`,
+`translation`, `reading`, `sentence`, `sentence_translation`,
+`sentence_insight` (021), `sentence_gloss` JSONB and `grammar_key` (041),
+`part_of_speech` (028), `category`, `image_path` (nullable since 043: typed and
+scene cards have no cutout), `memory_photo_path` and `memory_photo_color`
+(003/020), `voice_note_path` with `voice_note_start_ms`/`voice_note_end_ms`
+(012/016), `discovered_at`, `created_at` (018, "when it landed in the
+collection"), `latitude`/`longitude`/`location_label`, `source`, `scene_id`,
+`forms` (043), `origin_author_id` (042), `is_favorite` and `notes` (011), and
+the scheduler state `review_count`, `last_reviewed_at`, `ease_factor`,
+`interval_days`, `lapses` (028/029), `due_at`, `learning_step` (040). Not
+present: `tags`, `memory_video_path`. The column rename `name` →
+`word`, `pronunciation` → `reading` happened in 002.
 
 Every phase below is a step toward this shape. None of them require the
 others to be "done" — they're additive columns/fields, so we can ship
@@ -73,16 +133,19 @@ is sorted.
 - [x] Settings screen: language picker (persists to `profiles.target_language`,
       used as the default for new captures).
 
+**Superseded since:** the Groq prompt builders named above now live behind the
+provider-neutral `_shared/llm/` adapters and call Gemini (see Status); the
+language list grew to include Cantonese.
+
 **Status (2026-06-13): Shipped.** Migration `002_language_support.sql`
 applied, `create-sticker`/`translate-word` deployed with the shared
 `supabase/functions/_shared/vocab.ts` prompt module, Settings screen live
 behind the gear icon on Collection.
 
 **Open questions**
-- Does Groq's vision model (`llama-4-scout`) reliably produce *correct*
-  Japanese (kanji + accurate romaji) at temperature 0.1? **Not yet verified
-  on-device** — try scanning ~10 household objects with the language set to
-  日本語 and sanity-check the kanji/romaji before relying on it.
+- (Moot: Groq is no longer the primary provider. The same question for
+  Gemini was measured in the provider bake-off; see `research_notes/` and
+  `scripts/test-gemini-live.mts`.)
 - Category enum (`Kitchen/Animals/Study/Nature/Other`) — keep as-is for now,
   revisit if it stops making sense for Japanese vocab.
 
@@ -105,7 +168,7 @@ learning to *say* the word.
 
 **Status (2026-06-13): Shipped, on-device.** New `lib/speech.ts` wraps
 `expo-speech`'s `Speech.speak(text, { language })`, mapping `Language` →
-BCP-47 locale (`fr` → `fr-FR`, `ja` → `ja-JP`) and calling `Speech.stop()`
+BCP-47 locale (`fr` → `fr-FR`, `ja` → `ja-JP`; later `yue` → `zh-HK`) and calling `Speech.stop()`
 before each new utterance. Speaker icons added next to the word in
 `DiscoveryReveal` (preview pronunciation before saving) and
 `StickerDetailView` (front face), plus next to the sentence in the
@@ -181,12 +244,12 @@ was in place — same image(s), same API call, two more JSON fields.
       scrapbook-style "chapters" by when/where they were discovered (e.g.
       "Shibuya · Jun 10–12", or "Jun 1–7" if no location), alongside the
       existing category-filtered grid.
-- [ ] Manual tags (`stickers.tags TEXT[]`, tag-chip prompt on capture,
+- [ ] (Still open, 2026-11: no `tags` column exists.) Manual tags (`stickers.tags TEXT[]`, tag-chip prompt on capture,
       tag/date filters) — **not done this round**; auto-clustering shipped
       instead as the lower-friction "no manual tagging" organizing layer. Tags
       remain a possible future addition if auto-clustering proves too coarse.
 - [ ] Time-of-day badge (morning/afternoon/evening/night) — derived from
-      `discovered_at`, no new column needed.
+      `discovered_at`, no new column needed. (Still open, 2026-11.)
 
 **Status (2026-06-13): Shipped (auto-clustered chapters).** Migration
 `005_location.sql` adds nullable `latitude`/`longitude`/`location_label`. New
@@ -279,16 +342,20 @@ LLM re-translation — see the new bullet under Phase 3 below.
 **Why:** once the collection has words + translations + sentences + tags +
 locations, browsing alone won't cut it.
 
-- [ ] Search bar in Collection screen, client-side filter to start
-      (`word`, `translation`, `sentence`, `tags`, `location_label` —
-      collection sizes are small per-user, no need for server-side search
-      yet).
+- [x] Search bar in Collection screen, client-side filter. **Shipped:**
+      `app/(tabs)/collection.tsx` filters on `word`, `translation`, `reading`
+      and `notes` (not `sentence`, `tags` or `location_label`; there are no
+      tags). Covered by `.maestro/agent/collection-search-visible.yaml`.
 - [ ] Revisit with Postgres full-text search (`tsvector`) only if/when
       collections get large enough that client-side filtering feels slow.
 
 ---
 
 ## Ongoing / parallel track — remove.bg's 50/month limit
+
+**Superseded (2026-08): on-device Apple Vision is the primary cutout; the
+server chain described next is the fallback only.** The 2026-06 note follows
+for history.
 
 **Resolved (2026-06):** `create-sticker` now calls **Replicate** (`cjwbw/rembg`,
 ~$0.004/image) as the primary bg-removal provider, with remove.bg's 50/month
@@ -307,6 +374,8 @@ Future Work" below for the full writeup.
 
 ## Suggested order
 
+(Historical, 2026-06. Phases 1-4 capture, 5a and 6 are done; see Status at the top.)
+
 1. **Phase 1** (language abstraction) — unblocks everything, do this first.
 2. **Phase 3** (sentences) — almost free once Phase 1's prompt refactor
    exists, big "memory" payoff.
@@ -321,6 +390,10 @@ Future Work" below for the full writeup.
 ---
 
 ## Future: Teochew (heritage language mode)
+
+(Status 2026-11: still deferred. Cantonese (`yue`) shipped as a normal LLM +
+TTS language in the meantime; that does not remove the low-resource concern
+below for Teochew.)
 
 Deliberately out of scope for this plan. Teochew is low-resource enough that
 an LLM-generated romanization is likely to be *wrong*, not just imprecise.
@@ -360,6 +433,12 @@ just swapping the `speak()` call for fetching/playing the recorded clip.
 > This section is kept for the option research/comparison.
 
 ### Current state
+
+> 2026-11: this describes the **fallback** path. `create-sticker` skips
+> `removeBackground()` when the device already uploaded a cutout (the
+> `precutImagePath` branch), and the vocab call is Gemini via `_shared/llm`, not
+> Groq. The Replicate and remove.bg code (and `REPLICATE_*`/`REMOVEBG_API_KEY`
+> secrets) are still in `supabase/functions/create-sticker/index.ts`.
 
 Background removal lives in the `create-sticker` Supabase **Edge Function**
 (`supabase/functions/create-sticker/index.ts`):
@@ -426,10 +505,13 @@ the zero-config Expo Go workflow behind (one-time CNG prebuild + EAS dev-client
 build; routine JS edits still fast-refresh normally), and a minority of older
 iPhones (iOS <17) must use a fallback.
 
-### Existing prototype (Option B) — parked
+### Existing prototype (Option B) — parked, since removed
 
-There is a **working self-hosted rembg prototype** preserved in
-[`rembg-server/`](./rembg-server/) (FastAPI + rembg `u2netp` model, deployed to Fly.io as
+> 2026-11: the `rembg-server/` directory is no longer in the repo (removed in
+> commit `cfdec2f`), so the link that used to be here is dead. The Fly app may
+> still be deployed. The rest of this section is historical.
+
+There was a **working self-hosted rembg prototype** (FastAPI + rembg `u2netp` model, deployed to Fly.io as
 `lingostickers-rembg`, 1GB shared VM, auto-suspend). It exposes `POST /remove-bg`
 and `GET /health`, and lazy-loads the model in a background thread so uvicorn
 boots fast.

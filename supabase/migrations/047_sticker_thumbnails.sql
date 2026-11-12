@@ -1,0 +1,13 @@
+-- 047: a small list-size copy of each cutout.
+--
+-- Cutouts are PNGs up to 1280px (~435KB average, measured 2026-11-11). The
+-- collection grid draws them at ~540px, so a fresh install downloaded about
+-- ten times the bytes it could show. The app now uploads a 512px WebP beside
+-- each new cutout and records it here; list surfaces read it, full-size
+-- surfaces keep image_path. See lib/thumbnails.ts.
+--
+-- Nullable with no default on purpose: null means "no thumbnail, use
+-- image_path", which is the right reading for every existing row and for
+-- typed/scene cards with no picture. scripts/backfill-thumbnails.mjs fills it
+-- for existing cutouts.
+ALTER TABLE public.stickers ADD COLUMN IF NOT EXISTS thumb_path TEXT;

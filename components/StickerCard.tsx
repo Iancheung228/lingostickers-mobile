@@ -1,7 +1,9 @@
-import { TouchableOpacity, Text, View, StyleSheet, ActivityIndicator } from 'react-native';
+import { TouchableOpacity, Text, View, StyleSheet } from 'react-native';
 import { Image } from 'expo-image';
 import { Heart, MapPin, Volume2, Check, Play } from 'lucide-react-native';
 import { Sticker } from '@/lib/types';
+import StickerImageFallback from '@/components/StickerImageFallback';
+import { listImagePath } from '@/lib/thumbnails';
 import { speak } from '@/lib/speech';
 import { useTrimmedVoicePlayback } from '@/hooks/useTrimmedVoicePlayback';
 import { colors, shadows, radii, spacing, fonts, wordFontFor } from '@/constants/theme';
@@ -76,13 +78,13 @@ export default function StickerCard({ sticker, onPress, onToggleFavorite, select
       <View style={styles.imageContainer}>
         {imageUrl ? (
           <Image
-            source={{ uri: imageUrl, cacheKey: sticker.image_path ?? undefined }}
+            source={{ uri: imageUrl, cacheKey: listImagePath(sticker) ?? undefined }}
             cachePolicy="memory-disk"
             style={styles.image}
             contentFit="contain"
           />
         ) : (
-          <ActivityIndicator style={styles.spinner} color={colors.terra} />
+          <StickerImageFallback sticker={sticker} size={40} />
         )}
       </View>
       <View style={styles.label}>
@@ -177,7 +179,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   image: { width: '100%', height: '100%' },
-  spinner: { flex: 1 },
   label: {
     paddingHorizontal: spacing.xs,
     paddingBottom: spacing.xs,

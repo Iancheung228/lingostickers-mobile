@@ -1,6 +1,8 @@
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, useWindowDimensions } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, useWindowDimensions } from 'react-native';
 import { Image } from 'expo-image';
 import { Sticker, Language, PersonSummary } from '@/lib/types';
+import { listImagePath } from '@/lib/thumbnails';
+import StickerImageFallback from '@/components/StickerImageFallback';
 import { ageInDays } from '@/lib/review';
 import Avatar from '@/components/Avatar';
 import { colors, radii, spacing, shadows, fonts } from '@/constants/theme';
@@ -124,7 +126,7 @@ export default function FeedRail({
             key={sticker.id}
             sticker={sticker}
             width={cardWidth}
-            url={getUrl(sticker.image_path)}
+            url={getUrl(listImagePath(sticker))}
             author={getAuthor(sticker)}
             onPress={() => onPressSticker(sticker)}
           />
@@ -171,13 +173,13 @@ function FeedCard({ sticker, width, url, author, onPress }: {
       <View style={styles.well}>
         {url ? (
           <Image
-            source={{ uri: url, cacheKey: sticker.image_path ?? undefined }}
+            source={{ uri: url, cacheKey: listImagePath(sticker) ?? undefined }}
             cachePolicy="memory-disk"
             contentFit="contain"
             style={StyleSheet.absoluteFillObject}
           />
         ) : (
-          <ActivityIndicator color={colors.terra} />
+          <StickerImageFallback sticker={sticker} size={40} />
         )}
       </View>
     </TouchableOpacity>

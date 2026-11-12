@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, useWindowDimensions } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { router, useFocusEffect } from 'expo-router';
@@ -10,6 +10,8 @@ import * as Haptics from 'expo-haptics';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
 import { useSignedUrls } from '@/hooks/useSignedUrls';
+import { listImagePath } from '@/lib/thumbnails';
+import StickerImageFallback from '@/components/StickerImageFallback';
 import { weekAhead, weekActivity, dueToday, dueCountsByDate, dateKeyOf, reviewMinutes, heaviestDay } from '@/lib/review';
 import WeekActivityTracker from '@/components/WeekActivityTracker';
 import StudySessionHost from '@/components/StudySessionHost';
@@ -100,13 +102,13 @@ function DayIcon({ sticker, size, url }: { sticker: Sticker; size: number; url: 
     <View style={[styles.dayIcon, { width: size, height: size }]}>
       {url ? (
         <Image
-          source={{ uri: url, cacheKey: sticker.image_path ?? undefined }}
+          source={{ uri: url, cacheKey: listImagePath(sticker) ?? undefined }}
           cachePolicy="memory-disk"
           style={styles.dayIconImage}
           contentFit="contain"
         />
       ) : (
-        <ActivityIndicator size="small" color={colors.rust} />
+        <StickerImageFallback sticker={sticker} size={Math.round(size * 0.55)} />
       )}
     </View>
   );
@@ -169,7 +171,7 @@ export default function CalendarScreen() {
   // sticker of each day is ever shown) instead of one per rendered cell —
   // see hooks/useSignedUrls.ts.
   const dayIconUrls = useSignedUrls(useMemo(
-    () => Array.from(stickersByDate.values(), list => list[0].image_path),
+    () => Array.from(stickersByDate.values(), list => listImagePath(list[0])),
     [stickersByDate]
   ));
 
@@ -332,7 +334,7 @@ export default function CalendarScreen() {
                   <DayIcon
                     sticker={dayStickers[0]}
                     size={dayIconSize}
-                    url={dayStickers[0].image_path ? dayIconUrls.get(dayStickers[0].image_path) ?? null : null}
+                    url={dayIconUrls.get(listImagePath(dayStickers[0]) ?? '') ?? null}
                   />
                 ) : (
                   <Text style={[styles.dayNumber, isToday && styles.dayNumberToday]}>{cell.day}</Text>

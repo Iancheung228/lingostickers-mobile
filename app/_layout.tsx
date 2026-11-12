@@ -26,6 +26,7 @@ import { configureNotificationHandler, syncPushToken } from '@/lib/notifications
 import { handleAuthDeepLink } from '@/lib/deepLinks';
 import { flushPendingAvatar } from '@/lib/pendingAvatar';
 import { initAnalytics, trackEvent } from '@/lib/analytics';
+import { SOCIAL_ENABLED } from '@/lib/features';
 import { colors, fonts as themeFonts, radii, spacing, typography } from '@/constants/theme';
 
 SplashScreen.preventAutoHideAsync();
@@ -171,6 +172,10 @@ function RootLayout() {
     // redirect below knows the user is signed in would just be bounced back
     // to sign-in. The response is not lost by waiting — that is the whole
     // point of reading it from state instead of catching it in flight.
+    // With social off there is no Friends tab to land on (it is hidden with
+    // href: null, not removed), and no new social pushes are sent — but a
+    // push delivered before an update could still be tapped.
+    if (!SOCIAL_ENABLED) return;
     if (!session?.user?.id || !lastNotificationResponse) return;
 
     // The hook returns the same response on every render until a new one

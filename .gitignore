@@ -36,6 +36,8 @@ yarn-error.*
 .env.staging
 # Local-only API keys for scripts/ validation harnesses — never committed.
 .env.groq
+# any other env variant (.env.production, .env.test, ...)
+.env.*
 
 # Claude Code harness state
 .claude/scheduled_tasks.lock

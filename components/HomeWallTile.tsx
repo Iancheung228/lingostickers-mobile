@@ -1,7 +1,9 @@
-import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 import { CutoutBorderStyle, Sticker } from '@/lib/types';
 import { seededRandom } from '@/lib/seededRandom';
 import CutoutSticker from '@/components/CutoutSticker';
+import { listImagePath } from '@/lib/thumbnails';
+import StickerImageFallback from '@/components/StickerImageFallback';
 import { colors, radii, wordFontFor } from '@/constants/theme';
 
 // One pinned cutout, taped to the home wall. Shared by the panel on the
@@ -44,9 +46,13 @@ export default function HomeWallTile({
         ]}
       />
       {url ? (
-        <CutoutSticker uri={url} cacheKey={sticker.image_path ?? undefined} borderStyle={borderStyle} />
+        <CutoutSticker uri={url} cacheKey={listImagePath(sticker) ?? undefined} borderStyle={borderStyle} />
       ) : (
-        <ActivityIndicator size="small" color={colors.terra} style={styles.loader} />
+        // A typed card on the wall has no picture to wait for; the fallback
+        // shows its glyph instead of a spinner that never stops.
+        <View style={styles.loader}>
+          <StickerImageFallback sticker={sticker} size={Math.round(size * 0.4)} />
+        </View>
       )}
       {showWord && (
         // Frosted chip rather than bare text: the wall sits on whatever
@@ -62,7 +68,7 @@ export default function HomeWallTile({
 const TAPE_COLORS = [colors.skyNight + 'CC', colors.sageLight + 'EE', colors.terraLight + 'EE'];
 
 const styles = StyleSheet.create({
-  loader: { flex: 1 },
+  loader: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   tape: { position: 'absolute', left: '50%', borderRadius: 2, zIndex: 2 },
   wordChip: {
     position: 'absolute',

@@ -13,6 +13,8 @@ import {
 } from 'expo-audio';
 import { File } from 'expo-file-system';
 import { X, Volume2, HelpCircle, Mic, Play, Trash2, PenLine, PinOff, Download, Share2 } from 'lucide-react-native';
+import StickerImageFallback from '@/components/StickerImageFallback';
+import { withThumbPath } from '@/lib/thumbnails';
 import { Sticker } from '@/lib/types';
 import { supabase } from '@/lib/supabase';
 import { speak } from '@/lib/speech';
@@ -694,7 +696,8 @@ export default function StudyCard({
           style: 'destructive',
           onPress: async () => {
             const paths: string[] = [];
-            if (sticker.image_path) paths.push(sticker.image_path);
+            if (sticker.image_path) paths.push(...withThumbPath(sticker.image_path));
+            if (sticker.thumb_path && !paths.includes(sticker.thumb_path)) paths.push(sticker.thumb_path);
             if (sticker.memory_photo_path) paths.push(sticker.memory_photo_path);
             if (sticker.voice_note_path) paths.push(sticker.voice_note_path);
             const [{ error }] = await Promise.all([
@@ -1098,7 +1101,7 @@ function FrontFace({ sticker, authorName, authorAvatarPath, imageUrl, hintShown,
                   style={styles.wellImage}
                 />
               ) : (
-                <ActivityIndicator color={colors.terra} />
+                <StickerImageFallback sticker={sticker} size={72} />
               )}
             </View>
           </View>

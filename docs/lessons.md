@@ -19,6 +19,7 @@ other part happens to refetch on its own. Examples already hit:
   updated the badge count in `app/(tabs)/_layout.tsx`.
 - `StickerDetailView`'s "Challenge" button silently always saw an empty
   friends list, because nobody ever passed it a `currentUserId` prop.
+  (`StickerDetailView` no longer exists in the tree; the example stands.)
 
 **Root cause:** A React hook (`useAuth()`, `useFriends()`, `useChallenges()`)
 is just a function. Calling it from two different components does **not**
@@ -44,8 +45,8 @@ export function useThing() {
 }
 ```
 Mount the Provider once, near the root (`app/_layout.tsx`), nesting
-`AuthProvider → FriendsProvider → ChallengesProvider` since the latter two
-read `useAuth()` internally to get the current user ID (no more threading a
+`AuthProvider → ProfileProvider → FriendsProvider → ChallengesProvider` since
+the latter three read `useAuth()` internally to get the current user ID (no more threading a
 `userId`/`currentUserId` prop through every call site — which is itself a
 prop that's easy to forget to pass, as `StickerDetailView` proved).
 
@@ -54,7 +55,7 @@ inputs, modal open/closed, animation values) — that's correctly a plain
 `useState` in the component that owns it. Context is only for state that
 *multiple independent components* need to read the same live value of.
 
-**Where this lives in this codebase:** `hooks/useAuth.ts`, `hooks/useFriends.ts`,
+**Where this lives in this codebase:** `hooks/useAuth.ts`, `hooks/useProfile.ts`, `hooks/useFriends.ts`,
 `hooks/useChallenges.ts` are all Context-based now. If you add a new piece of
 cross-screen state, follow the same pattern rather than a bare hook.
 
@@ -143,8 +144,8 @@ this same boundary, not scattered across every screen that calls the hook.
 
 ## 4. This project's build/test loop has no fast refresh — and EAS builds are rationed
 
-**Context:** this is a managed Expo project (no `ios`/`android` native
-folders) using **EAS Build**, not Expo Go. The **free EAS plan caps you at
+**Context:** this is a managed Expo project (CNG: `ios/` is a git-ignored local
+`expo prebuild` output, not source; there is no `android/`) using **EAS Build**, not Expo Go. The **free EAS plan caps you at
 15 iOS + 15 Android builds/month**, resetting monthly — burning a full
 `eas build` for every single JS/TS tweak eats that budget fast (two rounds
 of iterating on `StickerDetailView`'s hero layout alone used 2 of the 15).
@@ -184,8 +185,8 @@ tunnel or USB/localhost:**
   alone gives the phone zero network path to Metro; it still connects over
   WiFi. `--localhost` only works if Xcode itself launched the app in an
   active debug session (it sets up the USB port-forward as a side effect of
-  attaching the debugger) — this project has no local `ios/` Xcode project,
-  so that path is unavailable. `--tunnel` (routes through ngrok) sounds like
+  attaching the debugger) — this project is not developed from an Xcode
+  project (the local `ios/` is git-ignored prebuild output), so that path is unavailable. `--tunnel` (routes through ngrok) sounds like
   the "works anywhere" option but was unreliable in practice (manifest and
   bundle both served fine when checked with `curl` from the Mac, yet the
   device's dev-client still failed with a bare "failed to connect" and no
@@ -649,6 +650,17 @@ remembering:
 - Cap every backoff. Groq answers a spent daily budget with "retry after
   2048s"; honoured literally that is a 34-minute request.
 
+**Fail over between models, not just vendors (2026-11-01).** Each Gemini model
+has its own capacity: Flash-Lite answered 503 "high demand" to whole scans
+while Gemini 3 Flash served the same requests. So the default chain is
+Flash-Lite → `gemini-3-flash-preview` → `gemini-3.5-flash`
+(`DEFAULT_GEMINI_FALLBACKS` in `_shared/llm/index.ts`, overridable with the
+`GEMINI_FALLBACK_MODELS` secret); Groq joins only when
+`LLM_FALLBACK=groq`. While a next provider exists, the current one gets a short
+leash (a stall fails over at once, a 503/429 after one retry); the last keeps
+all 3 attempts. Every attempt has its own 12s timer under a 30s deadline,
+because a stalled connection is not an error at all, just a spinner.
+
 **Two provider facts that cost real time to discover, both measured:**
 - **A bad Gemini API key returns `400 INVALID_ARGUMENT`, not 401.** Only
   `error.details[].reason === 'API_KEY_INVALID'` separates a credential fault
@@ -705,7 +717,7 @@ that the schema was never actually sent.
 
 `tsconfig.json` excludes `supabase/functions` (the Deno URL imports are errors
 to `tsc`), and eslint ignores it too. So until 2026-09-09 **no type checker had
-ever run over the edge functions** — nine functions, the entire backend.
+ever run over the edge functions** — nine functions at the time (eleven now), the entire backend.
 
 `npm run typecheck:functions` now runs `deno check` over them. Installing Deno
 locally is the only prerequisite (`curl -fsSL https://deno.land/install.sh | sh`).
@@ -737,3 +749,33 @@ buffer *could* be shared — ours never is.
 **Verify a change to the image pipeline by running it, not by type-checking
 it.** `deno check` passing proves nothing about esm.sh interop; decoding a real
 JPEG and round-tripping a PNG does.
+
+---
+
+## 17. One image, two sizes: the cache key is the size
+
+**Symptom:** a fresh install took seconds to fill the collection. Measured
+2026-11-11: cutouts averaged 435KB (177KB-984KB), 1-7s each over a real
+connection, for a grid tile about 540px wide at 3x.
+
+**Root cause:** the cutout is a PNG up to 1280px, and every surface drew that
+one file. The disk cache hid it on every launch but the first.
+
+**Fix pattern — `lib/thumbnails.ts`:** each device cutout also uploads a 512px
+WebP beside it (`<name>.thumb.webp`, alpha kept, ~11x smaller on the demo
+account's stickers), recorded in `stickers.thumb_path` (migration 047). List
+surfaces read `listImagePath(sticker)`, which falls back to `image_path` when
+there is no thumbnail (older stickers, server cutouts, typed cards).
+`scripts/backfill-thumbnails.mjs` fills in existing rows.
+
+**The trap:** expo-image caches by `cacheKey`, and every component used
+`sticker.image_path` as the key. Load the thumbnail under that key and the
+study card, which asks for the full image under the same key, gets the
+512px copy from cache, blurry. So the path you sign, the URL you load and the
+`cacheKey` you pass must be one value. `listImagePath()` is that value for
+list surfaces; full-size surfaces keep `image_path` for all three.
+
+**Cleanup follows the naming:** the thumbnail's path is derived from the
+cutout's (`thumbPathFor`), so any code that removes a cutout removes both with
+`withThumbPath(imagePath)`. Removing a file that was never written is a no-op
+in Storage, so this is safe for stickers without one.

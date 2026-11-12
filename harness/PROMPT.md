@@ -45,9 +45,12 @@ Ask it to write the flow if missing, run `harness/qa.sh <flow>` and then the ful
   found that is outside this feature (don't fix those; list them).
 
 ## Hard rules
-- Never edit harness/*, scripts/test-*.mts, skills.md, docs/lessons.md, AGENTS.md, .env files,
-  the human-approved flows `.maestro/*.yaml`, `.maestro/run.sh`, `.maestro/seed.mjs`.
+- Never edit harness/*, scripts/test-*.mts, skills.md, docs/lessons.md, AGENTS.md, CLAUDE.md, .env files,
+  `.claude/agents/*`, `.maestro/fixtures/*`, `.maestro/qa.env`, the human-approved flows
+  `.maestro/*.yaml`, `.maestro/run.sh`, `.maestro/seed.mjs`.
   If you believe one is wrong, explain why in HUMAN_REQUESTS.md and stop.
+- The QA account has 100 AI calls per UTC day. Before any flow that scans or looks up a word,
+  run `node scripts/qa-budget.mjs`; if fewer than 15 remain, write it to HUMAN_REQUESTS.md and stop.
 - Never run eas, supabase deploy/db/link/secrets, git push, npm run test:live,
   or `maestro cloud`. Put requests for those in HUMAN_REQUESTS.md.
 - Native changes (Swift, app.json plugins, new native deps) need a local rebuild

@@ -10,6 +10,7 @@ import { identifyFromPhoto, resolveLanguage } from '../_shared/vocab.ts';
 import { loadLearnerContext } from '../_shared/learner.ts';
 import { pickDominantColor } from '../_shared/imageColor.ts';
 import { requireUserId, consumeQuota, serviceClient, errorResponse } from '../_shared/rateLimit.ts';
+import { readImage, ImageError } from '../_shared/requestImages.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -48,7 +49,29 @@ Deno.serve(async (req) => {
       precutImagePath: rawPrecutImagePath,
       contextImage,
     } = await req.json();
-    if (!image) {
+
+    // Bounded before the quota claim and before any decode: an unbounded
+    // base64 body is CPU and memory the worker spends on our dime, and a
+    // malformed one should be a 400, not a 500 from atob. Same limit as the
+    // scene paths (create-card, scene-words).
+    let imageData: string | undefined;
+    let memoryData: string | undefined;
+    let contextData: string | undefined;
+    try {
+      imageData = readImage(image, 'image');
+      memoryData = readImage(memoryImage, 'memoryImage');
+      contextData = readImage(contextImage, 'contextImage');
+    } catch (err) {
+      if (err instanceof ImageError) {
+        return new Response(
+          JSON.stringify({ error: err.message }),
+          { status: err.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      throw err;
+    }
+
+    if (!imageData) {
       return new Response(
         JSON.stringify({ error: 'Missing image' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -87,17 +110,14 @@ Deno.serve(async (req) => {
     // cost exactly as much as one the user keeps. Throws 429 when spent.
     const quota = await consumeQuota(supabase, userId, 'create-sticker');
 
-    const base64Data = image.includes(',') ? image.split(',')[1] : image;
+    const base64Data = imageData;
     const imageBytes = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0));
     // Two different consumers want two different sizes of the wider scene.
     // Storage wants it big enough to fill a phone screen as the hero
     // background; the vision model only needs enough to describe what's around it,
     // and every extra pixel is tokens against a free-tier budget that is what
     // actually rate-limits this endpoint. The client sends both when it can.
-    const sceneForVision: string | undefined = contextImage ?? memoryImage;
-    const memoryBase64Data: string | undefined = sceneForVision
-      ? (sceneForVision.includes(',') ? sceneForVision.split(',')[1] : sceneForVision)
-      : undefined;
+    const memoryBase64Data: string | undefined = contextData ?? memoryData;
     // The user's hand-drawn lasso, in the crop's own pixel coordinates — a
     // stronger signal than automatic background removal (see forceIncludeLasso).
     const lassoPolygon: { x: number; y: number }[] | null =
@@ -117,7 +137,7 @@ Deno.serve(async (req) => {
       precutImagePath
         ? Promise.resolve({ data: null, status: 'device cutout (skipped)' })
         : removeBackground(imageBytes),
-      uploadMemoryPhoto(supabase, memoryImage, userId),
+      uploadMemoryPhoto(supabase, memoryData, userId),
     ]);
     const { path: memoryPhotoPath, color: memoryPhotoColor } = memoryPhoto;
 
@@ -326,6 +346,15 @@ async function removeBackground(imageBytes: Uint8Array): Promise<{ data: Uint8Ar
   return { data: null, status: `replicate: ${replicateResult.status} | remove.bg: ${removeBgResult.status}` };
 }
 
+// Every vendor fetch is bounded. The quota is already spent by the time we get
+// here, so a vendor that accepts the connection and then hangs would otherwise
+// hold the user's scan open until the platform kills the worker, with no
+// fallback attempted. A timeout throws, the caller's catch turns it into a
+// status string, and the next fallback gets its turn.
+const VENDOR_LOOKUP_TIMEOUT_MS = 5_000;
+const VENDOR_DOWNLOAD_TIMEOUT_MS = 10_000;
+const REMOVEBG_TIMEOUT_MS = 15_000;
+
 // Cache of resolved model -> version-id lookups, kept across warm
 // invocations of the same Deno isolate to avoid an extra round-trip on
 // every request.
@@ -340,6 +369,7 @@ async function resolveReplicateVersion(apiKey: string, model: string): Promise<{
 
   const response = await fetch(`https://api.replicate.com/v1/models/${model}`, {
     headers: { 'Authorization': `Bearer ${apiKey}` },
+    signal: AbortSignal.timeout(VENDOR_LOOKUP_TIMEOUT_MS),
   });
 
   if (!response.ok) {
@@ -402,8 +432,13 @@ async function removeBackgroundReplicate(imageBytes: Uint8Array): Promise<{ data
       if (erode) input.alpha_matting_erode_size = Number(erode);
     }
 
+    const waitSeconds = Number(Deno.env.get('REPLICATE_WAIT_SECONDS') ?? '10');
     const response = await fetch('https://api.replicate.com/v1/predictions', {
       method: 'POST',
+      // `Prefer: wait` is a request to Replicate, not a guarantee; this is the
+      // guarantee. A few seconds over the wait so a prediction that finishes
+      // right at the deadline still gets its response back.
+      signal: AbortSignal.timeout((waitSeconds + 5) * 1000),
       headers: {
         'Authorization': `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
@@ -415,7 +450,7 @@ async function removeBackgroundReplicate(imageBytes: Uint8Array): Promise<{ data
         // is degraded, and a 20s stall followed by the remove.bg fallback put
         // the worst case near 40 seconds. Better to give up early and let the
         // fallback have its turn.
-        'Prefer': `wait=${Number(Deno.env.get('REPLICATE_WAIT_SECONDS') ?? '10')}`,
+        'Prefer': `wait=${waitSeconds}`,
       },
       body: JSON.stringify({ version: versionId, input }),
     });
@@ -433,7 +468,10 @@ async function removeBackgroundReplicate(imageBytes: Uint8Array): Promise<{ data
     const outputUrl = Array.isArray(prediction.output) ? prediction.output[0] : prediction.output;
     if (!outputUrl) return { data: null, status: 'replicate succeeded with no output' };
 
-    const imageResponse = await fetch(outputUrl, { headers: { 'Authorization': `Bearer ${apiKey}` } });
+    const imageResponse = await fetch(outputUrl, {
+      headers: { 'Authorization': `Bearer ${apiKey}` },
+      signal: AbortSignal.timeout(VENDOR_DOWNLOAD_TIMEOUT_MS),
+    });
     if (!imageResponse.ok) return { data: null, status: `replicate output fetch ${imageResponse.status}` };
 
     const buf = await imageResponse.arrayBuffer();
@@ -467,6 +505,7 @@ async function removeBackgroundRemoveBg(imageBytes: Uint8Array): Promise<{ data:
       method: 'POST',
       headers: { 'X-Api-Key': apiKey },
       body: form,
+      signal: AbortSignal.timeout(REMOVEBG_TIMEOUT_MS),
     });
 
     if (!response.ok) {

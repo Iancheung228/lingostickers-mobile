@@ -1,0 +1,67 @@
+# Real library scan saves correctly, with the new thumbnail path.
+# Scans the same library photo as scene-prompts-open-gallery.yaml, extracts, then saves
+# with the reveal's "Add to Collection" button (no scene chips, so one save).
+# Asserts there is no "Save failed" alert, then checks the new sticker in the Latest list
+# and the grid (its picture, not a spinner or a glyph). Costs ~1-2 AI calls (extract).
+appId: com.iancheung228.lingostickers
+---
+- runFlow: ../sign-in.yaml
+- tapOn:
+    text: "Close this card"
+    optional: true
+- tapOn: "Scan a new sticker"
+- tapOn:
+    text: "Agree and start scanning"
+    optional: true
+- extendedWaitUntil:
+    visible: "What did you find\\?"
+    timeout: 15000
+- tapOn: "Import a photo from your library"
+- waitForAnimationToEnd:
+    timeout: 2000
+- takeScreenshot: 20-picker
+- tapOn: "Photo, September 09, 8:11.*"
+- extendedWaitUntil:
+    visible: "Extract Sticker"
+    timeout: 20000
+- takeScreenshot: 21-extractor
+
+# Extract (bottom button, as in the gallery flow), then the reveal's save control.
+- tapOn:
+    point: "50%,91%"
+- extendedWaitUntil:
+    visible: "Add to Collection"
+    timeout: 90000
+- takeScreenshot: 22-discovery
+
+- tapOn: "Add to Collection"
+- extendedWaitUntil:
+    visible: ".*(added|Save failed).*"
+    timeout: 20000
+- takeScreenshot: 23-after-save
+# The failure alert must not be there. Its text is "Save failed" (scan.tsx).
+- assertNotVisible: "Save failed.*"
+
+# Collection: the toast's View action opens it if the toast is still up; otherwise tab.
+- runFlow:
+    when:
+      visible:
+        id: "toast-action"
+    commands:
+      - tapOn:
+          id: "toast-action"
+- runFlow:
+    when:
+      notVisible: "Latest stickers.*"
+    commands:
+      - tapOn: "Collection"
+- extendedWaitUntil:
+    visible: "Latest stickers.*"
+    timeout: 20000
+- waitForAnimationToEnd:
+    timeout: 1500
+- takeScreenshot: 24-collection-latest
+- scroll
+- waitForAnimationToEnd:
+    timeout: 1000
+- takeScreenshot: 25-collection-grid

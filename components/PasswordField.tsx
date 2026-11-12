@@ -4,7 +4,7 @@ import {
   TextInputProps, StyleProp, TextStyle,
 } from 'react-native';
 import { Eye, EyeOff } from 'lucide-react-native';
-import { colors, spacing } from '@/constants/theme';
+import { colors } from '@/constants/theme';
 
 interface PasswordFieldProps extends Omit<TextInputProps, 'secureTextEntry' | 'style'> {
   /// The screen's own input style. Its margins are lifted onto the wrapper —

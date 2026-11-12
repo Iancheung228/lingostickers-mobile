@@ -1,7 +1,9 @@
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { Image } from 'expo-image';
 import { MapPin, Volume2 } from 'lucide-react-native';
 import { Sticker } from '@/lib/types';
+import StickerImageFallback from '@/components/StickerImageFallback';
+import { listImagePath } from '@/lib/thumbnails';
 import { timeAgo } from '@/lib/relativeTime';
 import { useTrimmedVoicePlayback } from '@/hooks/useTrimmedVoicePlayback';
 import { colors, radii, spacing, shadows, fonts, wordFontFor } from '@/constants/theme';
@@ -58,7 +60,7 @@ export default function LatestStickers({
             key={sticker.id}
             sticker={sticker}
             last={i === rows.length - 1}
-            imageUrl={getUrl(sticker.image_path)}
+            imageUrl={getUrl(listImagePath(sticker))}
             voiceUrl={getUrl(sticker.voice_note_path)}
             onPress={() => onPressSticker(sticker)}
           />
@@ -88,13 +90,13 @@ function Row({ sticker, last, imageUrl, voiceUrl, onPress }: {
       <View style={styles.thumb}>
         {imageUrl ? (
           <Image
-            source={{ uri: imageUrl, cacheKey: sticker.image_path ?? undefined }}
+            source={{ uri: imageUrl, cacheKey: listImagePath(sticker) ?? undefined }}
             cachePolicy="memory-disk"
             contentFit="contain"
             style={styles.thumbImage}
           />
         ) : (
-          <ActivityIndicator size="small" color={colors.terra} />
+          <StickerImageFallback sticker={sticker} size={24} />
         )}
       </View>
 

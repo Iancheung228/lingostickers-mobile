@@ -1,3 +1,17 @@
+# Harness progress
+
+Status audit 2026-11-11. This is the loop's running log; entries are kept as
+written. 14 of the 16 features in `harness/feature_list.json` have their own
+`harness: <id>` commit (last: `01d7d4b harness: type-a-word-entry`);
+hide-card-id and collection-filter-empty were committed bundled into later
+feature commits (per the profile-cleanup and collection-sort-menu notes). The open
+human items from these notes live in `HUMAN_REQUESTS.md`. Not re-verified in
+the Simulator by this audit.
+
+Gaps noted below that still hold in the code: picture-less cards show a
+spinner in Latest stickers (`components/LatestStickers.tsx:96-98`, OPEN app
+bug); keyboard occlusion and a few positive cases remain unproven.
+
 
 ## collection-search-visible
 - collection.tsx: while searching, the search bar is pinned above the list (testIDs collection-search-input/-cancel) and hero / Latest finds / Latest stickers are hidden; Cancel restores them.
