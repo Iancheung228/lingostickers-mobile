@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>B Rose, refined — Style kit</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&amp;family=JetBrains+Mono:wght@500&amp;display=swap">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div style="width: 600px; height: 844px; box-sizing: border-box; padding: 36px; background: #FAF4EA; font-family: Newsreader, Georgia, serif; color: #4A4340; display: flex; flex-direction: column; gap: 24px">
+
+  <div style="display: flex; flex-direction: column; gap: 6px">
+    <div style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 11px; font-weight: 500; letter-spacing: 1.4px; color: #8A6266">DIRECTION B · STYLE KIT</div>
+    <div style="font-size: 34px; font-weight: 500; letter-spacing: -0.3px; color: #833F46">Rose, refined</div>
+    <div style="font-size: 17px; line-height: 24px">The palette and fonts you already ship, held to a short list of rules so every screen agrees.</div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 10px">
+    <div style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 11px; font-weight: 500; letter-spacing: 1.4px; color: #8A6266">COLOUR</div>
+    <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px">
+      <sc-for list="{{swatches}}" as="c" hint-placeholder-count="8">
+        <div style="display: flex; flex-direction: column; gap: 4px">
+          <div style="height: 48px; border-radius: 12px; border: 1px solid #EADFD6; background: {{c.hex}}"></div>
+          <div style="font-size: 15px; font-weight: 500; color: #4A4340">{{c.role}}</div>
+          <div style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 11px; font-weight: 500; color: #8A6266">{{c.hex}}</div>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 8px">
+    <div style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 11px; font-weight: 500; letter-spacing: 1.4px; color: #8A6266">TYPE · NEWSREADER + JETBRAINS MONO</div>
+    <div style="display: grid; grid-template-columns: 150px 1fr; align-items: baseline"><div style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 11px; font-weight: 500; color: #8A6266">WORD · 54</div><div style="font-size: 54px; line-height: 58px; font-weight: 500; color: #833F46; letter-spacing: -0.8px">pomme</div></div>
+    <div style="display: grid; grid-template-columns: 150px 1fr; align-items: baseline"><div style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 11px; font-weight: 500; color: #8A6266">DISPLAY · 32</div><div style="font-size: 32px; font-weight: 500; color: #662B31">12 cards are waiting</div></div>
+    <div style="display: grid; grid-template-columns: 150px 1fr; align-items: baseline"><div style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 11px; font-weight: 500; color: #8A6266">TITLE · 22</div><div style="font-size: 22px; font-weight: 500; color: #833F46">Recent</div></div>
+    <div style="display: grid; grid-template-columns: 150px 1fr; align-items: baseline"><div style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 11px; font-weight: 500; color: #8A6266">BODY · 17</div><div style="font-size: 17px">Je mange une pomme rouge.</div></div>
+    <div style="display: grid; grid-template-columns: 150px 1fr; align-items: baseline"><div style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 11px; font-weight: 500; color: #8A6266">DATA · MONO 12</div><div style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 12px; font-weight: 500; color: #8A6266">[pɔm] · 4 DAYS · 12 NOV</div></div>
+    <div style="display: grid; grid-template-columns: 150px 1fr; align-items: baseline"><div style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 11px; font-weight: 500; color: #8A6266">LABEL · MONO 11</div><div style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 11px; font-weight: 500; letter-spacing: 1.2px; color: #8A6266">FOUND TODAY</div></div>
+  </div>
+
+  <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap">
+    <button style="height: 52px; padding: 0 24px; border: 0; border-radius: 26px; background: #9D4D51; color: #FFFFFF; font-family: inherit; font-size: 18px; font-weight: 500">Start review</button>
+    <button style="height: 52px; padding: 0 22px; border: 1px solid #EADFD6; border-radius: 16px; background: #FFFFFF; color: #833F46; font-family: inherit; font-size: 17px; font-weight: 500">Type a word</button>
+    <button style="height: 36px; padding: 0 16px; border: 0; border-radius: 18px; background: #833F46; color: #FFFFFF; font-family: inherit; font-size: 16px">All</button>
+    <button style="height: 36px; padding: 0 16px; border: 1px solid #EADFD6; border-radius: 18px; background: #FFFFFF; color: #4A4340; font-family: inherit; font-size: 16px">Kitchen</button>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 6px; font-size: 16px; line-height: 22px">
+    <div>1. Button rose (#9D4D51) is for the one main action on a screen. Headings use rose-brown.</div>
+    <div>2. One card: white, 1px hairline, 20 radius. Only the tab bar casts a shadow.</div>
+    <div>3. Mono only for labels and data, never sentences. Captions move from #A98A8C (2.9:1) to #8A6266 (4.8:1).</div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":600,"height":844}}'>
+class Component extends DCLogic {
+renderVals() {
+return {
+  swatches: [
+    { role: 'Page', hex: '#FAF4EA' },
+    { role: 'Card', hex: '#FFFFFF' },
+    { role: 'Band', hex: '#E4A0A1' },
+    { role: 'Action', hex: '#9D4D51' },
+    { role: 'Heading', hex: '#833F46' },
+    { role: 'Body', hex: '#4A4340' },
+    { role: 'Caption', hex: '#8A6266' },
+    { role: 'Hairline', hex: '#EADFD6' }
+  ]
+};
+}
+}
+</script>
+</body>
+</html>

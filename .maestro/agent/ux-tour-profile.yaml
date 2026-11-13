@@ -1,0 +1,25 @@
+# UX baseline tour, profile: top (language list), scrolled, bottom. Opened from
+# the Collection header's settings control. No AI calls, nothing changed.
+appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
+---
+- runFlow: ../sign-in.yaml
+- tapOn: "Collection"
+- extendedWaitUntil:
+    visible: "Latest stickers.*"
+    timeout: 20000
+- tapOn: "Open your profile and settings"
+- extendedWaitUntil:
+    visible: "My Profile"
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 800
+- takeScreenshot: 08a-profile-top
+- scroll
+- waitForAnimationToEnd:
+    timeout: 1000
+- takeScreenshot: 08b-profile-scrolled
+- scroll
+- scroll
+- waitForAnimationToEnd:
+    timeout: 1000
+- takeScreenshot: 08c-profile-bottom

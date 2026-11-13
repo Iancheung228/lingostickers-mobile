@@ -1,0 +1,79 @@
+# UX baseline tour, Scan tab. Budget: exactly ONE typed-word lookup ("chat")
+# and exactly ONE gallery extraction. Nothing is saved to the collection: the
+# result is screenshotted and left unsaved (the QA seed resets before each flow).
+# Do not add retries here: each AI step costs a call.
+appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
+---
+- runFlow: ../sign-in.yaml
+- tapOn:
+    text: "Scan a new sticker"
+- extendedWaitUntil:
+    visible: ".*(One quick thing|Agree and start scanning|Import a photo from your library|What did you find).*"
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 1000
+- takeScreenshot: 06a-scan-first-view
+
+# Consent gate may appear on a fresh account; agreeing only records consent, no AI call.
+- runFlow:
+    when:
+      visible: "Agree and start scanning"
+    commands:
+      - tapOn: "Agree and start scanning"
+- extendedWaitUntil:
+    visible:
+      id: "scan-type-word"
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 1000
+- takeScreenshot: 06b-scan-after-consent
+
+# Type a word: empty sheet, then "chat" looked up (AI call #1), preview shown.
+- tapOn:
+    id: "scan-type-word"
+- extendedWaitUntil:
+    visible:
+      id: "type-word-input"
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 800
+- takeScreenshot: 06c-type-word-sheet-empty
+- tapOn:
+    id: "type-word-input"
+- inputText: "chat"
+- tapOn:
+    id: "type-word-lookup"
+- extendedWaitUntil:
+    visible:
+      id: "type-word-preview"
+    timeout: 90000
+- waitForAnimationToEnd:
+    timeout: 800
+- takeScreenshot: 06d-type-word-result-chat
+# Close the sheet without adding (its Cancel is labelled "Close").
+- tapOn: "Close"
+- extendedWaitUntil:
+    visible: "What did you find\\?"
+    timeout: 10000
+
+# Gallery: the seeded photo, extracted once (AI call #2). Result is not saved.
+- tapOn: "Import a photo from your library"
+- waitForAnimationToEnd:
+    timeout: 2000
+- takeScreenshot: 06e-gallery-picker
+- tapOn: "Photo, September 09, 8:11.*"
+- extendedWaitUntil:
+    visible: "Extract Sticker"
+    timeout: 20000
+- takeScreenshot: 06f-scan-extractor
+- tapOn:
+    point: "50%,91%"
+- waitForAnimationToEnd:
+    timeout: 2000
+- takeScreenshot: 06g-scan-processing
+- extendedWaitUntil:
+    visible: "Add to Collection"
+    timeout: 90000
+- waitForAnimationToEnd:
+    timeout: 1000
+- takeScreenshot: 06h-scan-result

@@ -1,0 +1,68 @@
+# UX baseline tour, home and collection: top, search active, sort menu open,
+# a favourites filter with no matches, then the list scrolled.
+# Read-only apart from toggling the filter and sort back. No AI calls.
+# Scroll comes last: the search and sort controls are in the header.
+appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
+---
+- runFlow: ../sign-in.yaml
+- tapOn: "Collection"
+- extendedWaitUntil:
+    visible: "Latest stickers.*"
+    timeout: 20000
+- waitForAnimationToEnd:
+    timeout: 800
+- takeScreenshot: 02a-home-top
+
+# Search field active with a result (keyboard up).
+- tapOn: "Search your collection"
+- extendedWaitUntil:
+    visible:
+      id: "collection-search-input"
+    timeout: 10000
+- inputText: "pom"
+- extendedWaitUntil:
+    visible: ".*pomme.*"
+    timeout: 10000
+- takeScreenshot: 02c-search-active
+- tapOn:
+    id: "collection-search-cancel"
+- extendedWaitUntil:
+    visible: "Latest stickers.*"
+    timeout: 10000
+
+# Sort menu open (sheet), then keep the default newest-first mode.
+- tapOn:
+    id: "collection-sort"
+- extendedWaitUntil:
+    visible: "Sort by"
+    timeout: 10000
+- waitForAnimationToEnd:
+    timeout: 800
+- takeScreenshot: 02d-sort-menu-open
+- tapOn:
+    id: "collection-sort-newest"
+- extendedWaitUntil:
+    notVisible: "Sort by"
+    timeout: 10000
+
+# Favourites filter with zero matches: the empty state in the grid.
+- tapOn:
+    text: "Show favourites only"
+- extendedWaitUntil:
+    visible: "No favourites yet.*"
+    timeout: 10000
+- waitForAnimationToEnd:
+    timeout: 800
+- takeScreenshot: 02e-filter-favourites-empty
+# Restore All so the screen is left as found.
+- tapOn:
+    text: "Showing favourites only.*"
+- extendedWaitUntil:
+    visible: "Latest stickers.*"
+    timeout: 10000
+
+# Scrolled down the Collection list.
+- scroll
+- waitForAnimationToEnd:
+    timeout: 1000
+- takeScreenshot: 02b-home-scrolled

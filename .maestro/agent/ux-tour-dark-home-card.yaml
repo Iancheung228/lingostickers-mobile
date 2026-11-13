@@ -1,0 +1,24 @@
+# UX baseline tour, DARK MODE pass part 1: home and card detail front/back.
+# Run only after the Simulator is switched to dark. Read-only, no AI calls.
+appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
+---
+- runFlow: ../sign-in.yaml
+- tapOn: "Collection"
+- extendedWaitUntil:
+    visible: "Latest stickers.*"
+    timeout: 20000
+- waitForAnimationToEnd:
+    timeout: 800
+- takeScreenshot: 09a-dark-home-top
+
+- tapOn: "pomme, \\[pɔm\\], Apple, Hear.*"
+- extendedWaitUntil:
+    visible: "What did you call this\\?"
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 800
+- takeScreenshot: 09b-dark-card-detail-front
+- tapOn: "What did you call this\\?"
+- waitForAnimationToEnd:
+    timeout: 1500
+- takeScreenshot: 09c-dark-card-detail-back

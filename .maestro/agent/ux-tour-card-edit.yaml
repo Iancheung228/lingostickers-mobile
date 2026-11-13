@@ -1,0 +1,48 @@
+# UX baseline tour, card detail for 'pomme': front, back, and both edit sheets
+# (word and meaning) opened, then cancelled. Cancel leaves the card unchanged.
+# No AI calls.
+appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
+---
+- runFlow: ../sign-in.yaml
+- tapOn: "Collection"
+- extendedWaitUntil:
+    visible: "Latest stickers.*"
+    timeout: 20000
+- tapOn: "pomme, \\[pɔm\\], Apple, Hear.*"
+- extendedWaitUntil:
+    visible: "What did you call this\\?"
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 800
+- takeScreenshot: 03a-card-detail-front
+
+- tapOn: "What did you call this\\?"
+- waitForAnimationToEnd:
+    timeout: 1500
+- takeScreenshot: 03b-card-detail-back
+
+# Word edit sheet (pencil on the word side).
+- tapOn:
+    point: "87%,20%"
+- extendedWaitUntil:
+    visible: "The word.*"
+    timeout: 10000
+- waitForAnimationToEnd:
+    timeout: 800
+- takeScreenshot: 03c-edit-word-sheet
+- tapOn: "Cancel"
+- waitForAnimationToEnd:
+    timeout: 1000
+
+# Meaning edit sheet.
+- tapOn:
+    point: "87%,45%"
+- extendedWaitUntil:
+    visible: "What it means.*"
+    timeout: 10000
+- waitForAnimationToEnd:
+    timeout: 800
+- takeScreenshot: 03d-edit-meaning-sheet
+- tapOn: "Cancel"
+- waitForAnimationToEnd:
+    timeout: 1000

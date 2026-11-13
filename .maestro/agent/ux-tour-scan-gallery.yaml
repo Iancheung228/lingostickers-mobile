@@ -1,0 +1,63 @@
+# UX baseline tour, Scan tab: first view (with consent gate if shown), the empty
+# "Type a word" sheet (closed without a lookup), then the gallery picker, extractor,
+# processing and result of the seeded photo. ONE AI extraction. Nothing is saved.
+appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
+---
+- runFlow: ../sign-in.yaml
+- tapOn:
+    text: "Scan a new sticker"
+- extendedWaitUntil:
+    visible: ".*(One quick thing|Agree and start scanning|Import a photo from your library|What did you find).*"
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 1000
+- takeScreenshot: 06a-scan-first-view
+- runFlow:
+    when:
+      visible: "Agree and start scanning"
+    commands:
+      - tapOn: "Agree and start scanning"
+- extendedWaitUntil:
+    visible:
+      id: "scan-type-word"
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 1000
+- takeScreenshot: 06b-scan-after-consent
+
+# Empty Type-a-word sheet, closed again: no lookup, no AI call.
+- tapOn:
+    id: "scan-type-word"
+- extendedWaitUntil:
+    visible:
+      id: "type-word-input"
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 800
+- takeScreenshot: 06c-type-word-sheet-empty
+- tapOn: "Close"
+- extendedWaitUntil:
+    visible:
+      id: "scan-type-word"
+    timeout: 10000
+
+- tapOn: "Import a photo from your library"
+- waitForAnimationToEnd:
+    timeout: 2000
+- takeScreenshot: 06e-gallery-picker
+- tapOn: "Photo, September 09, 8:11.*"
+- extendedWaitUntil:
+    visible: "Extract Sticker"
+    timeout: 20000
+- takeScreenshot: 06f-scan-extractor
+- tapOn:
+    point: "50%,91%"
+- waitForAnimationToEnd:
+    timeout: 2000
+- takeScreenshot: 06g-scan-processing
+- extendedWaitUntil:
+    visible: "Add to Collection"
+    timeout: 90000
+- waitForAnimationToEnd:
+    timeout: 1000
+- takeScreenshot: 06h-scan-result

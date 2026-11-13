@@ -1,0 +1,7 @@
+# Moderator's own observations (baseline screenshots)
+
+- 02a Home: the sort pill overlaps the filter chip row (the third chip is cut off). The one card appears three times: Latest finds, Latest stickers, and the list. Monospace uppercase labels everywhere (FOUND TODAY, GOAL 5, DAY 1). The tab bar floats over content with no labels, and Profile is a gear repeated on every tab header.
+- 04b Study back: share/download/**delete** buttons in the review header, so a destructive action sits one slip away mid-review. "SHOT AT · Not recorded" shows an empty field as content. The labels FRENCH / WORD / SAY IT / MEANS / IN USE stack up as uppercase noise. The grade buttons mix filled (Again, Easy) and outlined (Hard, Good) styles. A big empty area sits between the content and the footer.
+- 05a Calendar: "The long view" title. The month grid is mostly empty air and its numbers are in monospace. A week chart sits above a month grid, so time appears twice. The Review CTA duplicates Home's.
+- 06b Scan: the title "What did you find?" collides with the camera frame and the gear. The hint "Pinch to zoom · Tap frame to focus" overlaps the frame's bottom edge. "Type a word" is a floating text link. The shutter is red while the action button colour is maroon.
+- App-wide: app.json forces light mode, so there's no dark mode. The staging AI backend errored on both the lookup and the scan (06h). The scan error is titled "Couldn't find the word" even for a photo. The Boards gear reportedly didn't open Profile.

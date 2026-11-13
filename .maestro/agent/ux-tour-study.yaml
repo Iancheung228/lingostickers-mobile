@@ -1,0 +1,37 @@
+# UX baseline tour, study session: card front, back with grade buttons, the
+# requeued card after Good, and the session-done summary. Same path as
+# study-grade.yaml, with screenshots. No AI calls.
+appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
+---
+- runFlow: ../sign-in.yaml
+- extendedWaitUntil:
+    visible: "Start reviewing — 1 card due.*"
+    timeout: 20000
+- tapOn: "Start reviewing — 1 card due.*"
+- extendedWaitUntil:
+    visible: "Tap to reveal.*"
+    timeout: 10000
+- waitForAnimationToEnd:
+    timeout: 800
+- takeScreenshot: 04a-study-front
+- tapOn: "What did you call this\\?"
+- extendedWaitUntil:
+    visible: "Good — next review in.*"
+    timeout: 10000
+- waitForAnimationToEnd:
+    timeout: 1000
+- takeScreenshot: 04b-study-back-grade-buttons
+- tapOn: "Good — next review in.*"
+- extendedWaitUntil:
+    visible: "2 / 2"
+    timeout: 10000
+- waitForAnimationToEnd:
+    timeout: 800
+- takeScreenshot: 04c-study-requeued
+- tapOn: "Close this card"
+- extendedWaitUntil:
+    visible: "Session done"
+    timeout: 10000
+- waitForAnimationToEnd:
+    timeout: 800
+- takeScreenshot: 04d-study-session-done

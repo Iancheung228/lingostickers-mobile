@@ -1,0 +1,30 @@
+# UX baseline tour, DARK MODE pass part 3: calendar month, scan first view,
+# boards empty. Profile is shot in dark via ux-tour-profile.yaml (renamed 09i). Run only after the Simulator is switched to dark.
+# No AI calls; nothing is tapped that changes state.
+appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
+---
+- runFlow: ../sign-in.yaml
+
+- tapOn: "Calendar"
+- extendedWaitUntil:
+    visible: "Previous month"
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 800
+- takeScreenshot: 09f-dark-calendar-month
+
+- tapOn: "Scan a new sticker"
+- extendedWaitUntil:
+    visible: ".*(One quick thing|Agree and start scanning|Import a photo from your library|What did you find).*"
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 1000
+- takeScreenshot: 09g-dark-scan-first-view
+
+- tapOn: "Boards"
+- extendedWaitUntil:
+    visible: "No boards yet"
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 800
+- takeScreenshot: 09h-dark-boards-empty

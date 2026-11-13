@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Refined — Style kit v2</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&amp;family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&amp;display=swap">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div style="width: 640px; height: 1000px; box-sizing: border-box; padding: 32px 36px; background: #FAF4EA; color: #4A4340; font-family: Figtree, system-ui, sans-serif; display: flex; flex-direction: column; gap: 20px">
+
+  <div style="display: flex; flex-direction: column; gap: 4px">
+    <div style="font-size: 13px; font-weight: 600; color: #8A6266">B, refined · Style kit v2</div>
+    <div style="font-family: Newsreader, Georgia, serif; font-size: 32px; font-weight: 500; letter-spacing: -0.3px; color: #833F46">Serif for the language, sans for the app</div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 4px">
+    <div style="font-size: 13px; font-weight: 600; color: #8A6266">Type — six roles, nothing else</div>
+    <div style="display: grid; grid-template-columns: 170px 1fr; align-items: baseline; row-gap: 2px">
+      <div style="font-size: 13px; color: #8A6266">Word · Newsreader 56</div><div style="font-family: Newsreader, Georgia, serif; font-size: 44px; line-height: 50px; font-weight: 500; color: #833F46; letter-spacing: -0.6px">pomme</div>
+      <div style="font-size: 13px; color: #8A6266">Title · Newsreader 34</div><div style="font-family: Newsreader, Georgia, serif; font-size: 30px; font-weight: 500; color: #833F46">12 cards are waiting</div>
+      <div style="font-size: 13px; color: #8A6266">Heading · Newsreader 22</div><div style="font-family: Newsreader, Georgia, serif; font-size: 22px; font-weight: 500; color: #833F46">Recent</div>
+      <div style="font-size: 13px; color: #8A6266">Language · Newsreader 21</div><div style="font-family: Newsreader, Georgia, serif; font-size: 21px">Je mange une pomme rouge.</div>
+      <div style="font-size: 13px; color: #8A6266">Interface · Figtree 15–17</div><div style="font-size: 16px; font-weight: 600">Start review · I am eating a red apple.</div>
+      <div style="font-size: 13px; color: #8A6266">Caption · Figtree 13</div><div style="font-size: 13px; font-weight: 600; color: #8A6266">French · noun · 1st review</div>
+    </div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 6px">
+    <div style="display: grid; grid-template-columns: 120px 1fr 1fr; gap: 8px; font-size: 13px; font-weight: 600; color: #8A6266"><div>Colour</div><div>Light</div><div>Dark</div></div>
+    <sc-for list="{{colours}}" as="c" hint-placeholder-count="8">
+      <div style="display: grid; grid-template-columns: 120px 1fr 1fr; gap: 8px; align-items: center">
+        <div style="font-size: 14px; font-weight: 600">{{c.role}}</div>
+        <div style="display: flex; align-items: center; gap: 8px"><div style="width: 40px; height: 22px; border-radius: 6px; border: 1px solid #EADFD6; background: {{c.light}}"></div><div style="font-size: 12px; font-family: ui-monospace, Menlo, monospace; color: #6B5557">{{c.light}}</div></div>
+        <div style="display: flex; align-items: center; gap: 8px"><div style="width: 40px; height: 22px; border-radius: 6px; border: 1px solid #EADFD6; background: {{c.dark}}"></div><div style="font-size: 12px; font-family: ui-monospace, Menlo, monospace; color: #6B5557">{{c.dark}}</div></div>
+      </div>
+    </sc-for>
+  </div>
+
+  <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px">
+    <div style="display: flex; flex-direction: column; gap: 8px">
+      <div style="font-size: 13px; font-weight: 600; color: #8A6266">Spacing — 4 · 8 · 12 · 16 · 20 · 24 · 32</div>
+      <div style="display: flex; align-items: flex-end; gap: 8px; height: 34px">
+        <div style="width: 4px; height: 4px; background: #E4A0A1"></div>
+        <div style="width: 8px; height: 8px; background: #E4A0A1"></div>
+        <div style="width: 12px; height: 12px; background: #E4A0A1"></div>
+        <div style="width: 16px; height: 16px; background: #E4A0A1"></div>
+        <div style="width: 20px; height: 20px; background: #E4A0A1"></div>
+        <div style="width: 24px; height: 24px; background: #E4A0A1"></div>
+        <div style="width: 32px; height: 32px; background: #E4A0A1"></div>
+      </div>
+      <div style="font-size: 13px; font-weight: 600; color: #8A6266; margin-top: 6px">Corners — 12 · 16 · 20 · 28 · pill</div>
+      <div style="display: flex; gap: 8px; align-items: center">
+        <div style="width: 40px; height: 40px; border-radius: 12px; background: #F6EEDD"></div>
+        <div style="width: 40px; height: 40px; border-radius: 16px; background: #F6EEDD"></div>
+        <div style="width: 40px; height: 40px; border-radius: 20px; background: #F6EEDD"></div>
+        <div style="width: 56px; height: 40px; border-radius: 28px; background: #F6EEDD"></div>
+        <div style="width: 72px; height: 28px; border-radius: 14px; background: #9D4D51"></div>
+      </div>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 8px">
+      <div style="font-size: 13px; font-weight: 600; color: #8A6266">Depth — one shadow, light mode only</div>
+      <div style="display: flex; gap: 12px">
+        <div style="flex: 1 1 0; height: 58px; border-radius: 16px; background: #FFFFFF; box-shadow: 0 1px 2px rgba(102,43,49,0.06), 0 8px 24px rgba(102,43,49,0.08); display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600; color: #8A6266">Card</div>
+        <div style="flex: 1 1 0; height: 58px; border-radius: 16px; background: #2E2526; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600; color: #BFA3A5">Dark: lighter fill</div>
+      </div>
+    </div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 6px">
+    <div style="font-size: 13px; font-weight: 600; color: #8A6266">Motion and touch</div>
+    <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 20px; row-gap: 4px; font-size: 14px; line-height: 20px">
+      <div>Press: shrink to 97% in 120 ms, back on release</div>
+      <div>Card flip: 250 ms, ease-out</div>
+      <div>Sheets: spring, no bounce past the top</div>
+      <div>Haptic: light tap on tab change and grade</div>
+      <div>New sticker lands on the wall with a 1.05 pop</div>
+      <div>Haptic: success when a session finishes</div>
+    </div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 4px; font-size: 15px; line-height: 21px">
+    <div>1. One rose action per screen. Everything else is heading-rose text or a sand fill.</div>
+    <div>2. Newsreader only for words you are learning and for titles; Figtree for everything the app says.</div>
+    <div>3. No outlines. Depth is one soft shadow in light mode and a lighter surface in dark.</div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":640,"height":1000}}'>
+class Component extends DCLogic {
+renderVals() {
+return {
+  colours: [
+    { role: 'Page', light: '#FAF4EA', dark: '#1C1617' },
+    { role: 'Card', light: '#FFFFFF', dark: '#2E2526' },
+    { role: 'Sand well', light: '#F6EEDD', dark: '#3A2F30' },
+    { role: 'Heading', light: '#833F46', dark: '#F0B8BA' },
+    { role: 'Body', light: '#4A4340', dark: '#EDE3DF' },
+    { role: 'Caption', light: '#8A6266', dark: '#BFA3A5' },
+    { role: 'Action', light: '#9D4D51', dark: '#E4A0A1' },
+    { role: 'Action text', light: '#FFFFFF', dark: '#3A1418' }
+  ]
+};
+}
+}
+</script>
+</body>
+</html>

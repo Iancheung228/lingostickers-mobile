@@ -1,0 +1,43 @@
+# UX baseline tour, signed-out screens: sign-in intro, forgot password, sign-up.
+# Read-only: no account is created and no reset email is sent. Starts from a
+# cleared state, so it does not need the seed to be signed in.
+appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
+---
+- launchApp:
+    clearState: true
+- openLink: "exp+lingostickers-mobile://expo-development-client/?url=http%3A%2F%2Flocalhost%3A${METRO_PORT}"
+- tapOn:
+    text: "Open"
+    optional: true
+- extendedWaitUntil:
+    visible: "WELCOME BACK"
+    timeout: 60000
+- waitForAnimationToEnd:
+    timeout: 1000
+- takeScreenshot: 01a-signed-out-sign-in-intro
+
+# Forgot password (empty form; nothing is sent).
+- tapOn: "Forgot password\\?"
+- extendedWaitUntil:
+    visible: "Reset Password"
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 800
+- takeScreenshot: 01b-signed-out-forgot-password
+- tapOn: "Back to.*"
+- extendedWaitUntil:
+    visible: "WELCOME BACK"
+    timeout: 15000
+
+# Sign-up: the create-account form, then scrolled to the button and sign-in link.
+- tapOn: "Don.t have an account.*"
+- extendedWaitUntil:
+    visible: "Create your collection"
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 800
+- takeScreenshot: 01c-signed-out-sign-up-top
+- scroll
+- waitForAnimationToEnd:
+    timeout: 800
+- takeScreenshot: 01d-signed-out-sign-up-scrolled

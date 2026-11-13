@@ -1,0 +1,48 @@
+# UX baseline tour: calendar month, the day screen for today (1 sticker),
+# boards empty state and the New board sheet (cancelled, no board created).
+# No AI calls.
+appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
+---
+- runFlow: ../sign-in.yaml
+
+- tapOn: "Calendar"
+- extendedWaitUntil:
+    visible: "Previous month"
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 800
+- takeScreenshot: 05a-calendar-month
+
+# The seeded sticker sits on the 12th (its cell label is "12, 1 sticker").
+- tapOn: "12, 1 sticker.*"
+- extendedWaitUntil:
+    visible: "Thursday, November 12, 2026"
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 800
+- takeScreenshot: 05b-calendar-day-with-card
+- tapOn: "Go back"
+- extendedWaitUntil:
+    visible: "Previous month"
+    timeout: 10000
+
+- tapOn: "Boards"
+- extendedWaitUntil:
+    visible: "No boards yet"
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 800
+- takeScreenshot: 07a-boards-empty
+- tapOn: "New board"
+- extendedWaitUntil:
+    visible: "Give it a name.*"
+    timeout: 10000
+- waitForAnimationToEnd:
+    timeout: 800
+- takeScreenshot: 07b-new-board-sheet
+- tapOn: "Cancel"
+- extendedWaitUntil:
+    visible: "No boards yet"
+    timeout: 10000
+
+# Profile is in ux-tour-profile.yaml: the gear does not open it from Boards.
