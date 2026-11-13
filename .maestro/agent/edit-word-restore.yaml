@@ -1,0 +1,21 @@
+appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
+---
+# Restore WORD by hand (no lookup): Le raisin -> pomme, luh ray-zan -> pɔm.
+- tapOn:
+    point: "87%,20%"
+- extendedWaitUntil:
+    visible: "The word.*"
+    timeout: 10000
+- waitForAnimationToEnd:
+    timeout: 800
+- tapOn: "Le raisin"
+- eraseText: 20
+- inputText: "pomme"
+- tapOn: "luh ray-zan"
+- eraseText: 20
+- inputText: "pɔm"
+- takeScreenshot: restore-03-word-sheet-filled
+- tapOn: "Save"
+- waitForAnimationToEnd:
+    timeout: 3000
+- takeScreenshot: restore-04-after-word-save

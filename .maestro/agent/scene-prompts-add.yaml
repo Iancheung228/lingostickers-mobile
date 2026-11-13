@@ -1,0 +1,15 @@
+# Phase 5: "Add 3 cards" (the card creation is what the Add button does), then
+# the Collection tab. Only the Add button and tab bar are tapped.
+appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
+---
+- assertVisible: "Add 3 cards"
+- tapOn: "Add 3 cards"
+- waitForAnimationToEnd:
+    timeout: 2000
+- takeScreenshot: sp-s5a-after-add
+- tapOn: "Collection"
+- extendedWaitUntil:
+    visible: "ZZZ-never-visible-wait-for-background-cards"
+    timeout: 30000
+    optional: true
+- takeScreenshot: sp-s5-collection

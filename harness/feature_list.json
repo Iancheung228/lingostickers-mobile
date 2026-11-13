@@ -276,6 +276,36 @@
       "flow_must_show": "Scan the seeded gallery photo the way scene-prompts.yaml does (AI calls: 1 scan), select one scene chip, tap 'Add 2 cards', assert '2 cards added' is visible (screenshot), tap the toast's View action, assert the Collection tab is showing."
     },
     {
+      "id": "teachers-hand-fonts",
+      "description": "Owner's font decision, 2026-11-13 ('Teacher's hand', study at https://claude.ai/artifact/A2DSU4vudP3u9tiiMpNkgb). Text in the language being learned (headwords and example sentences) changes to a handwritten-style face: Klee One SemiBold for French and Japanese, Iansui for Cantonese. Iansui is Klee One extended for Traditional Chinese, so the two match. Font files were checked with fontTools: Klee One has all 21 French and 26 Japanese test characters but only 4 of 27 Cantonese-only characters (嘅咗佢冇啲嚟…), so it must never be used for yue. Iansui has 27/27. Steps: (1) `npx expo install @expo-google-fonts/klee-one @expo-google-fonts/iansui` (pure JS plus font assets loaded by expo-font, not a native change). (2) In app/_layout.tsx, add KleeOne_600SemiBold and Iansui_400Regular to the existing useFonts call, using per-weight imports ('@expo-google-fonts/klee-one/600SemiBold', '@expo-google-fonts/iansui/400Regular') like the existing ones; leave the fontError fallback alone. (3) In constants/theme.ts, wordFontFor and sentenceFontFor return 'Iansui_400Regular' for yue and 'KleeOne_600SemiBold' for fr and ja, on every platform. The Platform.OS check and cjkFaceFor go, because the faces are bundled now. Rewrite the comment above them to say why: one matched handwritten family across all three languages, coverage measured as above, each language keeps its own glyph shapes (Japanese kanji from the Japanese font, Cantonese from the Chinese one), and the cost is about 15 MB of bundled fonts. (4) Leave the UI roles in `fonts` (display/text/mono/monoBold) unchanged, and leave romanization (jyutping, furigana, IPA) in whatever face it uses today. Only target-language words and sentences change. Before and after, time a cold launch to first screen on the Simulator three times and write the medians to harness-progress.md. If launch gets more than 300 ms slower, note it in HUMAN_REQUESTS.md; still finish the feature.",
+      "checks": [
+        {
+          "file": "constants/theme.ts",
+          "includes": [
+            "KleeOne_600SemiBold",
+            "Iansui_400Regular"
+          ]
+        },
+        {
+          "file": "app/_layout.tsx",
+          "includes": [
+            "KleeOne_600SemiBold",
+            "Iansui_400Regular"
+          ]
+        },
+        {
+          "file": "package.json",
+          "includes": [
+            "@expo-google-fonts/klee-one",
+            "@expo-google-fonts/iansui"
+          ]
+        }
+      ],
+      "verify": "The seeded French card 'pomme' shows in a handwritten-style face with tapered pen strokes on Home and on the study card, not the bookish Newsreader serif. On Profile, the language list shows 日本語 and 廣東話 in the same handwritten style, with no characters in a different font.",
+      "flow": ".maestro/agent/teachers-hand-fonts.yaml",
+      "flow_must_show": "Sign in, start reviewing, assert 'Tap to reveal.*' is visible, screenshot the study card with 'pomme', close it, open Profile, scroll to the language list, assert '日本語' and '廣東話' are visible, screenshot. No AI calls. QA judges the screenshots: the headword and the endonyms must be in the handwritten style (uneven, pen-like strokes), not a uniform serif or system sans."
+    },
+    {
       "id": "new-card-found-today",
       "description": "FINDINGS P0-3. Cards made today from an old photo count as found in the past: 'FOUND TODAY' stays 0 and they sort below yesterday's. discovered_at is deliberately the photo's date ('when the memory happened', lib/types.ts:74) — keep it for the calendar, Day screen and the card's 'DAY n' stamp. Change only the 'today' signals to use created_at: findsToday() in lib/review.ts:136, the home Latest finds rail (components/FeedRail.tsx) and Latest stickers (components/LatestStickers.tsx, its 'time ago' label too). Do not change the scheduler's clock (lib/review.ts:378).",
       "checks": [

@@ -1,0 +1,25 @@
+appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
+---
+# Scenario 5: MEANS -> plum (wait for the row), then back to grape: the row must go.
+- tapOn:
+    point: "87%,45%"
+- extendedWaitUntil:
+    visible: "What it means.*"
+    timeout: 10000
+- waitForAnimationToEnd:
+    timeout: 800
+- tapOn: "grape"
+- eraseText: 10
+- inputText: "plum"
+- extendedWaitUntil:
+    visible: "Change the.*word to.*|Couldn't find.*"
+    timeout: 30000
+- takeScreenshot: s5-01-plum-row
+- tapOn: "plum"
+- eraseText: 10
+- inputText: "grape"
+- waitForAnimationToEnd:
+    timeout: 2000
+- assertNotVisible: "Change the.*word to.*"
+- assertNotVisible: "Couldn't find.*"
+- takeScreenshot: s5-02-reverted

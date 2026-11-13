@@ -2,7 +2,7 @@
 # dated 2018) must count as a find of today. The header's "N FOUND TODAY" and the
 # Latest finds rail use created_at, not discovered_at.
 # Uses one scan (extract) only: no scene question, so one AI call.
-appId: com.iancheung228.lingostickers
+appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
 ---
 - runFlow: ../sign-in.yaml
 

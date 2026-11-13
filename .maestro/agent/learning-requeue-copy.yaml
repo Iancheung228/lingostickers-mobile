@@ -1,4 +1,4 @@
-appId: com.iancheung228.lingostickers
+appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
 ---
 # Same journey as .maestro/study-grade.yaml up to the requeued "2 / 2" card.
 # A card graded Good in a session comes back inside the learn-ahead window;

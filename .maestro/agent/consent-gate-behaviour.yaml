@@ -1,0 +1,54 @@
+# Consent gate behaviour on a fresh install state (clearState wipes the stored
+# consent, so the QA user has never agreed):
+#  - Scan opens the consent screen BEFORE any camera permission dialog.
+#  - It names Google, Replicate and remove.bg with what each does.
+#  - Swiping down does not dismiss it.
+#  - Other tabs keep working while it is unanswered.
+#  - Returning to Scan shows the gate again (no accidental consent).
+# Never taps "Agree and start scanning".
+appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
+---
+- runFlow: ../sign-in.yaml
+
+# Fresh state: the gate is the first thing Scan shows.
+- tapOn:
+    text: "Scan a new sticker"
+- extendedWaitUntil:
+    visible: "One quick thing"
+    timeout: 15000
+- assertVisible: "Google"
+- assertVisible: "Replicate"
+- assertVisible: "remove\\.bg"
+- assertVisible: "Agree and start scanning"
+- assertVisible: "Read the privacy policy"
+# No camera or photo permission prompt may be on screen yet.
+- assertNotVisible: ".*Would Like to Access.*"
+- assertNotVisible: ".*Camera.*"
+- takeScreenshot: 01-consent-first-screen
+
+# Swipe down from the top of the screen: the gate must stay.
+- swipe:
+    direction: DOWN
+- waitForAnimationToEnd:
+    timeout: 1500
+- assertVisible: "One quick thing"
+- assertVisible: "Agree and start scanning"
+- takeScreenshot: 02-consent-after-swipe-down
+
+# Declining (not answering) leaves the other tabs working.
+- tapOn:
+    text: "Collection"
+- extendedWaitUntil:
+    visible: "FOUND.*"
+    timeout: 15000
+- assertNotVisible: "One quick thing"
+- takeScreenshot: 03-collection-while-undecided
+
+# Back to Scan: the gate is still there, still unanswered.
+- tapOn:
+    text: "Scan a new sticker"
+- extendedWaitUntil:
+    visible: "One quick thing"
+    timeout: 15000
+- assertVisible: "Agree and start scanning"
+- takeScreenshot: 04-consent-again

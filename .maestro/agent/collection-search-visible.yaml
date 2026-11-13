@@ -1,6 +1,6 @@
 # Collection search: the magnifier shows a pinned search bar with Cancel; results
 # appear while the keyboard stays up; Cancel removes the bar again.
-appId: com.iancheung228.lingostickers
+appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
 ---
 - runFlow: ../sign-in.yaml
 

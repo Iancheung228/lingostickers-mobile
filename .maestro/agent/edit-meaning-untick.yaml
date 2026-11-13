@@ -1,0 +1,34 @@
+appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
+---
+# Scenario 2: MEANS -> cherry, untick the word suggestion, Save.
+# Chains from the card back left by the previous flows (no relaunch).
+- tapOn: "Cancel"
+- waitForAnimationToEnd:
+    timeout: 1000
+- tapOn:
+    point: "87%,45%"
+- extendedWaitUntil:
+    visible: "What it means.*"
+    timeout: 10000
+- waitForAnimationToEnd:
+    timeout: 800
+- tapOn: "pear"
+- eraseText: 10
+- inputText: "cherry"
+- extendedWaitUntil:
+    visible: "Change the.*word to.*"
+    timeout: 30000
+- takeScreenshot: s2-01-suggestion-cherry
+- tapOn: "Change the.*word to.*"
+# "Keeping ..." is drawn text, not in the row's accessibility label: checked by screenshot.
+- waitForAnimationToEnd:
+    timeout: 800
+- takeScreenshot: s2-02-unticked
+- tapOn: "Save"
+- waitForAnimationToEnd:
+    timeout: 3000
+- assertNotVisible: "Update the sentence too.*"
+- extendedWaitUntil:
+    visible: "La poire, la pwar, means cherry.*"
+    timeout: 15000
+- takeScreenshot: s2-03-after-save

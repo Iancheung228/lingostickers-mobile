@@ -142,7 +142,7 @@ this same boundary, not scattered across every screen that calls the hook.
 
 ---
 
-## 4. This project's build/test loop has no fast refresh — and EAS builds are rationed
+## 4. Iterate through the dev client and Metro — EAS builds are rationed
 
 **Context:** this is a managed Expo project (CNG: `ios/` is a git-ignored local
 `expo prebuild` output, not source; there is no `android/`) using **EAS Build**, not Expo Go. The **free EAS plan caps you at
@@ -151,9 +151,12 @@ this same boundary, not scattered across every screen that calls the hook.
 of iterating on `StickerDetailView`'s hero layout alone used 2 of the 15).
 
 **Fix pattern — use the `development` profile (already in `eas.json`,
-`developmentClient: true`) instead of `preview` for day-to-day iteration:**
-1. Build the dev client **once**: `npx eas-cli build --platform ios --profile development --non-interactive`, install it on the device.
-2. Run `npx expo start --dev-client` and connect that install to it.
+`developmentClient: true`) instead of `preview` for day-to-day iteration.**
+It builds **Tabi Dev** (`….lingostickers.dev`), which installs beside the
+store app and talks to staging (lesson 18, `RELEASING.md`):
+1. Build the dev client **once**: `npx eas-cli build --platform ios --profile development`, install it on the device.
+   For the Simulator, build it locally instead (free, no signing): see `harness/README.md`.
+2. Run `npm run dev` and connect that install to it.
 3. From then on, every JS/TS/style change hot-reloads live through Metro —
    shake-to-reload works, **zero build credits spent** — exactly like Expo
    Go, just with this project's native modules included.
@@ -165,11 +168,11 @@ of iterating on `StickerDetailView`'s hero layout alone used 2 of the 15).
 **Practical commands:**
 ```bash
 # one-time dev client:
-npx eas-cli build --platform ios --profile development --non-interactive
+npx eas-cli build --platform ios --profile development
 # day-to-day after that:
-npx expo start --dev-client
+npm run dev
 # only when you actually need a standalone build to hand off:
-npx eas-cli build --platform ios --profile preview --non-interactive
+npx eas-cli build --platform ios --profile preview
 ```
 Run `eas-cli build` with `run_in_background: true` (it takes several
 minutes) and report the install link back once it completes — don't poll,
@@ -179,7 +182,7 @@ has only been tested on iOS so far.
 
 **Connecting a physical device to that Metro server — use LAN mode, not
 tunnel or USB/localhost:**
-- `npx expo start --dev-client` already defaults to LAN mode (`--host lan`),
+- `npm run dev` (`expo start --dev-client`) already defaults to LAN mode (`--host lan`),
   which is the right choice. **Don't reach for `--tunnel` or `--localhost`
   just because the phone is plugged into the Mac via USB** — a USB cable
   alone gives the phone zero network path to Metro; it still connects over
@@ -202,15 +205,13 @@ tunnel or USB/localhost:**
   not HTML — if it doesn't, the problem is server-side, not the phone.
 
 **Don't forget:** if a fix touches a Supabase **edge function**, that's a
-*separate* deploy from the app build — `npx supabase functions deploy <name>`
-(or list multiple names) BEFORE testing, since the app just calls the
-function by name at runtime and won't see source changes otherwise (this
-applies whether you're on the dev client or a fresh build — edge functions
-aren't bundled into the app either way). Match the existing functions'
-convention: deploy without `--no-verify-jwt` (default JWT verification) —
-every function in this project does its own `userClient.auth.getUser()`
-check anyway, so the platform-level check is just an extra layer, not a
-behavior change.
+*separate* deploy from the app build — `scripts/deploy.sh staging functions <name>`
+BEFORE testing, since the app just calls the function by name at runtime and
+won't see source changes otherwise (edge functions aren't bundled into the app
+either way). Production gets it later, from `main` (lesson 18). The script
+keeps the existing convention: default JWT verification, never
+`--no-verify-jwt` — every function does its own `userClient.auth.getUser()`
+check anyway, so the platform-level check is just an extra layer.
 
 ---
 
@@ -779,3 +780,50 @@ list surfaces; full-size surfaces keep `image_path` for all three.
 cutout's (`thumbPathFor`), so any code that removes a cutout removes both with
 `withThumbPath(imagePath)`. Removing a file that was never written is a no-op
 in Storage, so this is safe for stickers without one.
+
+---
+
+## 18. Where a change lands — and why test work never touches production
+
+**Context:** until 2026-11-12 this project had one Supabase project, and it was
+production. The dev build, the Simulator, Maestro and the App Store app all hit
+the same database, so "deploy it to test it" meant shipping it to every user,
+and the dev build and store app shared a bundle id, so only one could be on
+a phone at a time. Now there are three app variants (Tabi Dev / Tabi Preview /
+Tabi Stickers) and two backends (staging / production). **`RELEASING.md` is
+the source of truth**: environments, deploy steps, app releases, OTA updates,
+limits. This lesson is the why and the rules.
+
+**Where each change becomes visible:**
+
+| Change | Who sees it | How |
+|---|---|---|
+| JS/TS, styles, copy | you, on Tabi Dev | `npm run dev`, hot reload (lesson 4) |
+| Native (package, permission, `modules/`, icon, `app.config.js`, `plugins/`) | you | new dev build: local for the Simulator, EAS for the phone |
+| Edge function or migration | **staging**, at once | `scripts/deploy.sh staging …` |
+| The same, for users | **everyone, at once** | `scripts/deploy.sh production …` (main, pushed, staged first, typed confirmation) |
+| App code, for users | everyone, after review **and** after they update | production build → TestFlight → App Store, phased release |
+| JS-only fix, for users (once a store build has `expo-updates`) | everyone, on their 2nd launch | `eas update --channel production` (owner's yes) |
+| `docs/` (privacy, support, reset page) | everyone, on push | GitHub Pages |
+
+**Rules:**
+- **Staging is the default everywhere.** `.env` is staging; production's values
+  are in `.env.production` and scripts touch it only with `TABI_ENV=production`.
+  `scripts/lib/backend.*` refuses to run if `.env` ever points at production.
+  Never "fix" that by copying production values into `.env`.
+- **Backend before app, and backward-compatible.** Released app versions keep
+  calling the backend until users update, so add, don't rename or drop, and
+  never make a function require something the store app doesn't send.
+- **Production changes are the owner's call, every time:** production deploys,
+  production secrets, `eas update` to production, `eas build`/`eas submit`,
+  anything in App Store Connect. Approval for one is not approval for the next.
+- **Each project has its own QA account and AI budget** (100 calls/UTC day).
+  Test data lives on staging; never copy real users' data there.
+- **Don't trust the Simulator for native image work**: no Apple Vision (lesson 17).
+
+**Symptoms that mean the wiring is wrong:** Maestro sign-in fails with "invalid
+credentials" (Metro and `.maestro/qa*.env` point at different projects; restart
+Metro after changing `.env`); a Tabi Dev install shows your real stickers
+(it's on production: check `.env` and the EAS `development` environment);
+staging requests fail to resolve (the free project paused after a week idle;
+restore it in the dashboard).

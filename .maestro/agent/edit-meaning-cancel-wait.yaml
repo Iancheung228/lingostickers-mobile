@@ -1,0 +1,20 @@
+appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
+---
+# Scenario 4: MEANS -> lemon, Save, then Cancel while the save waits on the lookup.
+# Expect "Discard changes?" and NOTHING saved. Chains from the card back (no relaunch).
+- tapOn:
+    point: "87%,45%"
+- extendedWaitUntil:
+    visible: "What it means.*"
+    timeout: 10000
+- waitForAnimationToEnd:
+    timeout: 800
+- tapOn: "grape"
+- eraseText: 10
+- inputText: "lemon"
+- tapOn: "Save"
+- tapOn: "Cancel"
+- extendedWaitUntil:
+    visible: "Discard changes.*"
+    timeout: 8000
+- takeScreenshot: s4-01-discard-prompt

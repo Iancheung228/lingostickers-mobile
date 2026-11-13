@@ -1,0 +1,26 @@
+# Profile for v1: no Friends anywhere on the page, a SUPPORT section with
+# "Report a problem" (mail), and a Privacy Policy row. Looks only: never taps
+# the mail link, the privacy link (it opens Safari), Log Out, or delete.
+appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
+---
+- runFlow: ../sign-in.yaml
+
+- tapOn: "Open your profile and settings"
+- extendedWaitUntil:
+    visible: "My Profile"
+    timeout: 15000
+- assertNotVisible: "Friends.*"
+- assertNotVisible: "Blocked accounts"
+- takeScreenshot: 01-profile-top
+
+- scrollUntilVisible:
+    element: "Email us about a problem"
+    direction: DOWN
+    timeout: 30000
+- assertVisible: "SUPPORT"
+- assertNotVisible: "SAFETY"
+# Rows are matched by accessibility label (it replaces the visible text).
+- assertVisible: "Email us about a problem"
+- assertVisible: "Open the privacy policy"
+- assertNotVisible: "Friends.*"
+- takeScreenshot: 02-profile-support-and-privacy

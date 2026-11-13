@@ -4,7 +4,7 @@
 # Focus is made deterministic: each field is tapped, the keyboard/autofill bar
 # is allowed to settle, then tapped again before typing (a single tap raced the
 # animation and left focus in Email).
-appId: com.iancheung228.lingostickers
+appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
 ---
 - launchApp:
     clearState: true

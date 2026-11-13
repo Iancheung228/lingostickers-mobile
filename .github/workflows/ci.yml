@@ -1,0 +1,28 @@
+# The same gate as harness/init.sh, on every push and pull request, so a red
+# tree is visible on GitHub before anything is deployed or built. Offline only:
+# no secrets, no AI calls, no deploys (those stay manual: RELEASING.md).
+name: CI
+on:
+  push:
+  pull_request:
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - run: npm ci
+      - run: npm run -s typecheck
+      - run: npm run -s lint
+      - run: npm test --silent
+      - run: npm run -s typecheck:functions

@@ -1,0 +1,37 @@
+{
+  "_note": "Four features the harness feature_list.json does not have yet, found while fixing the launch P0/P1 list on 2026-10-31. Same schema as harness/feature_list.json, ready to append before the next loop run (the list is protected mid-run). A reference implementation of each is in launch-v1-polish-salvage.patch next to this file. 'username-availability-rpc' needs migration 044 applied to production first; the loop cannot deploy.",
+  "features": [
+    {
+      "id": "username-availability-rpc",
+      "description": "Sign-up's 'Username available' is always shown, even for taken names. hooks/useUsernameAvailability.ts queries profiles directly, but sign-up runs signed out and migration 033 made profiles readable only when signed in, so the query returns [] for every name (verified 2026-10-31: anon lookup of 'maestro_qa' returns []). Switch the hook to the new RPC `supabase.rpc('username_available', { q })` (migration 044, a SECURITY DEFINER boolean, granted to anon). On RPC error show nothing rather than 'available'. Keep the username-format feature's rule check ahead of the lookup.",
+      "checks": [{ "file": "hooks/useUsernameAvailability.ts" }],
+      "verify": "Signed out, on Sign Up, type 'maestro_qa': the hint says 'Username taken'. Type an unused valid name: 'Username available'.",
+      "flow": ".maestro/agent/username-availability-rpc.yaml",
+      "flow_must_show": "From sign-in open Sign Up, type 'maestro_qa' in the username field, assert 'Username taken' visible and 'Username available' not visible; screenshot. Never submit the form."
+    },
+    {
+      "id": "scan-timeout-cancel",
+      "description": "A scan can sit on 'Looking up the word' for 35 s to 2.5 min, then alerts 'Extraction failed' although the cutout succeeded; the extractor's X is silently disabled meanwhile. In app/(tabs)/scan.tsx: pass an AbortSignal to supabase.functions.invoke('create-sticker') and abort after 60 s; once the cutout is done, a failure is titled \"Couldn't find the word\" (not 'Extraction failed'), and a timeout says the word service is slow and the photo is still there to retry. In components/PhotoExtractor.tsx the X stays enabled while processing and stops the scan (accessibility label 'Stop this scan'); a user stop shows no alert and leaves the photo and selection in place.",
+      "checks": [{ "file": "app/(tabs)/scan.tsx" }, { "file": "components/PhotoExtractor.tsx" }],
+      "verify": "Import the library photo, Extract, tap the X while 'Looking up the word' shows: the progress stops, no alert appears, the photo and box are still on screen and Extract Sticker works again.",
+      "flow": ".maestro/agent/scan-timeout-cancel.yaml",
+      "flow_must_show": "Check scripts/qa-budget.mjs first (1 AI call). Open Scan, Gallery, pick the photo, tap Extract Sticker, wait for the progress list, tap 'Stop this scan', assert no alert and 'Extract Sticker' visible; screenshot."
+    },
+    {
+      "id": "new-card-dates-from-created",
+      "description": "Extends new-card-found-today, by decision on 2026-10-31: a card made today from an old photo is new TODAY everywhere, not only in the header and feeds. Add `foundAt(sticker)` (created_at, falling back to discovered_at) in lib/review.ts and use it for: dueAtMs's clock for a never-studied card (today a 2018 import is due at once and years overdue), weekActivity's finds, the calendar's day buckets and fetch order (app/(tabs)/calendar.tsx), the Day screen query (app/day/[date].tsx, created_at range), and the study card's front date and DAY n. discovered_at stays the photo's own date and keeps driving the card footer's WHEN / SHOT AT and a 'By photo date' sort option.",
+      "checks": [{ "file": "lib/review.ts" }, { "file": "app/(tabs)/calendar.tsx" }, { "file": "app/day/[date].tsx" }],
+      "verify": "Unit test: a never-studied card with discovered_at in 2018 and created_at today is due tomorrow, not overdue. After adding a card from the 2018 library photo, today's calendar cell shows it and the Day screen for today lists it.",
+      "flow": ".maestro/agent/new-card-dates-from-created.yaml",
+      "flow_must_show": "Check the AI budget (1 scan). Add a card from the library photo, open Calendar, assert today's cell shows a find, tap it, assert the new card is listed; screenshot. Add a unit test in lib for dueAtMs."
+    },
+    {
+      "id": "hide-social-v1",
+      "description": "Decided 2026-10-31: Friends and challenges are off for the first App Store release (Guideline 1.2 moderation duty, no report inbox, few friends to find at launch). Add lib/features.ts exporting SOCIAL_ENABLED = false. When false: the Friends tab gets `href: null` in app/(tabs)/_layout.tsx and TAB_BAR_WIDTH (constants/tabBar.ts) counts 3 regular tabs, not 4; app/profile.tsx hides the SAFETY section (Blocked accounts). Keep 'Contact us' (mailto, without printing the address) in ABOUT. No code, table or policy is deleted.",
+      "checks": [{ "file": "lib/features.ts" }, { "file": "app/(tabs)/_layout.tsx" }, { "file": "constants/tabBar.ts" }],
+      "verify": "The tab bar shows Collection, Calendar, Scan, Boards and is centred with even padding; My Profile has no SAFETY section and still has Contact us.",
+      "flow": ".maestro/agent/hide-social-v1.yaml",
+      "flow_must_show": "Sign in, assert the Friends tab is not visible, screenshot the tab bar; open My Profile, scroll, assert 'SAFETY' not visible and 'Contact us' visible; screenshot."
+    }
+  ]
+}

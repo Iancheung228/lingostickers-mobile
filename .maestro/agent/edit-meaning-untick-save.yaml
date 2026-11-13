@@ -1,0 +1,14 @@
+appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
+---
+# Scenario 2, continued: the sheet is already open with the suggestion UNTICKED
+# ("Keeping La poire."). Save; the word must not change and no sentence alert.
+# Run only right after edit-meaning-untick.yaml stopped at its Keeping check.
+- takeScreenshot: s2-02-unticked
+- tapOn: "Save"
+- waitForAnimationToEnd:
+    timeout: 3000
+- assertNotVisible: "Update the sentence too.*"
+- extendedWaitUntil:
+    visible: "La poire, la pwar, means cherry.*"
+    timeout: 15000
+- takeScreenshot: s2-03-after-save

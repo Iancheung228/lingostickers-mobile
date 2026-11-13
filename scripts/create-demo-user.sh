@@ -3,12 +3,15 @@
 # saves its credentials to .maestro/demo.env (gitignored). Unlike the Maestro
 # QA account, nothing reseeds it: it keeps the real stickers made for review
 # and screenshots. Safe to re-run: an existing demo.env is reused.
+# App Review signs in to the store app, so this account lives in PRODUCTION.
 #   scripts/create-demo-user.sh
 set -euo pipefail
 cd "$(dirname "$0")/.."
+TABI_ENV=production
+. scripts/lib/backend.sh
 OUT=.maestro/demo.env
-URL=$(grep '^EXPO_PUBLIC_SUPABASE_URL=' .env | cut -d= -f2-)
-REF=$(echo "$URL" | sed -E 's#https://([^.]+)\..*#\1#')
+URL=$SUPABASE_URL
+REF=$PROJECT_REF
 
 if [ -f "$OUT" ]; then echo "$OUT already exists; using it."; exit 0; fi
 

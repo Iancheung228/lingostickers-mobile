@@ -4,13 +4,11 @@
 // Signs in AS the QA account (no service-role key needed); RLS allows a user
 // to write their own stickers and their own storage folder.
 //   node .maestro/seed.mjs
+// Backend: staging unless TABI_ENV=production (scripts/lib/backend.mjs).
 import { readFileSync } from 'node:fs';
+import { SUPABASE_URL as URL, ANON_KEY as ANON, qaAccount } from '../scripts/lib/backend.mjs';
 
-const env = (file) => Object.fromEntries(
-  readFileSync(file, 'utf8').split('\n').filter(l => l.includes('=')).map(l => [l.slice(0, l.indexOf('=')), l.slice(l.indexOf('=') + 1)]),
-);
-const { EXPO_PUBLIC_SUPABASE_URL: URL, EXPO_PUBLIC_SUPABASE_ANON_KEY: ANON } = env('.env');
-const { MAESTRO_EMAIL, MAESTRO_PASSWORD } = env('.maestro/qa.env');
+const { MAESTRO_EMAIL, MAESTRO_PASSWORD } = qaAccount();
 
 // Fixed id, so every run updates the same row instead of piling up copies.
 const STICKER_ID = '00000000-0000-4000-8000-00000000a001';

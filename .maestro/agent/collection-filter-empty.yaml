@@ -1,7 +1,7 @@
 # Collection favourites filter with zero matches: the hero, Latest finds and Latest
 # stickers blocks are hidden and the grid shows "No favourites yet". Toggling the
 # heart back to All restores the blocks and the pomme card.
-appId: com.iancheung228.lingostickers
+appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
 ---
 - runFlow: ../sign-in.yaml
 

@@ -1,0 +1,19 @@
+# Phase 6: no AI call. Open the Collection (home) tab, wait for the new scene
+# cards to land, pull down to refresh if they have not, and screenshot.
+appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
+---
+- tapOn: "Collection"
+- waitForAnimationToEnd:
+    timeout: 3000
+- takeScreenshot: sp-s5b-collection-first
+- extendedWaitUntil:
+    visible: ".*boire.*|.*manger.*"
+    timeout: 30000
+    optional: true
+- takeScreenshot: sp-s5c-collection-wait
+- swipe:
+    start: "50%, 25%"
+    end: "50%, 75%"
+- waitForAnimationToEnd:
+    timeout: 3000
+- takeScreenshot: sp-s5d-collection-refreshed

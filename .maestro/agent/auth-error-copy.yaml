@@ -2,7 +2,7 @@
 # never Supabase's "Invalid login credentials". Forgot-password keeps Send Reset
 # Code disabled for "notanemail" (no email shape), so the screen does not advance.
 # Does NOT submit a valid address on forgot-password (that sends a real email).
-appId: com.iancheung228.lingostickers
+appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
 ---
 - launchApp:
     clearState: true

@@ -27,8 +27,10 @@ if [ "$DEVICE" = booted ]; then
 else
   xcrun simctl list devices 2>/dev/null | grep "$DEVICE" | grep -q Booted || not_ready "Simulator $DEVICE is not booted"
 fi
-xcrun simctl get_app_container "$DEVICE" com.iancheung228.lingostickers >/dev/null 2>&1 \
-  || not_ready "Tabi Stickers dev build not installed on Simulator $DEVICE"
+# Tabi Dev (.dev) is the dev build; the older one shares the store app's id.
+xcrun simctl get_app_container "$DEVICE" com.iancheung228.lingostickers.dev >/dev/null 2>&1 \
+  || xcrun simctl get_app_container "$DEVICE" com.iancheung228.lingostickers >/dev/null 2>&1 \
+  || not_ready "no Tabi dev build installed on Simulator $DEVICE"
 # A flow-level `env:` default beats `maestro -e`, so a pinned METRO_PORT
 # silently sends the app to another Metro's code.
 pinned=$(grep -lE '^[[:space:]]+METRO_PORT:' .maestro/*.yaml .maestro/agent/*.yaml 2>/dev/null)

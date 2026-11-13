@@ -1,0 +1,38 @@
+appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
+---
+# Scenario 1, stage A: apple -> pear, Save, reach the sentence alert.
+# Stage B (edit-meaning-alert.yaml) continues from the alert without relaunching.
+- runFlow: ../sign-in.yaml
+- tapOn: "Collection"
+- tapOn: "pomme, \\[pɔm\\], Apple, Hear.*"
+- extendedWaitUntil:
+    visible: "What did you call this\\?"
+    timeout: 15000
+- tapOn: "What did you call this\\?"
+- waitForAnimationToEnd:
+    timeout: 1500
+- tapOn:
+    point: "87%,45%"
+- extendedWaitUntil:
+    visible: "What it means.*"
+    timeout: 10000
+- waitForAnimationToEnd:
+    timeout: 800
+- tapOn: "apple"
+- eraseText: 10
+- inputText: "pear"
+# "Finding the French word" is shown only for ~1s; the lookup can finish before
+# any check runs, so take the screenshot without asserting it.
+- waitForAnimationToEnd:
+    timeout: 300
+- takeScreenshot: s1-01-finding
+- extendedWaitUntil:
+    visible: "Change the.*word to.*"
+    timeout: 30000
+- takeScreenshot: s1-02-suggestion-pear
+- tapOn: "Save"
+- takeScreenshot: s1-03-saving
+- extendedWaitUntil:
+    visible: "Update the sentence too.*"
+    timeout: 30000
+- takeScreenshot: s1-04-sentence-alert

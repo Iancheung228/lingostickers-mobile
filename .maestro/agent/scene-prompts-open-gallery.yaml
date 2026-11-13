@@ -1,0 +1,31 @@
+appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
+---
+# Navigate to the Scan tab and open the Gallery picker for a photo import.
+- runFlow: ../sign-in.yaml
+- tapOn:
+    text: "Close this card"
+    optional: true
+- tapOn: "Scan a new sticker"
+- tapOn:
+    text: "Agree and start scanning"
+    optional: true
+- extendedWaitUntil:
+    visible: "What did you find\\?"
+    timeout: 15000
+- takeScreenshot: sp-00-scan-tab
+- tapOn: "Import a photo from your library"
+- waitForAnimationToEnd:
+    timeout: 2000
+- takeScreenshot: sp-01-picker
+- tapOn: "Photo, September 09, 8:11.*"
+- extendedWaitUntil:
+    visible: "Extract Sticker"
+    timeout: 20000
+- takeScreenshot: sp-02-extractor
+# Stage A: the one allowed scan. Tap the bottom Extract button (y~91%).
+- tapOn:
+    point: "50%,91%"
+- extendedWaitUntil:
+    visible: "Add to Collection"
+    timeout: 90000
+- takeScreenshot: sp-03-discovery

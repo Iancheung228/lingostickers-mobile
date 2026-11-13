@@ -1,0 +1,14 @@
+appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
+---
+# Stage B: continue from the New Discovery screen left by the scan flow, WITHOUT
+# clearing app state (no clearState, so the unsaved discovery draft can survive).
+# No AI calls in this stage by itself.
+- launchApp
+- openLink: "exp+lingostickers-mobile://expo-development-client/?url=http%3A%2F%2Flocalhost%3A${METRO_PORT}"
+- tapOn:
+    text: "Open"
+    optional: true
+- extendedWaitUntil:
+    visible: "New Discovery|Add to Collection|FOUND|WELCOME BACK"
+    timeout: 60000
+- takeScreenshot: sb-00-relaunch

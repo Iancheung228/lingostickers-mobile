@@ -15,10 +15,11 @@
 //   SUPABASE_SERVICE_ROLE_KEY=... node scripts/backfill-thumbnails.mjs          # dry run
 //   SUPABASE_SERVICE_ROLE_KEY=... node scripts/backfill-thumbnails.mjs --apply  # do it
 //
-// The project URL comes from EXPO_PUBLIC_SUPABASE_URL in .env.
+// The project is staging unless TABI_ENV=production (scripts/lib/backend.mjs);
+// use the service-role key of that same project.
 
-import fs from 'node:fs';
 import sharp from 'sharp';
+import { SUPABASE_URL as URL, TABI_ENV } from './lib/backend.mjs';
 
 const APPLY = process.argv.includes('--apply');
 const THUMB_MAX_SIDE = 512; // keep in step with lib/thumbnails.ts
@@ -26,17 +27,12 @@ const THUMB_QUALITY = 80;   // lib/thumbnails.ts uses 0.8 on a 0-1 scale
 const BUCKET = 'sticker-images';
 const PAGE = 500;
 
-const env = Object.fromEntries(
-  fs.readFileSync('.env', 'utf8').split('\n')
-    .filter((l) => l.includes('=') && !l.trim().startsWith('#'))
-    .map((l) => { const i = l.indexOf('='); return [l.slice(0, i).trim(), l.slice(i + 1).trim()]; }),
-);
-const URL = env.EXPO_PUBLIC_SUPABASE_URL;
 const KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 if (!URL || !KEY) {
-  console.error('Need EXPO_PUBLIC_SUPABASE_URL in .env and SUPABASE_SERVICE_ROLE_KEY in the environment.');
+  console.error(`Need EXPO_PUBLIC_SUPABASE_URL for ${TABI_ENV} and SUPABASE_SERVICE_ROLE_KEY in the environment.`);
   process.exit(1);
 }
+console.log(`Backend: ${TABI_ENV} (${URL})`);
 const H = { apikey: KEY, authorization: `Bearer ${KEY}` };
 
 const thumbPathFor = (p) => p.replace(/\.[a-z0-9]+$/i, '') + '.thumb.webp';

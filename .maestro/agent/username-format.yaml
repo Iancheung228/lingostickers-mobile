@@ -1,7 +1,7 @@
 # Username format on sign-up: an invalid username ("a b!tabc": space and "!") shows the
 # rule line from lib/username.ts in the hint slot, never "Username available".
 # Create Account stays disabled, so the button is never tapped: no real sign-up is submitted.
-appId: com.iancheung228.lingostickers
+appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
 ---
 - launchApp:
     clearState: true

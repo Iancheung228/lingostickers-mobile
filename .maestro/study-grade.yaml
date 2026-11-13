@@ -1,7 +1,7 @@
 # Review one due card and grade it "Good".
 # Needs the seed (.maestro/seed.mjs): the QA account has exactly one card,
 # "pomme", due now. run.sh re-seeds before every run.
-appId: com.iancheung228.lingostickers
+appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
 ---
 - runFlow: sign-in.yaml
 

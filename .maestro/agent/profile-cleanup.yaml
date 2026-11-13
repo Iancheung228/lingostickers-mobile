@@ -1,6 +1,6 @@
 # Profile cleanup: no watercolor copy, "stickers" in the note, an "App version" row at the
 # bottom. Never taps Log Out's confirm or any delete action.
-appId: com.iancheung228.lingostickers
+appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
 ---
 - launchApp:
     clearState: true

@@ -1,0 +1,8 @@
+appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
+---
+# Scenario 4, continued: discard the lemon edit; the card must still say grape.
+- tapOn: "Discard"
+- extendedWaitUntil:
+    visible: "Le raisin.*means grape.*"
+    timeout: 10000
+- takeScreenshot: s4-02-after-discard

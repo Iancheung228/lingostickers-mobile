@@ -2,7 +2,7 @@
 # are visible and sit above the floating tab bar, with a visible gap between them.
 # Never taps Agree. If consent is stored server-side and does not reappear, the
 # assertion on the consent screen fails and the run is reported as NOT RUN.
-appId: com.iancheung228.lingostickers
+appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
 ---
 - launchApp:
     clearState: true

@@ -1,0 +1,30 @@
+# Phase 2 of the "More words from this photo" check. NO scan, NO launchApp, NO
+# sign-in: it continues from the New Discovery screen phase 1 left on the
+# Simulator (sp-s1-after-more-words.png), whose prompt pills were verified on
+# screen. Real AI calls: <= 2 prompt taps (the third is a cached re-tap).
+appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
+---
+# --- Scenario 2: "What's happening?" -----------------------------------------
+- assertVisible: "What's happening\\?"
+- takeScreenshot: sp-s2-before-tap
+- tapOn: "What's happening\\?"
+- extendedWaitUntil:
+    visible: "Tap the words you want as cards\\."
+    timeout: 15000
+- takeScreenshot: sp-s2-happening-chips
+
+# --- Scenario 3: "What's it like?", then back to "What's happening?" --------
+- tapOn: "What's it like\\?"
+- extendedWaitUntil:
+    visible: "Tap the words you want as cards\\.|Nothing for that one.*|Try again"
+    timeout: 15000
+- takeScreenshot: sp-s3-like
+- tapOn: "What's happening\\?"
+- extendedWaitUntil:
+    visible: "Tap the words you want as cards\\.|Nothing for that one.*"
+    timeout: 2000
+    optional: true
+- assertNotVisible:
+    text: "Looking at your photo.*"
+    optional: true
+- takeScreenshot: sp-s3-happening-again

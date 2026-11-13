@@ -4,7 +4,7 @@
 # The seeded picture card "pomme" must still show its picture.
 # Costs ONE AI lookup (create-card). Budget-tight: do not add more lookups here.
 # Selectors are from the code (not yet run on the Simulator): see the report.
-appId: com.iancheung228.lingostickers
+appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
 ---
 - runFlow: ../sign-in.yaml
 - takeScreenshot: 10-signed-in-home

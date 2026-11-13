@@ -1,0 +1,10 @@
+appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
+---
+# Scenario 1, stage B: continues from the suggestion on screen (no relaunch,
+# no new lookup). Run only right after edit-meaning.yaml stage A.
+- tapOn: "Save"
+- takeScreenshot: s1-03-saving
+- extendedWaitUntil:
+    visible: "Update the sentence too.*"
+    timeout: 30000
+- takeScreenshot: s1-04-sentence-alert

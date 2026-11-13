@@ -1,7 +1,7 @@
 # Back of a study card shows the language name alone ("FRENCH"), not the
 # internal card id ("CARD 9668 · FR"). Needs the seed: the QA account has one
 # card, "pomme", due now. run.sh re-seeds before every run.
-appId: com.iancheung228.lingostickers
+appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
 ---
 - runFlow: ../sign-in.yaml
 

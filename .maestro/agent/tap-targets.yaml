@@ -9,7 +9,7 @@
 #   next    (375,299): 10pt right of the glyph, inside the 14pt slop
 #   prev    (27,299): 10pt left of the glyph, inside the 14pt slop
 # Control: (300,73) is 36pt left of the search glyph, outside any slop; it must do nothing.
-appId: com.iancheung228.lingostickers
+appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
 ---
 - runFlow: ../sign-in.yaml
 

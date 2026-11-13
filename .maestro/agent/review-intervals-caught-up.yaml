@@ -1,0 +1,48 @@
+# Review session on the QA account: the four grade buttons each show a
+# different next-review interval for the new card (Again 1 minute, Hard 6
+# minutes, Good 10 minutes, Easy in days), and grading Easy (graduating the
+# card) then finishing the session reaches the "caught up" home state.
+appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
+---
+- runFlow: ../sign-in.yaml
+
+- extendedWaitUntil:
+    visible: "Start reviewing — 1 card due.*"
+    timeout: 20000
+- tapOn: "Start reviewing — 1 card due.*"
+
+- extendedWaitUntil:
+    visible: "Tap to reveal.*"
+    timeout: 10000
+- tapOn: "What did you call this\\?"
+
+# Back of the card: four buttons, four different intervals.
+- extendedWaitUntil:
+    visible: "Again — next review in 1 minute.*"
+    timeout: 10000
+- assertVisible: "Hard — next review in 6 minutes.*"
+- assertVisible: "Good — next review in 10 minutes.*"
+- assertVisible: "Easy — next review in .*(day|days|hour|hours|month|months).*"
+- takeScreenshot: 01-four-intervals
+
+# Grade Easy: the card graduates out of the learning steps.
+- tapOn: "Easy — next review in .*"
+
+# The queue is empty after this card: the session may close itself, or need
+# "Close this card" first (as study-grade.yaml does after a learn-ahead card).
+- tapOn:
+    text: "Close this card"
+    optional: true
+- extendedWaitUntil:
+    visible: "Session done"
+    timeout: 15000
+- assertVisible: "1 card reviewed"
+- takeScreenshot: 02-session-done
+- tapOn: "Done"
+
+# Nothing due: caught-up line, no start button.
+- extendedWaitUntil:
+    visible: "All caught up.*"
+    timeout: 15000
+- assertNotVisible: "Start reviewing.*"
+- takeScreenshot: 03-caught-up

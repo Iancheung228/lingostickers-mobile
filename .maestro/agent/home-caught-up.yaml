@@ -1,4 +1,4 @@
-appId: com.iancheung228.lingostickers
+appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
 # Same journey as .maestro/study-grade.yaml through "Done". Once the only due
 # card is graded Good (learning, ~10 min), home must show the quiet caught-up
 # line where the due pill was, and must not show a "Start reviewing" button.

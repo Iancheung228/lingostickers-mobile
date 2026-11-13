@@ -1,8 +1,9 @@
 #!/bin/bash
 # Runs the harness loop in its own worktree so it never touches your working tree.
 #   harness/run-loop.sh [iterations=5] [usd-per-iteration=3]
-#   ALLOW_PROD_BACKEND=1 harness/run-loop.sh 3     # no staging yet: use .env (QA account only)
-#   DRY_RUN=1 ALLOW_PROD_BACKEND=1 harness/run-loop.sh   # set everything up, run QA, spend nothing
+#   DRY_RUN=1 harness/run-loop.sh   # set everything up, run QA, spend nothing
+# Backend is staging (.env + .maestro/qa.env). ALLOW_PROD_BACKEND=1 uses
+# production (.env.production + .maestro/qa.production.env) as the QA account.
 #
 # Models, cheapest that can do each job:
 #   builder    sonnet  (BUILDER_MODEL)  — writes code; delegates QA
@@ -35,19 +36,18 @@ PROTECTED=(harness/feature_list.json harness/guard.sh harness/init.sh harness/PR
   .maestro/sign-in.yaml .maestro/study-grade.yaml .maestro/run.sh .maestro/seed.mjs
   .claude/agents/qa-tester.md)
 
-# --- Backend: staging if you have one; production only when you say so --------
-if [ -f "$REPO/.env.staging" ]; then
-  prod_url=$(grep '^EXPO_PUBLIC_SUPABASE_URL=' "$REPO/.env" | cut -d= -f2-)
-  stg_url=$(grep '^EXPO_PUBLIC_SUPABASE_URL=' "$REPO/.env.staging" | cut -d= -f2-)
-  [ -n "$stg_url" ] && [ "$stg_url" != "$prod_url" ] || { echo ".env.staging points at production (or is empty). Refusing."; exit 1; }
-  ENV_SRC="$REPO/.env.staging"
-elif [ "${ALLOW_PROD_BACKEND:-}" = "1" ]; then
-  ENV_SRC="$REPO/.env"
+# --- Backend: staging; production only when you say so -------------------------
+# The worktree always gets them as .env + .maestro/qa.env, whichever they are.
+if [ "${ALLOW_PROD_BACKEND:-}" = "1" ]; then
+  ENV_SRC="$REPO/.env.production"; QA_SRC="$REPO/.maestro/qa.production.env"
   echo "Using the PRODUCTION backend. The app signs in as the QA account only; deploys stay blocked."
 else
-  echo "No .env.staging. Re-run with ALLOW_PROD_BACKEND=1 to test against production as the QA account."; exit 1
+  # backend.sh refuses a .env that points at production.
+  (cd "$REPO" && . scripts/lib/backend.sh) || exit 1
+  ENV_SRC="$REPO/.env"; QA_SRC="$REPO/.maestro/qa.env"
 fi
-[ -f "$REPO/.maestro/qa.env" ] || { echo "Missing .maestro/qa.env — run .maestro/create-qa-user.sh"; exit 1; }
+[ -f "$ENV_SRC" ] || { echo "Missing $ENV_SRC (see RELEASING.md)"; exit 1; }
+[ -f "$QA_SRC" ] || { echo "Missing $QA_SRC — run .maestro/create-qa-user.sh (TABI_ENV=production for prod)"; exit 1; }
 
 # --- Simulator: a dedicated one, found by name, booted if needed -------------
 MAESTRO_DEVICE=$(xcrun simctl list devices available | grep -F "    $HARNESS_SIM (" | head -1 | sed -E 's/.*\(([0-9A-F-]{36})\).*/\1/')
@@ -68,7 +68,7 @@ if [ ! -d "$WT" ]; then
   git -C "$WT" commit -q --allow-empty -m "harness: scaffold" || exit 1
 fi
 cp "$ENV_SRC" "$WT/.env"
-cp "$REPO/.maestro/qa.env" "$WT/.maestro/qa.env"
+cp "$QA_SRC" "$WT/.maestro/qa.env"
 SCAFFOLD=$(git -C "$WT" log --format=%H --grep='^harness: scaffold$' -1)
 cd "$WT" || exit 1
 mkdir -p harness/logs
@@ -76,7 +76,7 @@ mkdir -p harness/logs
 # --- Metro, from the worktree, with file watching ON ---------------------------
 # (A Metro started with CI set never re-bundles: tests would pass against stale code.)
 if ! lsof -nP -iTCP:"$METRO_PORT" -sTCP:LISTEN >/dev/null 2>&1; then
-  env -u CI nohup npx expo start --dev-client --port "$METRO_PORT" > harness/logs/metro.log 2>&1 &
+  APP_VARIANT=development env -u CI nohup npx expo start --dev-client --port "$METRO_PORT" > harness/logs/metro.log 2>&1 &
   for _ in $(seq 60); do curl -sf "http://localhost:$METRO_PORT/status" >/dev/null && break; sleep 1; done
 fi
 # Baseline is the FULL suite: qa-status.json holds only the flows of the last

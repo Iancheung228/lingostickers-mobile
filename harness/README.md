@@ -28,8 +28,9 @@ iteration the loop re-runs the full Maestro suite as a regression check.
 | `guard.sh` + `settings.json` | you | blocks deploys/pushes/`maestro cloud`, `.env` reads, and edits to everything above and to the approved flows |
 | `run-loop.sh` | you | worktree, Metro on :8082, loop, model escalation, regression, tamper check, cost total |
 | `../.maestro/*.yaml`, `run.sh`, `seed.mjs`, `fixtures/` | you | human-approved flows and test tooling |
-| `../.maestro/qa.env`, `create-qa-user.sh` | you | QA account credentials (gitignored; the loop copies `qa.env` into the worktree) and the script that creates the account |
-| `../scripts/qa-budget.mjs` | you | how many AI calls the QA account has left today (cap: 100 per UTC day); builders check it before any scan or lookup flow |
+| `../.maestro/qa.env`, `qa.production.env`, `create-qa-user.sh` | you | QA account credentials per backend (gitignored; the loop copies the right one into the worktree as `qa.env`) and the script that creates the account |
+| `../scripts/lib/backend.sh` | you | which backend (staging unless `TABI_ENV=production`); refuses a `.env` that points at production |
+| `../scripts/qa-budget.mjs` | you | how many AI calls the QA account has left today on that backend (cap: 100 per UTC day); builders check it before any scan or lookup flow |
 | `../.maestro/agent/*.yaml` | agents | flows the QA agent writes for new features |
 
 ## Before the first run
@@ -37,34 +38,47 @@ iteration the loop re-runs the full Maestro suite as a regression check.
 1. **Commit your work.** The loop branches from your last commit (it runs in
    `../tabi-harness`), so uncommitted fixes — and the approved flows that test
    them — won't be there.
-2. A Simulator named **Tabi Harness** with the Tabi Stickers dev build
-   installed. The loop runs every flow on it (`MAESTRO_DEVICE`), so yours is
-   never touched. Once:
+2. A Simulator named **Tabi Harness** with the **Tabi Dev** build installed.
+   The loop runs every flow on it (`MAESTRO_DEVICE`), so yours is never
+   touched. Build Tabi Dev for the Simulator locally (free, no EAS credit, no
+   signing; `EXPO_SCENE_LIFECYCLE=1` is needed under Maestro on iOS 27):
+   ```bash
+   APP_VARIANT=development EXPO_SCENE_LIFECYCLE=1 npx expo prebuild --clean --platform ios
+   xcodebuild -workspace ios/TabiDev.xcworkspace -scheme TabiDev -configuration Debug \
+     -sdk iphonesimulator -derivedDataPath ios/build build
+   APP=ios/build/Build/Products/Debug-iphonesimulator/TabiDev.app
+   ```
+   Then, once:
    ```bash
    UDID=$(xcrun simctl create "Tabi Harness" com.apple.CoreSimulator.SimDeviceType.iPhone-18-Pro com.apple.CoreSimulator.SimRuntime.iOS-27-0)
    xcrun simctl boot "$UDID"
-   xcrun simctl install "$UDID" "$(xcrun simctl get_app_container booted com.iancheung228.lingostickers app)"
+   xcrun simctl install "$UDID" "$APP"
+   # The old dev build shared the store app's bundle id and the same
+   # exp+lingostickers-mobile:// link; keep only one dev build per Simulator.
+   xcrun simctl uninstall "$UDID" com.iancheung228.lingostickers
    # Show the on-screen keyboard even after a hardware one was seen, so
    # keyboard-occlusion features can be tested; reboot once to apply.
    xcrun simctl spawn "$UDID" defaults write com.apple.keyboard.preferences AutomaticMinimizationEnabled -bool false
    xcrun simctl shutdown "$UDID" && xcrun simctl boot "$UDID"
    ```
    Reinstall it the same way after rebuilding the dev client.
-3. Backend: either create `.env.staging` (a second Supabase project), or pass
-   `ALLOW_PROD_BACKEND=1` to run against production as the QA account only.
+3. Backend: **staging** (`.env` + `.maestro/qa.env`), always, unless you pass
+   `ALLOW_PROD_BACKEND=1` (production, as the QA account only). Flows say
+   `appId: ${APP_ID}`; `.maestro/run.sh` sets it to whichever dev build is
+   installed (Tabi Dev preferred).
 
 ## Run
 
 ```bash
-DRY_RUN=1 ALLOW_PROD_BACKEND=1 harness/run-loop.sh   # set up + one sign-in flow, no tokens (a real run starts with the full suite)
-ALLOW_PROD_BACKEND=1 harness/run-loop.sh 1           # first time: one iteration, watch it
-ALLOW_PROD_BACKEND=1 harness/run-loop.sh 6 3         # up to 6 iterations, $3 cap each
+DRY_RUN=1 harness/run-loop.sh   # set up + one sign-in flow, no tokens (a real run starts with the full suite)
+harness/run-loop.sh 1           # first time: one iteration, watch it
+harness/run-loop.sh 6 3         # up to 6 iterations, $3 cap each
 ```
 
 The loop uses Metro on **:8082** (`METRO_PORT`; started from the worktree if nothing is listening there), so your own `npx expo start` on :8081 (and
 your phone) keep working, and on its own Simulator, so yours does too.
 
-The worktree and branch (`../tabi-harness`, `harness/drivable`) are created once and then reused: later runs do not pick up new commits from main, and the protected files stay as they were at the `harness: scaffold` commit. To start over, remove the worktree (`git worktree remove --force ../tabi-harness && git branch -D harness/drivable`).
+The worktree and branch (`../tabi-harness`, `harness/drivable`) are created once and then reused: later runs do not pick up new commits from main, and the protected files stay as they were at the `harness: scaffold` commit. To start over, remove the worktree (`git worktree remove --force ../tabi-harness && git branch -D harness/drivable`). The existing worktree predates staging and Tabi Dev (Nov 12, 2026); its own scripts still work against staging with the old dev build, but recreate it (after merging or saving its commits) to pick up `${APP_ID}` and `scripts/lib/`.
 
 Review with `cd ../tabi-harness && git log -p harness/drivable`, the QA
 screenshots in `.maestro/output/`, `harness-progress.md` (including any app bugs

@@ -3,7 +3,7 @@
 # with the reveal's "Add to Collection" button (no scene chips, so one save).
 # Asserts there is no "Save failed" alert, then checks the new sticker in the Latest list
 # and the grid (its picture, not a spinner or a glyph). Costs ~1-2 AI calls (extract).
-appId: com.iancheung228.lingostickers
+appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
 ---
 - runFlow: ../sign-in.yaml
 - tapOn:

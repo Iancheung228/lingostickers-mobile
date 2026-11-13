@@ -4,13 +4,21 @@
     "slug": "lingostickers-mobile",
     "scheme": "lingostickers",
     "version": "1.0.0",
+    "runtimeVersion": {
+      "policy": "fingerprint"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/497514cf-549d-4ce7-a873-4675cab5b9dc"
+    },
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "ios": {
       "bundleIdentifier": "com.iancheung228.lingostickers",
       "supportsTablet": false,
-      "associatedDomains": ["applinks:tabistickers.com"],
+      "associatedDomains": [
+        "applinks:tabistickers.com"
+      ],
       "infoPlist": {
         "NSCameraUsageDescription": "Tabi Stickers uses your camera to scan objects and create vocabulary stickers.",
         "NSLocationWhenInUseUsageDescription": "Tabi Stickers can tag where this memory happened, turning your collection into a map of your language journey. This is entirely optional.",

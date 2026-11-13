@@ -1,0 +1,22 @@
+appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
+---
+# Restore: MEANS back to apple (one lookup), untick so the word is kept, Save.
+# Chains from the open MEANS sheet left by the previous flow (no relaunch).
+- tapOn: "grape"
+- eraseText: 10
+- inputText: "apple"
+- extendedWaitUntil:
+    visible: "Change the.*word to.*|Couldn't find.*"
+    timeout: 30000
+- takeScreenshot: restore-01-apple-suggestion
+- tapOn: "Change the.*word to.*"
+- waitForAnimationToEnd:
+    timeout: 1500
+- tapOn: "Save"
+- waitForAnimationToEnd:
+    timeout: 3000
+- assertNotVisible: "Update the sentence too.*"
+- extendedWaitUntil:
+    visible: "Le raisin.*means apple.*"
+    timeout: 15000
+- takeScreenshot: restore-02-means-apple

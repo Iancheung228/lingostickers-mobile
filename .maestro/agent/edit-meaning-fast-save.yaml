@@ -1,0 +1,26 @@
+appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
+---
+# Scenario 3: MEANS -> grape, tap Save at once (while the lookup runs), expect
+# the spinner, then a save with the new word, then the sentence alert -> Leave it.
+# Chains from the card back left by the previous flows (no relaunch).
+- tapOn:
+    point: "87%,45%"
+- extendedWaitUntil:
+    visible: "What it means.*"
+    timeout: 10000
+- waitForAnimationToEnd:
+    timeout: 800
+- tapOn: "cherry"
+- eraseText: 10
+- inputText: "grape"
+- tapOn: "Save"
+- takeScreenshot: s3-01-spinner
+- extendedWaitUntil:
+    visible: "Update the sentence too.*"
+    timeout: 40000
+- takeScreenshot: s3-02-sentence-alert
+- tapOn: "Leave it"
+- extendedWaitUntil:
+    visible: "Le raisin.*means grape.*"
+    timeout: 15000
+- takeScreenshot: s3-03-after-leave-it

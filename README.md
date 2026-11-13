@@ -1,7 +1,9 @@
 # Tabi Stickers
 
 (Repo, npm package and Expo slug are still `lingostickers-mobile`; the public
-app name is **Tabi Stickers**, bundle id `com.iancheung228.lingostickers`.)
+app name is **Tabi Stickers**, bundle id `com.iancheung228.lingostickers`. Test
+builds are **Tabi Dev** (`.dev`) and **Tabi Preview** (`.preview`), on a
+separate staging backend: see [RELEASING.md](./RELEASING.md).)
 
 Tabi Stickers is an iOS-first language-learning app built around your own
 photos. Point the camera at a real object (or import a photo), outline the
@@ -49,10 +51,12 @@ assuming an API's shape (see `AGENTS.md`).
 | `plugins/` | Expo config plugins: `withPodDeploymentTargetFloor.js`, `withSceneLifecycle.js`. |
 | `constants/`, `assets/` | Theme constants and static assets. |
 | `supabase/functions/` | Edge functions: `create-sticker`, `create-card`, `scene-words`, `translate-word`, `translate-sentence`, `delete-account`, and the friends/challenge functions (`send-friend-request`, `respond-friend-request`, `send-challenge`, `submit-challenge-answer`, `get-challenge-image`). `_shared/` holds the LLM adapters (`llm/`), card schema, syllabus, vocab prompts, rate limiting, image helpers. |
-| `supabase/migrations/` | Numbered SQL migrations `001`-`044`. There is no `supabase/config.toml` in the repo. |
+| `supabase/migrations/` | Numbered SQL migrations `001`-`047`. They rebuild the whole schema on an empty project (verified when staging was created, 2026-11-12). There is no `supabase/config.toml`: auth settings live in each project's dashboard. |
 | `harness/` | Unattended build-and-QA loop (builder agent, cheap QA agent, Maestro). See `harness/README.md`. |
 | `.maestro/` | Maestro flows. `*.yaml` at the top level are human-approved; agent-written flows live in `.maestro/agent/`. `run.sh`, `seed.mjs`, `create-qa-user.sh` are the tooling. |
-| `scripts/` | Unit tests (`test-*.mts`), prompt tooling (`show-prompt.mts`, `prompt-lab.mts`), `qa-budget.mjs`, `create-demo-user.sh`, `backfill-thumbnails.mjs` (one-off: list-size thumbnails for existing stickers; needs the service-role key, dry run by default). |
+| `scripts/` | Unit tests (`test-*.mts`), prompt tooling (`show-prompt.mts`, `prompt-lab.mts`), `deploy.sh` (backend deploys, staging first), `lib/backend.*` (which backend a script uses), `qa-budget.mjs`, `create-demo-user.sh`, `make-variant-icons.swift`, `backfill-thumbnails.mjs` (one-off: list-size thumbnails for existing stickers; needs the service-role key, dry run by default). |
+| `app.config.js` | Derives the Tabi Dev / Preview / Stickers identities from `APP_VARIANT`; static config stays in `app.json`. |
+| `.github/workflows/ci.yml` | The offline gate (typecheck, lint, tests, deno check) on every push. |
 | `docs/` | `lessons.md` (write-ups of bugs already hit) and the static site served at the `CNAME` domain: `index.html`, `privacy.html`, `reset-password.html`. |
 | `research_notes/`, `reports/` | Launch strategy, store listing, UX-polish and engineering research notes. |
 
@@ -67,12 +71,17 @@ npm install
 
 ### Environment variables
 
-Create `.env` in the repo root (gitignored). The app reads only these names,
-all inlined at bundle time:
+Two gitignored files in the repo root: `.env` (the **staging** project; what
+Metro and every script use) and `.env.production` (production; scripts use it
+only with `TABI_ENV=production`). `npx eas-cli env:pull --environment development`
+recreates `.env`. The app reads only these names, all inlined at bundle time:
 
 - `EXPO_PUBLIC_SUPABASE_URL`
 - `EXPO_PUBLIC_SUPABASE_ANON_KEY`
-- `EXPO_PUBLIC_APTABASE_APP_KEY`
+- `EXPO_PUBLIC_APTABASE_APP_KEY` (production only; analytics stay off elsewhere)
+
+Cloud builds get the same names from EAS environment variables
+(`development`/`preview` = staging, `production` = production).
 
 Edge functions read these secrets (set with `npx supabase secrets set`, never
 committed): `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`
@@ -93,22 +102,23 @@ Gemini API.
 ### Run the dev client
 
 The app uses custom native code, so Expo Go does not work. Build the dev client
-once (see EAS below), install it, then:
+(Tabi Dev) once (see EAS below), install it, then:
 
 ```bash
-npx expo start --dev-client      # same as: npm start -- --dev-client
+npm run dev      # APP_VARIANT=development, file watching on, staging backend
 ```
 
 JS/TS changes hot reload through Metro; no new build is needed. A phone connects
-over the LAN (default `--host lan`), not tunnel. When Metro runs under a CI-like
-environment, file watching can be disabled; use `env -u CI npx expo start --dev-client`
-(this is what the QA tooling expects).
+over the LAN (default `--host lan`), not tunnel. A Metro started with `CI` set
+never re-bundles; `npm run dev` unsets it (this is what the QA tooling expects).
 
 ## npm scripts
 
 | Script | Does |
 |---|---|
+| `npm run dev` | Metro for the Tabi Dev client (`APP_VARIANT=development`, file watching on) |
 | `npm start` / `ios` / `android` / `web` | `expo start` (with `--ios`, `--android`, `--web`). Only iOS is exercised. |
+| `npm run deploy -- <staging\|production> <db\|functions\|all>` | `scripts/deploy.sh`; see `RELEASING.md` |
 | `npm run lint` | `expo lint` |
 | `npm run typecheck` | `tsc --noEmit` |
 | `npm run typecheck:functions` | `deno check` over every edge function and `_shared` module (needs Deno installed) |
@@ -125,46 +135,29 @@ environment, file watching can be disabled; use `env -u CI npx expo start --dev-
    `harness/qa.sh .maestro/agent/<flow>.yaml`; no argument runs every flow).
    It checks the Simulator, the installed dev build and that Metro is serving
    this tree, then prints a short pass/fail summary and writes
-   `harness/logs/qa-status.json`. It needs `.maestro/qa.env` (create the QA
-   account once with `.maestro/create-qa-user.sh`). The QA account has a budget
-   of 100 AI calls per UTC day; check `node scripts/qa-budget.mjs` first. New
+   `harness/logs/qa-status.json`. It runs against staging with `.maestro/qa.env`
+   (create the QA account once with `.maestro/create-qa-user.sh`). The QA account has a budget
+   of 100 AI calls per UTC day per project; check `node scripts/qa-budget.mjs` first. New
    flows go in `.maestro/agent/`; do not edit the human-approved `.maestro/*.yaml`.
 3. Unattended loop: `harness/run-loop.sh` (see `harness/README.md`).
 
-## Deploying the backend
+## Deploying and releasing
 
-Edge functions deploy separately from the app build:
+All of it is in [RELEASING.md](./RELEASING.md): the environments, backend
+deploys (`scripts/deploy.sh staging …` first, production only from a pushed
+`main` commit that ran on staging), App Store releases through TestFlight with
+phased release, and over-the-air updates.
 
-```bash
-npx supabase functions deploy <name> [<name> ...]
-```
-
-Use the default JWT verification (no `--no-verify-jwt`), matching every
-existing function (`docs/lessons.md` section 4). Secrets: `npx supabase secrets set NAME=value`.
-
-Migrations: the repo has no `supabase/config.toml` and no wrapper script, so
-nothing in the repo records how they were applied. They are numbered SQL files
-applied by hand to the hosted project (SQL editor, or after `npx supabase link`,
-`npx supabase db push`). Apply new ones in order and verify against production;
-migration `044_username_available.sql` is the most recent.
-
-## EAS builds
-
-Builds are rationed: the free plan caps iOS builds at 15 per month, and the
-owner tracks that budget. **Do not run `eas build` or `eas submit` without
-asking first.** Profiles in `eas.json`: `development` (dev client, internal),
-`preview` (internal), `production` (auto-increment, store submit config).
-
-```bash
-npx eas-cli build --platform ios --profile development --non-interactive
-```
-
-Only rebuild for native changes (new native dependency, config plugin, the
-`subject-cutout` module); everything else hot reloads.
+**EAS builds are rationed** (15 iOS builds/month on the free plan, tracked by
+the owner): **do not run `eas build`, `eas submit` or `eas update` without
+asking first.** Profiles in `eas.json`: `development` (Tabi Dev),
+`preview` (Tabi Preview), `production` (Tabi Stickers, store submit config).
+Only rebuild for native changes; everything else hot reloads.
 
 ## Where to read next
 
 - `AGENTS.md` / `CLAUDE.md` - project rules for coding agents (Expo SDK 54 docs, Simulator verification).
+- `RELEASING.md` - environments, deploys, releases, OTA updates and their limits.
 - `skills.md` - one-line index of lessons from bugs already hit; `docs/lessons.md` has the full write-ups.
 - `ROADMAP.md` - product vision, status and open work.
 - `harness/README.md` - the build/QA loop; `HUMAN_REQUESTS.md` and `harness-progress.md` - what the loop left for a human.

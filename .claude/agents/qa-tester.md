@@ -28,7 +28,7 @@ screenshots that matter, and report.
 ## Writing a flow
 - Start with `- runFlow: ../sign-in.yaml` (signs in as the QA account; the seed
   gives it exactly one sticker, "pomme", due for review).
-- Header: `appId: com.iancheung228.lingostickers` then `---`.
+- Header: `appId: ${APP_ID}` then `---` (`.maestro/run.sh` sets it to the installed dev build; never hard-code a bundle id).
 - Text selectors are FULL-string regexes. On iOS an accessibility label replaces
   the text of everything inside it, so match the label: `"Good — next review in.*"`,
   not `"Good"`. A big element whose label joins many texts needs `".*phrase.*"`.

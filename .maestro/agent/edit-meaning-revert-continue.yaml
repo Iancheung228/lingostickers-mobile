@@ -1,0 +1,13 @@
+appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
+---
+# Scenario 5, continued: the sheet reopened with a "lemon" draft and its row on
+# screen. Type the saved meaning (grape) back: the row must disappear. No lookup.
+- takeScreenshot: s5-01-reopened-lemon-row
+- tapOn: "lemon"
+- eraseText: 10
+- inputText: "grape"
+- waitForAnimationToEnd:
+    timeout: 2000
+- assertNotVisible: "Change the.*word to.*"
+- assertNotVisible: "Couldn't find.*"
+- takeScreenshot: s5-02-reverted

@@ -2,12 +2,14 @@
 # Creates the Maestro QA account (pre-confirmed, so no email is sent) and saves
 # its credentials to .maestro/qa.env (gitignored). Safe to re-run: an existing
 # qa.env is reused and the account is not duplicated.
-#   .maestro/create-qa-user.sh            # project from .env
+#   .maestro/create-qa-user.sh                       # staging (.env -> .maestro/qa.env)
+#   TABI_ENV=production .maestro/create-qa-user.sh   # production (-> .maestro/qa.production.env)
 set -euo pipefail
 cd "$(dirname "$0")/.."
-OUT=.maestro/qa.env
-URL=$(grep '^EXPO_PUBLIC_SUPABASE_URL=' .env | cut -d= -f2-)
-REF=$(echo "$URL" | sed -E 's#https://([^.]+)\..*#\1#')
+. scripts/lib/backend.sh
+OUT=$QA_ENV_FILE
+URL=$SUPABASE_URL
+REF=$PROJECT_REF
 
 if [ -f "$OUT" ]; then echo "$OUT already exists; using it."; exit 0; fi
 

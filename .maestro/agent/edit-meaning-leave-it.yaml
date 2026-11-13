@@ -1,0 +1,8 @@
+appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
+---
+# Scenario 3, continued: the sentence alert is already up (no relaunch, no lookup).
+- tapOn: "Leave it"
+- extendedWaitUntil:
+    visible: "Le raisin.*means grape.*"
+    timeout: 15000
+- takeScreenshot: s3-03-after-leave-it

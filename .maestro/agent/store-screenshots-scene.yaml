@@ -1,0 +1,126 @@
+# ss2 scene prompts on the 6.9-inch Simulator, DEMO account. ONE RUN ONLY:
+# AI call 1 = the scan (Extract). AI call 2 = one prompt pill. Nothing else calls AI.
+# Never retry this flow after the Extract tap: a rerun would scan again.
+# Cancel is "Discard this discovery" -> "Discard" (no save). Never tap "Add ...".
+appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
+---
+- launchApp:
+    clearState: true
+- openLink: "exp+lingostickers-mobile://expo-development-client/?url=http%3A%2F%2Flocalhost%3A${METRO_PORT}"
+- tapOn:
+    text: "Open"
+    optional: true
+- extendedWaitUntil:
+    visible: "WELCOME BACK"
+    timeout: 60000
+# The dev client can reload once after launch ("Refreshing..." banner), which
+# resets the auth screen to Create Account. Let that settle before typing.
+- waitForAnimationToEnd:
+    timeout: 6000
+- extendedWaitUntil:
+    visible: "WELCOME BACK"
+    timeout: 20000
+# Positional taps on the 6.9-inch layout (text taps landed on the wrong
+# element there): Email field, Password field, Sign In button.
+- tapOn:
+    point: "50%,73%"
+- waitForAnimationToEnd:
+    timeout: 1500
+- inputText: ${MAESTRO_EMAIL}
+- tapOn:
+    text: "WELCOME BACK"
+- waitForAnimationToEnd:
+    timeout: 1000
+- tapOn:
+    point: "50%,79%"
+- waitForAnimationToEnd:
+    timeout: 1500
+- inputText: ${MAESTRO_PASSWORD}
+- tapOn:
+    text: "WELCOME BACK"
+- tapOn:
+    point: "50%,88%"
+- tapOn:
+    text: "Not Now"
+    optional: true
+- tapOn:
+    text: "Allow"
+    optional: true
+- tapOn:
+    text: "Don't Allow"
+    optional: true
+- extendedWaitUntil:
+    visible: "FOUND"
+    timeout: 30000
+# First load after sign-in sometimes fails ("Couldn't load your collection"
+# and an empty "All caught up" home). Retry once if so; the data is intact.
+- waitForAnimationToEnd:
+    timeout: 3000
+- tapOn:
+    text: "Try loading your collection again"
+    optional: true
+- extendedWaitUntil:
+    visible: "Start reviewing.*"
+    timeout: 30000
+
+# --- Scan the café photo (AI call 1) ---
+- tapOn:
+    text: "Close this card"
+    optional: true
+- tapOn: "Scan a new sticker"
+- tapOn:
+    text: "Agree and start scanning"
+    optional: true
+- extendedWaitUntil:
+    visible: "What did you find\\?"
+    timeout: 15000
+- tapOn: "Import a photo from your library"
+- waitForAnimationToEnd:
+    timeout: 2000
+# simctl addmedia gave the café photo the file date 9 Sep 8:11 PM.
+- tapOn: "Photo, September 09, 8:11.*"
+- extendedWaitUntil:
+    visible: "Extract Sticker"
+    timeout: 20000
+- waitForAnimationToEnd:
+    timeout: 1500
+- tapOn:
+    point: "50%,91%"
+- extendedWaitUntil:
+    visible: "Add to Collection"
+    timeout: 90000
+- waitForAnimationToEnd:
+    timeout: 1500
+
+# --- Scroll to the scene section (no AI) and ask for one prompt (AI call 2) ---
+- tapOn: "More words from this photo"
+- waitForAnimationToEnd:
+    timeout: 1000
+- tapOn: "What's happening\\?"
+- waitForAnimationToEnd:
+    timeout: 25000
+
+# --- Pick two suggested words (checkboxes; never the Add button) ---
+- tapOn:
+    text: ".*, .*"
+    below: "MORE FROM THIS PHOTO"
+    index: 0
+- waitForAnimationToEnd:
+    timeout: 800
+- tapOn:
+    text: ".*, .*"
+    below: "MORE FROM THIS PHOTO"
+    index: 1
+- waitForAnimationToEnd:
+    timeout: 1500
+- takeScreenshot: ss2-scene
+
+# --- Cancel: discard the discovery. Nothing is saved. ---
+- tapOn: "Discard this discovery"
+- extendedWaitUntil:
+    visible: "Discard this discovery\\?"
+    timeout: 10000
+- tapOn:
+    text: "Discard"
+- waitForAnimationToEnd:
+    timeout: 2000

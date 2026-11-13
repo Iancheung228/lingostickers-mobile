@@ -1,0 +1,12 @@
+# Phase 3: no AI call, no taps on chips. The chips appeared under the fixed
+# footer, so swipe the content up (from the upper half of the screen) to bring
+# them above the footer, then screenshot for a human look before selecting any.
+appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
+---
+- assertVisible: "Tap the words you want as cards\\."
+- swipe:
+    start: "50%, 60%"
+    end: "50%, 25%"
+- waitForAnimationToEnd:
+    timeout: 1000
+- takeScreenshot: sp-s2b-after-swipe

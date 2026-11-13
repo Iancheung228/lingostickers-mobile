@@ -1,0 +1,15 @@
+# Phase 4: pick two chips already on screen (verified in sp-s2b-after-swipe)
+# and check the main button. No AI call.
+appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
+---
+- assertVisible: "boire, to drink"
+- assertVisible: "manger, to eat"
+- tapOn: "boire, to drink"
+- waitForAnimationToEnd:
+    timeout: 500
+- takeScreenshot: sp-s4a-one-picked
+- tapOn: "manger, to eat"
+- waitForAnimationToEnd:
+    timeout: 500
+- assertVisible: "Add 3 cards"
+- takeScreenshot: sp-s4-selected

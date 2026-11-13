@@ -4,7 +4,7 @@
 # Costs ONE AI lookup (budget-tight: do not add more lookups here).
 # Selectors use testIDs (scan-type-word, type-word-*, toast-action) because the
 # button label "Look up word" differs from its visible text "Look up".
-appId: com.iancheung228.lingostickers
+appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
 ---
 - runFlow: ../sign-in.yaml
 

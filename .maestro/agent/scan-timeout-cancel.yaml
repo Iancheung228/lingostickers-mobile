@@ -1,7 +1,7 @@
 # The extractor's X stops a scan that is still running: no alert, the photo and
 # selection stay, and Extract Sticker can be tapped again. Spends at most ONE
 # create-sticker call (the stopped one) — check scripts/qa-budget.mjs first.
-appId: com.iancheung228.lingostickers
+appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
 ---
 - runFlow: ../sign-in.yaml
 - tapOn:

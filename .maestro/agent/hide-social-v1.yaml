@@ -1,7 +1,7 @@
 # Friends is off for the first release (lib/features.ts SOCIAL_ENABLED = false):
 # no Friends tab in the bar, and Profile's SAFETY section becomes SUPPORT with
 # only "Report a problem" (no Blocked accounts). Never taps the mail link.
-appId: com.iancheung228.lingostickers
+appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
 ---
 - runFlow: ../sign-in.yaml
 - tapOn:

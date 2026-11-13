@@ -1,0 +1,15 @@
+appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
+---
+# Scenario 6: the WORD sheet has WORD and SAY IT inputs. No lookup. Cancels out.
+- tapOn: "Cancel"
+- waitForAnimationToEnd:
+    timeout: 1000
+- takeScreenshot: s1-06-card-after-save
+- tapOn:
+    point: "87%,20%"
+- extendedWaitUntil:
+    visible: "The word.*"
+    timeout: 10000
+- waitForAnimationToEnd:
+    timeout: 800
+- takeScreenshot: s6-01-word-sheet

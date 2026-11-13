@@ -1,0 +1,38 @@
+# Phase 1 of the "More words from this photo" check: scan once, open the
+# footer button, and STOP on a screenshot so a human/QA agent can confirm the
+# prompt pills are on screen before any prompt is tapped (phase 2 continues
+# from this exact screen, no re-scan). Real AI calls: 1 scan.
+appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
+---
+# --- Scan (copied from scene-prompts-open-gallery.yaml) ---------------------
+- runFlow: ../sign-in.yaml
+- tapOn:
+    text: "Close this card"
+    optional: true
+- tapOn: "Scan a new sticker"
+- tapOn:
+    text: "Agree and start scanning"
+    optional: true
+- extendedWaitUntil:
+    visible: "What did you find\\?"
+    timeout: 15000
+- takeScreenshot: sp-00-scan-start
+- tapOn: "Import a photo from your library"
+- waitForAnimationToEnd:
+    timeout: 2000
+- tapOn: "Photo, September 09, 8:11.*"
+- extendedWaitUntil:
+    visible: "Extract Sticker"
+    timeout: 20000
+- tapOn:
+    point: "50%,91%"
+- extendedWaitUntil:
+    visible: "Add to Collection"
+    timeout: 90000
+- takeScreenshot: sp-01-discovery-top
+
+# --- Scenario 1: footer button scrolls to the section (no prompt tapped) -----
+- tapOn: "More words from this photo"
+- waitForAnimationToEnd:
+    timeout: 1000
+- takeScreenshot: sp-s1-after-more-words

@@ -1,0 +1,1038 @@
+diff --git a/app/(auth)/forgot-password.tsx b/app/(auth)/forgot-password.tsx
+index 01c9506..4d2ee23 100644
+--- a/app/(auth)/forgot-password.tsx
++++ b/app/(auth)/forgot-password.tsx
+@@ -8,6 +8,7 @@ import { useAuth } from '@/hooks/useAuth';
+ import CozyBackground from '@/components/CozyBackground';
+ import { colors, shadows, radii, spacing, typography, fonts } from '@/constants/theme';
+ import { debugWarn } from '@/lib/debug';
++import { EMAIL_SHAPE } from '@/lib/validation';
+ 
+ export default function ForgotPasswordScreen() {
+   const { resetPasswordForEmail, verifyRecoveryOtp } = useAuth();
+@@ -19,7 +20,7 @@ export default function ForgotPasswordScreen() {
+   const [verifyError, setVerifyError] = useState<string | null>(null);
+   const [resent, setResent] = useState(false);
+ 
+-  const isFormValid = email.trim().length > 0;
++  const isFormValid = EMAIL_SHAPE.test(email.trim());
+   const isCodeValid = code.trim().length > 0;
+ 
+   const handleSend = async () => {
+diff --git a/app/(auth)/sign-in.tsx b/app/(auth)/sign-in.tsx
+index c9dc8ee..0faf244 100644
+--- a/app/(auth)/sign-in.tsx
++++ b/app/(auth)/sign-in.tsx
+@@ -1,12 +1,13 @@
+-import { useRef, useState } from 'react';
++import { useEffect, useRef, useState } from 'react';
+ import {
+   View, Text, TextInput, TouchableOpacity,
+-  StyleSheet, KeyboardAvoidingView, Platform, ActivityIndicator, ScrollView,
++  StyleSheet, KeyboardAvoidingView, Platform, ActivityIndicator, ScrollView, Keyboard,
+ } from 'react-native';
+ import { Link } from 'expo-router';
+ import { useAuth } from '@/hooks/useAuth';
+ import PasswordField from '@/components/PasswordField';
+ import AuthIntro from '@/components/AuthIntro';
++import { EMAIL_SHAPE } from '@/lib/validation';
+ import { colors, typography, shadows, radii, spacing, fonts } from '@/constants/theme';
+ 
+ export default function SignInScreen() {
+@@ -20,11 +21,23 @@ export default function SignInScreen() {
+   // So the email field's return key can hand over instead of dismissing the
+   // keyboard and leaving the password box untouched two rows below it.
+   const passwordRef = useRef<TextInput>(null);
++  // The form sits at the bottom of a scroll view that starts at the top, so on
++  // a small phone the keyboard covered Sign In and the only way to submit was
++  // the return key. Bring the end of the card up with the keyboard.
++  const scrollRef = useRef<ScrollView>(null);
++  useEffect(() => {
++    const sub = Keyboard.addListener('keyboardDidShow', () => scrollRef.current?.scrollToEnd({ animated: true }));
++    return () => sub.remove();
++  }, []);
+ 
+   const isFormValid = email.trim().length > 0 && password.length > 0;
+ 
+   const handleSignIn = async () => {
+     if (!isFormValid) return;
++    if (!EMAIL_SHAPE.test(email.trim())) {
++      setError("That doesn't look like an email address.");
++      return;
++    }
+     setError(null);
+     setUnconfirmed(false);
+     setResendMessage(null);
+@@ -34,6 +47,9 @@ export default function SignInScreen() {
+     if (error) {
+       if (error.message === 'Email not confirmed') {
+         setUnconfirmed(true);
++      } else if (error.message === 'Invalid login credentials') {
++        // Supabase's own wording, which reads like a server log.
++        setError("That email and password don't match. Check them, or reset your password below.");
+       } else {
+         setError(error.message);
+       }
+@@ -54,6 +70,7 @@ export default function SignInScreen() {
+         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+       >
+         <ScrollView
++          ref={scrollRef}
+           contentContainerStyle={styles.scroll}
+           keyboardShouldPersistTaps="handled"
+           showsVerticalScrollIndicator={false}
+diff --git a/app/(auth)/sign-up.tsx b/app/(auth)/sign-up.tsx
+index 2a3c7b6..298119a 100644
+--- a/app/(auth)/sign-up.tsx
++++ b/app/(auth)/sign-up.tsx
+@@ -7,7 +7,8 @@ import { Image } from 'expo-image';
+ import { Link, useRouter } from 'expo-router';
+ import { Camera } from 'lucide-react-native';
+ import { useAuth } from '@/hooks/useAuth';
+-import { useUsernameAvailability } from '@/hooks/useUsernameAvailability';
++import { useUsernameAvailability, USERNAME_RULE } from '@/hooks/useUsernameAvailability';
++import { EMAIL_SHAPE } from '@/lib/validation';
+ import { supabase } from '@/lib/supabase';
+ import { pickAvatarImage, uploadAvatar } from '@/lib/avatars';
+ import { stashPendingAvatar, clearPendingAvatar } from '@/lib/pendingAvatar';
+@@ -53,9 +54,10 @@ export default function SignUpScreen() {
+ 
+   const isFormValid =
+     username.trim().length > 0 &&
+-    email.trim().length > 0 &&
++    EMAIL_SHAPE.test(email.trim()) &&
+     password.length >= 6 &&
+-    usernameAvailability !== 'taken';
++    usernameAvailability !== 'taken' &&
++    usernameAvailability !== 'invalid';
+ 
+   const handlePickAvatar = async () => {
+     const picked = await pickAvatarImage();
+@@ -212,12 +214,13 @@ export default function SignUpScreen() {
+             {usernameAvailability !== 'idle' && (
+               <Text style={[
+                 styles.usernameHint,
+-                usernameAvailability === 'taken' && styles.usernameHintTaken,
++                (usernameAvailability === 'taken' || usernameAvailability === 'invalid') && styles.usernameHintTaken,
+                 usernameAvailability === 'available' && styles.usernameHintAvailable,
+               ]}>
+                 {usernameAvailability === 'checking' && 'Checking…'}
+                 {usernameAvailability === 'available' && 'Username available'}
+                 {usernameAvailability === 'taken' && 'Username taken'}
++                {usernameAvailability === 'invalid' && USERNAME_RULE}
+               </Text>
+             )}
+ 
+diff --git a/app/(tabs)/_layout.tsx b/app/(tabs)/_layout.tsx
+index ca510d4..c1dccf0 100644
+--- a/app/(tabs)/_layout.tsx
++++ b/app/(tabs)/_layout.tsx
+@@ -6,6 +6,7 @@ import type { LucideIcon } from 'lucide-react-native';
+ import * as Haptics from 'expo-haptics';
+ import { useChallenges } from '@/hooks/useChallenges';
+ import { useFriends } from '@/hooks/useFriends';
++import { SOCIAL_ENABLED } from '@/lib/features';
+ import { colors, shadows, radii, fonts } from '@/constants/theme';
+ import { TAB_BAR_HEIGHT, TAB_BAR_BOTTOM_MARGIN, TAB_BAR_WIDTH, TAB_BAR_ITEM_WIDTH, TAB_BAR_SCAN_ITEM_WIDTH } from '@/constants/tabBar';
+ 
+@@ -148,6 +149,9 @@ export default function TabLayout() {
+       <Tabs.Screen
+         name="friends"
+         options={{
++          // Off for the first release — see lib/features.ts. href: null
++          // keeps the route but takes it out of the bar.
++          ...(SOCIAL_ENABLED ? {} : { href: null }),
+           title: 'Friends',
+           tabBarAccessibilityLabel: friendsBadge > 0
+             ? `Friends, ${friendsBadge} waiting on you`
+diff --git a/app/(tabs)/calendar.tsx b/app/(tabs)/calendar.tsx
+index 35cbd21..7fd432b 100644
+--- a/app/(tabs)/calendar.tsx
++++ b/app/(tabs)/calendar.tsx
+@@ -10,7 +10,7 @@ import * as Haptics from 'expo-haptics';
+ import { useAuth } from '@/hooks/useAuth';
+ import { supabase } from '@/lib/supabase';
+ import { useSignedUrls } from '@/hooks/useSignedUrls';
+-import { weekAhead, weekActivity, dueToday, dueCountsByDate, dateKeyOf, reviewMinutes, heaviestDay } from '@/lib/review';
++import { weekAhead, weekActivity, dueToday, dueCountsByDate, dateKeyOf, foundAt, reviewMinutes, heaviestDay } from '@/lib/review';
+ import WeekActivityTracker from '@/components/WeekActivityTracker';
+ import StudySessionHost from '@/components/StudySessionHost';
+ import { Sticker } from '@/lib/types';
+@@ -141,7 +141,7 @@ export default function CalendarScreen() {
+       .from('stickers')
+       .select('*')
+       .eq('user_id', user.id)
+-      .order('discovered_at', { ascending: false });
++      .order('created_at', { ascending: false });
+     if (error) {
+       setLoadError(true);
+     } else if (data) {
+@@ -155,7 +155,7 @@ export default function CalendarScreen() {
+   const stickersByDate = useMemo(() => {
+     const map = new Map<string, Sticker[]>();
+     for (const sticker of stickers) {
+-      const key = dateKey(sticker.discovered_at);
++      const key = dateKey(foundAt(sticker));
+       const list = map.get(key) ?? [];
+       list.push(sticker);
+       map.set(key, list);
+diff --git a/app/(tabs)/collection.tsx b/app/(tabs)/collection.tsx
+index c970ffb..b4ac696 100644
+--- a/app/(tabs)/collection.tsx
++++ b/app/(tabs)/collection.tsx
+@@ -1,4 +1,4 @@
+-import { useState, useCallback, useMemo } from 'react';
++import { useState, useCallback, useMemo, useRef } from 'react';
+ import {
+   View, Text, TextInput, FlatList, StyleSheet, TouchableOpacity,
+   RefreshControl, ScrollView, ActivityIndicator, Modal, Pressable,
+@@ -18,7 +18,7 @@ import MiniStickerWall from '@/components/MiniStickerWall';
+ import HomeHeader from '@/components/HomeHeader';
+ import FeedRail from '@/components/FeedRail';
+ import LatestStickers, { MAX_ROWS as LATEST_FEED_ROWS } from '@/components/LatestStickers';
+-import { DAILY_GOAL, FEED_PREVIEW, dueToday, findsToday, reviewMinutes } from '@/lib/review';
++import { DAILY_GOAL, FEED_PREVIEW, dueToday, findsToday, foundAt, reviewMinutes } from '@/lib/review';
+ import StudySessionHost from '@/components/StudySessionHost';
+ import { colors, shadows, radii, spacing, typography, fonts } from '@/constants/theme';
+ import { TAB_BAR_CLEARANCE } from '@/constants/tabBar';
+@@ -26,17 +26,15 @@ import { languageLabel } from '@/lib/languages';
+ 
+ const CATEGORIES: Array<'All' | Category> = ['All', 'Kitchen', 'Animals', 'Study', 'Nature', 'Other'];
+ 
+-// 'newest'/'oldest' sort by discovered_at (when the memory happened —
+-// backdated to the photo's own date on import). 'recentlyAdded' sorts by
+-// created_at (when it actually landed in your collection) instead, for
+-// people who want to see today's imports at the top regardless of how old
+-// the photo itself is.
+-type SortMode = 'newest' | 'oldest' | 'recentlyAdded';
+-const SORT_CYCLE: SortMode[] = ['newest', 'oldest', 'recentlyAdded'];
++// 'newest'/'oldest' sort by when a card entered the collection (foundAt).
++// 'photoDate' sorts by discovered_at — the photo's own date, which an import
++// backdates — for browsing by when the moment happened.
++type SortMode = 'newest' | 'oldest' | 'photoDate';
++const SORT_CYCLE: SortMode[] = ['newest', 'oldest', 'photoDate'];
+ const SORT_LABELS: Record<SortMode, string> = {
+-  newest: 'Latest first',
++  newest: 'Newest first',
+   oldest: 'Oldest first',
+-  recentlyAdded: 'Recently added',
++  photoDate: 'By photo date',
+ };
+ 
+ // The wall card lifts up into the rose band rather than sitting below it,
+@@ -73,7 +71,15 @@ export default function CollectionScreen() {
+   // disorienting, but a filter for a state you can't be in is just clutter.
+   const [langFilter, setLangFilter] = useState<Language | null>(null);
+ 
+-  const openSearch = () => setSearchActive(true);
++  // Searching collapses the wall, feed and Latest blocks (see listHeader), so
++  // the field lands right under the masthead — above the keyboard — rather
++  // than a screen and a half down beneath it. Scroll to the top too, in case
++  // the magnifier was reached after scrolling.
++  const listRef = useRef<FlatList<Sticker>>(null);
++  const openSearch = () => {
++    setSearchActive(true);
++    listRef.current?.scrollToOffset({ offset: 0, animated: false });
++  };
+   const closeSearch = () => {
+     setSearchActive(false);
+     setSearchQuery('');
+@@ -85,7 +91,7 @@ export default function CollectionScreen() {
+       .from('stickers')
+       .select('*')
+       .eq('user_id', user.id)
+-      .order('discovered_at', { ascending: false });
++      .order('created_at', { ascending: false });
+ 
+     if (error) {
+       setLoadError(true);
+@@ -141,7 +147,7 @@ export default function CollectionScreen() {
+   // (language-scoped) collection in the chosen order while the grid below
+   // shows the filtered slice of it, and both have to agree about what
+   // "latest" means.
+-  const sortField = sortMode === 'recentlyAdded' ? 'created_at' : 'discovered_at';
++  const sortField = sortMode === 'photoDate' ? 'discovered_at' : 'created_at';
+   const sorted = useMemo(() => [...inLanguage].sort((a, b) => {
+     const diff = new Date(a[sortField]).getTime() - new Date(b[sortField]).getTime();
+     return sortMode === 'oldest' ? diff : -diff;
+@@ -178,7 +184,7 @@ export default function CollectionScreen() {
+     () => stickers
+       .filter(s => !langFilter || s.language === langFilter)
+       .slice()
+-      .sort((a, b) => Date.parse(b.discovered_at) - Date.parse(a.discovered_at))
++      .sort((a, b) => Date.parse(foundAt(b)) - Date.parse(foundAt(a)))
+       .slice(0, FEED_PREVIEW),
+     [stickers, langFilter]
+   );
+@@ -246,6 +252,7 @@ export default function CollectionScreen() {
+         onSearch={openSearch}
+       />
+ 
++      {!searchActive && (<>
+       {/* ── Mini sticker wall preview, lifted into the rose band above ── */}
+       <View style={styles.wallLift}>
+         <MiniStickerWall
+@@ -278,6 +285,7 @@ export default function CollectionScreen() {
+         getUrl={getUrl}
+         onPressSticker={setSelectedSticker}
+       />
++      </>)}
+ 
+       {/* ── Search bar, shown only while searching. There's no view-mode
+           switcher any more — the grid is the only view — so this row simply
+@@ -379,6 +387,9 @@ export default function CollectionScreen() {
+           rose band scrolls away with the content instead of being pinned
+           above a separately-scrolling grid. */}
+       <FlatList
++        ref={listRef}
++        keyboardShouldPersistTaps="handled"
++        keyboardDismissMode="on-drag"
+         data={loading ? [] : filtered}
+         keyExtractor={s => s.id}
+         numColumns={2}
+@@ -399,6 +410,7 @@ export default function CollectionScreen() {
+               title={
+                 isSearching ? `No matches for "${searchQuery.trim()}"`
+                 : langFilter ? `No ${languageLabel(langFilter)} stickers here`
++                : favoritesOnly ? 'No favourites yet'
+                 : 'No stickers yet'
+               }
+               subtitle={
+diff --git a/app/(tabs)/scan.tsx b/app/(tabs)/scan.tsx
+index 3e37f6f..6f6c6a8 100644
+--- a/app/(tabs)/scan.tsx
++++ b/app/(tabs)/scan.tsx
+@@ -9,9 +9,10 @@ import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
+ import * as ImagePicker from 'expo-image-picker';
+ import { GestureDetector, Gesture } from 'react-native-gesture-handler';
+ import Animated, {
+-  useSharedValue, useAnimatedStyle, runOnJS, withTiming, withDelay,
++  useSharedValue, useAnimatedStyle, runOnJS, withTiming, withDelay, FadeInUp, FadeOut,
+ } from 'react-native-reanimated';
+-import { ImagePlus, Zap, ZapOff } from 'lucide-react-native';
++import { router } from 'expo-router';
++import { Check, ImagePlus, Zap, ZapOff } from 'lucide-react-native';
+ import * as Haptics from 'expo-haptics';
+ import { useAuth } from '@/hooks/useAuth';
+ import SettingsButton from '@/components/SettingsButton';
+@@ -119,6 +120,17 @@ export default function ScanScreen() {
+   // cleaned up (its now-orphaned storage files removed) once the retry
+   // actually succeeds. Null outside of a retry.
+   const draftBeforeRetryRef = useRef<StickerDraft | null>(null);
++  // The in-flight create-sticker call, so the extractor's X can stop a scan
++  // that is taking too long, and so a scan can give up on its own.
++  const scanAbortRef = useRef<{ controller: AbortController; byUser: boolean } | null>(null);
++  // "Added N cards" after a save. Without it the sheet closed onto the bare
++  // camera and nothing said where the cards had gone.
++  const [savedCount, setSavedCount] = useState<number | null>(null);
++  useEffect(() => {
++    if (savedCount === null) return;
++    const t = setTimeout(() => setSavedCount(null), 5000);
++    return () => clearTimeout(t);
++  }, [savedCount]);
+   // Dry-run only: the device's cutout for the scan in flight, shown in the
+   // reveal instead of the saved image. Cleared each scan so a failed device
+   // cutout never shows the previous scan's preview.
+@@ -205,7 +217,9 @@ export default function ScanScreen() {
+     discoveredAt,
+     lassoPolygon,
+     precutImagePath,
++    signal,
+   }: {
++    signal?: AbortSignal;
+     base64: string;
+     memoryBase64: string | null | undefined;
+     // A small copy of the same scene, for the vision model. See
+@@ -230,6 +244,7 @@ export default function ScanScreen() {
+         ...(lassoPolygon ? { lassoPolygon } : {}),
+         ...(precutImagePath ? { precutImagePath } : {}),
+       },
++      signal,
+     });
+ 
+     if (error) {
+@@ -373,6 +388,16 @@ export default function ScanScreen() {
+       metadataPromiseRef.current = getImportedPhotoMetadata(asset.assetId);
+     }
+ 
++    // Set once the cutout is done and the word lookup starts, so a failure
++    // after that point isn't reported as a failed extraction — the cutout
++    // worked; it's the word that didn't come back.
++    let lookingUpWord = false;
++    const scanAbort = { controller: new AbortController(), byUser: false };
++    scanAbortRef.current = scanAbort;
++    // The server gives each model attempt 12s with retries and a failover;
++    // past this, waiting longer has never produced a card.
++    const giveUp = setTimeout(() => scanAbort.controller.abort(), SCAN_TIMEOUT_MS);
++
+     try {
+       // Checked here rather than left to submitImageForSticker, because the
+       // upload below runs first and would otherwise write to `undefined/…`.
+@@ -460,6 +485,7 @@ export default function ScanScreen() {
+       }
+ 
+       setStage('word');
++      lookingUpWord = true;
+       setSceneBase64(contextBase64 ?? null);
+       setSceneChips([]);
+       const submitStarted = Date.now();
+@@ -471,6 +497,7 @@ export default function ScanScreen() {
+           discoveredAt: fallbackDiscoveredAt,
+           lassoPolygon,
+           precutImagePath,
++          signal: scanAbort.controller.signal,
+         });
+         const serverMs = Date.now() - submitStarted;
+         debugLog(
+@@ -534,11 +561,23 @@ export default function ScanScreen() {
+         } : prev);
+       }
+     } catch (err: any) {
++      // Stopped with the X: they know, and the photo is still on screen.
++      if (scanAbort.byUser) return;
++      if (scanAbort.controller.signal.aborted) {
++        Alert.alert(
++          "Couldn't find the word",
++          'The word service is taking too long right now. Your photo is still here — tap Extract Sticker to try again.',
++        );
++        return;
++      }
+       const title = err?.isRateLimit
+         ? 'Daily limit reached'
++        : lookingUpWord ? "Couldn't find the word"
+         : camera ? 'Scan failed' : 'Extraction failed';
+       Alert.alert(title, err?.message ?? 'Something went wrong. Please try again.');
+     } finally {
++      clearTimeout(giveUp);
++      if (scanAbortRef.current === scanAbort) scanAbortRef.current = null;
+       setProcessing(false);
+     }
+   }, [processing, importedAsset, cameraCaptureContext, submitImageForSticker, prepareMemoryPhoto, user]);
+@@ -687,6 +726,7 @@ export default function ScanScreen() {
+       return;
+     }
+     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
++    setSavedCount(1 + extras.length);
+     setDraft(null);
+     setSceneChips([]);
+     setSceneBase64(null);
+@@ -873,6 +913,23 @@ export default function ScanScreen() {
+         <SettingsButton style={styles.headerSettings} />
+       </View>
+ 
++      {savedCount !== null && (
++        <Animated.View entering={FadeInUp} exiting={FadeOut} style={styles.savedToast}>
++          <Check size={16} color={colors.white} />
++          <Text style={styles.savedToastText} accessibilityLiveRegion="polite">
++            Added {savedCount} card{savedCount === 1 ? '' : 's'} to your collection
++          </Text>
++          <TouchableOpacity
++            onPress={() => { setSavedCount(null); router.navigate('/collection'); }}
++            hitSlop={10}
++            accessibilityRole="button"
++            accessibilityLabel="View your collection"
++          >
++            <Text style={styles.savedToastAction}>View</Text>
++          </TouchableOpacity>
++        </Animated.View>
++      )}
++
+       <View style={styles.cameraArea}>
+         <GestureDetector gesture={focusGesture}>
+           <View style={[styles.cameraFrame, { width: camW, height: camH }]}>
+@@ -999,6 +1056,12 @@ export default function ScanScreen() {
+           }
+         }}
+         onExtract={handleExtractFromPhoto}
++        onCancelProcessing={() => {
++          const scan = scanAbortRef.current;
++          if (!scan) return;
++          scan.byUser = true;
++          scan.controller.abort();
++        }}
+         processing={processing}
+         stage={stage}
+         usingServerCutout={usingServerCutout}
+@@ -1037,6 +1100,7 @@ const FRAME_RADIUS = 28;
+ const FRAME_MARGIN = 16;
+ // Viewfinder + capture-crop aspect ratio, expressed as width/height (3:4 portrait).
+ const ASPECT_RATIO = 3 / 4;
++const SCAN_TIMEOUT_MS = 60_000;
+ const RETICLE_SIZE = 72;
+ 
+ const styles = StyleSheet.create({
+@@ -1109,6 +1173,15 @@ const styles = StyleSheet.create({
+     gap: spacing.md,
+   },
+   hint: { color: colors.inkLight, fontSize: 13, fontFamily: fonts.text,},
++  savedToast: {
++    position: 'absolute', top: 110, alignSelf: 'center', zIndex: 10,
++    flexDirection: 'row', alignItems: 'center', gap: spacing.sm,
++    backgroundColor: colors.inkDark, borderRadius: radii.full,
++    paddingVertical: spacing.sm, paddingHorizontal: spacing.md,
++    ...shadows.card,
++  },
++  savedToastText: { color: colors.white, fontSize: 14, fontFamily: fonts.text },
++  savedToastAction: { color: colors.white, fontSize: 14, fontFamily: fonts.display, textDecorationLine: 'underline' },
+   scanProgressWrap: { alignSelf: 'stretch', paddingHorizontal: spacing.lg },
+ 
+   captureRow: {
+diff --git a/app/day/[date].tsx b/app/day/[date].tsx
+index 98c5642..10cbdd0 100644
+--- a/app/day/[date].tsx
++++ b/app/day/[date].tsx
+@@ -35,9 +35,9 @@ export default function DayScreen() {
+       .from('stickers')
+       .select('*')
+       .eq('user_id', user.id)
+-      .gte('discovered_at', dayStart.toISOString())
+-      .lt('discovered_at', dayEnd.toISOString())
+-      .order('discovered_at', { ascending: false });
++      .gte('created_at', dayStart.toISOString())
++      .lt('created_at', dayEnd.toISOString())
++      .order('created_at', { ascending: false });
+     if (error) {
+       setLoadError(true);
+     } else if (data) {
+diff --git a/app/profile.tsx b/app/profile.tsx
+index 714f496..928c349 100644
+--- a/app/profile.tsx
++++ b/app/profile.tsx
+@@ -1,7 +1,8 @@
+ import { useCallback, useEffect, useMemo, useState } from 'react';
+ import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView, ScrollView, ActivityIndicator, Alert, Linking } from 'react-native';
+ import { router, useFocusEffect } from 'expo-router';
+-import { ArrowLeft, Camera, LogOut, BookOpen, Heart, Check, Trash2, Shield, ExternalLink, Ban, Mail } from 'lucide-react-native';
++import Constants from 'expo-constants';
++import { ArrowLeft, Camera, LogOut, BookOpen, Heart, Check, Trash2, Shield, ExternalLink, Ban, Mail, FileText } from 'lucide-react-native';
+ import { useAuth } from '@/hooks/useAuth';
+ import { useProfile } from '@/hooks/useProfile';
+ import { supabase } from '@/lib/supabase';
+@@ -13,6 +14,7 @@ import Avatar from '@/components/Avatar';
+ import BlockedAccounts from '@/components/BlockedAccounts';
+ import { colors, shadows, radii, spacing, fonts, wordFontFor } from '@/constants/theme';
+ import { LANGUAGES } from '@/lib/languages';
++import { SOCIAL_ENABLED } from '@/lib/features';
+ 
+ // Published at the apex domain and linked from App Store Connect too. In
+ // the app because the Profile screen is where a person — and a reviewer —
+@@ -24,6 +26,11 @@ const PRIVACY_URL = 'https://tabistickers.com/privacy.html';
+ // inside the privacy policy.
+ const SUPPORT_EMAIL = 'iancheung228@gmail.com';
+ 
++// No custom terms of our own: Apple's standard licence applies to every App
++// Store app that doesn't supply one, and linking it is what reviewers expect.
++const TERMS_URL = 'https://www.apple.com/legal/internet-services/itunes/dev/stdeula/';
++const APP_VERSION = Constants.expoConfig?.version ?? '';
++
+ const WALL_DISPLAY_STYLES: { code: WallDisplayStyle; label: string; subtitle: string }[] = [
+   { code: 'framed', label: 'Framed', subtitle: 'Stickers sit inside a little photo card' },
+   { code: 'cutout', label: 'Cutout only', subtitle: 'Just the sticker shape, no card behind it' },
+@@ -188,7 +195,9 @@ export default function ProfileScreen() {
+           <ArrowLeft size={18} color={colors.inkMid} />
+         </TouchableOpacity>
+         <Text style={styles.title}>My Profile</Text>
+-        <View style={styles.backBtn} />
++        {/* Balances the back button so the title stays centred — invisible,
++            unlike the blank white circle it used to be. */}
++        <View style={styles.headerSpacer} />
+       </View>
+ 
+       {loading ? (
+@@ -239,7 +248,7 @@ export default function ProfileScreen() {
+               <Text style={styles.noteText}>
+                 {loadError
+                   ? "We couldn't reach your collection just now, so the counts above are blank. Nothing has been lost — pull back and open this again once you're online."
+-                  : `Welcome back to your cozy corner! You've captured ${stickers.length} watercolor memor${stickers.length === 1 ? 'y' : 'ies'} so far. Keep it up! 🌸`}
++                  : `Welcome back to your cozy corner! You've collected ${stickers.length} sticker${stickers.length === 1 ? '' : 's'} so far. Keep it up! 🌸`}
+               </Text>
+             </View>
+           </View>
+@@ -345,6 +354,7 @@ export default function ProfileScreen() {
+               blocking themselves live where the person is (a friend's profile,
+               a challenge, an incoming request); this section is where you
+               review what you've done and how to reach a human. */}
++          {SOCIAL_ENABLED && (<>
+           <Text style={styles.sectionLabel}>SAFETY</Text>
+           <View style={styles.card}>
+             <TouchableOpacity
+@@ -365,24 +375,8 @@ export default function ProfileScreen() {
+               </View>
+               <Text style={styles.rowChevron}>›</Text>
+             </TouchableOpacity>
+-
+-            <TouchableOpacity
+-              style={[styles.infoRow, styles.rowDivider]}
+-              onPress={() => Linking.openURL(
+-                `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent('Tabi Stickers — report a problem')}`,
+-              )}
+-              activeOpacity={0.7}
+-              accessibilityRole="link"
+-              accessibilityLabel="Email us about a problem"
+-            >
+-              <Mail size={16} color={colors.terraDark} />
+-              <View style={styles.infoTextWrap}>
+-                <Text style={styles.infoTitle}>Report a problem</Text>
+-                <Text style={styles.infoSubtitle}>{SUPPORT_EMAIL}</Text>
+-              </View>
+-              <ExternalLink size={14} color={colors.inkFaint} />
+-            </TouchableOpacity>
+           </View>
++          </>)}
+ 
+           {/* Info */}
+           <Text style={styles.sectionLabel}>ABOUT</Text>
+@@ -421,11 +415,45 @@ export default function ProfileScreen() {
+               </View>
+               <ExternalLink size={14} color={colors.inkFaint} />
+             </TouchableOpacity>
++
++            <TouchableOpacity
++              style={[styles.infoRow, styles.rowDivider]}
++              onPress={() => Linking.openURL(TERMS_URL)}
++              activeOpacity={0.7}
++              accessibilityRole="link"
++              accessibilityLabel="Open the terms of use"
++            >
++              <FileText size={16} color={colors.terraDark} />
++              <View style={styles.infoTextWrap}>
++                <Text style={styles.infoTitle}>Terms of Use</Text>
++                <Text style={styles.infoSubtitle}>Apple&apos;s standard licence agreement</Text>
++              </View>
++              <ExternalLink size={14} color={colors.inkFaint} />
++            </TouchableOpacity>
++
++            {/* The address itself isn't printed: the mail app shows it, and
++                the row reads as a person to write to, not an inbox. */}
++            <TouchableOpacity
++              style={[styles.infoRow, styles.rowDivider]}
++              onPress={() => Linking.openURL(
++                `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent(`Tabi Stickers ${APP_VERSION} — feedback`)}`,
++              )}
++              activeOpacity={0.7}
++              accessibilityRole="link"
++              accessibilityLabel="Email us about a problem or an idea"
++            >
++              <Mail size={16} color={colors.terraDark} />
++              <View style={styles.infoTextWrap}>
++                <Text style={styles.infoTitle}>Contact us</Text>
++                <Text style={styles.infoSubtitle}>A problem, a question or an idea</Text>
++              </View>
++              <ExternalLink size={14} color={colors.inkFaint} />
++            </TouchableOpacity>
+           </View>
+ 
+           {/* Logout */}
+           <TouchableOpacity style={styles.logoutButton} onPress={handleLogout} disabled={deletingAccount}>
+-            <LogOut size={16} color={colors.inkFaint} />
++            <LogOut size={16} color={colors.inkMid} />
+             <Text style={styles.logoutText}>Log Out</Text>
+           </TouchableOpacity>
+ 
+@@ -446,6 +474,8 @@ export default function ProfileScreen() {
+               {deletingAccount ? 'Deleting Account…' : 'Delete Account'}
+             </Text>
+           </TouchableOpacity>
++
++          {!!APP_VERSION && <Text style={styles.version}>Tabi Stickers {APP_VERSION}</Text>}
+         </ScrollView>
+       )}
+ 
+@@ -591,7 +621,9 @@ const styles = StyleSheet.create({
+     paddingVertical: spacing.md,
+     ...shadows.card,
+   },
+-  logoutText: { fontSize: 14, fontFamily: fonts.display, color: colors.inkFaint },
++  logoutText: { fontSize: 14, fontFamily: fonts.display, color: colors.inkMid },
++  headerSpacer: { width: 36, height: 36 },
++  version: { fontSize: 11, fontFamily: fonts.mono, color: colors.inkFaint, textAlign: 'center', marginTop: spacing.md },
+ 
+   deleteAccountButton: {
+     flexDirection: 'row',
+diff --git a/components/FeedRail.tsx b/components/FeedRail.tsx
+index 02e0086..bafb39e 100644
+--- a/components/FeedRail.tsx
++++ b/components/FeedRail.tsx
+@@ -1,7 +1,7 @@
+ import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, useWindowDimensions } from 'react-native';
+ import { Image } from 'expo-image';
+ import { Sticker, Language, PersonSummary } from '@/lib/types';
+-import { ageInDays } from '@/lib/review';
++import { ageInDays, foundAt } from '@/lib/review';
+ import Avatar from '@/components/Avatar';
+ import { colors, radii, spacing, shadows, fonts } from '@/constants/theme';
+ import { languageLabel } from '@/lib/languages';
+@@ -147,9 +147,9 @@ function FeedCard({ sticker, width, url, author, onPress }: {
+   sticker: Sticker; width: number; url: string | null;
+   author: PersonSummary | null; onPress: () => void;
+ }) {
+-  const discovered = new Date(sticker.discovered_at);
++  const discovered = new Date(foundAt(sticker));
+   const day = discovered.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric' });
+-  const age = ageInDays(sticker.discovered_at);
++  const age = ageInDays(foundAt(sticker));
+ 
+   return (
+     <TouchableOpacity style={[styles.card, { width }]} onPress={onPress} activeOpacity={0.9}>
+diff --git a/components/LatestStickers.tsx b/components/LatestStickers.tsx
+index 3f04add..427f27e 100644
+--- a/components/LatestStickers.tsx
++++ b/components/LatestStickers.tsx
+@@ -5,6 +5,7 @@ import { Sticker } from '@/lib/types';
+ import { timeAgo } from '@/lib/relativeTime';
+ import { useTrimmedVoicePlayback } from '@/hooks/useTrimmedVoicePlayback';
+ import { colors, radii, spacing, shadows, fonts, wordFontFor } from '@/constants/theme';
++import { foundAt } from '@/lib/review';
+ 
+ interface LatestStickersProps {
+   stickers: Sticker[];
+@@ -74,7 +75,7 @@ function Row({ sticker, last, imageUrl, voiceUrl, onPress }: {
+   const { play } = useTrimmedVoicePlayback(
+     voiceUrl, sticker.voice_note_start_ms, sticker.voice_note_end_ms
+   );
+-  const when = timeAgo(sticker.discovered_at);
++  const when = timeAgo(foundAt(sticker));
+   // One helper, in one place — the family a headword needs depends entirely
+   // on which language it is in. See wordFontFor in constants/theme.ts.
+   const wordFont = wordFontFor(sticker.language);
+diff --git a/components/PhotoExtractor.tsx b/components/PhotoExtractor.tsx
+index 08b2191..3a48c5f 100644
+--- a/components/PhotoExtractor.tsx
++++ b/components/PhotoExtractor.tsx
+@@ -30,6 +30,8 @@ interface PhotoExtractorProps {
+   // used only for on-device segmentation (see SEGMENT_CONTEXT_PAD_RATIO).
+   onExtract: (result: ExtractResult) => Promise<void> | void;
+   processing: boolean;
++  /** Stops the in-flight scan; the X does this instead of closing while one runs. */
++  onCancelProcessing?: () => void;
+   /// Which stage the scan is on, once one is running.
+   stage?: ScanStage | null;
+   usingServerCutout?: boolean;
+@@ -159,7 +161,7 @@ export async function renderWholePhotoExtract(
+   };
+ }
+ 
+-export default function PhotoExtractor({ imageUri, imageWidth, imageHeight, onClose, onExtract, processing, stage, usingServerCutout }: PhotoExtractorProps) {
++export default function PhotoExtractor({ imageUri, imageWidth, imageHeight, onClose, onExtract, processing, onCancelProcessing, stage, usingServerCutout }: PhotoExtractorProps) {
+   const [mode, setMode] = useState<ToolMode>('box');
+   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
+   const [cropping, setCropping] = useState(false);
+@@ -349,12 +351,17 @@ export default function PhotoExtractor({ imageUri, imageWidth, imageHeight, onCl
+         <View style={styles.header}>
+           <Text style={styles.headerTitle}>Extract Sticker</Text>
+           <TouchableOpacity
+-            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onClose(); }}
++            onPress={() => {
++              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
++              // While a scan is running the X stops it and leaves the photo
++              // and selection in place; it used to be silently disabled.
++              if (processing) onCancelProcessing?.(); else onClose();
++            }}
+             style={styles.closeButton}
+             hitSlop={8}
+-            disabled={busy}
++            disabled={cropping || (processing && !onCancelProcessing)}
+             accessibilityRole="button"
+-            accessibilityLabel="Close without extracting a sticker"
++            accessibilityLabel={processing ? 'Stop this scan' : 'Close without extracting a sticker'}
+           >
+             <X size={24} color={colors.inkDark} />
+           </TouchableOpacity>
+diff --git a/components/StudyCard.tsx b/components/StudyCard.tsx
+index bb01b71..5c1a7a8 100644
+--- a/components/StudyCard.tsx
++++ b/components/StudyCard.tsx
+@@ -19,7 +19,7 @@ import { speak } from '@/lib/speech';
+ import { useProfile } from '@/hooks/useProfile';
+ import { useSignedUrls } from '@/hooks/useSignedUrls';
+ import { useStickerAuthors } from '@/hooks/useStickerAuthors';
+-import { ageInDays, intervalPreview, schedule, spokenDelay, Grade, SchedulePatch } from '@/lib/review';
++import { ageInDays, foundAt, intervalPreview, schedule, spokenDelay, Grade, SchedulePatch } from '@/lib/review';
+ import { computeTrimOffsets, MeteringSample } from '@/lib/audioTrim';
+ import { useTrimmedVoicePlayback } from '@/hooks/useTrimmedVoicePlayback';
+ import Avatar from '@/components/Avatar';
+@@ -81,16 +81,6 @@ const DRAG_SLOP = 14;
+ // Shorter than this and it's an accidental brush of the mic, not a take.
+ const MIN_RECORDING_MS = 300;
+ 
+-// A stable four-digit label. Deliberately hashed from the id rather than
+-// taken from the sticker's position in the collection: an index would
+-// renumber every card behind one you delete, and a card number that moves
+-// is worse than no card number.
+-function cardNumber(id: string): string {
+-  let h = 0;
+-  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
+-  return String(h % 10000).padStart(4, '0');
+-}
+-
+ function ordinal(n: number): string {
+   const rem100 = n % 100;
+   if (rem100 >= 11 && rem100 <= 13) return `${n}TH`;
+@@ -1008,7 +998,9 @@ function FrontFace({ sticker, authorName, authorAvatarPath, imageUrl, hintShown,
+   hintShown: boolean; onHint: () => void; onEditNote?: () => void;
+   onScroll: (e: NativeSyntheticEvent<NativeScrollEvent>) => void;
+ }) {
+-  const found = new Date(sticker.discovered_at);
++  const found = new Date(foundAt(sticker));
++  // The footer's WHEN is the photo's own moment, which an import backdates.
++  const shot = new Date(sticker.discovered_at);
+   const hint = hintLetter(sticker);
+   const note = sticker.notes?.trim() ?? '';
+   const [frameHeight, setFrameHeight] = useState(0);
+@@ -1031,7 +1023,7 @@ function FrontFace({ sticker, authorName, authorAvatarPath, imageUrl, hintShown,
+           <View style={styles.frontAuthor}>
+             <View style={styles.frontAuthorText}>
+               <Text style={styles.authorName} numberOfLines={1}>{authorName}</Text>
+-              <Text style={styles.dayCount}>DAY {ageInDays(sticker.discovered_at)}</Text>
++              <Text style={styles.dayCount}>DAY {ageInDays(foundAt(sticker))}</Text>
+             </View>
+             <Avatar name={authorName} avatarPath={authorAvatarPath} size={38} />
+           </View>
+@@ -1124,7 +1116,7 @@ function FrontFace({ sticker, authorName, authorAvatarPath, imageUrl, hintShown,
+         <FooterField label="WHERE" value={sticker.location_label ?? 'Not recorded'} />
+         <FooterField
+           label="WHEN"
+-          value={`${found.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: false })}, ${found.toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}`}
++          value={`${shot.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: false })}, ${shot.toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}`}
+           align="right"
+         />
+       </View>
+@@ -1165,7 +1157,7 @@ function BackFace({ sticker, mode, onEditField, imageUrl, voice, onScroll }: {
+     <View style={styles.card}>
+       <View style={styles.cardBody}>
+         <View style={styles.backHead}>
+-          <Text style={styles.backMeta}>CARD {cardNumber(sticker.id)} · {sticker.language.toUpperCase()}</Text>
++          <Text style={styles.backMeta}>{languageLabel(sticker.language).toUpperCase()}</Text>
+           <Text style={styles.backMeta}>{badge}</Text>
+         </View>
+ 
+diff --git a/components/StudySessionHost.tsx b/components/StudySessionHost.tsx
+index 0be0fe7..a1ea46c 100644
+--- a/components/StudySessionHost.tsx
++++ b/components/StudySessionHost.tsx
+@@ -1,4 +1,4 @@
+-import { useEffect, useState } from 'react';
++import { useEffect, useRef, useState } from 'react';
+ import * as Haptics from 'expo-haptics';
+ import { Sticker } from '@/lib/types';
+ import { dueAtMs, Grade, LEARN_AHEAD_MIN, SchedulePatch } from '@/lib/review';
+@@ -28,6 +28,10 @@ export default function StudySessionHost({ queue, onExit, onUpdate, onDeleted }:
+   const [cards, setCards] = useState<Sticker[] | null>(null);
+   const [index, setIndex] = useState(0);
+   const [stats, setStats] = useState<{ graded: number; again: number } | null>(null);
++  // Counted per card, not per answer: a card that comes round again in the
++  // same sitting is still one card, and "2 cards reviewed" for one card read
++  // as a miscount.
++  const seen = useRef({ graded: new Set<string>(), again: new Set<string>() });
+ 
+   // A new queue starts a session; null ends one. The summary is kept alive
+   // after `cards` clears so the wind-down survives the queue emptying.
+@@ -36,16 +40,16 @@ export default function StudySessionHost({ queue, onExit, onUpdate, onDeleted }:
+     setCards(queue);
+     setIndex(0);
+     setStats({ graded: 0, again: 0 });
++    seen.current = { graded: new Set(), again: new Set() };
+   }, [queue]);
+ 
+   const current = cards?.[index] ?? null;
+ 
+   const handleGraded = (grade: Grade, patch: SchedulePatch) => {
+     if (!cards || !current) return;
+-    setStats(prev => ({
+-      graded: (prev?.graded ?? 0) + 1,
+-      again: (prev?.again ?? 0) + (grade === 'again' ? 1 : 0),
+-    }));
++    seen.current.graded.add(current.id);
++    if (grade === 'again') seen.current.again.add(current.id);
++    setStats({ graded: seen.current.graded.size, again: seen.current.again.size });
+ 
+     // The graded card carries its new schedule forward, because it may well
+     // be answered again before this session ends — and a second answer read
+diff --git a/constants/tabBar.ts b/constants/tabBar.ts
+index 2f0d7da..4c4bb8d 100644
+--- a/constants/tabBar.ts
++++ b/constants/tabBar.ts
+@@ -1,4 +1,5 @@
+ import { spacing } from './theme';
++import { SOCIAL_ENABLED } from '@/lib/features';
+ 
+ // Floating pill tab bar dimensions — shared between the tab layout (which
+ // positions the pill) and every tab screen (which needs to pad its own
+@@ -13,7 +14,8 @@ export const TAB_BAR_BOTTOM_MARGIN = spacing.sm;
+ // render time (see _layout.tsx), not pinned to fixed side margins.
+ export const TAB_BAR_ITEM_WIDTH = 62;
+ export const TAB_BAR_SCAN_ITEM_WIDTH = 74;
+-export const TAB_BAR_WIDTH = TAB_BAR_ITEM_WIDTH * 4 + TAB_BAR_SCAN_ITEM_WIDTH;
++// Four regular tabs, or three while Friends is switched off (lib/features).
++export const TAB_BAR_WIDTH = TAB_BAR_ITEM_WIDTH * (SOCIAL_ENABLED ? 4 : 3) + TAB_BAR_SCAN_ITEM_WIDTH;
+ // Total clearance a screen's bottom-most content needs to reserve: the
+ // pill's own height and margin, plus a little breathing room above it.
+ export const TAB_BAR_CLEARANCE = TAB_BAR_HEIGHT + TAB_BAR_BOTTOM_MARGIN + spacing.sm;
+diff --git a/hooks/useUsernameAvailability.ts b/hooks/useUsernameAvailability.ts
+index e7714dc..2fc06a2 100644
+--- a/hooks/useUsernameAvailability.ts
++++ b/hooks/useUsernameAvailability.ts
+@@ -1,29 +1,40 @@
+ import { useEffect, useState } from 'react';
+ import { supabase } from '@/lib/supabase';
+ 
+-export type UsernameAvailability = 'idle' | 'checking' | 'available' | 'taken';
++export type UsernameAvailability = 'idle' | 'invalid' | 'checking' | 'available' | 'taken';
++
++// Letters, digits, underscore and dot. Spaces and punctuation used to pass,
++// and a name like "a b!c" can't be typed into friend search to be found.
++export const USERNAME_SHAPE = /^[A-Za-z0-9_.]{3,20}$/;
++export const USERNAME_RULE = '3–20 letters, numbers, _ or .';
+ 
+ export function useUsernameAvailability(username: string): UsernameAvailability {
+   const [status, setStatus] = useState<UsernameAvailability>('idle');
+ 
+   useEffect(() => {
+     const trimmed = username.trim();
+-    if (trimmed.length < 3) {
++    if (trimmed.length === 0) {
+       setStatus('idle');
+       return;
+     }
++    if (!USERNAME_SHAPE.test(trimmed)) {
++      setStatus('invalid');
++      return;
++    }
+ 
+     setStatus('checking');
++    let current = true;
+     const handle = setTimeout(async () => {
+-      const { data } = await supabase
+-        .from('profiles')
+-        .select('id')
+-        .ilike('username', trimmed)
+-        .maybeSingle();
+-      setStatus(data ? 'taken' : 'available');
++      // An RPC, not a profiles query: sign-up is signed out and profiles are
++      // readable only when signed in (044).
++      const { data, error } = await supabase.rpc('username_available', { q: trimmed });
++      if (!current) return;
++      // On error say nothing rather than a false "available"; the server's
++      // unique constraint still has the last word on submit.
++      setStatus(error ? 'idle' : data ? 'available' : 'taken');
+     }, 400);
+ 
+-    return () => clearTimeout(handle);
++    return () => { current = false; clearTimeout(handle); };
+   }, [username]);
+ 
+   return status;
+diff --git a/lib/features.ts b/lib/features.ts
+new file mode 100644
+index 0000000..a588e62
+--- /dev/null
++++ b/lib/features.ts
+@@ -0,0 +1,7 @@
++// Friends, challenges and everything that lets one user reach another.
++// Off for the first App Store release: with a new user base there is almost
++// nobody to befriend, and shipping it brings Guideline 1.2 (user-generated
++// content) and a moderation duty with no inbox behind content_reports yet.
++// The code, tables and policies all stay; flipping this back on restores the
++// Friends tab and the Profile safety rows.
++export const SOCIAL_ENABLED = false;
+diff --git a/lib/review.ts b/lib/review.ts
+index 6036701..5c59433 100644
+--- a/lib/review.ts
++++ b/lib/review.ts
+@@ -131,9 +131,22 @@ export function ageInDays(dateStr: string, now: number = Date.now()): number {
+   return Math.max(0, Math.round((startOfDay(now) - startOfDay(then)) / 86_400_000));
+ }
+ 
+-/** Stickers discovered today — the numerator of the header's "N found today". */
++/**
++ * When a card entered your collection — the clock for everything about
++ * *activity*: "found today", the feeds, the calendar, a new card's first due
++ * date. Not `discovered_at`, which an imported photo backdates to the day it
++ * was shot: a card made today from a 2018 photo was counted as a 2018 find,
++ * missing from today, and due (years overdue) the moment it was made.
++ * `discovered_at` stays the photo's own date, shown where the card describes
++ * the photo (WHEN / SHOT AT).
++ */
++export function foundAt(sticker: Pick<Sticker, 'created_at' | 'discovered_at'>): string {
++  return sticker.created_at ?? sticker.discovered_at;
++}
++
++/** Cards added today — the numerator of the header's "N found today". */
+ export function findsToday(stickers: Sticker[], now: number = Date.now()): number {
+-  return stickers.filter(s => ageInDays(s.discovered_at, now) === 0).length;
++  return stickers.filter(s => ageInDays(foundAt(s), now) === 0).length;
+ }
+ 
+ // ---------------------------------------------------------------------------
+@@ -375,7 +388,7 @@ export function dueAtMs(sticker: Sticker): number {
+     if (!Number.isNaN(at)) return at;
+   }
+   const studied = !!sticker.last_reviewed_at;
+-  const clockStart = studied ? sticker.last_reviewed_at! : sticker.discovered_at;
++  const clockStart = studied ? sticker.last_reviewed_at! : foundAt(sticker);
+   const interval = studied ? (sticker.interval_days ?? 0) : NEW_CARD_REST_DAYS;
+   const from = new Date(clockStart).getTime();
+   return midnightIn(Number.isNaN(from) ? Date.now() : from, interval);
+@@ -519,7 +532,7 @@ export function weekActivity(
+   const reviews = new Array<number>(days).fill(0);
+   for (const sticker of stickers) {
+     if (opts.language && sticker.language !== opts.language) continue;
+-    const foundSlot = slotOf.get(dateKeyOf(new Date(sticker.discovered_at)));
++    const foundSlot = slotOf.get(dateKeyOf(new Date(foundAt(sticker))));
+     if (foundSlot !== undefined) finds[foundSlot] += 1;
+     if (sticker.last_reviewed_at) {
+       const reviewSlot = slotOf.get(dateKeyOf(new Date(sticker.last_reviewed_at)));
+@@ -539,7 +552,7 @@ export function weekActivity(
+ /**
+  * Local-time date key, `YYYY-MM-DD`. Local rather than UTC so a card due late
+  * in the evening isn't bucketed into tomorrow — the same reasoning the
+- * calendar screen uses for `discovered_at`.
++ * calendar screen uses for `foundAt`.
+  */
+ export function dateKeyOf(date: Date): string {
+   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+diff --git a/lib/validation.ts b/lib/validation.ts
+new file mode 100644
+index 0000000..b35b3c9
+--- /dev/null
++++ b/lib/validation.ts
+@@ -0,0 +1,3 @@
++// Deliberately loose — only catches what is plainly not an address, so a
++// typo gets a useful message instead of a server error or a silent no-op.
++export const EMAIL_SHAPE = /^\S+@\S+\.\S+$/;
+diff --git a/supabase/migrations/044_username_available.sql b/supabase/migrations/044_username_available.sql
+new file mode 100644
+index 0000000..1c21258
+--- /dev/null
++++ b/supabase/migrations/044_username_available.sql
+@@ -0,0 +1,30 @@
++-- 044: let sign-up ask whether a username is free.
++--
++-- Sign-up runs signed out, and 033 scoped `profiles` SELECT to
++-- `authenticated`, so the client's availability check (a direct
++-- `profiles.ilike(username)`) has returned [] for every name since — the form
++-- said "Username available" for names that were taken, and the clash only
++-- surfaced as an error after submitting. Verified 2026-10-31: anon lookup of
++-- an existing username returns [].
++--
++-- A yes/no answer and nothing else: no id, no profile row, no prefix search
++-- (that stays search_profiles, authenticated only). Case-insensitive, matching
++-- how the client compares.
++
++CREATE OR REPLACE FUNCTION public.username_available(q TEXT)
++RETURNS BOOLEAN
++LANGUAGE sql
++STABLE
++SECURITY DEFINER
++SET search_path = public
++AS $$
++  SELECT NOT EXISTS (
++    SELECT 1 FROM public.profiles WHERE lower(username) = lower(trim(q))
++  );
++$$;
++
++-- Supabase's default privileges grant EXECUTE to anon/authenticated by name,
++-- so revoking PUBLIC alone changes nothing (see 035); grant explicitly to the
++-- two roles that need it.
++REVOKE ALL ON FUNCTION public.username_available(TEXT) FROM PUBLIC;
++GRANT EXECUTE ON FUNCTION public.username_available(TEXT) TO anon, authenticated;

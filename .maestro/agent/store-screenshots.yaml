@@ -1,0 +1,176 @@
+# App Store capture on the 6.9-inch Simulator (iPhone 18 Pro Max, 1320x2868),
+# DEMO account only (credentials from .maestro/demo.env, never qa.env).
+# No AI calls here: the scene shot is in store-screenshots-scene.yaml.
+# Hard rules: never grade, edit, add or delete a card. Flipping and closing are fine.
+# Sign-in is inlined: .maestro/sign-in.yaml taps "Password" with the keyboard up,
+# which types the 'g' key into Email.
+appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
+---
+- launchApp:
+    clearState: true
+- openLink: "exp+lingostickers-mobile://expo-development-client/?url=http%3A%2F%2Flocalhost%3A${METRO_PORT}"
+- tapOn:
+    text: "Open"
+    optional: true
+- extendedWaitUntil:
+    visible: "WELCOME BACK"
+    timeout: 60000
+# The dev client can reload once after launch ("Refreshing..." banner), which
+# resets the auth screen to Create Account. Let that settle before typing.
+- waitForAnimationToEnd:
+    timeout: 6000
+- extendedWaitUntil:
+    visible: "WELCOME BACK"
+    timeout: 20000
+# Positional taps on the 6.9-inch layout (text taps landed on the wrong
+# element there): Email field, Password field, Sign In button.
+- tapOn:
+    point: "50%,73%"
+- waitForAnimationToEnd:
+    timeout: 1500
+- inputText: ${MAESTRO_EMAIL}
+- tapOn:
+    text: "WELCOME BACK"
+- waitForAnimationToEnd:
+    timeout: 1000
+- tapOn:
+    point: "50%,79%"
+- waitForAnimationToEnd:
+    timeout: 1500
+- inputText: ${MAESTRO_PASSWORD}
+- tapOn:
+    text: "WELCOME BACK"
+- tapOn:
+    point: "50%,88%"
+- tapOn:
+    text: "Not Now"
+    optional: true
+- tapOn:
+    text: "Allow"
+    optional: true
+- tapOn:
+    text: "Don't Allow"
+    optional: true
+- extendedWaitUntil:
+    visible: "FOUND"
+    timeout: 30000
+# First load after sign-in sometimes fails ("Couldn't load your collection"
+# and an empty "All caught up" home). Retry once if so; the data is intact.
+- waitForAnimationToEnd:
+    timeout: 3000
+- tapOn:
+    text: "Try loading your collection again"
+    optional: true
+- extendedWaitUntil:
+    visible: "Start reviewing.*"
+    timeout: 30000
+
+# ss1: a card from Collection, flipped to its back (word + sentence).
+- tapOn: "Le croissant.*"
+- extendedWaitUntil:
+    visible: "What did you call this\\?"
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 1000
+# Flipping a card to its back writes nothing.
+- tapOn: "What did you call this\\?"
+- waitForAnimationToEnd:
+    timeout: 2000
+- takeScreenshot: ss1-card
+
+# Close without grading.
+- tapOn: "Close this card"
+- waitForAnimationToEnd:
+    timeout: 1500
+
+# ss3: review session, back of the card with the four intervals. No grade.
+- tapOn: "Start reviewing.*"
+- extendedWaitUntil:
+    visible: "Tap to reveal.*"
+    timeout: 15000
+- tapOn:
+    text: "What did you call this\\?"
+    optional: true
+- tapOn:
+    text: "How do you say.*\\?"
+    optional: true
+- extendedWaitUntil:
+    visible: "Again — next review in.*"
+    timeout: 10000
+- waitForAnimationToEnd:
+    timeout: 1500
+- takeScreenshot: ss3-review
+- tapOn: "Close this card"
+- waitForAnimationToEnd:
+    timeout: 2000
+
+# ss4: Collection grid, scrolled so the sticker grid is the focus.
+- scrollUntilVisible:
+    element: "Sort: .*"
+    direction: DOWN
+    timeout: 30000
+# Push the sticker grid up so its cards fill the screen above the tab bar.
+- swipe:
+    start: "50%,80%"
+    end: "50%,35%"
+- swipe:
+    start: "50%,80%"
+    end: "50%,35%"
+- waitForAnimationToEnd:
+    timeout: 2000
+- takeScreenshot: ss4-collection
+
+# ss5: Calendar on October 2026 (the demo finds are dated 31 Oct).
+- tapOn: "Calendar"
+- extendedWaitUntil:
+    visible: "Next month"
+    timeout: 15000
+# Page back until October 2026 is showing, so the flow does not depend on the
+# month it is run in (one tap was only right in November 2026).
+- repeat:
+    while:
+      notVisible: "OCTOBER 2026"
+    times: 24
+    commands:
+      - tapOn: "Previous month"
+      - waitForAnimationToEnd:
+          timeout: 1000
+- extendedWaitUntil:
+    visible: "OCTOBER 2026"
+    timeout: 10000
+- waitForAnimationToEnd:
+    timeout: 2000
+- takeScreenshot: ss5-calendar
+
+# ss6: home (the Collection tab, scrolled back to the top) with the due count.
+- tapOn: "Collection"
+- waitForAnimationToEnd:
+    timeout: 1500
+# The tab comes back scrolled down; the header is only in the tree at the top.
+- scrollUntilVisible:
+    element: "Start reviewing.*"
+    direction: UP
+    timeout: 30000
+- waitForAnimationToEnd:
+    timeout: 2000
+- takeScreenshot: ss6-home
+
+# Sign out (same steps as reviewer-demo-look.yaml, from the home top).
+- tapOn: "Open your profile and settings"
+- extendedWaitUntil:
+    visible: "My Profile"
+    timeout: 15000
+- scrollUntilVisible:
+    element: "Log Out"
+    direction: DOWN
+    timeout: 30000
+- tapOn: "Log Out"
+- extendedWaitUntil:
+    visible: "Are you sure you want to log out.*"
+    timeout: 10000
+- tapOn:
+    text: "Log Out"
+    index: 1
+- extendedWaitUntil:
+    visible: "WELCOME BACK"
+    timeout: 20000

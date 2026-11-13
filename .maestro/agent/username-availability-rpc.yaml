@@ -2,7 +2,7 @@
 # signed-out user can't read: an existing name ("maestro_qa", the QA account's
 # own) must show "Username taken", never "Username available". The form is never
 # submitted: no real sign-up.
-appId: com.iancheung228.lingostickers
+appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
 ---
 - launchApp:
     clearState: true

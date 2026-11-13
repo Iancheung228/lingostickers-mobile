@@ -2,7 +2,7 @@
 # selected state, and the one matching the account's language reports selected: true.
 # The crop screen title reads "Crop your sticker" (its button keeps "Extract Sticker").
 # Stops on the crop screen: never taps Extract Sticker, so no AI call is made.
-appId: com.iancheung228.lingostickers
+appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
 ---
 - runFlow: ../sign-in.yaml
 

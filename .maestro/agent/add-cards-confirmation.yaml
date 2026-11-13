@@ -1,7 +1,7 @@
 # Add-cards confirmation: after "Add N cards" in the discovery reveal, the scan screen
 # shows a toast "N cards added" with a "View" action that opens the Collection tab.
 # Uses one scan (extract) plus one scene question ("What's happening?") to get a chip.
-appId: com.iancheung228.lingostickers
+appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
 ---
 - runFlow: ../sign-in.yaml
 
