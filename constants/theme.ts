@@ -1,5 +1,3 @@
-import { Platform } from 'react-native';
-
 // Dusty-rose / warm-cream palette (blush redesign, Aug 2026). Every hex
 // below is sampled from the reference mockup, so the token *names* are the
 // ones the whole app already imports — only their values moved. That's
@@ -18,7 +16,9 @@ export const colors = {
   // Brand / interactive
   terra:      '#9D4D51', // deep rose — primary CTA (white text sits on this)
   terraDark:  '#833F46', // pressed state
-  terraLight: '#F2DCDC', // disabled / muted CTA
+  terraLight: '#F2DCDC', // disabled / muted CTA, secondary-button fill (terraTint)
+  terraTintPressed: '#EBCFCF', // pressed secondary
+  sand2:      '#EFE3CC', // skeleton pulse peak, pressed sand
   sage:       '#D9B87C', // warm sand — badges, accents
   sageDark:   '#A9803E',
   sageLight:  '#F6EEDD',
@@ -28,8 +28,8 @@ export const colors = {
   // so long paragraphs don't read as tinted.
   inkDark:    '#833F46', // rose-brown — headings
   inkMid:     '#4A4340', // warm charcoal — body text
-  inkLight:   '#A98A8C', // muted rose — captions
-  inkFaint:   '#C4A9AB', // placeholder, disabled
+  inkLight:   '#7E5559', // muted rose — captions, placeholders (5.76 on cream, 6.30 on white)
+  inkFaint:   '#C4A9AB', // disabled and decoration ONLY — never text (2.0:1)
 
   // Journal / minimal-calendar redesign — neutral warm-black text + the
   // single accent, which is now the same deep rose as the rest of the app.
@@ -54,20 +54,29 @@ export const colors = {
   treeTrunk:  '#8B6040',
   skyBlue:    '#DCE6EC', // cool accent — the one non-rose sticker tint
 
-  // Semantic. The *Deep* pair are darkened from their base for the one job
+  // Semantic (contrast-fixed, C-look 1). The *Deep* pair are darkened from their base for the one job
   // the base can't do: carrying white text at body size. White on #C4565B is
   // ~3.9:1 and on #6E9E72 ~3.1:1, both short of WCAG AA's 4.5 for text under
   // 18.66pt bold — these clear it. Use the base for borders and icons, the
   // Deep one whenever white sits on top (the study card's grading row).
-  error:      '#C4565B',
+  error:      '#A8434A', // was #C4565B; text-safe (4.7 to 5.9)
   errorLight: '#F7E0E1',
   errorDeep:  '#A8434A',
-  success:    '#6E9E72',
+  success:    '#3F6E46', // was #6E9E72; text-safe, and the Good fill (white on it 5.95)
   successLight: '#E2EFE3',
-  successDeep:  '#4C7A52',
+  successDeep:  '#3F6E46',
+  gold:       '#7A5A1E', // Hard text, warnings (5.18)
+  goldTint:   '#F5E7C6',
+  againTint:  '#F6E3E1', // Again fill, 'Due' tag
+  errorPressed: '#EFCFD0', // pressed destructive
 
   // Utility
-  border:     '#EADFD6',
+  border:     '#EADFD6', // decorative edges only (1.2:1); controls use ctl
+  ctl:        '#957579', // input, chip, secondary-outline borders (3.76 on cream, 4.12 on white)
+  divider:    '#F0E6DC', // row dividers inside cards
+  scrim:      'rgba(51, 41, 42, 0.42)', // sheet and modal backdrop
+  grabber:    '#E3D3C8',
+  errorOnDark: '#F2A5A8', // error icon on the charcoal toast (7.2)
   borderLight:'#F4EBE2',
   white:      '#FFFFFF',
   black:      '#000000',
@@ -109,51 +118,35 @@ export const fonts = {
 };
 
 // ---------------------------------------------------------------------------
-// The face a headword is set in, which depends on the language it is in.
+// The face target-language text (headwords, example sentences) is set in.
 //
-// There used to be one `fonts.jp` — Kosugi Maru — applied to every headword in
-// every language. Kosugi Maru is a *Japanese* font: 7,525 codepoints, and
-// parsing its cmap directly says it covers 0 of 19 common French accented
-// characters and is missing 哋嘅咗嚟啲喺冇 (the particles that make written
-// Cantonese Cantonese) along with 咖啡 and 貓. Japanese was 15/15, which is why
-// this went unnoticed — and French is the DEFAULT language for a new account,
-// so the default experience was a headword rendered half in the Latin serif
-// and half
-// in whatever the OS substituted per missing glyph.
+// One matched handwritten family across all three languages, so the learner's
+// language reads as "yours" against the Newsreader interface: Klee One
+// SemiBold for French and Japanese, Iansui for Cantonese. Iansui is Klee One
+// extended for Traditional Chinese, so the two sit together.
 //
-// Bundling real CJK instead is not the answer: a single Noto Sans HK weight is
-// ~8 MB against ~116 KB for a Latin one. The system already ships both faces,
-// correctly hinted, so name them and delete the 3.57 MB download.
+// Coverage was measured with fontTools, and it is why yue must never fall back
+// to Klee One: Klee One has all 21 French and 26 Japanese test characters but
+// only 4 of 27 Cantonese-only ones (嘅咗佢冇啲嚟...). Iansui has 27/27. Each
+// language keeps its own glyph shapes (Japanese kanji from the Japanese font,
+// Cantonese from the Chinese one). Bundled on every platform, so there is no
+// Platform check and no system-face lookup. Cost: about 15 MB of fonts.
 //
-//   fr  → Newsreader, verified 34/34 on the French accent set by parsing
-//         its cmap directly
-//   ja  → Hiragino Sans, the iOS system Japanese face
-//   yue → PingFang HK, which matters beyond coverage: it carries Hong Kong
-//         glyph forms rather than the mainland or Japanese variants of the
-//         same codepoints, so 骨 and 直 look the way a Hong Kong reader
-//         expects them to.
-//
-// Android returns undefined on purpose. There is no PingFang there, and naming
-// a font the platform does not have gets you the default face with no CJK
-// fallback at all — whereas letting it choose gets Noto CJK, which ships with
-// the OS. Undefined is the better answer, not the absent one.
-function cjkFaceFor(language: string): string | undefined {
-  if (Platform.OS !== 'ios') return undefined;
-  return language === 'yue' ? 'PingFang HK' : 'Hiragino Sans';
+// Romanisation (jyutping, furigana, IPA) is not target-language prose and
+// stays in the UI roles above.
+export const learningFonts = {
+  klee:    'KleeOne_600SemiBold', // fr, ja
+  iansui:  'Iansui_400Regular',   // yue (single weight)
+};
+
+/** The headword: Iansui for Cantonese, Klee One for French and Japanese. */
+export function wordFontFor(language: string): string {
+  return language === 'yue' ? learningFonts.iansui : learningFonts.klee;
 }
 
-/** The headword: the display cut for Latin, the system face for CJK. */
-export function wordFontFor(language: string): string | undefined {
-  return language === 'fr' ? fonts.display : cjkFaceFor(language);
-}
-
-/**
- * Target-language *sentences*, which want the text cut rather than the
- * display one — a 19px sentence is reading, not a headline. Same system face
- * as the headword for CJK, which have no separate text cut to switch to.
- */
-export function sentenceFontFor(language: string): string | undefined {
-  return language === 'fr' ? fonts.text : cjkFaceFor(language);
+/** Target-language sentences: the same matched face as the headword. */
+export function sentenceFontFor(language: string): string {
+  return wordFontFor(language);
 }
 
 // The scale. Note there is no `fontWeight` anywhere below, and there should
@@ -169,50 +162,57 @@ export const typography = {
   body:     { fontSize: 15, fontFamily: fonts.text, color: colors.inkMid, lineHeight: 22 },
   bodyBold: { fontSize: 15, fontFamily: fonts.display, color: colors.inkMid },
   caption:  { fontSize: 12, fontFamily: fonts.text, color: colors.inkLight },
-  tiny:     { fontSize: 10, fontFamily: fonts.mono, color: colors.inkFaint },
+  tiny:     { fontSize: 12, fontFamily: fonts.mono, color: colors.inkLight }, // min size 12; faint is not a text colour
   label:    { fontSize: 13, fontFamily: fonts.monoBold, color: colors.inkMid, letterSpacing: 0.3 },
 };
 
+// Two rose-tinted elevation steps (C-look 1). Cards have no border; they sit on
+// cream with e1. e2 is for things that float: tab pill, due pill, sheets, toast.
+export const e1 = {
+  shadowColor: '#833F46',
+  shadowOpacity: 0.09,
+  shadowRadius: 12,
+  shadowOffset: { width: 0, height: 4 },
+  elevation: 3,
+};
+export const e2 = {
+  shadowColor: '#662B31',
+  shadowOpacity: 0.20,
+  shadowRadius: 24,
+  shadowOffset: { width: 0, height: 10 },
+  elevation: 8,
+};
+/** Soft contact shadow under a cutout, on a sand well or the cream page. */
+export const stickerShadow = {
+  shadowColor: '#662B31',
+  shadowOpacity: 0.22,
+  shadowRadius: 6,
+  shadowOffset: { width: 0, height: 3 },
+};
+
+// Legacy names, now aliases of the two steps so every screen picks them up.
 export const shadows = {
-  card: {
-    shadowColor: colors.inkDark,
-    shadowOpacity: 0.10,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 4,
-  },
-  cardWarm: {
-    shadowColor: colors.terra,
-    shadowOpacity: 0.18,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 3,
-  },
-  button: {
-    shadowColor: colors.terraDark,
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 5,
-  },
-  tab: {
-    shadowColor: colors.inkDark,
-    shadowOpacity: 0.08,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: -4 },
-    elevation: 8,
-  },
+  card: e1,
+  cardWarm: e1,
+  button: e2,
+  tab: e2,
 };
 
 export const radii = {
   xs:  6,
   sm:  10,
   md:  16,
-  lg:  22,
+  lg:  24, // study card, big cards, sheet tops
   xl:  30,
   full: 999,
 };
 
+// C-look scale: 4, 8, 12, 16, 20, 24, 32, 48.
+export const space = { 1: 4, 2: 8, 3: 12, 4: 16, 5: 20, 6: 24, 7: 32, 8: 48 } as const;
+/** Screen gutter. */
+export const GUTTER = 20;
+
+// Legacy names, kept so existing screens keep working.
 export const spacing = {
   xs:  4,
   sm:  8,
@@ -230,3 +230,38 @@ export const chipBase = {
   borderRadius: radii.full,
   borderWidth: 1.5,
 };
+
+// ---------------------------------------------------------------------------
+// The role scale (C-look 2): eight sizes, 40 30 22 17 16 14 13 12. Spread a
+// role into a style and pass `maxFontSizeMultiplier` to <Text>; use <T/> style
+// helpers in later phases. `headword` is a function because its face depends on
+// the language. Mono is for numerals, IPA and romanisation, plus at most one
+// uppercase overline per screen.
+export const type = {
+  headword: { fontSize: 40, lineHeight: 46, letterSpacing: -0.4, color: colors.inkDark, maxFontSizeMultiplier: 1.3 },
+  title:    { fontSize: 30, lineHeight: 34, letterSpacing: -0.6, fontFamily: fonts.display, color: colors.inkDark, maxFontSizeMultiplier: 1.3 },
+  h2:       { fontSize: 22, lineHeight: 28, fontFamily: fonts.display, color: colors.inkDark, maxFontSizeMultiplier: 1.5 },
+  button:   { fontSize: 17, lineHeight: 22, fontFamily: fonts.display, color: colors.inkDark, maxFontSizeMultiplier: 1.5 },
+  body:     { fontSize: 16, lineHeight: 24, fontFamily: fonts.text, color: colors.inkMid, maxFontSizeMultiplier: 2.0 },
+  small:    { fontSize: 14, lineHeight: 20, fontFamily: fonts.text, color: colors.inkLight, maxFontSizeMultiplier: 2.0 },
+  data:     { fontSize: 13, lineHeight: 16, fontFamily: fonts.mono, color: colors.inkMid, maxFontSizeMultiplier: 1.3 },
+  micro:    { fontSize: 12, lineHeight: 16, fontFamily: fonts.display, color: colors.inkLight, maxFontSizeMultiplier: 1.15 },
+  overline: { fontSize: 12, lineHeight: 16, fontFamily: fonts.mono, color: colors.inkLight, letterSpacing: 0.96, textTransform: 'uppercase' as const, maxFontSizeMultiplier: 1.15 },
+} as const;
+
+/** Headword style for a language: learning face, +2 line-height for CJK (Iansui sits low and wide). */
+export function headwordStyle(language: string, size = 40) {
+  const cjk = language !== 'fr';
+  return {
+    fontFamily: wordFontFor(language),
+    fontSize: size,
+    lineHeight: Math.round(size * 1.15) + (cjk ? 2 : 0),
+    letterSpacing: -0.4,
+    color: colors.inkDark,
+  };
+}
+
+// Motion constants live in lib/motion.ts; the press scale lives here so
+// primitives and screens agree.
+export const PRESS_SCALE = 0.98;
+export const MIN_TAP = 44;

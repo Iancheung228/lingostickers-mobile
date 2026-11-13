@@ -29,7 +29,7 @@ export default function Toast({ message, actionLabel, onAction, onDismiss, durat
             onPress={onAction}
             testID="toast-action"
             accessibilityRole="button"
-            hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
+            style={{ minHeight: 44, justifyContent: 'center' }}
           >
             <Text style={styles.action}>{actionLabel}</Text>
           </TouchableOpacity>
@@ -52,5 +52,5 @@ const styles = StyleSheet.create({
     ...shadows.card,
   },
   message: { fontFamily: fonts.text, fontSize: 16, color: colors.card },
-  action: { fontFamily: fonts.display, fontSize: 16, color: colors.terraLight },
+  action: { fontFamily: fonts.display, fontSize: 16, color: colors.blush },
 });

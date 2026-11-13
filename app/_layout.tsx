@@ -15,6 +15,8 @@ import { Newsreader_400Regular } from '@expo-google-fonts/newsreader/400Regular'
 import { Newsreader_500Medium } from '@expo-google-fonts/newsreader/500Medium';
 import { JetBrainsMono_500Medium } from '@expo-google-fonts/jetbrains-mono/500Medium';
 import { JetBrainsMono_700Bold } from '@expo-google-fonts/jetbrains-mono/700Bold';
+import { KleeOne_600SemiBold } from '@expo-google-fonts/klee-one/600SemiBold';
+import { Iansui_400Regular } from '@expo-google-fonts/iansui/400Regular';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { StatusBar } from 'expo-status-bar';
 import * as Notifications from 'expo-notifications';
@@ -26,6 +28,7 @@ import { configureNotificationHandler, syncPushToken } from '@/lib/notifications
 import { handleAuthDeepLink } from '@/lib/deepLinks';
 import { flushPendingAvatar } from '@/lib/pendingAvatar';
 import { initAnalytics, trackEvent } from '@/lib/analytics';
+import { ToastProvider } from '@/components/ToastProvider';
 import { SOCIAL_ENABLED } from '@/lib/features';
 import { colors, fonts as themeFonts, radii, spacing, typography } from '@/constants/theme';
 
@@ -67,6 +70,8 @@ function RootLayout() {
     Newsreader_500Medium,
     JetBrainsMono_500Medium,
     JetBrainsMono_700Bold,
+    KleeOne_600SemiBold,
+    Iansui_400Regular,
   });
 
   useEffect(() => {
@@ -244,7 +249,9 @@ export default function Root() {
         <ProfileProvider>
           <FriendsProvider>
           <ChallengesProvider>
-            <RootLayout />
+            <ToastProvider>
+              <RootLayout />
+            </ToastProvider>
           </ChallengesProvider>
           </FriendsProvider>
         </ProfileProvider>
