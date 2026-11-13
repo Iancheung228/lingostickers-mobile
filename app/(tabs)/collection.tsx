@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, useRef } from 'react';
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import {
   View, Text, TextInput, FlatList, StyleSheet, TouchableOpacity,
   RefreshControl, ScrollView, ActivityIndicator, Modal, Pressable,
@@ -8,6 +8,7 @@ import { useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Heart, ArrowUpDown, Check, Search, X } from 'lucide-react-native';
 import { useAuth } from '@/hooks/useAuth';
+import { useDueCount } from '@/hooks/useDueCount';
 import { useProfile } from '@/hooks/useProfile';
 import { supabase } from '@/lib/supabase';
 import { Sticker, Category, Language } from '@/lib/types';
@@ -21,7 +22,7 @@ import MiniStickerWall from '@/components/MiniStickerWall';
 import HomeHeader from '@/components/HomeHeader';
 import FeedRail from '@/components/FeedRail';
 import LatestStickers, { MAX_ROWS as LATEST_FEED_ROWS } from '@/components/LatestStickers';
-import { DAILY_GOAL, FEED_PREVIEW, dueAtMs, dueToday, findsToday, formatInterval, formatMinutes, reviewMinutes } from '@/lib/review';
+import { FEED_PREVIEW, dueToday, reviewMinutes } from '@/lib/review';
 import StudySessionHost from '@/components/StudySessionHost';
 import { colors, shadows, radii, spacing, typography, fonts } from '@/constants/theme';
 import { TAB_BAR_CLEARANCE } from '@/constants/tabBar';
@@ -170,19 +171,6 @@ export default function CollectionScreen() {
     () => dueToday(stickers, { language: langFilter ?? undefined }),
     [stickers, langFilter]
   );
-  // When nothing is due, the soonest card's wait in the scheduler's compact
-  // scale (minutes/hours under a day, days beyond). null = nothing scheduled.
-  const nextDue = useMemo(() => {
-    if (due.length > 0) return null;
-    const now = Date.now();
-    const times = stickers
-      .filter(s => !langFilter || s.language === langFilter)
-      .map(dueAtMs)
-      .filter(t => t > now);
-    if (times.length === 0) return null;
-    const minutes = (Math.min(...times) - now) / 60_000;
-    return minutes < 1440 ? formatMinutes(Math.max(1, minutes)) : formatInterval(Math.round(minutes / 1440));
-  }, [stickers, langFilter, due.length]);
   // The rail is a feed of recent finds, NOT a preview of the review queue.
   // Deliberately built from the whole collection rather than from `due`: a
   // card scanned a minute ago is the newest thing you have and is correctly
@@ -203,7 +191,9 @@ export default function CollectionScreen() {
     () => Array.from(new Set(stickers.map(s => s.language))),
     [stickers]
   );
-  const foundToday = useMemo(() => findsToday(stickers), [stickers]);
+  // The tab bar's badge reads the same queue the pill does (hooks/useDueCount).
+  const { setDueCount } = useDueCount();
+  useEffect(() => { setDueCount(due.length); }, [due.length, setDueCount]);
 
   // Two-tier signing: a small, fast batch for the images the grid/story list
   // actually renders first (comfortably covers the FlatList's initial
@@ -262,13 +252,9 @@ export default function CollectionScreen() {
       {!hideFeatured && (
         <>
         <HomeHeader
-          foundToday={foundToday}
-          goal={DAILY_GOAL}
           dueCount={due.length}
           reviewMinutes={reviewMinutes(due.length)}
-          nextDue={nextDue}
           onStartReview={startReview}
-          onSearch={openSearch}
         />
 
         {/* ── Mini sticker wall preview, lifted into the rose band above ── */}
@@ -337,6 +323,17 @@ export default function CollectionScreen() {
           </ScrollView>
         )}
         <View style={styles.iconCluster}>
+          {/* Search lives here until R4's toolbar; the band holds only the title and the due pill. */}
+          <TouchableOpacity
+            testID="home-search"
+            style={styles.iconBtnSmall}
+            onPress={openSearch}
+            accessibilityRole="button"
+            accessibilityLabel="Search your collection"
+            hitSlop={8}
+          >
+            <Search size={14} color={colors.inkMid} />
+          </TouchableOpacity>
           <TouchableOpacity
             testID="collection-sort"
             style={[styles.iconBtnSmall, styles.sortPill, sortMode !== DEFAULT_SORT && styles.iconBtnSmallSortActive]}

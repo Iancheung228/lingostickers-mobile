@@ -16,8 +16,8 @@ import { weekAhead, weekActivity, dueToday, dueCountsByDate, dateKeyOf, reviewMi
 import WeekActivityTracker from '@/components/WeekActivityTracker';
 import StudySessionHost from '@/components/StudySessionHost';
 import { Sticker } from '@/lib/types';
-import SettingsButton from '@/components/SettingsButton';
-import { colors, spacing, fonts, radii, shadows } from '@/constants/theme';
+import { colors, spacing, fonts, radii, shadows, type } from '@/constants/theme';
+import RoseBand from '@/components/RoseBand';
 import { TAB_BAR_CLEARANCE } from '@/constants/tabBar';
 
 // Sunday-start week, matching the minimal-journal reference layout (the
@@ -355,30 +355,26 @@ export default function CalendarScreen() {
   return (
     <View style={styles.container}>
       {/* ── Rose band ── */}
-      <View style={[styles.band, { paddingTop: insets.top + spacing.sm }]}>
-        <View style={styles.bandRow}>
-          <View style={styles.bandTitleWrap}>
-            <Text style={styles.title}>The long view</Text>
-            {/* Doubles as the band's status line: an empty month grid is
-                indistinguishable from a failed fetch otherwise. */}
-            {loadError ? (
-              <TouchableOpacity
-                onPress={fetchStickers}
-                hitSlop={8}
-                accessibilityRole="button"
-                accessibilityLabel="Try loading your calendar again"
-              >
-                <Text style={[styles.horizon, styles.horizonError]}>COULDN&apos;T LOAD · TAP TO RETRY</Text>
-              </TouchableOpacity>
-            ) : (
-              <Text style={styles.horizon}>
-                {dueInSevenDays > 0 ? `${dueInSevenDays} DUE IN 7 DAYS` : 'NOTHING DUE THIS WEEK'}
-              </Text>
-            )}
-          </View>
-
-          {/* One toggle decides what the grid means, so the two readings of
-              a day — what you found, what you owe — can't be confused. */}
+      <RoseBand
+        title="Calendar"
+        bottomPad={GRID_OVERLAP + BAND_GAP}
+        subtitle={loadError ? (
+          <TouchableOpacity
+            onPress={fetchStickers}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Try loading your calendar again"
+          >
+            <Text style={[styles.horizon, styles.horizonError]}>Couldn&apos;t load. Tap to retry</Text>
+          </TouchableOpacity>
+        ) : (
+          <Text style={styles.horizon}>
+            {dueInSevenDays > 0 ? `Due this week: ${dueInSevenDays}` : 'Nothing due this week'}
+          </Text>
+        )}
+        right={(
+          /* One toggle decides what the grid means, so the two readings of
+             a day (what you found, what you owe) can't be confused. */
           <View style={styles.segmented}>
             {(['finds', 'reviews'] as CalendarMode[]).map(m => (
               <TouchableOpacity
@@ -392,10 +388,8 @@ export default function CalendarScreen() {
               </TouchableOpacity>
             ))}
           </View>
-
-          <SettingsButton variant="bare" size={19} color={colors.maroon} />
-        </View>
-      </View>
+        )}
+      />
 
       {/* Everything below the band is one non-scrolling column: the week
           ahead lifts into the rose, and the month card underneath it takes
@@ -538,17 +532,10 @@ const styles = StyleSheet.create({
   // The week ahead in one line. The screen's other numbers are all
   // retrospective — this is the only forward-looking one, which is why it
   // rides with the title rather than sitting among the cards.
-  horizon: {
-    fontSize: 11,
-    lineHeight: 16,
-    marginTop: 3,
-    fontFamily: fonts.monoBold,
-    color: colors.maroon,
-    letterSpacing: 1.4,
-  },
+  horizon: { ...type.small, color: colors.maroon },
   // Same slot, same metrics — only the colour changes, so a failed load
   // reads as a state of this line rather than as new furniture appearing.
-  horizonError: { color: colors.error, textDecorationLine: 'underline' },
+  horizonError: { textDecorationLine: 'underline' },
 
 
   segmented: {

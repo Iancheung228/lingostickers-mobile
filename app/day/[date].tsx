@@ -9,7 +9,6 @@ import { useSignedUrls } from '@/hooks/useSignedUrls';
 import { listImagePath } from '@/lib/thumbnails';
 import StickerCard from '@/components/StickerCard';
 import StudyCard from '@/components/StudyCard';
-import SettingsButton from '@/components/SettingsButton';
 import { colors, shadows, radii, spacing, fonts } from '@/constants/theme';
 
 const DATE_FORMAT = new Intl.DateTimeFormat('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
@@ -98,7 +97,7 @@ export default function DayScreen() {
             {loadError ? "couldn't load this day" : `${stickers.length} captured`}
           </Text>
         </View>
-        <SettingsButton />
+        <View style={{ width: 36, height: 36 }} />
       </View>
 
       {loading ? (

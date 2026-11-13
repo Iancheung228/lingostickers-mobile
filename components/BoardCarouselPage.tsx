@@ -23,7 +23,6 @@ import { MAX_DIM_PCT } from '@/components/WallBackground';
 import FieldEditor from '@/components/FieldEditor';
 import StudyCard from '@/components/StudyCard';
 import StickerPickerModal from '@/components/StickerPickerModal';
-import SettingsButton from '@/components/SettingsButton';
 import { colors, shadows, radii, spacing, fonts } from '@/constants/theme';
 
 // Long side capped so a full-res photo library import doesn't balloon
@@ -423,9 +422,6 @@ export default function BoardCarouselPage({
             <Plus size={15} color={colors.white} strokeWidth={2.75} />
             <Text style={styles.addText}>Add</Text>
           </TouchableOpacity>
-          {/* Bare, not a disc: this row already carries two solid buttons,
-              and a third would read as a third thing to do here. */}
-          <SettingsButton variant="bare" hitSlop={{ top: 10, bottom: 10, left: 4, right: 12 }} />
         </View>
       </View>
 

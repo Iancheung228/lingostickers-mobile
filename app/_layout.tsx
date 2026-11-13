@@ -125,7 +125,7 @@ function RootLayout() {
     // "open board" flow). Without this, the generic "session -> tabs"
     // redirect below fires on every one of these and instantly bounces the
     // user back to the collection tab.
-    const inStandaloneAuthenticatedRoute = ['profile', 'day'].includes(segments[0] as string);
+    const inStandaloneAuthenticatedRoute = ['day'].includes(segments[0] as string);
     const onResetPasswordScreen = (segments as string[])[1] === 'reset-password';
 
     // A recovery session looks identical to a normal sign-in session, so it
@@ -207,7 +207,6 @@ function RootLayout() {
         <Stack.Screen name="index" />
         <Stack.Screen name="(auth)" />
         <Stack.Screen name="(tabs)" />
-        <Stack.Screen name="profile" options={{ presentation: 'card' }} />
         <Stack.Screen name="day/[date]" options={{ presentation: 'card' }} />
       </Stack>
     </>

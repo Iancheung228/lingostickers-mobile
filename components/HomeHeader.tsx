@@ -1,172 +1,56 @@
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ChevronRight, Search } from 'lucide-react-native';
-import SettingsButton from '@/components/SettingsButton';
+import { ChevronRight } from 'lucide-react-native';
+import RoseBand from '@/components/RoseBand';
 import { colors, radii, spacing, fonts } from '@/constants/theme';
 
 interface HomeHeaderProps {
-  foundToday: number;
-  goal: number;
   dueCount: number;
   reviewMinutes: number;
-  /** Compact wait until the next card, e.g. "3h"; null when nothing is scheduled. */
-  nextDue: string | null;
   onStartReview: () => void;
-  onSearch: () => void;
 }
 
-// The rose band at the top of the home screen. It runs edge-to-edge and up
-// behind the status bar — so this deliberately does its own `insets.top`
-// padding rather than sitting inside a SafeAreaView, which would leave a
-// cream strip above it.
-//
-// Text on the band is `maroon`, not the usual `inkDark`: the heading
-// rose-brown is only a couple of steps darker than the band itself and
-// washes out completely against it.
-export default function HomeHeader({
-  foundToday, goal, dueCount, reviewMinutes, nextDue, onStartReview, onSearch,
-}: HomeHeaderProps) {
-  const insets = useSafeAreaInsets();
-  const today = new Date()
-    .toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })
-    .toUpperCase();
-
+// The rose band at the top of Home: the title and, when something is due, the
+// "Review N" pill (40pt). Nothing else (owner, 2026-11-13). The wall card
+// below overlaps the band's bottom edge, so the bottom padding reserves the
+// overlap — see WALL_OVERLAP in collection.tsx.
+export default function HomeHeader({ dueCount, reviewMinutes, onStartReview }: HomeHeaderProps) {
   return (
-    <View style={[styles.band, { paddingTop: insets.top + spacing.xs }]}>
-      <View style={styles.metaRow}>
-        <Text style={styles.metaText}>{today}</Text>
-        {/* Settings sits last, hard against the right edge — the same slot
-            it occupies on every other screen, so it's findable without
-            looking. That's why GOAL moved ahead of the icons. */}
-        <View style={styles.metaRight}>
-          <Text style={styles.metaText}>GOAL {goal}</Text>
-          {/* 15pt glyphs 12pt apart: the slop has to stop at the midpoint of
-              that gap or these two become one ambiguous target. Vertically
-              there is nothing to collide with, so it reaches much further. */}
-          <TouchableOpacity
-            onPress={onSearch}
-            hitSlop={{ top: 15, bottom: 15, left: 14, right: 6 }}
-            testID="home-search"
-            accessibilityRole="button"
-            accessibilityLabel="Search your collection"
-          >
-            <Search size={15} color={colors.maroon} />
-          </TouchableOpacity>
-          <SettingsButton
-            variant="bare"
-            size={15}
-            color={colors.maroon}
-            hitSlop={{ top: 15, bottom: 15, left: 6, right: 14 }}
-            testID="home-settings"
-          />
-        </View>
-      </View>
-
-      <View style={styles.statRow}>
-        <View style={styles.countWrap}>
-          <Text style={styles.count}>{foundToday}</Text>
-          {/* Two stacked lines rather than one — the numeral is tall enough
-              that a single baseline beside it leaves the row lopsided. */}
-          <View>
-            <Text style={styles.countLabel}>FOUND</Text>
-            <Text style={styles.countLabel}>TODAY</Text>
-          </View>
-        </View>
-
-        {dueCount > 0 && (
-          <TouchableOpacity
-            style={styles.duePill}
-            onPress={onStartReview}
-            activeOpacity={0.85}
-            accessibilityRole="button"
-            accessibilityLabel={`Start reviewing — ${dueCount} card${dueCount === 1 ? '' : 's'} due, about ${reviewMinutes} minute${reviewMinutes === 1 ? '' : 's'}`}
-          >
-            <View>
-              <Text style={styles.dueCount}>{dueCount} due</Text>
-              <Text style={styles.dueTime}>{reviewMinutes} min</Text>
-            </View>
-            <View style={styles.dueArrow}>
-              <ChevronRight size={18} color={colors.white} strokeWidth={2.5} />
-            </View>
-          </TouchableOpacity>
-        )}
-        {dueCount === 0 && (
-          <Text style={styles.caughtUp} testID="home-caught-up">
-            {nextDue ? `All caught up · next due in ${nextDue}` : 'All caught up'}
-          </Text>
-        )}
-      </View>
-    </View>
+    <RoseBand
+      title="Collection"
+      bottomPad={56 + spacing.sm}
+      right={dueCount > 0 ? (
+        <TouchableOpacity
+          style={styles.duePill}
+          onPress={onStartReview}
+          activeOpacity={0.85}
+          accessibilityRole="button"
+          accessibilityLabel={`Start reviewing — ${dueCount} card${dueCount === 1 ? '' : 's'} due, about ${reviewMinutes} minute${reviewMinutes === 1 ? '' : 's'}`}
+        >
+          <Text style={styles.dueText} maxFontSizeMultiplier={1.3}>Review {dueCount}</Text>
+          <View style={styles.arrow}><ChevronRight size={18} color={colors.white} strokeWidth={2.5} /></View>
+        </TouchableOpacity>
+      ) : undefined}
+    />
   );
 }
 
 const styles = StyleSheet.create({
-  band: {
-    backgroundColor: colors.blush,
-    borderBottomLeftRadius: 34,
-    borderBottomRightRadius: 34,
-    paddingHorizontal: spacing.lg,
-    // The wall card below overlaps this band, so the padding here has to
-    // clear the overlap as well as the content — see WALL_OVERLAP in
-    // collection.tsx, which pulls the card up by all but this margin of it.
-    paddingBottom: 56 + spacing.sm,
-  },
-  metaRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  metaRight: { flexDirection: 'row', alignItems: 'center', gap: spacing.ms },
-  metaText: {
-    fontSize: 10,
-    fontFamily: fonts.monoBold,
-    color: colors.maroon,
-    letterSpacing: 1.6,
-  },
-
-  statRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: spacing.sm,
-  },
-  countWrap: { flexDirection: 'row', alignItems: 'center', gap: spacing.ms },
-  count: { fontSize: 40, lineHeight: 44, fontFamily: fonts.display, color: colors.maroon },
-  countLabel: {
-    fontSize: 10.5,
-    lineHeight: 14,
-    fontFamily: fonts.monoBold,
-    color: colors.maroon,
-    letterSpacing: 1.4,
-  },
-
-  caughtUp: {
-    flexShrink: 1,
-    marginLeft: spacing.md,
-    textAlign: 'right',
-    fontSize: 11,
-    fontFamily: fonts.mono,
-    color: colors.maroon,
-  },
-
   duePill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.ms,
+    height: 40,
     backgroundColor: colors.white,
     borderRadius: radii.full,
     paddingLeft: spacing.md,
-    paddingRight: spacing.xs,
-    paddingVertical: spacing.xs + 1,
-    shadowColor: colors.maroon,
-    shadowOpacity: 0.18,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 4,
+    paddingRight: 4,
+    gap: spacing.sm,
   },
-  dueCount: { fontSize: 15, fontFamily: fonts.display, color: colors.blushDeep },
-  dueTime: { fontSize: 10, fontFamily: fonts.mono, color: colors.inkLight, marginTop: 1 },
-  dueArrow: {
-    width: 34,
-    height: 34,
+  dueText: { fontSize: 17, lineHeight: 22, fontFamily: fonts.display, color: colors.inkDark },
+  arrow: {
+    width: 32,
+    height: 32,
     borderRadius: radii.full,
-    backgroundColor: colors.blushDeep,
+    backgroundColor: colors.terra,
     alignItems: 'center',
     justifyContent: 'center',
   },

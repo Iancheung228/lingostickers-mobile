@@ -1,0 +1,22 @@
+# R2 chrome tour: Home, Calendar, Boards, Profile each with the five-slot tab bar.
+appId: ${APP_ID}
+---
+- runFlow: ../sign-in.yaml
+- extendedWaitUntil:
+    visible: "Start reviewing — 1 card due.*"
+    timeout: 20000
+- waitForAnimationToEnd:
+    timeout: 4000
+- takeScreenshot: R2-home
+- tapOn: "Calendar"
+- waitForAnimationToEnd
+- takeScreenshot: R2-calendar
+- tapOn: "Boards"
+- waitForAnimationToEnd
+- takeScreenshot: R2-boards
+- tapOn: "Profile"
+- waitForAnimationToEnd
+- takeScreenshot: R2-profile
+- tapOn: "Collection, 1 due"
+- waitForAnimationToEnd
+- assertVisible: "Start reviewing — 1 card due.*"

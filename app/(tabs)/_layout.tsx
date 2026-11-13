@@ -1,209 +1,219 @@
-import { View, Text, StyleSheet, useWindowDimensions } from 'react-native';
+import { useEffect, useState } from 'react';
+import { View, Text, Pressable, StyleSheet, Keyboard } from 'react-native';
 import { Tabs } from 'expo-router';
+import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { BookOpen, Calendar, Camera, Sticker as StickerIcon, Users } from 'lucide-react-native';
+import { BookOpen, Calendar, Camera, Sticker as StickerIcon, User } from 'lucide-react-native';
 import type { LucideIcon } from 'lucide-react-native';
-import * as Haptics from 'expo-haptics';
-import { useChallenges } from '@/hooks/useChallenges';
-import { useFriends } from '@/hooks/useFriends';
+import { haptic } from '@/lib/haptics';
+import { DueCountProvider, useDueCount } from '@/hooks/useDueCount';
 import { SOCIAL_ENABLED } from '@/lib/features';
-import { colors, shadows, radii, fonts } from '@/constants/theme';
-import { TAB_BAR_HEIGHT, TAB_BAR_BOTTOM_MARGIN, TAB_BAR_WIDTH, TAB_BAR_ITEM_WIDTH, TAB_BAR_SCAN_ITEM_WIDTH } from '@/constants/tabBar';
+import { colors, e2, fonts, radii } from '@/constants/theme';
+import {
+  TAB_BAR_HEIGHT, TAB_BAR_WIDTH, TAB_BAR_ITEM_WIDTH, TAB_BAR_DISC, TAB_BAR_DISC_OVERHANG, tabBarBottom,
+} from '@/constants/tabBar';
 
-// Every tab gets the same treatment: a dark, legible icon by default, and a
-// soft rounded "area effect" behind it when active — no separate outlier
-// styling per tab, so the pill reads as one clean, consistent object.
-function TabIcon({ Icon, focused, badgeCount }: { Icon: LucideIcon; focused: boolean; badgeCount?: number }) {
-  return (
-    <View style={[styles.iconWrap, focused && styles.iconWrapActive]}>
-      <Icon size={20} color={focused ? colors.blushDeep : colors.white} strokeWidth={focused ? 2.25 : 2} />
-      {!!badgeCount && <Badge count={badgeCount} />}
-    </View>
-  );
+// Five equal slots, mirror-symmetric: Collection, Calendar, [Scan], Boards,
+// Profile. The bar is a custom component (not tabBarButton overrides) because
+// the raised disc needs an overflow-visible wrapper, and React Navigation's
+// default one clips.
+interface Slot {
+  name: string;
+  label: string;
+  a11y: string;
+  Icon: LucideIcon;
+  camera?: boolean;
 }
+const SLOTS: Slot[] = [
+  { name: 'collection', label: 'Collection', a11y: 'Collection', Icon: BookOpen },
+  { name: 'calendar', label: 'Calendar', a11y: 'Calendar', Icon: Calendar },
+  { name: 'scan', label: 'Scan', a11y: 'Scan a new sticker', Icon: Camera, camera: true },
+  { name: 'wall', label: 'Boards', a11y: 'Boards', Icon: StickerIcon },
+  { name: 'profile', label: 'Profile', a11y: 'Profile', Icon: User },
+];
 
-function Badge({ count }: { count: number }) {
-  if (count === 0) return null;
+function PillTabBar({ state, navigation }: BottomTabBarProps) {
+  const insets = useSafeAreaInsets();
+  const { dueCount } = useDueCount();
+  const [keyboardUp, setKeyboardUp] = useState(false);
+
+  // tabBarHideOnKeyboard does not apply to a custom bar.
+  useEffect(() => {
+    const show = Keyboard.addListener('keyboardWillShow', () => setKeyboardUp(true));
+    const hide = Keyboard.addListener('keyboardWillHide', () => setKeyboardUp(false));
+    return () => { show.remove(); hide.remove(); };
+  }, []);
+
+  if (keyboardUp) return null;
+  const focusedName = state.routes[state.index]?.name;
+
+  const press = (slot: Slot) => {
+    const route = state.routes.find(r => r.name === slot.name);
+    if (!route) return;
+    const focused = focusedName === slot.name;
+    const event = navigation.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
+    if (!focused && !event.defaultPrevented) {
+      haptic.tap();
+      navigation.navigate(route.name as never);
+    }
+  };
+
   return (
+    // The wrapper is the overflow-visible one: the pill below has the rose
+    // fill, the disc is a sibling that overhangs it.
     <View
-      style={styles.badgeDot}
-      accessibilityLabel={`${count} waiting on you`}
+      pointerEvents="box-none"
+      style={[styles.wrap, { bottom: tabBarBottom(insets.bottom) }]}
     >
-      <Text style={styles.badgeText}>{count > 9 ? '9+' : String(count)}</Text>
-    </View>
-  );
-}
-
-// Scan is the one action that actually produces stickers — everything else
-// in this bar is just a way to browse what scanning made. Its own deeper
-// rose makes it read as the bar's one deliberate call to action rather
-// than a fifth peer of Collection/Calendar/Wall/Friends, but it sits
-// in-line with the rest of the row instead of floating above it: the tab
-// bar clips its own bounds, so a button that pokes out the top would be
-// cut off rather than raised.
-// Intentionally the same regardless of `focused` — a CTA, not a destination
-// you "arrive at" the way the other four are.
-function ScanTabIcon() {
-  return (
-    <View style={styles.scanWrap}>
-      <Camera size={23} color={colors.white} strokeWidth={2.25} />
+      <View style={styles.row} accessibilityRole="tabbar">
+        <View style={styles.pill} pointerEvents="none" />
+        {SLOTS.map(slot => {
+          const focused = focusedName === slot.name;
+          const badge = slot.name === 'collection' && dueCount > 0;
+          const label = badge ? `${slot.a11y}, ${dueCount} due` : slot.a11y;
+          const Icon = slot.Icon;
+          return (
+            <Pressable
+              key={slot.name}
+              onPress={() => press(slot)}
+              accessibilityRole="tab"
+              accessibilityLabel={label}
+              accessibilityState={{ selected: focused }}
+              testID={`tab-${slot.name}`}
+              style={styles.slot}
+            >
+              {slot.camera ? (
+                <View style={styles.discHolder} pointerEvents="none">
+                  <View style={styles.disc}>
+                    <Camera size={26} color={colors.white} strokeWidth={2} />
+                  </View>
+                </View>
+              ) : (
+                <>
+                  {focused && <View style={styles.highlight} />}
+                  <View>
+                    <Icon size={24} color={focused ? colors.terra : colors.maroon} strokeWidth={1.75} />
+                    {badge && (
+                      <View style={styles.badge}>
+                        <Text style={styles.badgeText} maxFontSizeMultiplier={1}>
+                          {dueCount > 9 ? '9+' : String(dueCount)}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                </>
+              )}
+              <Text
+                style={[styles.label, focused && styles.labelActive, slot.camera && styles.labelCamera]}
+                numberOfLines={1}
+                maxFontSizeMultiplier={1.15}
+              >
+                {slot.label}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
     </View>
   );
 }
 
 export default function TabLayout() {
-  const insets = useSafeAreaInsets();
-  const { width: winW } = useWindowDimensions();
-  const { pendingCount } = useChallenges();
-  const { friends } = useFriends();
-  const pendingRequestCount = friends.filter(f => f.status === 'pending' && !f.is_requester).length;
-  // The badge draws its own accessibilityLabel, but it lives inside the tab
-  // button — which is itself one accessible element, so nothing underneath it
-  // is ever announced. The count has to be part of the tab's own label or a
-  // screen reader user is never told there is anything waiting.
-  const friendsBadge = pendingCount + pendingRequestCount;
-
   return (
-    <Tabs
-      screenListeners={({ navigation }) => ({
-        // isFocused() is false only when the pressed tab isn't the one
-        // already showing — re-tapping the current tab stays silent, same
-        // as native iOS/Android tab bars.
-        tabPress: () => {
-          if (!navigation.isFocused()) {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-          }
-        },
-      })}
-      screenOptions={{
-        headerShown: false,
-        tabBarShowLabel: false,
-        tabBarStyle: {
-          position: 'absolute',
-          // React Navigation's own default tab bar style sets `start: 0,
-          // end: 0` (RN's logical left/right) to make it span edge-to-edge
-          // — and per RN's own precedence rules, `start`/`end` win over
-          // `left`/`right`/`width` when both are present. Overriding
-          // `start`/`end` directly (not `left`/`width`) is what actually
-          // takes effect; symmetric offsets fully determine both position
-          // and width without a redundant, ambiguity-prone `width` key.
-          start: (winW - TAB_BAR_WIDTH) / 2,
-          end: (winW - TAB_BAR_WIDTH) / 2,
-          bottom: insets.bottom + TAB_BAR_BOTTOM_MARGIN,
-          height: TAB_BAR_HEIGHT,
-          borderRadius: radii.full,
-          borderTopWidth: 0,
-          backgroundColor: colors.blush,
-          ...shadows.tab,
-        },
-        tabBarItemStyle: {
-          width: TAB_BAR_ITEM_WIDTH,
-          height: TAB_BAR_HEIGHT,
-        },
-        // The item's own flex:1 fills the full pill height, but its inner
-        // layout still defaults to justifyContent: 'flex-start' (meant for
-        // icon-above-label) — with tabBarShowLabel: false there's no label
-        // to make room for, so the icon sat pinned near the top. That
-        // inner layout isn't reachable via tabBarItemStyle at all; the icon
-        // wrapper itself has to be told to grow and center within it.
-        tabBarIconStyle: {
-          flex: 1,
-          alignItems: 'center',
-          justifyContent: 'center',
-        },
-      }}
-    >
-      <Tabs.Screen
-        name="collection"
-        options={{
-          title: 'Collection',
-          tabBarAccessibilityLabel: 'Collection',
-          tabBarIcon: ({ focused }) => <TabIcon Icon={BookOpen} focused={focused} />,
-        }}
-      />
-      <Tabs.Screen
-        name="calendar"
-        options={{
-          title: 'Calendar',
-          tabBarAccessibilityLabel: 'Calendar',
-          tabBarIcon: ({ focused }) => <TabIcon Icon={Calendar} focused={focused} />,
-        }}
-      />
-      <Tabs.Screen
-        name="scan"
-        options={{
-          title: 'Scan',
-          tabBarAccessibilityLabel: 'Scan a new sticker',
-          tabBarIcon: () => <ScanTabIcon />,
-          tabBarItemStyle: { width: TAB_BAR_SCAN_ITEM_WIDTH, height: TAB_BAR_HEIGHT },
-        }}
-      />
-      <Tabs.Screen
-        name="wall"
-        options={{
-          title: 'Boards',
-          tabBarAccessibilityLabel: 'Boards',
-          tabBarIcon: ({ focused }) => <TabIcon Icon={StickerIcon} focused={focused} />,
-        }}
-      />
-      <Tabs.Screen
-        name="friends"
-        options={{
-          // Off for the first release — see lib/features.ts. href: null
-          // keeps the route but takes it out of the bar.
-          ...(SOCIAL_ENABLED ? {} : { href: null }),
-          title: 'Friends',
-          tabBarAccessibilityLabel: friendsBadge > 0
-            ? `Friends, ${friendsBadge} waiting on you`
-            : 'Friends',
-          tabBarIcon: ({ focused }) => (
-            <TabIcon Icon={Users} focused={focused} badgeCount={friendsBadge} />
-          ),
-        }}
-      />
-    </Tabs>
+    <DueCountProvider>
+      <Tabs
+        tabBar={(props) => <PillTabBar {...props} />}
+        screenOptions={{ headerShown: false }}
+      >
+        <Tabs.Screen name="collection" options={{ title: 'Collection' }} />
+        <Tabs.Screen name="calendar" options={{ title: 'Calendar' }} />
+        <Tabs.Screen name="scan" options={{ title: 'Scan' }} />
+        <Tabs.Screen name="wall" options={{ title: 'Boards' }} />
+        <Tabs.Screen name="profile" options={{ title: 'Profile' }} />
+        <Tabs.Screen
+          name="friends"
+          options={{
+            // Off for the first release — see lib/features.ts. href: null
+            // keeps the route but takes it out of the bar (the bar is fixed
+            // to five slots, so Friends is reachable by route only).
+            ...(SOCIAL_ENABLED ? {} : { href: null }),
+            title: 'Friends',
+          }}
+        />
+      </Tabs>
+    </DueCountProvider>
   );
 }
 
 const styles = StyleSheet.create({
-  iconWrap: {
-    width: 42,
-    height: 42,
+  wrap: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    overflow: 'visible',
+  },
+  // The row is taller than the pill by the disc's overhang, so the disc sits
+  // inside its parent's bounds and is tappable (iOS ignores touches outside).
+  row: {
+    width: TAB_BAR_WIDTH,
+    height: TAB_BAR_HEIGHT + TAB_BAR_DISC_OVERHANG,
+    flexDirection: 'row',
+    overflow: 'visible',
+  },
+  pill: {
+    position: 'absolute',
+    left: 0, right: 0, bottom: 0,
+    height: TAB_BAR_HEIGHT,
     borderRadius: radii.full,
+    backgroundColor: colors.blush,
+    ...e2,
+  },
+  slot: {
+    width: TAB_BAR_ITEM_WIDTH,
+    height: TAB_BAR_HEIGHT + TAB_BAR_DISC_OVERHANG,
+    paddingTop: TAB_BAR_DISC_OVERHANG,
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 2,
   },
-  // A plain white disc, not a tinted one — on a rose bar the only reading
-  // that stays unambiguous at a glance is "the lit one is the pale one".
-  iconWrapActive: {
+  highlight: {
+    position: 'absolute',
+    top: TAB_BAR_DISC_OVERHANG + 7, bottom: 7, left: 3, right: 3,
+    borderRadius: 22,
     backgroundColor: colors.white,
   },
-  scanWrap: {
-    width: 50,
-    height: 50,
-    borderRadius: radii.full,
-    backgroundColor: colors.blushDeep,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: colors.blushDeep,
-    shadowOpacity: 0.35,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 4,
-  },
-  badgeDot: {
+  label: { fontSize: 12, lineHeight: 14, fontFamily: fonts.display, color: colors.maroon },
+  labelActive: { color: colors.inkDark },
+  labelCamera: { position: 'absolute', bottom: 8 },
+  // The disc lives in the camera slot but is lifted so it overhangs the pill.
+  discHolder: {
     position: 'absolute',
-    top: 2,
-    right: 2,
-    backgroundColor: colors.error,
+    top: 0,
+    alignItems: 'center',
+  },
+  disc: {
+    width: TAB_BAR_DISC,
+    height: TAB_BAR_DISC,
     borderRadius: radii.full,
-    minWidth: 16,
-    height: 16,
+    backgroundColor: colors.terra,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 3,
-    borderWidth: 1.5,
-    borderColor: colors.blush,
+    borderWidth: 4,
+    borderColor: colors.cream,
+    ...e2,
   },
-  badgeText: { color: colors.card, fontSize: 9, fontFamily: fonts.display,},
+  badge: {
+    position: 'absolute',
+    top: -6,
+    right: -12,
+    minWidth: 18,
+    height: 18,
+    paddingHorizontal: 4,
+    borderRadius: radii.full,
+    backgroundColor: colors.errorDeep,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  badgeText: { color: colors.white, fontSize: 11, lineHeight: 14, fontFamily: fonts.monoBold },
 });

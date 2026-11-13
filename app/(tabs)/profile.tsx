@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView, ScrollView, ActivityIndicator, Alert, Linking } from 'react-native';
-import { router, useFocusEffect } from 'expo-router';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator, Alert, Linking } from 'react-native';
+import { useFocusEffect } from 'expo-router';
+import RoseBand from '@/components/RoseBand';
+import { TAB_BAR_CLEARANCE } from '@/constants/tabBar';
 import Constants from 'expo-constants';
-import { ArrowLeft, Camera, LogOut, BookOpen, Heart, Check, Trash2, Shield, ExternalLink, Ban, Mail } from 'lucide-react-native';
+import { Camera, LogOut, BookOpen, Heart, Check, Trash2, Shield, ExternalLink, Ban, Mail } from 'lucide-react-native';
 import { useAuth } from '@/hooks/useAuth';
 import { useProfile } from '@/hooks/useProfile';
 import { supabase } from '@/lib/supabase';
@@ -178,20 +180,9 @@ export default function ProfileScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity
-          onPress={() => router.back()}
-          style={styles.backBtn}
-          hitSlop={8}
-          accessibilityRole="button"
-          accessibilityLabel="Go back"
-        >
-          <ArrowLeft size={18} color={colors.inkMid} />
-        </TouchableOpacity>
-        <Text style={styles.title}>My Profile</Text>
-        <View style={styles.headerSpacer} />
-      </View>
+    <View style={styles.container}>
+      <RoseBand title="Profile" subtitle={username} bottomPad={spacing.md} />
+      <View style={{ height: spacing.md }} />
 
       {loading ? (
         <ActivityIndicator style={styles.loader} color={colors.terra} size="large" />
@@ -466,7 +457,7 @@ export default function ProfileScreen() {
       )}
 
       <BlockedAccounts visible={blockedOpen} onClose={() => setBlockedOpen(false)} />
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -493,7 +484,7 @@ const styles = StyleSheet.create({
   title: { fontSize: 15, fontFamily: fonts.display, color: colors.inkDark },
   loader: { flex: 1 },
 
-  scrollBody: { paddingHorizontal: spacing.md, paddingBottom: spacing.xxl },
+  scrollBody: { paddingHorizontal: spacing.md, paddingBottom: TAB_BAR_CLEARANCE + 34 + spacing.xl },
 
   panel: {
     backgroundColor: colors.skyDeep,
