@@ -35,7 +35,7 @@ appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
     text: "Not Now"
     optional: true
 - extendedWaitUntil:
-    visible: "FOUND"   # home header: "<n> FOUND TODAY"
+    visible: "Collection"   # home title (owner approved 2026-11-13; was "FOUND")
     timeout: 30000
 - assertNotVisible: "WELCOME BACK"
 - takeScreenshot: 02-home

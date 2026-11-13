@@ -54,6 +54,6 @@ appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
 - takeScreenshot: 06-session-done
 - tapOn: "Done"
 - extendedWaitUntil:
-    visible: "FOUND"
+    visible: "Collection"   # home title (owner approved 2026-11-13; was "FOUND")
     timeout: 10000
 - assertNotVisible: "Start reviewing.*"
