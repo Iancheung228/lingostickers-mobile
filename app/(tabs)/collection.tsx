@@ -1,3 +1,4 @@
+import { usePendingDeletes } from '@/components/PendingDeleteProvider';
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import {
   View, Text, TextInput, FlatList, StyleSheet, TouchableOpacity,
@@ -52,7 +53,14 @@ const WALL_OVERLAP = 56;
 export default function CollectionScreen() {
   const { user } = useAuth();
   const { profile, setHomeBackground, setHomeWallArranged } = useProfile();
-  const [stickers, setStickers] = useState<Sticker[]>([]);
+  const [fetchedStickers, setStickers] = useState<Sticker[]>([]);
+  // A card being deleted (undo window, or already gone) must not come back with
+  // a refetch: every list filters through the provider's pendingDeleteIds.
+  const { pendingDeleteIds } = usePendingDeletes();
+  const stickers = useMemo(
+    () => (pendingDeleteIds.size ? fetchedStickers.filter(s => !pendingDeleteIds.has(s.id)) : fetchedStickers),
+    [fetchedStickers, pendingDeleteIds],
+  );
   const [loading, setLoading] = useState(true);
   // Distinguishes "you have no stickers" from "we couldn't ask". Without it a
   // failed fetch left `stickers` empty and the screen cheerfully told someone

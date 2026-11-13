@@ -26,5 +26,5 @@ export function useTrimmedVoicePlayback(
     player.play();
   };
 
-  return { play, pause: () => player.pause() };
+  return { play, pause: () => player.pause(), playing: status.playing };
 }

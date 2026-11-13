@@ -1,8 +1,7 @@
 appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
 ---
 # Scenario 5: MEANS -> plum (wait for the row), then back to grape: the row must go.
-- tapOn:
-    point: "87%,45%"
+- tapOn: "Meaning, .*Edit"
 - extendedWaitUntil:
     visible: "What it means.*"
     timeout: 10000

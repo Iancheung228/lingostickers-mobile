@@ -5,8 +5,7 @@ appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
 - tapOn: "Cancel"
 - waitForAnimationToEnd:
     timeout: 1000
-- tapOn:
-    point: "87%,45%"
+- tapOn: "Meaning, .*Edit"
 - extendedWaitUntil:
     visible: "What it means.*"
     timeout: 10000

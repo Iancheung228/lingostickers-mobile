@@ -75,6 +75,8 @@ interface FieldEditorProps {
   /// the sheet can never reopen onto the previous field's draft.
   spec: EditorSpec | null;
   saving?: boolean;
+  /// A failed save, shown under the fields. The sheet stays open and keeps the edit.
+  error?: string | null;
   onCancel: () => void;
   /// `follow` is the accepted suggestion's fields, or null for none.
   onSave: (values: Record<string, string>, follow: Record<string, string> | null) => void;
@@ -117,7 +119,7 @@ const draftFor = (spec: EditorSpec, key: string): Draft => ({
 // that flips on tap — a focused TextInput in there fights the keyboard for
 // space and the flip for touches, and the card's fixed height can't grow to
 // fit a longer sentence. A sheet sidesteps all three.
-export default function FieldEditor({ spec, saving, onCancel, onSave }: FieldEditorProps) {
+export default function FieldEditor({ spec, saving, error, onCancel, onSave }: FieldEditorProps) {
   // The sheet outlives the prop that opened it by exactly one exit animation.
   // A successful save clears `spec` from above; without a mirror to render
   // from, the sheet would blink out of existence on the save path while
@@ -422,6 +424,12 @@ export default function FieldEditor({ spec, saving, onCancel, onSave }: FieldEdi
         )}
       </ScrollView>
 
+      {!!error && (
+        <View style={styles.errorBlock} accessibilityLiveRegion="polite">
+          <Text style={styles.errorText}>{error}</Text>
+        </View>
+      )}
+
       <View style={styles.actions}>
         <TouchableOpacity style={styles.cancelBtn} onPress={requestClose} disabled={saving}>
           <Text style={styles.cancelText}>Cancel</Text>
@@ -441,9 +449,9 @@ const styles = StyleSheet.create({
   subtitle: { fontSize: 13, fontFamily: fonts.text, color: colors.inkLight, lineHeight: 19, marginTop: 2 },
 
   inputBlock: { marginTop: spacing.md, gap: spacing.xs },
-  inputLabel: {
-    fontSize: 10, fontFamily: fonts.monoBold, color: colors.inkLight, letterSpacing: 1.4,
-  },
+  inputLabel: { fontSize: 14, lineHeight: 20, fontFamily: fonts.display, color: colors.inkLight },
+  errorBlock: { marginTop: spacing.md, padding: spacing.ms, borderRadius: radii.md, backgroundColor: colors.errorLight },
+  errorText: { fontSize: 14, lineHeight: 20, fontFamily: fonts.text, color: colors.error },
   input: {
     padding: spacing.md,
     borderRadius: radii.md,

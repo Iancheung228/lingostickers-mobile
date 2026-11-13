@@ -5,14 +5,13 @@ appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
 - runFlow: ../sign-in.yaml
 - tapOn: "Collection"
 - tapOn: "pomme, \\[pɔm\\], Apple, Hear.*"
+# The detail opens on the answer (R3); no flip needed.
 - extendedWaitUntil:
-    visible: "What did you call this\\?"
+    visible: "Meaning, .*Edit"
     timeout: 15000
-- tapOn: "What did you call this\\?"
 - waitForAnimationToEnd:
-    timeout: 1500
-- tapOn:
-    point: "87%,45%"
+    timeout: 800
+- tapOn: "Meaning, .*Edit"
 - extendedWaitUntil:
     visible: "What it means.*"
     timeout: 10000

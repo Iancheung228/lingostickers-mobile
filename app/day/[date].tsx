@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState } from 'react';
+import { usePendingDeletes } from '@/components/PendingDeleteProvider';
 import { View, Text, FlatList, TouchableOpacity, StyleSheet, SafeAreaView, ActivityIndicator } from 'react-native';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { ArrowLeft } from 'lucide-react-native';
@@ -16,7 +17,14 @@ const DATE_FORMAT = new Intl.DateTimeFormat('en-US', { weekday: 'long', month: '
 export default function DayScreen() {
   const { date } = useLocalSearchParams<{ date: string }>();
   const { user } = useAuth();
-  const [stickers, setStickers] = useState<Sticker[]>([]);
+  const [fetchedStickers, setStickers] = useState<Sticker[]>([]);
+  // A card being deleted (undo window, or already gone) must not come back with
+  // a refetch: every list filters through the provider's pendingDeleteIds.
+  const { pendingDeleteIds } = usePendingDeletes();
+  const stickers = useMemo(
+    () => (pendingDeleteIds.size ? fetchedStickers.filter(s => !pendingDeleteIds.has(s.id)) : fetchedStickers),
+    [fetchedStickers, pendingDeleteIds],
+  );
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [selectedSticker, setSelectedSticker] = useState<Sticker | null>(null);

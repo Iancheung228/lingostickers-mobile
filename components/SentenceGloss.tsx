@@ -3,7 +3,7 @@ import { StyleProp, StyleSheet, Text, View, ViewStyle } from 'react-native';
 import { Lightbulb } from 'lucide-react-native';
 
 import { glossFor } from '@/lib/gloss';
-import { colors, fonts, sentenceFontFor, spacing } from '@/constants/theme';
+import { colors, fonts, sentenceFontFor, spacing, type } from '@/constants/theme';
 
 /**
  * The interlinear breakdown under a sentence: each chunk of the target
@@ -22,8 +22,8 @@ import { colors, fonts, sentenceFontFor, spacing } from '@/constants/theme';
  * a breakdown that mislabels which characters mean what is worse than none,
  * because nothing in it tells the learner it is wrong.
  *
- * No touch targets, deliberately. This sits inside the study card's back
- * face, where the background is the flip gesture — see skills.md #9. A chunk
+ * No touch targets, deliberately. This sits inside the card's back face,
+ * where the background is the flip gesture — see skills.md #9. A chunk
  * that looked tappable would be a false affordance, and one that actually was
  * would eat flips.
  */
@@ -42,7 +42,7 @@ export function SentenceGloss({ raw, sentence, language, style }: {
 
   return (
     <View style={[styles.gloss, style]}>
-      <Text style={styles.glossLabel}>WORD BY WORD</Text>
+      <Text style={styles.glossLabel} maxFontSizeMultiplier={type.small.maxFontSizeMultiplier}>Word by word</Text>
       <View style={styles.chunks}>
         {chunks.map((chunk, i) => (
           // Each pair is one accessible element: read as two independent
@@ -54,8 +54,8 @@ export function SentenceGloss({ raw, sentence, language, style }: {
             accessible
             accessibilityLabel={`${chunk.t}, ${chunk.g}`}
           >
-            <Text style={[styles.chunkTarget, { fontFamily: targetFont }]}>{chunk.t}</Text>
-            <Text style={styles.chunkGloss}>{chunk.g}</Text>
+            <Text style={[styles.chunkTarget, { fontFamily: targetFont }]} maxFontSizeMultiplier={type.body.maxFontSizeMultiplier}>{chunk.t}</Text>
+            <Text style={styles.chunkGloss} maxFontSizeMultiplier={type.small.maxFontSizeMultiplier}>{chunk.g}</Text>
           </View>
         ))}
       </View>
@@ -77,8 +77,8 @@ export function SentenceInsight({ text, style }: { text: string | null | undefin
   if (!trimmed) return null;
   return (
     <View style={[styles.insightRow, style]}>
-      <Lightbulb size={12} color={colors.sageDark} />
-      <Text style={styles.insightText}>{trimmed}</Text>
+      <Lightbulb size={16} strokeWidth={1.75} color={colors.gold} style={{ marginTop: 2 }} />
+      <Text style={styles.insightText} maxFontSizeMultiplier={type.small.maxFontSizeMultiplier}>{trimmed}</Text>
     </View>
   );
 }
@@ -90,13 +90,7 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: colors.borderLight,
   },
-  glossLabel: {
-    fontSize: 9,
-    fontFamily: fonts.monoBold,
-    letterSpacing: 1,
-    color: colors.inkFaint,
-    marginBottom: spacing.sm,
-  },
+  glossLabel: { ...type.small, fontFamily: fonts.display, marginBottom: spacing.sm },
   chunks: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -108,14 +102,8 @@ const styles = StyleSheet.create({
   },
   chunk: { alignItems: 'flex-start' },
   // fontFamily comes from the render site — target-language text.
-  chunkTarget: { fontSize: 16, lineHeight: 21, color: colors.inkMid },
-  chunkGloss: {
-    fontSize: 10,
-    lineHeight: 13,
-    fontFamily: fonts.mono,
-    color: colors.inkLight,
-    marginTop: 1,
-  },
+  chunkTarget: { fontSize: 17, lineHeight: 24, color: colors.inkMid },
+  chunkGloss: { ...type.small, fontSize: 13, lineHeight: 16, color: colors.inkLight, marginTop: 1 },
   insightRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -125,5 +113,5 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: colors.borderLight,
   },
-  insightText: { flex: 1, fontSize: 12, fontFamily: fonts.text, color: colors.sageDark, lineHeight: 16 },
+  insightText: { ...type.small, flex: 1 },
 });

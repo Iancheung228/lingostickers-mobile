@@ -69,6 +69,9 @@ export const colors = {
   goldTint:   '#F5E7C6',
   againTint:  '#F6E3E1', // Again fill, 'Due' tag
   errorPressed: '#EFCFD0', // pressed destructive
+  goldTintPressed: '#EFDDAF', // pressed Hard
+  successPressed: '#325A38', // pressed Good (solid)
+  successTintPressed: '#D2E5D4', // pressed Easy
 
   // Utility
   border:     '#EADFD6', // decorative edges only (1.2:1); controls use ctl

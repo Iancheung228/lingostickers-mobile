@@ -1,21 +1,46 @@
-import { Modal, View, Text, StyleSheet, TouchableOpacity, Pressable } from 'react-native';
-import { Check, RotateCcw } from 'lucide-react-native';
-import { colors, radii, spacing, shadows, fonts } from '@/constants/theme';
+import { useEffect, useRef, useState } from 'react';
+import { Animated, Modal, View, Text, StyleSheet, Pressable, ScrollView } from 'react-native';
+import { Check, ChevronRight } from 'lucide-react-native';
+import Button from '@/components/ui/Button';
+import StudyCard from '@/components/StudyCard';
+import { ToastLayer } from '@/components/ToastProvider';
+import { haptic } from '@/lib/haptics';
+import { useMotion } from '@/lib/motion';
+import type { Sticker } from '@/lib/types';
+import { colors, e2, fonts, headwordStyle, radii, spacing, type, MIN_TAP } from '@/constants/theme';
 
 interface ReviewSummaryProps {
   /// Null while no session has finished — the modal is driven entirely by
   /// this, so the parent never has to hold a separate "is it open" flag.
-  stats: { graded: number; again: number } | null;
+  stats: { graded: number; again: number; unsynced?: number } | null;
+  /// The learner closed the session before the queue emptied.
+  early: boolean;
+  /// "Next card in 10m", or null.
+  nextDue: string | null;
+  /// Words whose last grade this session was Again.
+  revisit: Sticker[];
   onDone: () => void;
+  onUpdate?: (id: string, patch: Partial<Sticker>) => void;
 }
 
 // The wind-down at the end of a study session. Deliberately small: the point
 // is to mark that the queue is finished, not to grade the session — a screen
 // full of accuracy percentages turns "I did my reviews" into something to
 // feel bad about.
-export default function ReviewSummary({ stats, onDone }: ReviewSummaryProps) {
+export default function ReviewSummary({ stats, early, nextDue, revisit, onDone, onUpdate }: ReviewSummaryProps) {
+  const { reduced } = useMotion();
+  const pop = useRef(new Animated.Value(0)).current;
+  const [opened, setOpened] = useState<Sticker | null>(null);
+  const shown = !!stats;
+
+  useEffect(() => {
+    if (!shown) return;
+    haptic.success();
+    pop.setValue(0);
+    Animated.timing(pop, { toValue: 1, duration: reduced ? 120 : 200, useNativeDriver: true }).start();
+  }, [shown]);
+
   if (!stats) return null;
-  const solid = stats.graded - stats.again;
 
   return (
     <Modal visible transparent animationType="fade" onRequestClose={onDone}>
@@ -32,90 +57,106 @@ export default function ReviewSummary({ stats, onDone }: ReviewSummaryProps) {
           accessibilityRole="button"
           accessibilityLabel="Close the session summary"
         />
-        <View style={styles.card}>
+        <Animated.View
+          style={[styles.card, { opacity: pop, transform: [{ scale: reduced ? 1 : pop.interpolate({ inputRange: [0, 1], outputRange: [0.96, 1] }) }] }]}
+        >
           <View style={styles.badge}>
-            <Check size={26} color={colors.white} strokeWidth={3} />
+            <Check size={26} strokeWidth={2.5} color={colors.white} />
           </View>
 
-          <Text style={styles.title}>Session done</Text>
-          <Text style={styles.subtitle}>
+          <Text style={styles.title} maxFontSizeMultiplier={type.h2.maxFontSizeMultiplier}>
+            {early ? 'Stopped early' : 'Session done'}
+          </Text>
+          <Text style={styles.subtitle} maxFontSizeMultiplier={type.small.maxFontSizeMultiplier}>
             {stats.graded} card{stats.graded === 1 ? '' : 's'} reviewed
           </Text>
+          {!!nextDue && (
+            <Text style={styles.next} maxFontSizeMultiplier={type.small.maxFontSizeMultiplier}>{nextDue}</Text>
+          )}
+          {!!stats.unsynced && (
+            <Text style={styles.warn} maxFontSizeMultiplier={type.small.maxFontSizeMultiplier}>
+              {stats.unsynced === 1 ? "1 review couldn't be saved." : `${stats.unsynced} reviews couldn't be saved.`}
+            </Text>
+          )}
 
-          <View style={styles.stats}>
-            <Stat value={solid} label={solid === 1 ? 'recalled' : 'recalled'} />
-            <View style={styles.divider} />
-            <Stat value={stats.again} label="to revisit" muted icon />
-          </View>
+          {revisit.length > 0 && (
+            <View style={styles.revisit}>
+              <Text style={styles.revisitHead} maxFontSizeMultiplier={type.small.maxFontSizeMultiplier}>To revisit</Text>
+              <ScrollView style={styles.revisitList} showsVerticalScrollIndicator={false}>
+                {revisit.map(card => (
+                  <Pressable
+                    key={card.id}
+                    style={({ pressed }) => [styles.row, pressed && { backgroundColor: colors.sand }]}
+                    onPress={() => { haptic.select(); setOpened(card); }}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${card.word}, ${card.translation}. Open card`}
+                  >
+                    <Text style={[headwordStyle(card.language, 18), styles.rowWord]} numberOfLines={1}>{card.word}</Text>
+                    <Text style={styles.rowMeaning} numberOfLines={1} maxFontSizeMultiplier={type.small.maxFontSizeMultiplier}>
+                      {card.translation}
+                    </Text>
+                    <ChevronRight size={16} strokeWidth={2} color={colors.inkLight} />
+                  </Pressable>
+                ))}
+              </ScrollView>
+            </View>
+          )}
 
-          <TouchableOpacity style={styles.doneBtn} onPress={onDone} activeOpacity={0.85}>
-            <Text style={styles.doneText}>Done</Text>
-          </TouchableOpacity>
-        </View>
+          <Button label="Done" onPress={onDone} style={styles.done} />
+        </Animated.View>
+
+        <ToastLayer />
       </View>
+
+      <StudyCard
+        sticker={opened}
+        mode="browse"
+        embedded
+        onClose={() => setOpened(null)}
+        onUpdate={(id, patch) => { setOpened(o => (o && o.id === id ? { ...o, ...patch } : o)); onUpdate?.(id, patch); }}
+      />
     </Modal>
-  );
-}
-
-function Stat({ value, label, muted, icon }: { value: number; label: string; muted?: boolean; icon?: boolean }) {
-  return (
-    <View style={styles.stat}>
-      <View style={styles.statValueRow}>
-        {icon && <RotateCcw size={14} color={colors.inkLight} />}
-        <Text style={[styles.statValue, muted && styles.statValueMuted]}>{value}</Text>
-      </View>
-      <Text style={styles.statLabel}>{label}</Text>
-    </View>
   );
 }
 
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(43, 42, 40, 0.45)',
+    backgroundColor: colors.scrim,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: spacing.xl,
+    paddingHorizontal: 20,
   },
   card: {
     alignSelf: 'stretch',
     alignItems: 'center',
     backgroundColor: colors.card,
-    borderRadius: 28,
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.xl,
-    paddingBottom: spacing.lg,
-    ...shadows.card,
+    borderRadius: radii.lg,
+    paddingHorizontal: 20,
+    paddingTop: spacing.lg,
+    paddingBottom: 20,
+    ...e2,
   },
   badge: {
     width: 56, height: 56, borderRadius: radii.full,
-    backgroundColor: colors.blushDeep,
+    backgroundColor: colors.terra,
     alignItems: 'center', justifyContent: 'center',
     marginBottom: spacing.md,
   },
-  title: { fontSize: 22, fontFamily: fonts.display, color: colors.inkDark },
-  subtitle: { fontSize: 14, fontFamily: fonts.text, color: colors.inkLight, marginTop: 2 },
+  title: { ...type.h2 },
+  subtitle: { ...type.small, marginTop: 2 },
+  next: { ...type.body, color: colors.inkMid, marginTop: spacing.sm },
+  warn: { ...type.small, color: colors.error, marginTop: spacing.xs },
 
-  stats: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'stretch',
-    marginTop: spacing.lg,
-    marginBottom: spacing.lg,
+  revisit: { alignSelf: 'stretch', marginTop: spacing.md },
+  revisitHead: { ...type.small, fontFamily: fonts.display, marginBottom: spacing.xs },
+  revisitList: { maxHeight: 4 * MIN_TAP + 8 },
+  row: {
+    minHeight: MIN_TAP, flexDirection: 'row', alignItems: 'center', gap: spacing.ms,
+    borderRadius: radii.sm, paddingHorizontal: spacing.sm,
   },
-  stat: { flex: 1, alignItems: 'center', gap: 2 },
-  statValueRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  statValue: { fontSize: 26, fontFamily: fonts.display, color: colors.inkDark },
-  statValueMuted: { color: colors.inkLight },
-  statLabel: { fontSize: 11, fontFamily: fonts.mono, color: colors.inkFaint, letterSpacing: 1 },
-  divider: { width: 1, height: 34, backgroundColor: colors.borderLight },
+  rowWord: { flexShrink: 0, maxWidth: '50%' },
+  rowMeaning: { ...type.small, flex: 1 },
 
-  doneBtn: {
-    alignSelf: 'stretch',
-    alignItems: 'center',
-    paddingVertical: spacing.ms + 2,
-    borderRadius: radii.full,
-    backgroundColor: colors.terra,
-  },
-  doneText: { fontSize: 16, fontFamily: fonts.display, color: colors.white },
+  done: { alignSelf: 'stretch', marginTop: spacing.lg },
 });

@@ -2,8 +2,7 @@ appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
 ---
 # Scenario 4: MEANS -> lemon, Save, then Cancel while the save waits on the lookup.
 # Expect "Discard changes?" and NOTHING saved. Chains from the card back (no relaunch).
-- tapOn:
-    point: "87%,45%"
+- tapOn: "Meaning, .*Edit"
 - extendedWaitUntil:
     visible: "What it means.*"
     timeout: 10000

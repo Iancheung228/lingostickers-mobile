@@ -28,3 +28,21 @@ export function speak(text: string, language: Language, rate: number = LEARNING_
 export function stopSpeaking() {
   Speech.stop();
 }
+
+/**
+ * Speaks and resolves when the utterance ends, is stopped or fails: the
+ * "Compare" button plays the native voice, then your take, back to back.
+ */
+export function speakAsync(text: string, language: Language, rate: number = LEARNING_RATE): Promise<void> {
+  if (!text) return Promise.resolve();
+  Speech.stop();
+  return new Promise<void>(resolve => {
+    Speech.speak(text, {
+      language: LOCALE_BY_LANGUAGE[language],
+      rate,
+      onDone: () => resolve(),
+      onStopped: () => resolve(),
+      onError: () => resolve(),
+    });
+  });
+}

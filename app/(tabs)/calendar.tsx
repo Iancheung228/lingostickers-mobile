@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { usePendingDeletes } from '@/components/PendingDeleteProvider';
 import { View, Text, TouchableOpacity, StyleSheet, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
@@ -116,7 +117,14 @@ function DayIcon({ sticker, size, url }: { sticker: Sticker; size: number; url: 
 
 export default function CalendarScreen() {
   const { user } = useAuth();
-  const [stickers, setStickers] = useState<Sticker[]>([]);
+  const [fetchedStickers, setStickers] = useState<Sticker[]>([]);
+  // A card being deleted (undo window, or already gone) must not come back with
+  // a refetch: every list filters through the provider's pendingDeleteIds.
+  const { pendingDeleteIds } = usePendingDeletes();
+  const stickers = useMemo(
+    () => (pendingDeleteIds.size ? fetchedStickers.filter(s => !pendingDeleteIds.has(s.id)) : fetchedStickers),
+    [fetchedStickers, pendingDeleteIds],
+  );
   const [loadError, setLoadError] = useState(false);
   const [viewedMonth, setViewedMonth] = useState(() => new Date());
   const [mode, setMode] = useState<CalendarMode>('finds');

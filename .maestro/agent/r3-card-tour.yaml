@@ -1,0 +1,65 @@
+# R3 tour: study front/back, undo toast, summary, card detail, the "..." menu.
+# Screenshots land in .maestro/output; no AI calls.
+appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
+---
+- runFlow: ../sign-in.yaml
+- extendedWaitUntil:
+    visible: "Start reviewing — 1 card due.*"
+    timeout: 20000
+- tapOn: "Start reviewing — 1 card due.*"
+- extendedWaitUntil:
+    visible: "Tap to reveal.*"
+    timeout: 10000
+- waitForAnimationToEnd:
+    timeout: 800
+- takeScreenshot: r3-study-front
+- tapOn:
+    point: "50%,77%"   # the Hint pill is inside the card's accessibility element
+- waitForAnimationToEnd:
+    timeout: 600
+- takeScreenshot: r3-study-hint
+- tapOn: "What did you call this.*"
+- extendedWaitUntil:
+    visible: "Good — next review in.*"
+    timeout: 10000
+- waitForAnimationToEnd:
+    timeout: 1200
+- takeScreenshot: r3-study-back
+- tapOn: "More actions"
+- waitForAnimationToEnd:
+    timeout: 800
+- takeScreenshot: r3-study-menu
+# iOS 27 draws the action sheet as a popover with no Cancel row, so pick the harmless Favourite row to close it.
+- tapOn: "Favourite|Remove from favourites"
+- waitForAnimationToEnd:
+    timeout: 800
+- tapOn: "Good — next review in.*"
+- waitForAnimationToEnd:
+    timeout: 700
+- takeScreenshot: r3-undo-toast
+- tapOn: "Close this card"
+- extendedWaitUntil:
+    visible: "Session done"
+    timeout: 10000
+- waitForAnimationToEnd:
+    timeout: 500
+- takeScreenshot: r3-summary
+- tapOn: "Done"
+- extendedWaitUntil:
+    visible: "Collection"
+    timeout: 10000
+- tapOn: "pomme, .*Hear.*"
+- extendedWaitUntil:
+    visible: "Meaning, .*Edit"
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 1000
+- takeScreenshot: r3-detail
+- tapOn: "More actions"
+- waitForAnimationToEnd:
+    timeout: 800
+- takeScreenshot: r3-detail-menu
+# iOS 27 draws the action sheet as a popover with no Cancel row, so pick the harmless Favourite row to close it.
+- tapOn: "Favourite|Remove from favourites"
+- waitForAnimationToEnd:
+    timeout: 800

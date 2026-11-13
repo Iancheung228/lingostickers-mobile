@@ -4,8 +4,9 @@ import { X, Bookmark, Pencil, Volume2, Info, RotateCcw, Check, Sparkles } from '
 import { StickerDraft } from '@/lib/types';
 import { supabase } from '@/lib/supabase';
 import { speak, stopSpeaking } from '@/lib/speech';
-import { colors, spacing, shadows, fonts, wordFontFor, sentenceFontFor } from '@/constants/theme';
-import { SentenceGloss, SentenceInsight } from '@/components/SentenceGloss';
+import { colors, spacing, shadows, fonts, wordFontFor, type } from '@/constants/theme';
+import { CardBack, contentFromDraft } from '@/components/CardView';
+import { useCoachMark } from '@/lib/coachMarks';
 import SceneWords from '@/components/SceneWords';
 import { SceneChip } from '@/lib/sceneCards';
 
@@ -35,6 +36,7 @@ export default function DiscoveryReveal({ draft, onAdd, onDiscard, onRetryExtrac
   // having laid out) scrolls them into view instead of leaving them under
   // the footer.
   const revealSceneRef = useRef(false);
+  const teach = useCoachMark('reveal-prompt', !!draft);
   const [editingWord, setEditingWord] = useState(false);
   const [wordInput, setWordInput] = useState('');
   const [editingSentence, setEditingSentence] = useState(false);
@@ -158,75 +160,28 @@ export default function DiscoveryReveal({ draft, onAdd, onDiscard, onRetryExtrac
             )}
           </View>
 
-          <View style={styles.wordRow}>
-            <Text
-              style={[styles.word, { fontFamily: wordFontFor(draft.language) }, retranslating && styles.fadedWhileTranslating]}
-              numberOfLines={2}
-              adjustsFontSizeToFit
-              minimumFontScale={0.55}
-            >
-              {draft.word}
-            </Text>
-            <TouchableOpacity
-              onPress={() => speak(draft.word, draft.language)}
-              style={styles.speakButton}
-              hitSlop={10}
-              accessibilityRole="button"
-              accessibilityLabel={`Hear ${draft.word} pronounced`}
-            >
-              <Volume2 size={20} color={colors.terra} />
-            </TouchableOpacity>
+          {/* The same answer face the study card and the card detail draw:
+              one CardBack, so a field looks and reads the same here as on
+              every later visit. First meeting, so "More" starts open. */}
+          <View style={styles.answer}>
+            <CardBack
+              card={contentFromDraft(draft)}
+              variant="reveal"
+              onSpeak={() => speak(draft.word, draft.language)}
+              onEdit={(target) => {
+                if (target === 'meaning') beginEditingWord();
+                else if (target === 'sentence') beginEditingSentence();
+              }}
+              editable={['meaning', 'sentence']}
+              moreOpen
+              fading={{ word: retranslating, sentence: retranslatingSentence }}
+            />
           </View>
-          <Text style={[styles.reading, retranslating && styles.fadedWhileTranslating]}>{draft.reading}</Text>
 
-          <TouchableOpacity
-            style={styles.translationRow}
-            onPress={beginEditingWord}
-            disabled={retranslating || editingWord}
-            hitSlop={8}
-          >
-            {retranslating ? (
-              <ActivityIndicator size="small" color={colors.terra} />
-            ) : (
-              <>
-                <Text style={styles.translation}>{draft.translation?.toUpperCase() ?? ''}</Text>
-                <Pencil size={12} color={colors.terra} />
-              </>
-            )}
-          </TouchableOpacity>
-
-          {!!draft.sentence && (
-            <Text style={[styles.sentence, { fontFamily: sentenceFontFor(draft.language) }, retranslatingSentence && styles.fadedWhileTranslating]}>
-              {draft.sentence}
+          {teach.visible && (
+            <Text style={styles.teach} maxFontSizeMultiplier={type.small.maxFontSizeMultiplier}>
+              You’ll see this photo and be asked the word.
             </Text>
-          )}
-
-          <TouchableOpacity
-            style={styles.sentenceTranslationRow}
-            onPress={beginEditingSentence}
-            disabled={retranslatingSentence || editingSentence}
-            hitSlop={8}
-          >
-            {retranslatingSentence ? (
-              <ActivityIndicator size="small" color={colors.terra} />
-            ) : (
-              <>
-                <Text style={styles.sentenceTranslation}>{draft.sentenceTranslation}</Text>
-                <Pencil size={11} color={colors.terra} />
-              </>
-            )}
-          </TouchableOpacity>
-
-          {!retranslatingSentence && (
-            <>
-              <SentenceGloss
-                raw={draft.sentenceGloss}
-                sentence={draft.sentence}
-                language={draft.language}
-                style={styles.revealBlock}
-              />
-              <SentenceInsight text={draft.sentenceInsight} style={styles.revealBlock} />
-            </>
           )}
 
           {!!sceneBase64 && (
@@ -248,7 +203,7 @@ export default function DiscoveryReveal({ draft, onAdd, onDiscard, onRetryExtrac
         </ScrollView>
 
         <View style={styles.actions}>
-          <TouchableOpacity style={styles.addButton} onPress={onAdd} disabled={saving}>
+          <TouchableOpacity style={styles.addButton} onPress={() => { teach.dismiss(); onAdd(); }} disabled={saving}>
             {saving ? (
               <ActivityIndicator color={colors.white} />
             ) : (
@@ -455,7 +410,8 @@ const styles = StyleSheet.create({
   // width instead. An interlinear gloss has to be left-aligned to be read at
   // all — the columns are the meaning — and the note under it lines up with
   // the gloss rather than floating between the two alignments.
-  revealBlock: { alignSelf: 'stretch', marginTop: spacing.md },
+  answer: { alignSelf: 'stretch', backgroundColor: colors.card, borderRadius: 24, padding: 24 },
+  teach: { ...type.small, textAlign: 'center', marginTop: spacing.md },
   actions: {
     paddingHorizontal: 32,
     paddingTop: spacing.ms,

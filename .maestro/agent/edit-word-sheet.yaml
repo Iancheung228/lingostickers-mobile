@@ -5,8 +5,7 @@ appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
 - waitForAnimationToEnd:
     timeout: 1000
 - takeScreenshot: s1-06-card-after-save
-- tapOn:
-    point: "87%,20%"
+- tapOn: "Word, .*Edit"
 - extendedWaitUntil:
     visible: "The word.*"
     timeout: 10000

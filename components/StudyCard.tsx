@@ -1,49 +1,49 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Modal, View, Text, StyleSheet, TouchableOpacity, Pressable, Animated,
-  ActivityIndicator, AccessibilityInfo, ScrollView, Alert, PanResponder,
-  useWindowDimensions, NativeSyntheticEvent, NativeScrollEvent,
+  Modal, View, Text, StyleSheet, Pressable, Animated, AccessibilityInfo, ScrollView, Alert,
+  PanResponder, useWindowDimensions, NativeSyntheticEvent, NativeScrollEvent,
 } from 'react-native';
-import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import * as Haptics from 'expo-haptics';
-import {
-  useAudioRecorder, useAudioRecorderState, RecordingPresets,
-  requestRecordingPermissionsAsync, setAudioModeAsync,
-} from 'expo-audio';
-import { File } from 'expo-file-system';
-import { X, Volume2, HelpCircle, Mic, Play, Trash2, PenLine, PinOff, Download, Share2 } from 'lucide-react-native';
-import StickerImageFallback from '@/components/StickerImageFallback';
-import { withThumbPath } from '@/lib/thumbnails';
-import { Sticker } from '@/lib/types';
-import { supabase } from '@/lib/supabase';
-import { speak } from '@/lib/speech';
-import { useProfile } from '@/hooks/useProfile';
+import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
+import Reanimated, {
+  runOnJS, useAnimatedStyle, useSharedValue, withSpring, withTiming,
+} from 'react-native-reanimated';
+import { Check, MoreHorizontal, RotateCcw, X } from 'lucide-react-native';
+import CardDetail from '@/components/CardDetail';
+import { CardBack, CardFront, STILL_LEARNING, answerLabel, promptLabel, splitAroundWord } from '@/components/CardView';
+import FieldEditor, { EditorSpec } from '@/components/FieldEditor';
+import GradeRow from '@/components/GradeRow';
+import { ToastLayer, useToast } from '@/components/ToastProvider';
 import { useSignedUrls } from '@/hooks/useSignedUrls';
-import { useStickerAuthors } from '@/hooks/useStickerAuthors';
-import { ageInDays, intervalPreview, schedule, spokenDelay, Grade, SchedulePatch } from '@/lib/review';
-import { computeTrimOffsets, MeteringSample } from '@/lib/audioTrim';
-import { useTrimmedVoicePlayback } from '@/hooks/useTrimmedVoicePlayback';
-import Avatar from '@/components/Avatar';
-import FieldEditor, { EditorSpec, Suggestion } from '@/components/FieldEditor';
-import { languageLabel } from '@/lib/languages';
-import { SentenceGloss, SentenceInsight } from '@/components/SentenceGloss';
-import { getFunctionErrorMessage } from '@/lib/functionError';
-import { saveStickerToPhotos, shareSticker } from '@/lib/exportSticker';
-import { alertPermissionDenied } from '@/lib/permissions';
-import { colors, radii, spacing, shadows, fonts, wordFontFor, sentenceFontFor } from '@/constants/theme';
+import { EditTarget, NULLABLE_FIELDS, editorSpecFor } from '@/lib/cardEdit';
+import { showMenu } from '@/lib/actionMenu';
+import { haptic } from '@/lib/haptics';
+import { hintTiers } from '@/lib/hint';
+import { flipMs, useMotion } from '@/lib/motion';
+import { Grade, SchedulePatch, schedule } from '@/lib/review';
+import { speak, stopSpeaking } from '@/lib/speech';
+import { useStudyPrefs } from '@/lib/studyPrefs';
+import { supabase } from '@/lib/supabase';
+import type { Sticker } from '@/lib/types';
+import { colors, e1, radii, spacing, type, MIN_TAP } from '@/constants/theme';
+
+export { splitAroundWord } from '@/components/CardView';
+export type { EditTarget } from '@/lib/cardEdit';
 
 /**
- * 'browse' — just look at the card. Flipping is free: nothing is written, no
- * grade is asked for, and the schedule is untouched. This is what tapping a
- * sticker anywhere in the app does.
+ * 'browse' is the card DETAIL: it opens on the answer, nothing is graded, the
+ * schedule is untouched. Tapping a sticker anywhere in the app opens this. A
+ * "Test me" button turns it into an ungraded quiz.
  *
- * 'review' — the card is part of a study session. The answer side asks for a
- * grade, and that grade is what advances SM-2.
+ * 'review' is the card in a STUDY SESSION: a quiz with a grade row, and that
+ * grade is what advances SM-2.
  *
  * Keeping these apart matters: if simply looking at a word counted as a
- * review, the schedule would slowly fill with cards you glanced at rather
- * than cards you actually recalled.
+ * review, the schedule would slowly fill with cards you glanced at rather than
+ * cards you actually recalled.
+ *
+ * Both postures render the same CardView faces; this file is the Modal around
+ * them, the study loop (flip, hint, grade, swipe) and the field editor.
  */
 export type StudyCardMode = 'browse' | 'review';
 
@@ -51,469 +51,99 @@ interface StudyCardProps {
   sticker: Sticker | null;
   mode?: StudyCardMode;
   onClose: () => void;
-  /// Fired after a grade is written. The parent decides what "next" means —
-  /// advance a session queue, or close a one-off card.
+  /// Fired when a grade is committed. The parent writes it and decides what
+  /// "next" means: advance a session queue, or close a one-off card.
   onGraded?: (grade: Grade, patch: SchedulePatch) => void;
-  /// Position in the current study session, if there is one.
-  progress?: { index: number; total: number };
+  /// Position in the current study session, if there is one. `fraction` is the
+  /// share of unique cards graded at least once, for the thin bar.
+  progress?: { index: number; total: number; fraction?: number };
   /// This card was graded earlier in the session and has come round again
   /// (the learn-ahead re-show), so say so rather than let it read as a bug.
   stillLearning?: boolean;
-  /// Fired after the sticker and every file it owns are gone, so the screen
+  /// Open on the answer with the grade row live: the card an Undo returns to.
+  startFlipped?: boolean;
+  /// Undo the last grade (the VoiceOver action; the toast has its own button).
+  onUndoGrade?: () => void;
+  /// Fired after the card is on its way out (undo toast up), so the screen
   /// behind can drop it from its list.
   onDeleted?: () => void;
-  /// Same patch channel the lists use, so a review written here is reflected
+  /// Same patch channel the lists use, so an edit written here is reflected
   /// in the grid and the due queue without a refetch — see skills.md #1.
   onUpdate?: (id: string, patch: Partial<Sticker>) => void;
   /// Present only when this card was opened from a board, where "remove" has
-  /// a second and far narrower meaning than the delete button above: unpin it
-  /// from this one board, leave it in the collection. Without it the only
-  /// destructive control on a board sticker was the one with the widest
-  /// possible blast radius, wearing the same trash glyph.
+  /// a second and far narrower meaning than delete: unpin it from this one
+  /// board, leave it in the collection.
   onRemoveFromBoard?: { boardName: string; remove: () => void | Promise<void> };
+  /// Opened over a study session: no Delete, no Test me.
+  embedded?: boolean;
 }
 
-const FLIP_MS = 420;
-// How far down, or how fast, the card has to be pulled before letting go
-// means "put it away". Deliberately further than the bottom sheet's 96: this
-// one is dismissed by dragging the thing you are reading, so it has to be
-// clearly a pull rather than a slipped thumb.
+// How far down, or how fast, the card has to be pulled before letting go means
+// "put it away". Deliberately further than the bottom sheet's 96: this one is
+// dismissed by dragging the thing you are reading, so it has to be clearly a
+// pull rather than a slipped thumb.
 const DISMISS_DISTANCE = 120;
 const DISMISS_VELOCITY = 1.1;
-// A drag has to be this far down, and this much more vertical than
-// horizontal, before it counts as a dismissal rather than a tap or a scroll.
+// A drag has to be this far down, and this much more vertical than horizontal,
+// before it counts as a dismissal rather than a tap or a scroll.
 const DRAG_SLOP = 14;
-// Shorter than this and it's an accidental brush of the mic, not a take.
-const MIN_RECORDING_MS = 300;
-
-function ordinal(n: number): string {
-  const rem100 = n % 100;
-  if (rem100 >= 11 && rem100 <= 13) return `${n}TH`;
-  switch (n % 10) {
-    case 1: return `${n}ST`;
-    case 2: return `${n}ND`;
-    case 3: return `${n}RD`;
-    default: return `${n}TH`;
-  }
-}
-
-/** The back face's edit pencils, as VoiceOver actions on the card. */
-const EDIT_ACTIONS_BACK: { name: EditTarget; label: string }[] = [
-  { name: 'word', label: 'Edit the word' },
-  { name: 'reading', label: 'Edit the reading' },
-  { name: 'meaning', label: 'Edit the meaning' },
-  { name: 'sentence', label: 'Edit the example sentence' },
-];
-
-/** Kana or CJK ideographs: text that is not an English meaning. */
-const CJK = /[\u3040-\u30ff\u3400-\u9fff\uf900-\ufaff]/;
-
-export type EditTarget = 'note' | 'word' | 'reading' | 'meaning' | 'sentence';
-
-// Columns that are genuinely nullable — anything else keeps its old value
-// rather than being blanked, so an accidental empty save can't strip the
-// headword off a card.
-const NULLABLE_FIELDS = new Set(['notes', 'part_of_speech', 'sentence_insight']);
-
-function editorSpecFor(target: EditTarget, sticker: Sticker): EditorSpec {
-  switch (target) {
-    case 'note':
-      return {
-        title: 'What happened?',
-        subtitle: 'Where you were, who you were with, why this one stuck — the part no dictionary has.',
-        inputs: [{
-          key: 'notes',
-          value: sticker.notes ?? '',
-          placeholder: 'Queued twenty minutes in the rain for this…',
-          multiline: true,
-        }],
-      };
-    case 'word':
-      return {
-        title: 'The word',
-        subtitle: `As it is written in ${languageLabel(sticker.language)}. Change it and how it's said and what it means follow.`,
-        inputs: [
-          { key: 'word', label: 'WORD', value: sticker.word, fontFamily: wordFontFor(sticker.language), maxLength: 60 },
-        ],
-        // The reading and meaning change with the word: a new word under the
-        // old reading teaches the wrong sound, and for Japanese and Cantonese
-        // the reading is the part a learner cannot check for themselves.
-        follow: {
-          from: 'word',
-          fetch: (text) => readingForWord(text, sticker.language),
-          copy: {
-            looking: 'Looking up how it’s said and what it means…',
-            heading: 'Update how it’s said and what it means to',
-            failed: 'Couldn’t look that word up',
-            kept: 'Keeping the old reading and meaning.',
-            failedKeep: 'Saving changes only the word, so check SAY IT and MEANS after.',
-          },
-          fontFamily: fonts.mono,
-          note: 'Your example sentence stays as it is.',
-          skip: (text) => sticker.language !== 'fr' && !CJK.test(text)
-            ? `That looks like English. To change the meaning, edit MEANS and the ${languageLabel(sticker.language)} word will follow.`
-            : null,
-        },
-      };
-    case 'reading':
-      return {
-        title: 'How to say it',
-        inputs: [{ key: 'reading', label: 'READING', value: sticker.reading, fontFamily: fonts.mono }],
-      };
-    case 'meaning':
-      return {
-        title: 'What it means',
-        subtitle: `In English. Change it and the ${languageLabel(sticker.language)} word follows.`,
-        inputs: [
-          { key: 'translation', label: 'MEANS', value: sticker.translation, maxLength: 60 },
-          { key: 'part_of_speech', label: 'PART OF SPEECH', value: sticker.part_of_speech ?? '', placeholder: 'noun, verb, adjective…' },
-        ],
-        follow: {
-          from: 'translation',
-          fetch: (text) => wordForMeaning(text, sticker.language),
-          copy: {
-            looking: `Finding the ${languageLabel(sticker.language)} word…`,
-            heading: `Change the ${languageLabel(sticker.language)} word to`,
-            failed: `Couldn’t find the ${languageLabel(sticker.language)} word`,
-            kept: `Keeping ${sticker.word}.`,
-            failedKeep: `Saving keeps the word as ${sticker.word}.`,
-          },
-          fontFamily: wordFontFor(sticker.language),
-          // The sentence was written about the actual photo; translate-word
-          // only sees a bare English word, so it is never regenerated here.
-          note: 'Your example sentence stays as it is.',
-          skip: (text) => sticker.language !== 'fr' && CJK.test(text)
-            ? `MEANS is the English. To change the ${languageLabel(sticker.language)} word itself, edit WORD.`
-            : null,
-        },
-      };
-    case 'sentence':
-      return {
-        title: 'In use',
-        subtitle: 'The example sentence and its English.',
-        inputs: [
-          { key: 'sentence', label: 'SENTENCE', value: sticker.sentence, multiline: true, fontFamily: sentenceFontFor(sticker.language) },
-          { key: 'sentence_translation', label: 'IN ENGLISH', value: sticker.sentence_translation, multiline: true },
-        ],
-      };
-  }
-}
-
-/**
- * The target-language word for a corrected English meaning, shown in the
- * editor before anything is saved.
- *
- * Deliberately does NOT touch `sentence`/`sentence_translation`: the stored
- * sentence was generated against the actual photo and names real things in
- * the scene, while translate-word only ever sees a bare English word and
- * returns a generic example. Overwriting would trade something specific to
- * that moment for something anyone could have written.
- */
-async function wordForMeaning(englishWord: string, language: Sticker['language']): Promise<Suggestion> {
-  const { data, error } = await supabase.functions.invoke('translate-word', {
-    body: { englishWord, language },
-  });
-  if (error) throw new Error(await getFunctionErrorMessage(error));
-  if (data?.error) throw new Error(String(data.error));
-  if (!data?.word) throw new Error('No word came back.');
-  // Only keys the model actually returned — an `undefined` in the patch would
-  // travel to Supabase as a column being set, not as one being left alone.
-  const fields: Record<string, string> = { word: String(data.word) };
-  if (data.reading) fields.reading = String(data.reading);
-  if (data.part_of_speech) fields.part_of_speech = String(data.part_of_speech);
-  if (data.category) fields.category = String(data.category);
-  return { fields, title: fields.word, detail: fields.reading };
-}
-
-/**
- * The reading, meaning and part of speech for a word the learner typed in
- * the target language: the other direction of `wordForMeaning`.
- */
-async function readingForWord(word: string, language: Sticker['language']): Promise<Suggestion> {
-  const { data, error } = await supabase.functions.invoke('translate-word', {
-    body: { word, language },
-  });
-  if (error) throw new Error(await getFunctionErrorMessage(error));
-  if (data?.error) throw new Error(String(data.error));
-  if (!data?.reading && !data?.translation) throw new Error('Nothing came back.');
-  // The word stays exactly as typed: the learner was correcting it, and a
-  // model "fixing" their fix back would be maddening.
-  const fields: Record<string, string> = {};
-  if (data.reading) fields.reading = String(data.reading);
-  if (data.translation) fields.translation = String(data.translation);
-  if (data.part_of_speech) fields.part_of_speech = String(data.part_of_speech);
-  return {
-    fields,
-    title: fields.reading ?? fields.translation,
-    detail: fields.reading && fields.translation ? `means ${fields.translation}` : undefined,
-  };
-}
-
-/**
- * The four buttons, left to right, painted as one ramp.
- *
- * The ramp is the whole point and it used to run the wrong way: Hard was bare
- * white and Good was the brand rose, so the button meaning "I struggled" read
- * as blank and the button meaning "I got it" read as an alarm. Colour on a
- * grading scale is not decoration — it is the fastest signal the row carries,
- * and if it disagrees with the words it beats the words.
- *
- * So: filled red → sand → pale green → filled green. Failure and mastery are
- * the two ends and are the two filled buttons; the two middle answers are
- * tints of the colour their end is heading toward. Nothing on this row is the
- * brand rose any more, because the brand rose is what the app uses for
- * "primary action" everywhere else and none of these four is more primary
- * than the others.
- */
-const GRADES: Array<{
-  grade: Grade;
-  label: string;
-  tone: 'toneAgain' | 'toneHard' | 'toneGood' | 'toneEasy';
-  onFill: boolean;
-}> = [
-  { grade: 'again', label: 'Again', tone: 'toneAgain', onFill: true  },
-  { grade: 'hard',  label: 'Hard',  tone: 'toneHard',  onFill: false },
-  { grade: 'good',  label: 'Good',  tone: 'toneGood',  onFill: false },
-  { grade: 'easy',  label: 'Easy',  tone: 'toneEasy',  onFill: true  },
-];
-
-/**
- * Splits a sentence around the headword so it can be bolded in place.
- *
- * The headword is often stored with an article the sentence doesn't repeat
- * ("Le Café" vs "…un café…"), so a failed exact match falls back to the last
- * whitespace-separated token. Returns null when neither is found, and the
- * caller renders the sentence plain rather than guessing.
- */
-export function splitAroundWord(sentence: string, word: string): [string, string, string] | null {
-  const attempt = (needle: string): [string, string, string] | null => {
-    if (!needle) return null;
-    const at = sentence.toLowerCase().indexOf(needle.toLowerCase());
-    if (at < 0) return null;
-    return [sentence.slice(0, at), sentence.slice(at, at + needle.length), sentence.slice(at + needle.length)];
-  };
-  const tokens = word.trim().split(/\s+/);
-  return attempt(word.trim()) ?? attempt(tokens[tokens.length - 1]);
-}
+/// Grade buttons ignore taps this long after a reveal, so a double-tap on
+/// "Tap to reveal" can never grade.
+const GRADE_GUARD_MS = 250;
+/// Horizontal travel that commits a swipe, in points.
+const SWIPE_COMMIT = 96;
+const SWIPE_VELOCITY = 600;
 
 export default function StudyCard({
-  sticker, mode = 'browse', onClose, onGraded, progress, stillLearning, onDeleted, onUpdate, onRemoveFromBoard,
+  sticker, mode = 'browse', onClose, onGraded, progress, stillLearning, startFlipped, onUndoGrade,
+  onDeleted, onUpdate, onRemoveFromBoard, embedded,
 }: StudyCardProps) {
-  const insets = useSafeAreaInsets();
-  const { profile } = useProfile();
-  const [flipped, setFlipped] = useState(false);
-  const [hintShown, setHintShown] = useState(false);
-  const [reducedMotion, setReducedMotion] = useState(false);
-  const flip = useRef(new Animated.Value(0)).current;
-  const [voiceUrl, setVoiceUrl] = useState<string | null>(null);
-  const [uploadingVoice, setUploadingVoice] = useState(false);
-  const recorder = useAudioRecorder({ ...RecordingPresets.HIGH_QUALITY, isMeteringEnabled: true });
-  // Polled well under the default 500ms so the silence trim has enough
-  // resolution to find where speech actually starts and ends.
-  const recorderState = useAudioRecorderState(recorder, 100);
-  const meteringSamplesRef = useRef<MeteringSample[]>([]);
-  // The finger, not the microphone. Everything between the press and
-  // `record()` is asynchronous — a permission sheet, an audio-session switch,
-  // a prepare — and a quick tap releases long before any of it finishes. The
-  // release then found nothing recording and returned, and the recorder
-  // started a moment later with nobody left to stop it: a hot mic for the
-  // rest of the session, with the card showing no sign of it. So the release
-  // records the *intent* first, and every await on the way in checks whether
-  // the finger is still down before going on to the next one.
-  const holding = useRef(false);
-  const [grading, setGrading] = useState(false);
-  // Which field the editor sheet is open on, if any. Carrying the whole spec
-  // rather than a flag means it can't reopen onto the previous field's draft.
+  const toast = useToast();
+  const { reduced } = useMotion();
+  const [testing, setTesting] = useState(false);
+  // The card detail, opened over a study session ("Edit card", the memory line).
+  const [detailOpen, setDetailOpen] = useState(false);
   const [editing, setEditing] = useState<{ target: EditTarget; spec: EditorSpec } | null>(null);
   const [savingField, setSavingField] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
-  // ── Pull down to put the card away ────────────────────────────────────
-  // The modal slides up from the bottom, and a thing that arrives that way is
-  // read as a thing you can push back down; leaving the X as the only exit is
-  // the same broken promise the field editor's grabber used to make.
-  //
-  // The gesture is claimed on *capture*, which is the only way a parent can
-  // outrank a scroll view its finger is already on — so it is fenced in
-  // hard: it takes over only when the face under the finger is scrolled to
-  // its top, the drag is clearly downward, and the mic isn't live. Anywhere
-  // else the touch goes where it always went, to the scroll or to the tap.
-  const { height: windowHeight } = useWindowDimensions();
-  const dragY = useRef(new Animated.Value(0)).current;
-  const atTop = useRef({ front: true, back: true });
-  // Read inside the responder, which is built once and would otherwise close
-  // over the first render's values forever.
-  const live = useRef({ flipped: false, recording: false, onClose, height: windowHeight });
-  live.current = { flipped, recording: recorderState.isRecording, onClose, height: windowHeight };
-
-  const dismissPan = useMemo(() => PanResponder.create({
-    // Taps are never intercepted — only movement can start a drag, so
-    // flipping the card and every button on it keep working untouched.
-    onMoveShouldSetPanResponderCapture: (_e, g) => {
-      const { flipped: f, recording } = live.current;
-      if (recording) return false;
-      if (!atTop.current[f ? 'back' : 'front']) return false;
-      return g.dy > DRAG_SLOP && g.dy > Math.abs(g.dx) * 1.5;
-    },
-    onPanResponderMove: (_e, g) => { dragY.setValue(Math.max(0, g.dy)); },
-    onPanResponderRelease: (_e, g) => {
-      if (g.dy > DISMISS_DISTANCE || g.vy > DISMISS_VELOCITY) {
-        Animated.timing(dragY, {
-          toValue: live.current.height,
-          duration: 190,
-          useNativeDriver: true,
-        }).start(() => { dragY.setValue(0); live.current.onClose(); });
-      } else {
-        Animated.spring(dragY, { toValue: 0, useNativeDriver: true, bounciness: 2 }).start();
-      }
-    },
-    // A drag that is interrupted (a call arrives, the app backgrounds) must
-    // leave the card where it belongs rather than stranded mid-pull.
-    onPanResponderTerminate: () => {
-      Animated.spring(dragY, { toValue: 0, useNativeDriver: true, bounciness: 2 }).start();
-    },
-  }), []);
-
-  const onFaceScroll = useCallback((face: 'front' | 'back') =>
-    (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-      atTop.current[face] = e.nativeEvent.contentOffset.y <= 0;
-    }, []);
-
-  // Every sticker readable here is the signed-in user's own (RLS is
-  // owner-only since 022_restrict_stickers_to_owner.sql), but one won off a
-  // friend is still credited to them — the byline and the face follow
-  // whoever actually found the word. Resolved from the sticker itself rather
-  // than threaded in as a prop, which is exactly the kind of prop that gets
-  // forgotten at a call site.
-  const authorOf = useStickerAuthors(
-    useMemo(() => (sticker ? [sticker] : []), [sticker]),
-    profile,
-  );
-  const author = sticker ? authorOf(sticker) : null;
-  const authorName = author?.username ?? 'You';
-
+  // Every sticker readable here is the signed-in user's own (RLS is owner-only
+  // since 022_restrict_stickers_to_owner.sql).
   const urls = useSignedUrls(useMemo(
     () => (sticker ? [sticker.image_path] : []),
-    [sticker?.image_path]
+    [sticker?.image_path],
   ));
   const imageUrl = sticker?.image_path ? urls.get(sticker.image_path) ?? null : null;
 
-  const { play: playVoice, pause: pauseVoice } = useTrimmedVoicePlayback(
-    voiceUrl, sticker?.voice_note_start_ms, sticker?.voice_note_end_ms
-  );
-
-  // Signed here rather than through useSignedUrls: re-recording overwrites
-  // the same storage path, so the map keyed by that path would never
-  // re-sign and the player would keep serving the previous take.
-  const refreshVoiceUrl = useCallback(async (path: string) => {
-    const { data } = await supabase.storage.from('sticker-images').createSignedUrl(path, 3600);
-    if (data) setVoiceUrl(data.signedUrl);
-  }, []);
-
   useEffect(() => {
-    setVoiceUrl(null);
-    if (!sticker?.voice_note_path) return;
-    let cancelled = false;
-    supabase.storage.from('sticker-images')
-      .createSignedUrl(sticker.voice_note_path, 3600)
-      .then(({ data }) => { if (!cancelled && data) setVoiceUrl(data.signedUrl); });
-    return () => { cancelled = true; };
-  }, [sticker?.id, sticker?.voice_note_path]);
-
-  useEffect(() => {
-    if (!recorderState.isRecording) return;
-    meteringSamplesRef.current.push({
-      t: recorderState.durationMillis,
-      db: recorderState.metering ?? -160,
-    });
-  }, [recorderState.isRecording, recorderState.durationMillis, recorderState.metering]);
-
-  // Never leave the mic hot when the card changes or closes — including when
-  // it was opened by a press that hadn't finished starting yet.
-  useEffect(() => () => {
-    holding.current = false;
-    // `useAudioRecorder` disposes the native shared object when the component
-    // goes away, and reading `recorder.isRecording` on a released object
-    // throws NativeSharedObjectNotFoundException — which this fired on every
-    // card change, not just on close. If the recorder is already gone there is
-    // nothing left to stop, so that is the success case rather than an error.
-    //
-    // Read live off `recorder` rather than off `recorderState`: this cleanup's
-    // deps are the sticker id, so a polled value captured here would be stale
-    // for any recording that started after the effect last ran.
-    try {
-      if (recorder.isRecording) recorder.stop();
-    } catch {
-      // already disposed
-    }
+    setTesting(false);
+    setDetailOpen(false);
+    setEditing(null);
   }, [sticker?.id]);
 
-  useEffect(() => {
-    let mounted = true;
-    AccessibilityInfo.isReduceMotionEnabled().then(e => { if (mounted) setReducedMotion(e); });
-    const sub = AccessibilityInfo.addEventListener('reduceMotionChanged', setReducedMotion);
-    return () => { mounted = false; sub.remove(); };
-  }, []);
-
-  // One showing of a card. A session re-queues a card it booked inside the
-  // learn-ahead window, so the same sticker can come straight back at the next
-  // position. Keying on the id alone treated that as "nothing changed" and
-  // reopened it with the answer showing.
-  const visit = `${sticker?.id}:${progress?.index ?? ''}`;
-
-  // Every card opens on its prompt side, with no hint spent.
-  useEffect(() => {
+  const openEditor = useCallback((target: EditTarget) => {
     if (!sticker) return;
-    setFlipped(false);
-    setHintShown(false);
-    setGrading(false);
-    setEditing(null);
-    flip.setValue(0);
-    dragY.setValue(0);
-    // True because the faces are keyed on the visit below and therefore
-    // remount with a fresh scroll view — asserting it without that would be a
-    // guess about where the previous card had been left.
-    atTop.current = { front: true, back: true };
-  }, [visit]);
-
-  // Grading is what advances the schedule — flipping on its own no longer
-  // counts as a pass. An earlier version logged a review on flip, which meant
-  // a word you had completely blanked on advanced exactly like one you
-  // answered instantly.
-  const handleGrade = useCallback(async (grade: Grade) => {
-    if (!sticker || grading || mode !== 'review') return;
-    setGrading(true);
-    Haptics.impactAsync(
-      grade === 'again' ? Haptics.ImpactFeedbackStyle.Rigid : Haptics.ImpactFeedbackStyle.Light
-    );
-    const patch = schedule(sticker, grade);
-    onUpdate?.(sticker.id, patch);
-    onGraded?.(grade, patch);
-    const { error } = await supabase.from('stickers').update(patch).eq('id', sticker.id);
-    // Roll back rather than leave the card claiming a review the server never
-    // stored — the schedule would then disagree on the next load.
-    if (error) {
-      onUpdate?.(sticker.id, {
-        ease_factor: sticker.ease_factor,
-        interval_days: sticker.interval_days,
-        learning_step: sticker.learning_step,
-        due_at: sticker.due_at,
-        review_count: sticker.review_count,
-        lapses: sticker.lapses,
-        last_reviewed_at: sticker.last_reviewed_at,
-      });
-    }
-    setGrading(false);
-  }, [sticker, grading, mode, onUpdate, onGraded]);
-
-  const openEditor = (target: EditTarget) => {
-    if (!sticker) return;
-    Haptics.selectionAsync();
+    haptic.select();
+    setSaveError(null);
     setEditing({ target, spec: { ...editorSpecFor(target, sticker), id: sticker.id } });
-  };
+  }, [sticker]);
+
+  const toggleFavorite = useCallback(async () => {
+    if (!sticker) return;
+    const next = !sticker.is_favorite;
+    haptic.tap();
+    onUpdate?.(sticker.id, { is_favorite: next });
+    const { error } = await supabase.from('stickers').update({ is_favorite: next }).eq('id', sticker.id);
+    if (error) {
+      onUpdate?.(sticker.id, { is_favorite: !next });
+      toast.show({ kind: 'error', message: "Couldn't update the favourite. Try again." });
+    }
+  }, [sticker, onUpdate, toast]);
 
   const handleSaveField = async (values: Record<string, string>, follow: Record<string, string> | null) => {
     if (!sticker || !editing) return;
     setSavingField(true);
+    setSaveError(null);
     // Clearing a nullable field stores null, so "no note" and "a note that is
     // one space" aren't two different states. Clearing a required one is
     // ignored rather than written — an accidental empty save must not be able
@@ -527,11 +157,7 @@ export default function StudyCard({
     // Three columns describe the sentence rather than being part of it: the
     // word-by-word gloss, the note explaining its grammar, and the syllabus
     // key naming the structure it was built around. Rewriting the sentence by
-    // hand leaves all three describing a sentence that no longer exists, and
-    // this editor has no way to regenerate them — it takes the target-language
-    // text directly from the user. SentenceGloss re-checks the gloss at render
-    // time and would fall silent on its own, but a stale row is still a lie
-    // waiting for someone to query it, and nothing re-checks the note at all.
+    // hand leaves all three describing a sentence that no longer exists.
     if (typeof patch.sentence === 'string' && patch.sentence !== sticker.sentence) {
       patch.sentence_gloss = null;
       patch.sentence_insight = null;
@@ -554,22 +180,21 @@ export default function StudyCard({
       if (Object.keys(patch).length === 0) { setEditing(null); return; }
 
       const before = sticker as unknown as Record<string, unknown>;
-      const previous = Object.fromEntries(
-        Object.keys(patch).map(k => [k, before[k]])
-      ) as Partial<Sticker>;
+      const previous = Object.fromEntries(Object.keys(patch).map(k => [k, before[k]])) as Partial<Sticker>;
       onUpdate?.(sticker.id, patch as Partial<Sticker>);
       const { error } = await supabase.from('stickers').update(patch).eq('id', sticker.id);
       if (error) {
         onUpdate?.(sticker.id, previous);
         throw error;
       }
+      haptic.success();
       setEditing(null);
 
-      // The word moved on and the example sentence did not. Its bolded
-      // headword silently disappears and the card shows "pear" over a
-      // sentence about an apple, so ask now, while the learner is here.
+      // The word moved on and the example sentence did not. Its picked-out
+      // headword silently disappears and the card shows "pear" over a sentence
+      // about an apple, so ask now, while the learner is here.
       const newWord = typeof patch.word === 'string' ? patch.word : null;
-      if (newWord && newWord !== sticker.word && !splitAroundWord(sticker.sentence, newWord)) {
+      if (newWord && newWord !== sticker.word && sticker.sentence && !splitAroundWord(sticker.sentence, newWord)) {
         Alert.alert(
           'Update the sentence too?',
           `Your example sentence doesn't use ${newWord} yet.`,
@@ -579,1026 +204,543 @@ export default function StudyCard({
           ],
         );
       }
-    } catch (err: any) {
-      Alert.alert("Couldn't save", err?.message ?? 'Something went wrong.');
+    } catch {
+      // The sheet stays, with the edit in it (lesson #3: never error.message).
+      haptic.error();
+      setSaveError("Couldn't save. Your edit is still here.");
     } finally {
       setSavingField(false);
     }
   };
 
-  // Hold the mic to record, let go to stop — re-holding overwrites the
-  // previous take at the same storage path, so there is always at most one
-  // voice note per sticker.
-  const handleStartRecording = async () => {
-    if (!sticker || uploadingVoice || recorder.isRecording) return;
-    holding.current = true;
-    const { granted, canAskAgain } = await requestRecordingPermissionsAsync();
-    if (!granted) {
-      holding.current = false;
-      alertPermissionDenied(
-        'Microphone access needed',
-        'Tabi Stickers needs your microphone to record your pronunciation.',
-        canAskAgain
-      );
-      return;
-    }
-    if (!holding.current) return;
-    pauseVoice();
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    meteringSamplesRef.current = [];
-    // record() silently no-ops unless the audio session has allowsRecording
-    // on — lib/speech.ts only ever sets playsInSilentMode for TTS, so this
-    // has to be set explicitly here.
-    await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
-    if (!holding.current) return;
-    await recorder.prepareToRecordAsync();
-    // Last check before the mic actually opens. Past this line the recorder is
-    // live and it is handleStopRecording's job to close it.
-    if (!holding.current) { await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true }); return; }
-    recorder.record();
-  };
+  // ── detail: pull-down + a scale-fade in (250ms; opacity only under RM) ──
+  const detail = mode === 'browse' && !testing;
+  const openAnim = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    if (!sticker || !detail) return;
+    openAnim.setValue(0);
+    Animated.timing(openAnim, { toValue: 1, duration: reduced ? 120 : 250, useNativeDriver: true }).start();
+  }, [!!sticker, detail]);
 
-  const handleStopRecording = async () => {
-    const wasHolding = holding.current;
-    holding.current = false;
-    // `recorder.isRecording` is the live flag; `recorderState` is a 100ms
-    // poll, and a take shorter than one tick would look like no take at all.
-    if (!sticker || !recorder.isRecording) return;
-    if (!wasHolding) return;
-    // Same reason: read the length off the recorder rather than off the poll,
-    // which can still be reporting the previous tick's value.
-    const durationMs = Math.max(recorderState.durationMillis, Math.round(recorder.currentTime * 1000));
-    const samples = meteringSamplesRef.current;
-    await recorder.stop();
-    // Back to playback-only, so speak() and voice playback afterward aren't
-    // left routed through the recording session.
-    await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true });
-    if (durationMs < MIN_RECORDING_MS) return;
-
-    setUploadingVoice(true);
-    try {
-      if (!recorder.uri) throw new Error('Recording failed');
-      const { startMs, endMs } = computeTrimOffsets(samples, durationMs);
-      const path = `${sticker.user_id}/${sticker.id}-voice.m4a`;
-      const bytes = await new File(recorder.uri).bytes();
-      const { error } = await supabase.storage
-        .from('sticker-images')
-        .upload(path, bytes, { contentType: 'audio/m4a', upsert: true });
-      if (error) throw error;
-      await supabase.from('stickers').update({
-        voice_note_path: path,
-        voice_note_start_ms: startMs,
-        voice_note_end_ms: endMs,
-      }).eq('id', sticker.id);
-      onUpdate?.(sticker.id, {
-        voice_note_path: path, voice_note_start_ms: startMs, voice_note_end_ms: endMs,
-      });
-      await refreshVoiceUrl(path);
-    } catch (err: any) {
-      Alert.alert("Couldn't save recording", err?.message ?? 'Something went wrong.');
-    } finally {
-      setUploadingVoice(false);
-    }
-  };
-
-  // One at a time, and named rather than a bare boolean: both buttons spin
-  // off the same download, and a second tap while the first is in flight
-  // would fetch the file twice and stack two system sheets.
-  const [exporting, setExporting] = useState<'save' | 'share' | null>(null);
-
-  const runExport = async (kind: 'save' | 'share') => {
-    if (!sticker || exporting) return;
-    setExporting(kind);
-    const ok = kind === 'save'
-      ? await saveStickerToPhotos(sticker)
-      : await shareSticker(sticker);
-    setExporting(null);
-    // Only saving needs a word of confirmation — a file dropped into Photos
-    // leaves no trace on screen, whereas the share sheet was its own receipt.
-    if (ok && kind === 'save') {
-      Alert.alert('Saved to Photos', 'Long-press it in Photos to lift it out as a chat sticker.');
-    }
-  };
-
-  // A sticker and its card are one thing, not a note pointing at a photo —
-  // so deleting takes the row and every file it owns with it. Leaving the
-  // cutout, memory photo or voice note behind would orphan them in storage
-  // with nothing left that could ever reference or clean them up.
-  const handleDelete = () => {
-    if (!sticker) return;
-    Alert.alert(
-      'Delete card',
-      `Remove "${sticker.word}" from your collection? The cutout, photo and any recording go with it.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            const paths: string[] = [];
-            if (sticker.image_path) paths.push(...withThumbPath(sticker.image_path));
-            if (sticker.thumb_path && !paths.includes(sticker.thumb_path)) paths.push(sticker.thumb_path);
-            if (sticker.memory_photo_path) paths.push(sticker.memory_photo_path);
-            if (sticker.voice_note_path) paths.push(sticker.voice_note_path);
-            const [{ error }] = await Promise.all([
-              supabase.from('stickers').delete().eq('id', sticker.id),
-              supabase.storage.from('sticker-images').remove(paths),
-            ]);
-            if (error) {
-              Alert.alert("Couldn't delete", error.message);
-              return;
-            }
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-            onDeleted?.();
-            onClose();
-          },
-        },
-      ]
-    );
-  };
-
-  const handleRemoveFromBoard = () => {
-    if (!sticker || !onRemoveFromBoard) return;
-    const { boardName, remove } = onRemoveFromBoard;
-    Alert.alert(
-      'Remove from board',
-      `Take "${sticker.word}" off "${boardName}"? It stays in your collection.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Remove',
-          onPress: async () => {
-            await remove();
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            onClose();
-          },
-        },
-      ]
-    );
-  };
-
-  const toggleFlip = useCallback(() => {
-    if (!sticker) return;
-    const next = !flipped;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setFlipped(next);
-    Animated.timing(flip, {
-      toValue: next ? 1 : 0,
-      duration: reducedMotion ? 160 : FLIP_MS,
-      useNativeDriver: true,
-    }).start();
-  }, [sticker, flipped, reducedMotion, flip]);
+  const detailAtTop = useRef(true);
+  const dismiss = useDismiss(
+    () => { if (testing) setTesting(false); else onClose(); },
+    () => detail && detailAtTop.current,
+  );
 
   if (!sticker) return null;
 
-  // Under Reduce Motion the faces cross-fade in place instead of rotating —
-  // a half-second of spinning geometry is exactly what that setting is for.
-  const frontFace = reducedMotion
-    ? { opacity: flip.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }) }
-    : {
-        opacity: flip.interpolate({ inputRange: [0, 0.5, 0.5001, 1], outputRange: [1, 1, 0, 0] }),
-        transform: [
-          { perspective: 1400 },
-          { rotateY: flip.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '180deg'] }) },
-        ],
-      };
-  const backFace = reducedMotion
-    ? { opacity: flip }
-    : {
-        opacity: flip.interpolate({ inputRange: [0, 0.4999, 0.5, 1], outputRange: [0, 0, 1, 1] }),
-        transform: [
-          { perspective: 1400 },
-          { rotateY: flip.interpolate({ inputRange: [0, 1], outputRange: ['180deg', '360deg'] }) },
-        ],
-      };
+  const closeAll = () => { setTesting(false); onClose(); };
 
   return (
     // `transparent` rather than a full-screen presentation, so the card can be
-    // pulled down off the screen with something behind it instead of tearing
-    // a hole in the app. The scrim fades as it travels, which is what tells a
-    // half-committed pull how close to leaving it is.
-    <Modal visible animationType="slide" transparent statusBarTranslucent onRequestClose={onClose}>
-      <Animated.View
-        style={[styles.scrim, {
-          opacity: dragY.interpolate({
-            inputRange: [0, Math.max(windowHeight, 1)],
-            outputRange: [1, 0],
-            extrapolate: 'clamp',
-          }),
-        }]}
-        pointerEvents="none"
-      />
-      <Animated.View
-        {...dismissPan.panHandlers}
-        style={[
-          styles.screen,
-          { paddingTop: insets.top + spacing.sm, paddingBottom: insets.bottom + spacing.md },
-          { transform: [{ translateY: dragY }] },
-        ]}
-      >
-        <View style={styles.topBar}>
-          <TouchableOpacity
-            onPress={onClose}
-            style={styles.topBtn}
-            hitSlop={10}
-            accessibilityRole="button"
-            accessibilityLabel="Close this card"
-          >
-            <X size={20} color={colors.inkDark} />
-          </TouchableOpacity>
-          {!!progress && (
-            <Text style={styles.progress}>{progress.index + 1} / {progress.total}</Text>
-          )}
-          <View style={styles.topActions}>
-            <TouchableOpacity
-              onPress={() => runExport('share')}
-              style={styles.topBtn}
-              hitSlop={10}
-              disabled={!!exporting}
-              accessibilityRole="button"
-              accessibilityLabel="Share this sticker"
+    // pulled down off the screen with something behind it instead of tearing a
+    // hole in the app.
+    <Modal
+      visible
+      animationType={detail ? 'fade' : 'slide'}
+      transparent
+      statusBarTranslucent
+      onRequestClose={() => { if (testing) setTesting(false); else onClose(); }}
+    >
+      <GestureHandlerRootView style={styles.root}>
+        {detail ? (
+          <>
+            <Animated.View style={[styles.scrim, { opacity: dismiss.scrimOpacity }]} pointerEvents="none" />
+            <Animated.View
+              {...dismiss.panHandlers}
+              style={[styles.page, {
+                opacity: openAnim,
+                transform: [
+                  { translateY: dismiss.dragY },
+                  { scale: reduced ? 1 : openAnim.interpolate({ inputRange: [0, 1], outputRange: [0.96, 1] }) },
+                ],
+              }]}
             >
-              {exporting === 'share'
-                ? <ActivityIndicator size="small" color={colors.inkDark} />
-                : <Share2 size={18} color={colors.inkDark} />}
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={() => runExport('save')}
-              style={styles.topBtn}
-              hitSlop={10}
-              disabled={!!exporting}
-              accessibilityRole="button"
-              accessibilityLabel="Save this sticker to your photo library"
-            >
-              {exporting === 'save'
-                ? <ActivityIndicator size="small" color={colors.inkDark} />
-                : <Download size={18} color={colors.inkDark} />}
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={handleDelete}
-              style={styles.topBtn}
-              hitSlop={10}
-              accessibilityRole="button"
-              accessibilityLabel="Delete this sticker"
-            >
-              <Trash2 size={18} color={colors.error} />
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* The card is one accessibility element, and iOS builds such an
-            element's label from every descendant's text — including the face
-            that is turned away, so VoiceOver read the answer aloud before the
-            flip. Say only what is showing. */}
-        <Pressable
-          style={styles.cardArea}
-          onPress={toggleFlip}
-          accessibilityRole="button"
-          accessibilityLabel={flipped ? answerLabel(sticker) : `${stillLearning ? `${STILL_LEARNING}. ` : ''}${promptLabel(sticker, hintShown)}`}
-          accessibilityHint={flipped ? 'Double-tap to see the question again' : 'Double-tap to reveal the answer'}
-          // Being one element also hides every edit pencil inside it from
-          // VoiceOver. These put them back as the card's own actions (swipe
-          // up or down to pick one), and only the ones on the showing face.
-          accessibilityActions={mode !== 'browse' ? undefined : flipped
-            ? EDIT_ACTIONS_BACK.map(({ name, label }) => ({ name, label }))
-            : [{ name: 'note', label: 'Edit what happened' }]}
-          onAccessibilityAction={(e) => {
-            const name = e.nativeEvent.actionName;
-            if (name === 'activate') toggleFlip();
-            else openEditor(name as EditTarget);
-          }}
-        >
-          <Animated.View style={[styles.face, frontFace]} pointerEvents={flipped ? 'none' : 'auto'}>
-            <FrontFace
-              key={`front-${visit}`}
-              onScroll={onFaceScroll('front')}
-              sticker={sticker}
-              authorName={authorName}
-              authorAvatarPath={author?.avatar_path ?? null}
-              imageUrl={imageUrl}
-              hintShown={hintShown}
-              stillLearning={!!stillLearning}
-              onHint={() => { Haptics.selectionAsync(); setHintShown(true); }}
-              // Mid-session the note is part of the prompt, so tapping it
-              // should flip the card like the rest of the face. Editing is a
-              // browsing action.
-              onEditNote={mode === 'browse' ? () => openEditor('note') : undefined}
-            />
-          </Animated.View>
-
-          <Animated.View style={[styles.face, backFace]} pointerEvents={flipped ? 'auto' : 'none'}>
-            <BackFace
-              key={`back-${visit}`}
-              onScroll={onFaceScroll('back')}
-              sticker={sticker}
-              mode={mode}
-              onEditField={mode === 'browse' ? openEditor : undefined}
-              imageUrl={imageUrl}
-              voice={{
-                hasTake: !!sticker.voice_note_path,
-                recording: recorderState.isRecording,
-                uploading: uploadingVoice,
-                onPlay: playVoice,
-                onStart: handleStartRecording,
-                onStop: handleStopRecording,
-              }}
-            />
-          </Animated.View>
-        </Pressable>
-
-        {/* The grading row lives below the card rather than on it, so both
-            faces stay exactly as designed — the card is the flashcard, this
-            is the machinery around it. */}
-        {flipped && mode === 'review' ? (
-          <View style={styles.gradeRow}>
-            {GRADES.map(({ grade, label, tone, onFill }) => (
-              <TouchableOpacity
-                key={grade}
-                style={[styles.gradeBtn, styles[tone], grading && styles.gradeBtnBusy]}
-                onPress={() => handleGrade(grade)}
-                disabled={grading}
-                accessibilityRole="button"
-                // Spoken as a sentence, because "Easy 3mo" read aloud is two
-                // unrelated nouns. The interval is the whole point of the
-                // button — it's what distinguishes the four of them.
-                accessibilityLabel={`${label} — next review in ${spokenDelay(intervalPreview(sticker, grade))}`}
-                accessibilityState={{ disabled: grading }}
-              >
-                <Text style={[styles.gradeLabel, onFill && styles.gradeLabelOnFill]}>
-                  {label}
-                </Text>
-                <Text style={[styles.gradeWhen, onFill && styles.gradeWhenOnFill]}>
-                  {intervalPreview(sticker, grade)}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
+              <CardDetail
+                sticker={sticker}
+                imageUrl={imageUrl}
+                onClose={onClose}
+                onEdit={openEditor}
+                onTest={embedded ? undefined : () => setTesting(true)}
+                onUpdate={onUpdate}
+                onDeleted={onDeleted}
+                onRemoveFromBoard={onRemoveFromBoard}
+                embedded={embedded}
+                onAtTop={top => { detailAtTop.current = top; }}
+              />
+            </Animated.View>
+          </>
         ) : (
-          <View style={styles.browseFooter}>
-            <Text style={styles.flipHint}>
-              {flipped ? 'Tap to go back' : 'Tap to reveal'} · pull down to close
-            </Text>
-            {mode === 'browse' && !!onRemoveFromBoard && (
-              <TouchableOpacity
-                style={styles.unpinBtn}
-                onPress={handleRemoveFromBoard}
-                activeOpacity={0.7}
-                hitSlop={6}
-              >
-                <PinOff size={13} color={colors.inkLight} />
-                <Text style={styles.unpinText} numberOfLines={1}>
-                  Remove from “{onRemoveFromBoard.boardName}”
-                </Text>
-              </TouchableOpacity>
-            )}
-          </View>
+          <StudyFace
+            sticker={sticker}
+            review={mode === 'review'}
+            progress={progress}
+            stillLearning={!!stillLearning}
+            startFlipped={!!startFlipped}
+            imageUrl={imageUrl}
+            onClose={mode === 'review' ? closeAll : () => setTesting(false)}
+            onGraded={onGraded}
+            onUndoGrade={onUndoGrade}
+            onToggleFavorite={toggleFavorite}
+            onOpenDetail={() => setDetailOpen(true)}
+          />
         )}
-      </Animated.View>
+        <ToastLayer bottomOffset={mode === 'review' ? 84 : 0} />
+      </GestureHandlerRootView>
 
       <FieldEditor
         spec={editing?.spec ?? null}
         saving={savingField}
-        onCancel={() => setEditing(null)}
+        error={saveError}
+        onCancel={() => { setEditing(null); setSaveError(null); }}
         onSave={handleSaveField}
       />
+
+      {detailOpen && mode === 'review' && (
+        <StudyCard
+          sticker={sticker}
+          mode="browse"
+          embedded
+          onClose={() => setDetailOpen(false)}
+          onUpdate={onUpdate}
+        />
+      )}
     </Modal>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Front — the prompt. Everything you recorded about the moment, and nothing
-// that would give the word away.
+// Pull down to put the card away
 // ---------------------------------------------------------------------------
-function hintLetter(sticker: Sticker): string {
-  return Array.from(sticker.word.trim())[0] ?? '';
-}
+// The modal arrives from below, and a thing that arrives that way is read as a
+// thing you can push back down; leaving the X as the only exit is the same
+// broken promise the field editor's grabber used to make.
+//
+// The gesture is claimed on *capture*, which is the only way a parent can
+// outrank a scroll view its finger is already on — so it is fenced in hard: it
+// takes over only when the drag is clearly downward and `enabled()` says the
+// face under the finger is at its top. Anywhere else the touch goes where it
+// always went, to the scroll or to the tap.
+function useDismiss(onClose: () => void, enabled: () => boolean) {
+  const { height } = useWindowDimensions();
+  const dragY = useRef(new Animated.Value(0)).current;
+  // Read inside the responder, which is built once and would otherwise close
+  // over the first render's values forever.
+  const live = useRef({ onClose, enabled, height });
+  live.current = { onClose, enabled, height };
 
-/** What VoiceOver reads for the card's front: the prompt as written on it. */
-/**
- * The question on the front. A scan's photo shows one object, so the photo
- * is the cue. A scene card shares its photo with its siblings (a verb, an
- * adjective, an idiom from the same picture), so it has to say which word.
- */
-function frontQuestion(sticker: Sticker): string {
-  return sticker.source === 'scene'
-    ? `How do you say “${sticker.translation}”?`
-    : 'What did you call this?';
-}
+  const panHandlers = useMemo(() => PanResponder.create({
+    onMoveShouldSetPanResponderCapture: (_e, g) =>
+      live.current.enabled() && g.dy > DRAG_SLOP && g.dy > Math.abs(g.dx) * 1.5,
+    onPanResponderMove: (_e, g) => { dragY.setValue(Math.max(0, g.dy)); },
+    onPanResponderRelease: (_e, g) => {
+      if (g.dy > DISMISS_DISTANCE || g.vy > DISMISS_VELOCITY) {
+        Animated.timing(dragY, { toValue: live.current.height, duration: 190, useNativeDriver: true })
+          .start(() => { dragY.setValue(0); live.current.onClose(); });
+      } else {
+        Animated.spring(dragY, { toValue: 0, useNativeDriver: true, bounciness: 2 }).start();
+      }
+    },
+    // A drag interrupted by a call or backgrounding must leave the card where
+    // it belongs rather than stranded mid-pull.
+    onPanResponderTerminate: () => {
+      Animated.spring(dragY, { toValue: 0, useNativeDriver: true, bounciness: 2 }).start();
+    },
+  }).panHandlers, [dragY]);
 
-const STILL_LEARNING = 'Still learning — one more look';
-
-function promptLabel(sticker: Sticker, hintShown: boolean): string {
-  return hintShown
-    ? `${frontQuestion(sticker)} Starts with ${hintLetter(sticker)}`
-    : frontQuestion(sticker);
-}
-
-/** What VoiceOver reads for the card's back: the answer and its example. */
-function answerLabel(sticker: Sticker): string {
-  const parts = [sticker.word];
-  if (sticker.reading) parts.push(sticker.reading);
-  let label = `${parts.join(', ')}, means ${sticker.translation}`;
-  if (sticker.sentence) label += `. ${sticker.sentence} ${sticker.sentence_translation}`.trimEnd();
-  return label;
-}
-
-function FrontFace({ sticker, authorName, authorAvatarPath, imageUrl, hintShown, stillLearning, onHint, onEditNote, onScroll }: {
-  sticker: Sticker; authorName: string; authorAvatarPath: string | null; imageUrl: string | null;
-  hintShown: boolean; stillLearning: boolean; onHint: () => void; onEditNote?: () => void;
-  onScroll: (e: NativeSyntheticEvent<NativeScrollEvent>) => void;
-}) {
-  const found = new Date(sticker.created_at);
-  // The footer's WHEN is the photo's own moment, which an import backdates.
-  const shot = new Date(sticker.discovered_at);
-  const hint = hintLetter(sticker);
-  const note = sticker.notes?.trim() ?? '';
-  const [frameHeight, setFrameHeight] = useState(0);
-  const [contentHeight, setContentHeight] = useState(0);
-  const overflowing = contentHeight > frameHeight + 1;
-
-  return (
-    <View style={styles.card}>
-      <View style={styles.cardBody}>
-        <View style={styles.frontHead}>
-          <View style={styles.frontDate}>
-            <Text style={styles.dayNumber}>{found.toLocaleDateString(undefined, { day: 'numeric' })}</Text>
-            <View>
-              <Text style={styles.weekday}>{found.toLocaleDateString(undefined, { weekday: 'long' })}</Text>
-              <Text style={styles.monthYear}>
-                {found.toLocaleDateString(undefined, { month: 'short', year: 'numeric' }).toUpperCase()}
-              </Text>
-            </View>
-          </View>
-          <View style={styles.frontAuthor}>
-            <View style={styles.frontAuthorText}>
-              <Text style={styles.authorName} numberOfLines={1}>{authorName}</Text>
-              <Text style={styles.dayCount}>DAY {ageInDays(sticker.created_at)}</Text>
-            </View>
-            <Avatar name={authorName} avatarPath={authorAvatarPath} size={38} />
-          </View>
-        </View>
-
-        <ScrollView
-          style={styles.frontScroll}
-          contentContainerStyle={styles.frontScrollContent}
-          showsVerticalScrollIndicator={false}
-          onScroll={onScroll}
-          scrollEventThrottle={16}
-          // Measured rather than guessed from whether there's a note. It used
-          // to be `!!note`, on the reasoning that a card without one has
-          // nothing to scroll — but the cutout below it is sized as a share of
-          // the card's width, so on a narrow or short phone the image alone
-          // overflows, and locking the scroll put the bottom of the sticker
-          // somewhere no gesture could reach.
-          scrollEnabled={overflowing}
-          onLayout={e => setFrameHeight(e.nativeEvent.layout.height)}
-          onContentSizeChange={(_w, h) => setContentHeight(h)}
-        >
-          {/* Two different things wear two different shapes, for the same
-              reason as the back's fields: a written note is *content*, so it
-              belongs to the card and flips it, with a labelled button beside
-              it for editing. An empty note is an *invitation* — there is
-              nothing to read and nothing to flip to on the front, so the
-              whole dashed box is the target it looks like. */}
-          {note ? (
-            <View>
-              <Text style={styles.note}>{note}</Text>
-              {!!onEditNote && (
-                <TouchableOpacity
-                  style={styles.noteEditBtn}
-                  onPress={onEditNote}
-                  hitSlop={{ top: 10, bottom: 10, left: 16, right: 16 }}
-                  activeOpacity={0.6}
-                  accessibilityRole="button"
-                  accessibilityLabel="Edit what happened that day"
-                >
-                  <PenLine size={12} color={colors.inkLight} />
-                  <Text style={styles.noteEditText}>Edit</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-          ) : onEditNote ? (
-            <TouchableOpacity
-              onPress={onEditNote}
-              activeOpacity={0.7}
-              accessibilityRole="button"
-              accessibilityLabel="Add what happened that day"
-            >
-              <View style={styles.notePrompt}>
-                <PenLine size={15} color={colors.inkFaint} />
-                <Text style={styles.notePromptText}>Add what happened that day…</Text>
-              </View>
-            </TouchableOpacity>
-          ) : null}
-
-          <View style={styles.wellWrap}>
-            <View style={styles.well}>
-              {imageUrl ? (
-                <Image
-                  source={{ uri: imageUrl, cacheKey: sticker.image_path ?? undefined }}
-                  cachePolicy="memory-disk"
-                  contentFit="contain"
-                  style={styles.wellImage}
-                />
-              ) : (
-                <StickerImageFallback sticker={sticker} size={72} />
-              )}
-            </View>
-          </View>
-        </ScrollView>
-
-        {stillLearning && <Text style={styles.stillLearning}>{STILL_LEARNING}</Text>}
-        <View style={styles.promptRow}>
-          <Text style={styles.prompt}>
-            {hintShown ? `Starts with ${hint}` : frontQuestion(sticker)}
-          </Text>
-          {!hintShown && (
-            <TouchableOpacity style={styles.hintPill} onPress={onHint} hitSlop={8}>
-              <HelpCircle size={14} color={colors.inkDark} />
-              <Text style={styles.hintText}>Hint</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-      </View>
-
-      <Perforation />
-      <View style={styles.footer}>
-        <FooterField label="WHERE" value={sticker.location_label ?? 'Not recorded'} />
-        <FooterField
-          label="WHEN"
-          value={`${shot.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: false })}, ${shot.toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}`}
-          align="right"
-        />
-      </View>
-    </View>
-  );
+  const scrimOpacity = dragY.interpolate({
+    inputRange: [0, Math.max(height, 1)], outputRange: [1, 0], extrapolate: 'clamp',
+  });
+  return { dragY, panHandlers, scrimOpacity };
 }
 
 // ---------------------------------------------------------------------------
-// Back — the answer, as a run of labelled rows.
+// The study loop: top bar, the flipping card, the grade row
 // ---------------------------------------------------------------------------
-interface VoiceControls {
-  hasTake: boolean;
-  recording: boolean;
-  uploading: boolean;
-  onPlay: () => void;
-  onStart: () => void;
-  onStop: () => void;
-}
-
-function BackFace({ sticker, mode, onEditField, imageUrl, voice, onScroll }: {
-  sticker: Sticker; mode: StudyCardMode; onEditField?: (target: EditTarget) => void;
-  imageUrl: string | null; voice: VoiceControls;
-  onScroll: (e: NativeSyntheticEvent<NativeScrollEvent>) => void;
+function StudyFace({
+  sticker, review, progress, stillLearning, startFlipped, imageUrl,
+  onClose, onGraded, onUndoGrade, onToggleFavorite, onOpenDetail,
+}: {
+  sticker: Sticker;
+  review: boolean;
+  progress?: StudyCardProps['progress'];
+  stillLearning: boolean;
+  startFlipped: boolean;
+  imageUrl: string | null;
+  onClose: () => void;
+  onGraded?: StudyCardProps['onGraded'];
+  onUndoGrade?: () => void;
+  onToggleFavorite: () => void;
+  onOpenDetail: () => void;
 }) {
-  const found = new Date(sticker.discovered_at);
-  // In a session the badge names the review being done right now; browsing
-  // it names the history, because looking is not reviewing.
-  const reviewsDone = sticker.review_count ?? 0;
-  const badge = mode === 'review'
-    ? `${ordinal(reviewsDone + 1)} REVIEW`
-    : reviewsDone === 0
-      ? 'NEW CARD'
-      : `${reviewsDone} REVIEW${reviewsDone === 1 ? '' : 'S'}`;
-  const parts = splitAroundWord(sticker.sentence, sticker.word);
-  const wordFont = wordFontFor(sticker.language);
+  const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
+  const { reduced } = useMotion();
+  const prefs = useStudyPrefs();
+
+  const [flipped, setFlipped] = useState(false);
+  const [hintCount, setHintCount] = useState(0);
+  const [grading, setGrading] = useState(false);
+  const flip = useRef(new Animated.Value(0)).current;
+  const rise = useRef(new Animated.Value(0)).current;
+  const flippedRef = useRef(false);
+  const flippingRef = useRef(false);
+  const gradingRef = useRef(false);
+  const revealedAt = useRef(0);
+  // Cards come back (learn-ahead), and a card an Undo returns to is opened on
+  // its answer: one showing of a card is the id plus its place in the queue.
+  const visit = `${sticker.id}:${progress?.index ?? ''}`;
+  const skipAutoplay = useRef(false);
+  const backAtTop = useRef(true);
+
+  const tiers = useMemo(() => hintTiers(sticker), [sticker.id, sticker.word, sticker.reading, sticker.part_of_speech]);
+  const hints = tiers.slice(0, hintCount);
+
+  // Screen reader on: autoplay would collide with it.
+  const screenReader = useRef(false);
+  useEffect(() => {
+    AccessibilityInfo.isScreenReaderEnabled().then(v => { screenReader.current = v; }).catch(() => {});
+    const sub = AccessibilityInfo.addEventListener('screenReaderChanged', v => { screenReader.current = v; });
+    return () => { sub.remove(); stopSpeaking(); };
+  }, []);
+
+  // ── card motion: exit toward the grade side, enter from 0.97 ──
+  const tx = useSharedValue(0);
+  const cardOpacity = useSharedValue(1);
+  const cardScale = useSharedValue(1);
+  const crossed = useSharedValue(false);
+  const cardAnim = useAnimatedStyle(() => ({
+    opacity: cardOpacity.value,
+    transform: [
+      { translateX: tx.value },
+      { rotate: `${reduced ? 0 : Math.max(-1, Math.min(1, tx.value / width)) * 6}deg` },
+      { scale: cardScale.value },
+    ],
+  }));
+  const washLeft = useAnimatedStyle(() => ({ opacity: tx.value < 0 ? Math.min(-tx.value / SWIPE_COMMIT, 1) * 0.6 : 0 }));
+  const washRight = useAnimatedStyle(() => ({ opacity: tx.value > 0 ? Math.min(tx.value / SWIPE_COMMIT, 1) * 0.6 : 0 }));
+
+  // Every card opens on its prompt side with no hint spent.
+  useEffect(() => {
+    flippedRef.current = startFlipped;
+    flippingRef.current = false;
+    gradingRef.current = false;
+    skipAutoplay.current = startFlipped;
+    setFlipped(startFlipped);
+    setHintCount(0);
+    setGrading(false);
+    flip.setValue(startFlipped ? 1 : 0);
+    rise.setValue(startFlipped ? 1 : 0);
+    revealedAt.current = startFlipped ? Date.now() : 0;
+    backAtTop.current = true;
+    tx.value = 0;
+    crossed.value = false;
+    cardOpacity.value = 0;
+    cardScale.value = reduced ? 1 : 0.97;
+    cardOpacity.value = withTiming(1, { duration: reduced ? 120 : 200 });
+    cardScale.value = withTiming(1, { duration: 200 });
+  }, [visit]);
+
+  // ── flip: 220ms out-cubic, or a 120ms fade under Reduce Motion ──
+  const toggleFlip = useCallback(() => {
+    if (flippingRef.current || gradingRef.current) return;
+    const next = !flippedRef.current;
+    flippingRef.current = true;
+    flippedRef.current = next;
+    setFlipped(next);
+    if (next) { haptic.tap(); revealedAt.current = Date.now(); }
+    else stopSpeaking();
+    Animated.timing(flip, { toValue: next ? 1 : 0, duration: reduced ? 120 : flipMs, useNativeDriver: true })
+      .start(() => { flippingRef.current = false; });
+    if (next) {
+      Animated.timing(rise, { toValue: 1, duration: 160, delay: reduced ? 0 : 120, useNativeDriver: true }).start();
+    } else {
+      rise.setValue(0);
+    }
+  }, [flip, rise, reduced]);
+
+  // Autoplay: once per reveal, 150ms after the swap. Not with a screen reader
+  // on, and never when an Undo has put you back on a card you already heard.
+  useEffect(() => {
+    if (!flipped) return;
+    if (skipAutoplay.current) { skipAutoplay.current = false; return; }
+    if (!prefs.autoplayAudio || screenReader.current) return;
+    const t = setTimeout(() => speak(sticker.word, sticker.language), 150 + (reduced ? 0 : 0));
+    return () => clearTimeout(t);
+  }, [flipped, visit]);
+
+  // ── grading ──
+  const finish = useCallback((grade: Grade) => {
+    onGraded?.(grade, schedule(sticker, grade));
+  }, [sticker, onGraded]);
+
+  const commit = useCallback((grade: Grade, swipe = false) => {
+    if (!review || !flippedRef.current || gradingRef.current || flippingRef.current) return;
+    // A double-tap on "Tap to reveal" must never also grade.
+    if (Date.now() - revealedAt.current < GRADE_GUARD_MS) return;
+    gradingRef.current = true;
+    setGrading(true);
+    stopSpeaking();
+    if (grade === 'again') haptic.rigid(); else haptic.tap();
+    const dir = grade === 'again' || grade === 'hard' ? -1 : 1;
+    const done = (finished?: boolean) => { if (finished) runOnJS(finish)(grade); };
+    if (reduced) {
+      cardOpacity.value = withTiming(0, { duration: 120 }, done);
+    } else {
+      tx.value = withTiming(swipe ? dir * width : dir * 24, { duration: 180 });
+      cardOpacity.value = withTiming(0, { duration: 180 }, done);
+    }
+  }, [review, reduced, width, finish]);
+
+  // ── swipe on the back only: left = Again, right = Good ──
+  const swipeActive = review && flipped && prefs.swipeGrading && !grading;
+  const swipeCommit = useCallback((g: Grade) => commit(g, true), [commit]);
+  const buzz = useCallback(() => haptic.select(), []);
+  const pan = useMemo(() => Gesture.Pan()
+    .enabled(swipeActive)
+    .activeOffsetX([-12, 12])
+    .failOffsetY([-24, 24])
+    .onUpdate(e => {
+      tx.value = e.translationX;
+      const over = Math.abs(e.translationX) >= SWIPE_COMMIT;
+      if (over !== crossed.value) {
+        crossed.value = over;
+        if (over) runOnJS(buzz)();
+      }
+    })
+    .onEnd(e => {
+      const dx = e.translationX;
+      const fast = Math.abs(e.velocityX) > SWIPE_VELOCITY && Math.sign(e.velocityX) === Math.sign(dx || e.velocityX);
+      if (Math.abs(dx) >= SWIPE_COMMIT || fast) {
+        runOnJS(swipeCommit)((dx || e.velocityX) < 0 ? 'again' : 'good');
+      } else {
+        tx.value = withSpring(0, { damping: 20, stiffness: 300 });
+        crossed.value = false;
+      }
+    }), [swipeActive, swipeCommit, buzz]);
+
+  // ── pull down to close, on the front only ──
+  const dismiss = useDismiss(onClose, () => !flippedRef.current || (!review && backAtTop.current));
+
+  // ── progress bar ──
+  const fraction = progress ? (progress.fraction ?? (progress.index + 1) / Math.max(progress.total, 1)) : 0;
+  const bar = useRef(new Animated.Value(fraction)).current;
+  useEffect(() => {
+    Animated.timing(bar, { toValue: fraction, duration: reduced ? 0 : 200, useNativeDriver: false }).start();
+  }, [fraction]);
+
+  const openMenu = () => {
+    haptic.select();
+    showMenu([
+      { label: sticker.is_favorite ? 'Remove from favourites' : 'Favourite', onPress: onToggleFavorite },
+      { label: 'Edit card', onPress: onOpenDetail },
+    ]);
+  };
+
+  // The card is one accessibility element, and iOS builds such an element's
+  // label from every descendant's text, including the face that is turned
+  // away, so VoiceOver would read the answer aloud before the flip. Say only
+  // what is showing.
+  const label = flipped
+    ? answerLabel(sticker)
+    : `${stillLearning ? `${STILL_LEARNING}. ` : ''}${promptLabel(sticker, hints)}`;
+  const actions = flipped
+    ? [
+        ...(review ? [
+          { name: 'again', label: 'Again' }, { name: 'hard', label: 'Hard' },
+          { name: 'good', label: 'Good' }, { name: 'easy', label: 'Easy' },
+          ...(onUndoGrade ? [{ name: 'undo', label: 'Undo the last grade' }] : []),
+        ] : []),
+        { name: 'speak', label: 'Hear it pronounced' },
+        { name: 'details', label: 'Open card details' },
+      ]
+    : [...(hintCount < tiers.length ? [{ name: 'hint', label: 'Hint' }] : [])];
+
+  const frontFace = reduced
+    ? { opacity: flip.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }) }
+    : {
+        opacity: flip.interpolate({ inputRange: [0, 0.5, 0.5001, 1], outputRange: [1, 1, 0, 0] }),
+        transform: [{ perspective: 1400 }, { rotateY: flip.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '180deg'] }) }],
+      };
+  const backFace = reduced
+    ? { opacity: flip }
+    : {
+        opacity: flip.interpolate({ inputRange: [0, 0.4999, 0.5, 1], outputRange: [0, 0, 1, 1] }),
+        transform: [{ perspective: 1400 }, { rotateY: flip.interpolate({ inputRange: [0, 1], outputRange: ['180deg', '360deg'] }) }],
+      };
 
   return (
-    <View style={styles.card}>
-      <View style={styles.cardBody}>
-        <View style={styles.backHead}>
-          <Text style={styles.backMeta}>{languageLabel(sticker.language).toUpperCase()}</Text>
-          <Text style={styles.backMeta}>{badge}</Text>
-        </View>
-
-        <ScrollView
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.backScroll}
-          onScroll={onScroll}
-          scrollEventThrottle={16}
-        >
-          <Field label="WORD" editLabel="Edit the word" onEdit={onEditField && (() => onEditField('word'))}>
-            <Text style={[styles.word, { fontFamily: wordFont }]}>{sticker.word}</Text>
-          </Field>
-
-          <Field label="SAY IT" editLabel="Edit the reading" onEdit={onEditField && (() => onEditField('reading'))}>
-            <View style={styles.sayItRow}>
-              <Text style={styles.reading} numberOfLines={2}>[{sticker.reading}]</Text>
-              <View style={styles.sayItBtns}>
-                <TouchableOpacity
-                  style={styles.speakBtn}
-                  onPress={() => speak(sticker.word, sticker.language)}
-                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 5 }}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Hear ${sticker.word} pronounced`}
-                >
-                  <Volume2 size={17} color={colors.white} />
-                </TouchableOpacity>
-
-                {voice.hasTake && !voice.recording && (
-                  <TouchableOpacity
-                    style={styles.voiceBtn}
-                    onPress={voice.onPlay}
-                    hitSlop={{ top: 10, bottom: 10, left: 5, right: 5 }}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Play your recording of ${sticker.word}`}
-                  >
-                    <Play size={14} color={colors.sageDark} fill={colors.sageDark} />
-                  </TouchableOpacity>
-                )}
-
-                {/* Press-and-hold rather than tap-to-toggle: a hold can't
-                    leave the mic running if the card is dismissed mid-take. */}
-                <TouchableOpacity
-                  style={[styles.micBtn, voice.recording && styles.micBtnLive]}
-                  onPressIn={voice.onStart}
-                  onPressOut={voice.onStop}
-                  disabled={voice.uploading}
-                  hitSlop={{ top: 10, bottom: 10, left: 5, right: 10 }}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Hold to record yourself saying ${sticker.word}`}
-                  accessibilityState={{ disabled: voice.uploading, busy: voice.recording }}
-                >
-                  {voice.uploading
-                    ? <ActivityIndicator size="small" color={colors.terra} />
-                    : <Mic size={16} color={voice.recording ? colors.white : colors.terra} />}
-                </TouchableOpacity>
-              </View>
-            </View>
-            <Text style={styles.micHint}>
-              {voice.recording
-                ? 'Recording… let go to stop'
-                : voice.hasTake
-                  ? 'Hold the mic to record a new take'
-                  : 'Hold the mic to record your pronunciation'}
-            </Text>
-          </Field>
-
-          <Field
-            label={sticker.part_of_speech ? `MEANS · ${sticker.part_of_speech.toUpperCase()}` : 'MEANS'}
-            editLabel="Edit the meaning"
-            onEdit={onEditField && (() => onEditField('meaning'))}
-          >
-            <Text style={styles.means}>{sticker.translation}</Text>
-          </Field>
-
-          <Field label="IN USE" last editLabel="Edit the example sentence" onEdit={onEditField && (() => onEditField('sentence'))}>
-            <Text style={[styles.sentence, { fontFamily: sentenceFontFor(sticker.language) }]}>
-              {parts ? (
-                <>
-                  {parts[0]}
-                  <Text style={[styles.sentenceWord, { fontFamily: wordFontFor(sticker.language) }]}>{parts[1]}</Text>
-                  {parts[2]}
-                </>
-              ) : sticker.sentence}
-            </Text>
-            <Text style={styles.sentenceTranslation}>{sticker.sentence_translation}</Text>
-            <SentenceGloss
-              raw={sticker.sentence_gloss}
-              sentence={sticker.sentence}
-              language={sticker.language}
-            />
-            <SentenceInsight text={sticker.sentence_insight} />
-          </Field>
-        </ScrollView>
-      </View>
-
-      <Perforation />
-      <View style={styles.footer}>
-        <View style={styles.footerThumb}>
-          {imageUrl && (
-            <Image
-              source={{ uri: imageUrl, cacheKey: sticker.image_path ?? undefined }}
-              cachePolicy="memory-disk"
-              contentFit="cover"
-              style={styles.wellImage}
-            />
-          )}
-        </View>
-        <FooterField label="SHOT AT" value={sticker.location_label ?? 'Not recorded'} />
-        <Text style={styles.footerWhen}>
-          {found.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: false })},{' '}
-          {found.toLocaleDateString(undefined, { day: 'numeric', month: 'short' }).toUpperCase()}
-        </Text>
-      </View>
-    </View>
-  );
-}
-
-/**
- * One row of the answer side — and the screen's sharpest division of touch.
- *
- * The whole field used to be the edit target, which meant that on the back of
- * a card in browse mode almost every pixel opened a text editor while the
- * footer underneath said "Tap the card to go back". The card was telling the
- * truth about one narrow gutter and lying about the rest of itself.
- *
- * So the two actions get two shapes: the pencil is a button and edits, and
- * everything else — the label, the word, the sentence, the space around them
- * — belongs to the card and flips it. The button is drawn small to stay out
- * of the way of the text, and given `hitSlop` to a full 48pt so that being
- * small is a visual decision rather than an aiming problem.
- *
- * Mid-session there is no pencil at all: being dropped into a text editor
- * because you tapped slightly left of centre would be a bad surprise while
- * studying.
- */
-function Field({ label, children, last, onEdit, editLabel }: {
-  label: string; children: React.ReactNode; last?: boolean;
-  onEdit?: () => void; editLabel?: string;
-}) {
-  return (
-    <View style={[styles.field, !last && styles.fieldRuled]}>
-      <View style={styles.fieldHead}>
-        <Text style={styles.fieldLabel}>{label}</Text>
-        {!!onEdit && (
-          <TouchableOpacity
-            style={styles.editBtn}
-            onPress={onEdit}
-            hitSlop={{ top: 12, bottom: 12, left: 16, right: 16 }}
-            activeOpacity={0.6}
+    <>
+      <Animated.View style={[styles.scrim, { opacity: dismiss.scrimOpacity }]} pointerEvents="none" />
+      <Animated.View
+        {...dismiss.panHandlers}
+        style={[
+          styles.screen,
+          { paddingTop: insets.top + spacing.sm, paddingBottom: insets.bottom + spacing.md },
+          { transform: [{ translateY: dismiss.dragY }] },
+        ]}
+      >
+        <View style={styles.topBar}>
+          <Pressable
+            onPress={onClose}
+            style={({ pressed }) => [styles.topBtn, pressed && styles.topBtnPressed]}
             accessibilityRole="button"
-            accessibilityLabel={editLabel ?? `Edit ${label.toLowerCase()}`}
+            accessibilityLabel="Close this card"
           >
-            <PenLine size={13} color={colors.inkLight} />
-          </TouchableOpacity>
+            <X size={22} strokeWidth={1.75} color={colors.inkDark} />
+          </Pressable>
+          {review && !!progress ? (
+            <>
+              <View style={styles.track} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+                <Animated.View style={[styles.fill, { width: bar.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] }) }]} />
+              </View>
+              <Text style={styles.count} maxFontSizeMultiplier={type.data.maxFontSizeMultiplier}>
+                {`${progress.index + 1} / ${progress.total}`}
+              </Text>
+            </>
+          ) : <View style={styles.flexSpace} />}
+          {review ? (
+            <Pressable
+              onPress={openMenu}
+              style={({ pressed }) => [styles.topBtn, pressed && styles.topBtnPressed]}
+              accessibilityRole="button"
+              accessibilityLabel="More actions"
+            >
+              <MoreHorizontal size={22} strokeWidth={1.75} color={colors.inkDark} />
+            </Pressable>
+          ) : <View style={styles.topBtn} />}
+        </View>
+
+        <GestureDetector gesture={pan}>
+          <Reanimated.View style={[styles.cardArea, cardAnim]}>
+            <Pressable
+              style={styles.fillAbs}
+              onPress={toggleFlip}
+              accessibilityRole="button"
+              accessibilityLabel={label}
+              accessibilityHint={flipped ? 'Double-tap to see the question again' : 'Double-tap to reveal the answer'}
+              accessibilityActions={actions}
+              onAccessibilityAction={e => {
+                const name = e.nativeEvent.actionName;
+                if (name === 'activate') toggleFlip();
+                else if (name === 'hint') setHintCount(c => Math.min(c + 1, tiers.length));
+                else if (name === 'speak') speak(sticker.word, sticker.language);
+                else if (name === 'details') onOpenDetail();
+                else if (name === 'undo') onUndoGrade?.();
+                else commit(name as Grade);
+              }}
+            >
+              <Animated.View style={[styles.face, frontFace]} pointerEvents={flipped ? 'none' : 'auto'}>
+                <View style={styles.card}>
+                  <View style={styles.clip}>
+                    <CardFront
+                      key={`front-${visit}`}
+                      card={sticker}
+                      imageUrl={imageUrl}
+                      hints={hints}
+                      hasMoreHints={hintCount < tiers.length}
+                      onHint={() => { haptic.select(); setHintCount(c => Math.min(c + 1, tiers.length)); }}
+                      stillLearning={stillLearning}
+                    />
+                  </View>
+                </View>
+              </Animated.View>
+
+              <Animated.View style={[styles.face, backFace]} pointerEvents={flipped ? 'auto' : 'none'}>
+                <View style={styles.card}>
+                  <View style={styles.clip}>
+                    <ScrollView
+                      key={`back-${visit}`}
+                      showsVerticalScrollIndicator={false}
+                      contentContainerStyle={styles.backScroll}
+                      onScroll={(e: NativeSyntheticEvent<NativeScrollEvent>) => { backAtTop.current = e.nativeEvent.contentOffset.y <= 0; }}
+                      scrollEventThrottle={16}
+                    >
+                      <CardBack
+                        card={sticker}
+                        variant="study"
+                        thumbUrl={imageUrl}
+                        thumbPath={sticker.image_path}
+                        onSpeak={() => speak(sticker.word, sticker.language)}
+                        onOpenMemory={onOpenDetail}
+                      />
+                    </ScrollView>
+                  </View>
+                </View>
+              </Animated.View>
+            </Pressable>
+
+            {/* Swipe feedback grows from the edge it is heading for. */}
+            <Reanimated.View pointerEvents="none" style={[styles.wash, styles.washLeft, washLeft]}>
+              <RotateCcw size={28} strokeWidth={2} color={colors.error} />
+            </Reanimated.View>
+            <Reanimated.View pointerEvents="none" style={[styles.wash, styles.washRight, washRight]}>
+              <Check size={28} strokeWidth={2.25} color={colors.success} />
+            </Reanimated.View>
+
+            {/* Outside the card's accessibility element, so it stays its own
+                line for VoiceOver and the approved flow. */}
+            {!flipped && (
+              <View style={styles.revealHint} pointerEvents="none">
+                <Text style={styles.revealText} maxFontSizeMultiplier={type.small.maxFontSizeMultiplier}>Tap to reveal</Text>
+              </View>
+            )}
+          </Reanimated.View>
+        </GestureDetector>
+
+        {/* The grading row lives below the card rather than on it, so both
+            faces stay exactly as designed: the card is the flashcard, this is
+            the machinery around it. The slot is reserved so the card never
+            changes height at the flip. */}
+        {review && (
+          <View style={styles.gradeSlot}>
+            {flipped && (
+              <Animated.View style={{ opacity: rise, transform: [{ translateY: rise.interpolate({ inputRange: [0, 1], outputRange: [8, 0] }) }] }}>
+                <GradeRow sticker={sticker} simple={prefs.simpleGrading} disabled={grading} onGrade={g => commit(g)} />
+              </Animated.View>
+            )}
+          </View>
         )}
-      </View>
-      {children}
-    </View>
+      </Animated.View>
+    </>
   );
-}
-
-function FooterField({ label, value, align }: { label: string; value: string; align?: 'right' }) {
-  return (
-    <View style={[styles.footerField, align === 'right' && styles.footerFieldRight]}>
-      <Text style={styles.footerLabel}>{label}</Text>
-      <Text style={styles.footerValue} numberOfLines={1}>{value}</Text>
-    </View>
-  );
-}
-
-// The torn-ticket seam between the card and its footer. A dashed border on a
-// zero-height view, rather than a row of drawn dots, so it stretches to any
-// card width without the dashes ever landing half-off the edge.
-function Perforation() {
-  return <View style={styles.perforation} />;
 }
 
 const styles = StyleSheet.create({
-  // Dimmed, not opaque: the point of pulling the card down is to see that
-  // there is a screen behind it to go back to. An opaque backdrop would make
-  // the drag look like the card sliding across a blank wall.
-  scrim: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(43, 42, 40, 0.45)' },
-  screen: { flex: 1, backgroundColor: colors.sky, paddingHorizontal: spacing.md },
+  root: { flex: 1 },
+  // Dimmed, not opaque: the point of pulling the card down is to see that there
+  // is a screen behind it to go back to.
+  scrim: { ...StyleSheet.absoluteFillObject, backgroundColor: colors.scrim },
+  page: { flex: 1, backgroundColor: colors.sky },
+  screen: { flex: 1, backgroundColor: colors.sky, paddingHorizontal: 20 },
 
-  topBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingBottom: spacing.sm,
-  },
-  topActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  topBtn: {
-    width: 36, height: 36, borderRadius: radii.full,
-    alignItems: 'center', justifyContent: 'center',
-    backgroundColor: colors.card,
-    ...shadows.card,
-  },
+  topBar: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingBottom: spacing.sm },
+  topBtn: { width: MIN_TAP, height: MIN_TAP, borderRadius: radii.full, alignItems: 'center', justifyContent: 'center' },
+  topBtnPressed: { backgroundColor: colors.terraLight },
+  flexSpace: { flex: 1 },
+  track: { flex: 1, height: 3, borderRadius: 2, backgroundColor: colors.terraLight, overflow: 'hidden' },
+  fill: { height: 3, borderRadius: 2, backgroundColor: colors.terra },
+  count: { ...type.data, color: colors.inkLight, minWidth: 48, textAlign: 'center' },
 
   cardArea: { flex: 1 },
+  fillAbs: { ...StyleSheet.absoluteFillObject },
   face: { ...StyleSheet.absoluteFillObject, backfaceVisibility: 'hidden' },
+  // Shadow on the outer view, clipping on the inner: a view that both clips and
+  // casts a shadow loses the shadow on iOS.
+  card: { flex: 1, backgroundColor: colors.card, borderRadius: radii.lg, ...e1 },
+  clip: { flex: 1, borderRadius: radii.lg, overflow: 'hidden' },
+  backScroll: { padding: 24, paddingBottom: 16 },
 
-  card: {
-    flex: 1,
-    backgroundColor: colors.card,
-    borderRadius: 28,
-    overflow: 'hidden',
-    ...shadows.card,
-  },
-  cardBody: { flex: 1, paddingHorizontal: spacing.lg, paddingTop: spacing.lg },
+  revealHint: { position: 'absolute', left: 0, right: 0, bottom: 20, alignItems: 'center' },
+  revealText: { ...type.small },
 
-  // ── front ──
-  frontHead: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' },
-  frontDate: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  dayNumber: { fontSize: 34, lineHeight: 38, fontFamily: fonts.display, color: colors.inkDark },
-  weekday: { fontSize: 15, fontFamily: fonts.display, color: colors.inkDark },
-  monthYear: { fontSize: 9.5, fontFamily: fonts.mono, color: colors.inkLight, letterSpacing: 1.4 },
-  frontAuthor: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  frontAuthorText: { alignItems: 'flex-end' },
-  authorName: { fontSize: 13, fontFamily: fonts.display, color: colors.inkDark },
-  dayCount: { fontSize: 9.5, fontFamily: fonts.mono, color: colors.inkLight, letterSpacing: 1.4 },
-
-  frontScroll: { flex: 1, marginTop: spacing.md },
-  frontScrollContent: { paddingBottom: spacing.sm },
-  note: { fontSize: 17, fontFamily: fonts.text, lineHeight: 26, color: colors.inkMid },
-  notePrompt: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingVertical: spacing.ms,
-    paddingHorizontal: spacing.md,
-    borderRadius: radii.md,
-    borderWidth: 1.5,
-    borderStyle: 'dashed',
-    borderColor: colors.border,
-  },
-  notePromptText: { fontSize: 15, fontFamily: fonts.text, color: colors.inkFaint },
-  // Sits under the note rather than over it: a note can run to several lines
-  // and an overlaid control would land on top of the words on a long one.
-  noteEditBtn: {
-    alignSelf: 'flex-start',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    marginTop: spacing.sm,
-    paddingHorizontal: spacing.ms,
-    paddingVertical: 5,
-    borderRadius: radii.full,
-    borderWidth: 1,
-    borderColor: colors.borderLight,
-    backgroundColor: colors.sky,
-  },
-  noteEditText: { fontSize: 12, fontFamily: fonts.display, color: colors.inkLight },
-
-  // Offset left rather than centred, as in the reference: the cutout reads as
-  // a photo laid onto the card, not as a framed illustration.
-  wellWrap: { alignItems: 'flex-start', marginTop: spacing.lg },
-  // A sizing box only — no fill, no rounding, no clipping. The cutout is a
-  // transparent PNG, so it should sit on the card the way a sticker sits on
-  // a page; a tinted circle behind it reads as a photo frame and crops the
-  // silhouette that the whole cutout pipeline exists to produce.
-  well: {
-    width: '82%',
-    aspectRatio: 1,
-    alignItems: 'center',
+  wash: {
+    position: 'absolute', top: 0, bottom: 0, width: '55%', borderRadius: radii.lg,
     justifyContent: 'center',
   },
-  wellImage: { width: '100%', height: '100%' },
+  washLeft: { left: 0, backgroundColor: colors.againTint, paddingLeft: 24, alignItems: 'flex-start' },
+  washRight: { right: 0, backgroundColor: colors.successLight, paddingRight: 24, alignItems: 'flex-end' },
 
-  promptRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.sm,
-    paddingVertical: spacing.md,
-  },
-  stillLearning: { fontSize: 13, fontFamily: fonts.text, color: colors.inkLight, paddingTop: spacing.sm },
-  prompt: { flex: 1, fontSize: 20, fontFamily: fonts.display, color: colors.inkDark },
-  hintPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm + 1,
-    borderRadius: radii.full,
-    borderWidth: 1.5,
-    borderColor: colors.inkDark,
-  },
-  hintText: { fontSize: 14, fontFamily: fonts.display, color: colors.inkDark },
-
-  // ── back ──
-  backHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  backMeta: { fontSize: 10, fontFamily: fonts.monoBold, color: colors.inkLight, letterSpacing: 1.5 },
-  backScroll: { paddingTop: spacing.md, paddingBottom: spacing.md },
-
-  field: { paddingBottom: spacing.md, marginBottom: spacing.md },
-  fieldRuled: { borderBottomWidth: 1, borderBottomColor: colors.borderLight },
-  fieldHead: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: spacing.sm,
-  },
-  // Drawn as a button because it is now the only way into the editor — a bare
-  // glyph beside a label reads as decoration, and the thing that has to be
-  // aimed at is exactly the thing that must look aimable. The negative margin
-  // keeps a 28pt control inside a 13pt label's row instead of pushing all four
-  // fields apart; hitSlop is what makes it comfortable to hit anyway.
-  editBtn: {
-    width: 28, height: 28, borderRadius: radii.full,
-    alignItems: 'center', justifyContent: 'center',
-    backgroundColor: colors.sky,
-    borderWidth: 1,
-    borderColor: colors.borderLight,
-    marginVertical: -7,
-    marginRight: -2,
-  },
-  fieldLabel: {
-    fontSize: 10,
-    fontFamily: fonts.monoBold,
-    color: colors.inkLight,
-    letterSpacing: 1.5,
-  },
-  // fontFamily from the render site — target-language headword.
-  word: { fontSize: 38, lineHeight: 48, color: colors.inkDark },
-  sayItRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm },
-  reading: { flex: 1, fontSize: 22, fontFamily: fonts.mono, color: colors.inkDark },
-  // 12pt apart, not 8: each of these three carries 5pt of horizontal hitSlop
-  // (below), and at an 8pt gap that slop made every pair of neighbours
-  // overlap. The pair that mattered was Play and the mic — one replays your
-  // recording, the other records over it — so the cost of a mis-aimed thumb
-  // there was the take you had just made.
-  sayItBtns: { flexDirection: 'row', alignItems: 'center', gap: spacing.ms },
-  speakBtn: {
-    width: 40, height: 40, borderRadius: radii.full,
-    backgroundColor: colors.blushDeep,
-    alignItems: 'center', justifyContent: 'center',
-    ...shadows.card,
-  },
-  voiceBtn: {
-    width: 36, height: 36, borderRadius: radii.full,
-    backgroundColor: colors.sageLight,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  micBtn: {
-    width: 40, height: 40, borderRadius: radii.full,
-    backgroundColor: colors.terraLight,
-    borderWidth: 1.5,
-    borderColor: colors.terra,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  micBtnLive: { backgroundColor: colors.error, borderColor: colors.error },
-  micHint: { fontSize: 11, fontFamily: fonts.text, color: colors.inkFaint, marginTop: spacing.sm },
-  means: { fontSize: 20, fontFamily: fonts.text, color: colors.inkDark, lineHeight: 27 },
-  // fontFamily from the render site — target-language sentence.
-  sentence: { fontSize: 19, lineHeight: 30, color: colors.inkDark },
-  // The headword picked out inside the sentence. Family alone can't carry
-  // this: in Japanese and Cantonese the sentence and the word are the same
-  // system face, so the highlight was invisible in two of three languages.
-  // The accent colour is what actually marks it, in all three.
-  sentenceWord: { color: colors.terra },
-  sentenceTranslation: { fontSize: 15, fontFamily: fonts.text, lineHeight: 22, color: colors.inkLight, marginTop: spacing.sm },
-
-  // ── shared footer ──
-  perforation: {
-    borderTopWidth: 1.5,
-    borderTopColor: colors.border,
-    borderStyle: 'dashed',
-    marginHorizontal: spacing.md,
-  },
-  footer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.ms,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    backgroundColor: colors.sky,
-  },
-  footerThumb: {
-    width: 42, height: 42, borderRadius: radii.full,
-    backgroundColor: colors.sand,
-    overflow: 'hidden',
-  },
-  footerField: { flex: 1, gap: 2 },
-  footerFieldRight: { alignItems: 'flex-end' },
-  footerLabel: { fontSize: 9.5, fontFamily: fonts.monoBold, color: colors.inkLight, letterSpacing: 1.4 },
-  footerValue: { fontSize: 14, fontFamily: fonts.display, color: colors.inkDark },
-  footerWhen: { fontSize: 12, fontFamily: fonts.mono, color: colors.inkDark, letterSpacing: 0.5 },
-
-  browseFooter: { alignItems: 'center', gap: spacing.sm },
-  // Deliberately quiet and text-led, sitting apart from the top bar's red
-  // trash: same screen, two removals, and only the loud one is permanent.
-  unpinBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: spacing.ms,
-    paddingVertical: 7,
-    borderRadius: radii.full,
-    borderWidth: 1,
-    borderColor: colors.border,
-    maxWidth: '90%',
-  },
-  unpinText: { fontSize: 12, fontFamily: fonts.display, color: colors.inkLight, flexShrink: 1 },
-  flipHint: { textAlign: 'center', fontSize: 12, fontFamily: fonts.text, color: colors.inkFaint, paddingTop: spacing.ms, paddingBottom: spacing.xs, },
-  progress: { fontSize: 12, fontFamily: fonts.monoBold, color: colors.inkLight, letterSpacing: 1.2 },
-
-  gradeRow: { flexDirection: 'row', gap: spacing.sm, paddingTop: spacing.ms },
-  gradeBtn: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 1,
-    paddingVertical: spacing.ms,
-    borderRadius: radii.md,
-    borderWidth: 1.5,
-  },
-  // A grade write is one round-trip, but it is a round-trip: without this the
-  // row looks live while it is inert, and the second tap that gets no response
-  // reads as the button being broken rather than as it already having worked.
-  gradeBtnBusy: { opacity: 0.45 },
-  // The two filled ends use the *Deep* shades rather than the plain semantic
-  // ones: white on colors.error clears only ~3.9:1, and this label is 14pt,
-  // which is below the size where WCAG relaxes to 3:1.
-  toneAgain: { backgroundColor: colors.errorDeep, borderColor: colors.errorDeep },
-  toneHard:  { backgroundColor: colors.sageLight, borderColor: colors.sageDark },
-  toneGood:  { backgroundColor: colors.successLight, borderColor: colors.success },
-  toneEasy:  { backgroundColor: colors.successDeep, borderColor: colors.successDeep },
-  // Neutral warm-black rather than the rose-brown heading ink, which reads as
-  // a third hue sitting on top of a sand or a green button.
-  gradeLabel: { fontSize: 14, fontFamily: fonts.display, color: colors.charcoal },
-  gradeLabelOnFill: { color: colors.white },
-  gradeWhen: { fontSize: 10, fontFamily: fonts.mono, color: colors.inkMid },
-  gradeWhenOnFill: { color: colors.white, opacity: 0.85 },
+  gradeSlot: { minHeight: 60 + spacing.ms, paddingTop: spacing.ms },
 });

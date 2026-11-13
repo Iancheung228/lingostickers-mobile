@@ -32,6 +32,23 @@ interface ToastApi {
 
 const ToastContext = createContext<ToastApi | null>(null);
 
+// What a layer needs to draw the current toast. The provider's own layer sits
+// at the app root, which a native Modal covers; a screen that presents a Modal
+// mounts <ToastLayer/> inside it, and the root layer steps aside while one is
+// mounted, so there is only ever one toast on screen.
+interface ToastView {
+  current: Item | null;
+  opacity: Animated.Value;
+  lift: Animated.Value;
+  panHandlers: object;
+  pause: () => void;
+  resume: () => void;
+  dismiss: () => void;
+  kb: number;
+  registerHost: () => () => void;
+}
+const ToastViewContext = createContext<ToastView | null>(null);
+
 /** Tab pill height 68 + its 30 inset + 8 gap (C-look 3). */
 export const TAB_BAR_CLEARANCE = 68 + 30;
 const MAX_WAITING = 2;
@@ -39,7 +56,6 @@ const MAX_WAITING = 2;
 type Item = Required<Pick<ToastOptions, 'kind' | 'message'>> & Pick<ToastOptions, 'action' | 'aboveTabBar'> & { id: number };
 
 export function ToastProvider({ children }: { children: ReactNode }) {
-  const insets = useSafeAreaInsets();
   const { reduced } = useMotion();
   const [current, setCurrent] = useState<Item | null>(null);
   const currentRef = useRef<Item | null>(null);
@@ -134,42 +150,73 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 
   const api = useMemo<ToastApi>(() => ({ show, dismiss }), [show, dismiss]);
 
-  const bottom = kb > 0 ? kb + 8 : insets.bottom + (current?.aboveTabBar ? TAB_BAR_CLEARANCE + 8 : 16);
-  const Icon = current?.kind === 'error' ? AlertCircle : current?.kind === 'success' ? CheckCircle2 : current?.kind === 'undo' ? Undo2 : Info;
+  const [hosts, setHosts] = useState(0);
+  const registerHost = useCallback(() => {
+    setHosts(n => n + 1);
+    return () => setHosts(n => Math.max(0, n - 1));
+  }, []);
+  const resume = useCallback(() => { if (!timer.current && currentRef.current) arm(); },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    []);
+
+  const view = useMemo<ToastView>(() => ({
+    current, opacity, lift, panHandlers: pan.panHandlers, pause, resume, dismiss, kb, registerHost,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [current, opacity, lift, pan, dismiss, kb, registerHost, resume]);
 
   return (
     <ToastContext.Provider value={api}>
-      {children}
-      {current && (
-        <View style={[styles.wrap, { bottom }]} pointerEvents="box-none">
-          <Animated.View
-            {...pan.panHandlers}
-            onTouchStart={pause}
-            onTouchEnd={() => { if (!timer.current && currentRef.current) arm(); }}
-            style={[styles.toast, current.message.length > 44 && styles.multi, { opacity, transform: [{ translateY: lift }] }]}
-            accessibilityLiveRegion="polite"
-            accessibilityRole="alert"
-          >
-            <Icon size={20} strokeWidth={1.75} color={current.kind === 'error' ? colors.errorOnDark : colors.white} />
-            <Text style={styles.message} numberOfLines={3} maxFontSizeMultiplier={1.5} testID="toast-message">{current.message}</Text>
-            {current.action && (
-              <Pressable
-                onPress={() => {
-                  if (current.kind === 'undo') haptic.tap();
-                  current.action!.onPress();
-                  dismiss();
-                }}
-                testID="toast-action"
-                accessibilityRole="button"
-                style={styles.actionHit}
-              >
-                <Text style={styles.action} maxFontSizeMultiplier={1.5}>{current.action.label}</Text>
-              </Pressable>
-            )}
-          </Animated.View>
-        </View>
-      )}
+      <ToastViewContext.Provider value={view}>
+        {children}
+        {hosts === 0 && <ToastLayer root />}
+      </ToastViewContext.Provider>
     </ToastContext.Provider>
+  );
+}
+
+/**
+ * Draws the current toast. The provider mounts one at the root; mount another
+ * inside any Modal that should show toasts (the study card, the card detail,
+ * the session summary). `bottomOffset` lifts it clear of a control row.
+ */
+export function ToastLayer({ root, bottomOffset = 0 }: { root?: boolean; bottomOffset?: number }) {
+  const insets = useSafeAreaInsets();
+  const v = useContext(ToastViewContext);
+  const register = v?.registerHost;
+  useEffect(() => (!root && register ? register() : undefined), [root, register]);
+  if (!v || !v.current) return null;
+  const { current, opacity, lift, panHandlers, pause, resume, dismiss, kb } = v;
+  const bottom = (kb > 0 ? kb + 8 : insets.bottom + (current.aboveTabBar ? TAB_BAR_CLEARANCE + 8 : 16)) + bottomOffset;
+  const Icon = current.kind === 'error' ? AlertCircle : current.kind === 'success' ? CheckCircle2 : current.kind === 'undo' ? Undo2 : Info;
+
+  return (
+    <View style={[styles.wrap, { bottom }]} pointerEvents="box-none">
+      <Animated.View
+        {...panHandlers}
+        onTouchStart={pause}
+        onTouchEnd={resume}
+        style={[styles.toast, current.message.length > 44 && styles.multi, { opacity, transform: [{ translateY: lift }] }]}
+        accessibilityLiveRegion="polite"
+        accessibilityRole="alert"
+      >
+        <Icon size={20} strokeWidth={1.75} color={current.kind === 'error' ? colors.errorOnDark : colors.white} />
+        <Text style={styles.message} numberOfLines={3} maxFontSizeMultiplier={1.5} testID="toast-message">{current.message}</Text>
+        {current.action && (
+          <Pressable
+            onPress={() => {
+              if (current.kind === 'undo') haptic.tap();
+              current.action!.onPress();
+              dismiss();
+            }}
+            testID="toast-action"
+            accessibilityRole="button"
+            style={styles.actionHit}
+          >
+            <Text style={styles.action} maxFontSizeMultiplier={1.5}>{current.action.label}</Text>
+          </Pressable>
+        )}
+      </Animated.View>
+    </View>
   );
 }
 

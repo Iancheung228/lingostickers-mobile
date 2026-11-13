@@ -10,20 +10,14 @@ appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
     timeout: 20000
 - tapOn: "pomme, \\[pɔm\\], Apple, Hear.*"
 - extendedWaitUntil:
-    visible: "What did you call this\\?"
+    visible: "Meaning, .*Edit"
     timeout: 15000
 - waitForAnimationToEnd:
     timeout: 800
-- takeScreenshot: 03a-card-detail-front
-
-- tapOn: "What did you call this\\?"
-- waitForAnimationToEnd:
-    timeout: 1500
-- takeScreenshot: 03b-card-detail-back
+- takeScreenshot: 03a-card-detail
 
 # Word edit sheet (pencil on the word side).
-- tapOn:
-    point: "87%,20%"
+- tapOn: "Word, .*Edit"
 - extendedWaitUntil:
     visible: "The word.*"
     timeout: 10000
@@ -35,8 +29,7 @@ appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
     timeout: 1000
 
 # Meaning edit sheet.
-- tapOn:
-    point: "87%,45%"
+- tapOn: "Meaning, .*Edit"
 - extendedWaitUntil:
     visible: "What it means.*"
     timeout: 10000

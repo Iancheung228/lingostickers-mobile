@@ -1,8 +1,7 @@
 appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
 ---
 # Restore WORD by hand (no lookup): Le raisin -> pomme, luh ray-zan -> pɔm.
-- tapOn:
-    point: "87%,20%"
+- tapOn: "Word, .*Edit"
 - extendedWaitUntil:
     visible: "The word.*"
     timeout: 10000

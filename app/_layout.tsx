@@ -29,6 +29,7 @@ import { handleAuthDeepLink } from '@/lib/deepLinks';
 import { flushPendingAvatar } from '@/lib/pendingAvatar';
 import { initAnalytics, trackEvent } from '@/lib/analytics';
 import { ToastProvider } from '@/components/ToastProvider';
+import { PendingDeleteProvider } from '@/components/PendingDeleteProvider';
 import { SOCIAL_ENABLED } from '@/lib/features';
 import { colors, fonts as themeFonts, radii, spacing, typography } from '@/constants/theme';
 
@@ -249,7 +250,9 @@ export default function Root() {
           <FriendsProvider>
           <ChallengesProvider>
             <ToastProvider>
-              <RootLayout />
+              <PendingDeleteProvider>
+                <RootLayout />
+              </PendingDeleteProvider>
             </ToastProvider>
           </ChallengesProvider>
           </FriendsProvider>
