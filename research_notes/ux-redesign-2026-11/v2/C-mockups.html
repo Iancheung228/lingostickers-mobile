@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Tabi Pass C - Rose, refined</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:wght@400;500&family=JetBrains+Mono:wght@500;700&family=Klee+One:wght@400;600&family=Iansui&display=swap" rel="stylesheet">
+<style>
+:root{
+--page:#FAF4EA;--card:#fff;--sand:#F6EEDD;--sand2:#EFE3CC;--band:#E4A0A1;--bandEdge:#D08E90;
+--action:#9D4D51;--pressed:#833F46;--head:#833F46;--maroon:#662B31;--body:#4A4340;--cap:#7E5559;--faint:#C4A9AB;
+--tint:#F2DCDC;--tintP:#EBCFCF;--ctl:#957579;--hair:#EADFD6;--div:#F0E6DC;--charcoal:#33292A;
+--err:#A8434A;--errT:#F7E0E1;--ok:#3F6E46;--okT:#E2EFE3;--gold:#7A5A1E;--goldT:#F5E7C6;--againT:#F6E3E1;
+--e1:0 1px 2px rgba(102,43,49,.06),0 4px 14px rgba(131,63,70,.09);
+--e2:0 2px 4px rgba(102,43,49,.10),0 12px 28px rgba(131,63,70,.20);
+--scrim:rgba(51,41,42,.42);
+--nr:'Newsreader',Georgia,serif;--mono:'JetBrains Mono',monospace;--klee:'Klee One','Hiragino Sans',serif;--ian:'Iansui','PingFang HK',serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#E9E2D8;font-family:var(--nr);color:var(--body);padding:32px 16px}
+h1{font:500 22px var(--nr);color:var(--head);text-align:center;margin-bottom:4px}
+.sub{text-align:center;font-size:14px;color:var(--cap);margin-bottom:28px}
+.wall{display:flex;flex-wrap:wrap;gap:36px;justify-content:center}
+figure{width:390px}figcaption{font-size:14px;color:var(--cap);margin-top:10px;text-align:center}
+.ph{position:relative;width:390px;height:844px;background:var(--page);border-radius:44px;overflow:hidden;box-shadow:0 0 0 1px #d8cdbf,0 18px 40px rgba(60,30,30,.18)}
+.sb{position:absolute;top:0;left:0;right:0;height:54px;display:flex;justify-content:space-between;align-items:flex-end;padding:0 32px 8px 40px;font:600 16px -apple-system,system-ui,sans-serif;color:#000;z-index:30}
+.sb i{width:60px;height:11px;border-radius:3px;background:linear-gradient(90deg,#000 0 30%,transparent 30% 36%,#000 36% 64%,transparent 64% 70%,#000 70%);opacity:.85}
+.hi{position:absolute;bottom:8px;left:125px;width:140px;height:5px;border-radius:3px;background:#000;opacity:.9;z-index:40}
+svg.i{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round;flex:none}
+svg.s{width:16px;height:16px;stroke-width:2}svg.m{width:20px;height:20px}svg.l{width:26px;height:26px}
+.band{position:absolute;top:0;left:0;right:0;background:var(--band);border-radius:0 0 28px 28px;color:var(--maroon)}
+.title{font:500 30px/34px var(--nr);letter-spacing:-.6px;color:var(--maroon)}
+.bsub{font:400 14px/20px var(--nr);color:var(--maroon)}
+.avatar{position:absolute;right:20px;top:60px;width:44px;height:44px;border-radius:50%;background:#fff;color:var(--head);display:grid;place-items:center;font:500 17px var(--nr)}
+.duepill{position:absolute;left:20px;right:20px;top:146px;height:64px;background:#fff;border-radius:999px;box-shadow:var(--e2);display:flex;align-items:center;padding:0 10px 0 24px;justify-content:space-between}
+.duepill b{font:500 22px/26px var(--nr);color:var(--head)}.duepill span{font:400 14px/18px var(--nr);color:var(--cap);display:block}
+.disc{width:44px;height:44px;border-radius:50%;background:var(--action);color:#fff;display:grid;place-items:center}
+.field{position:absolute;left:20px;right:76px;height:48px;border:1px solid var(--ctl);background:#fff;border-radius:16px;display:flex;align-items:center;gap:10px;padding:0 14px;color:var(--cap);font-size:16px}
+.fbtn{position:absolute;right:20px;width:48px;height:48px;border-radius:16px;border:1px solid var(--ctl);background:#fff;display:grid;place-items:center;color:var(--head)}
+.chips{position:absolute;left:0;right:0;display:flex;gap:8px;padding:0 20px;overflow:hidden}
+.chip{height:36px;padding:0 16px;border-radius:999px;border:1px solid var(--ctl);background:#fff;font:400 15px/34px var(--nr);color:var(--body);white-space:nowrap}
+.chip.on{background:var(--action);border-color:var(--action);color:#fff;font-weight:500}
+.grid{position:absolute;left:20px;right:20px;display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.cell{background:#fff;border-radius:16px;box-shadow:var(--e1);overflow:hidden}
+.well{background:var(--sand);height:128px;display:grid;place-items:center;font-size:62px;position:relative;filter:none}
+.stk{filter:drop-shadow(0 3px 5px rgba(102,43,49,.22))}
+.well .hrt{position:absolute;top:0;right:0;width:44px;height:44px;display:grid;place-items:center;color:var(--action)}
+.cell .t{padding:10px 12px 12px}.cell .w{font:600 18px/24px var(--klee);color:var(--head)}.cell .m{font:400 14px/20px var(--nr);color:var(--cap);display:flex;justify-content:space-between;align-items:center}
+.due{font:500 12px/16px var(--nr);background:var(--againT);color:var(--err);border-radius:999px;padding:2px 8px}
+.tabbar{position:absolute;left:47px;bottom:30px;width:296px;height:68px;background:var(--band);border-radius:999px;box-shadow:var(--e2);display:flex;z-index:20}
+.ph:has(.tabbar)::after{content:"";position:absolute;left:0;right:0;bottom:0;height:150px;background:linear-gradient(transparent,var(--page) 62%);z-index:15;pointer-events:none}
+.tab{width:74px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;color:var(--maroon);font:500 12px/14px var(--nr);position:relative}
+.tab.on{color:var(--head)}.tab.on::before{content:"";position:absolute;inset:7px 5px;background:#fff;border-radius:22px;z-index:-1}.tab.on svg{color:var(--action)}
+.tab.cam .cb{width:60px;height:60px;border-radius:50%;background:var(--action);color:#fff;display:grid;place-items:center;margin-top:-30px;box-shadow:0 0 0 4px var(--page),var(--e2)}
+.tab.cam{padding-top:2px;gap:0;justify-content:flex-end;padding-bottom:6px}.tab.cam span{margin-top:3px}
+.badge{position:absolute;top:8px;right:16px;min-width:18px;height:18px;border-radius:9px;background:var(--err);color:#fff;font:700 11px/18px var(--mono);text-align:center;padding:0 4px}
+.btn{height:52px;border-radius:999px;display:flex;align-items:center;justify-content:center;gap:8px;font:500 17px var(--nr);background:var(--action);color:#fff}
+.btn.sec{background:var(--tint);color:var(--head)}.btn.ter{background:none;color:var(--head);height:44px}
+.card{background:#fff;border-radius:24px;box-shadow:var(--e1)}
+.mono{font-family:var(--mono);font-weight:500}.cap{font:400 14px/20px var(--nr);color:var(--cap)}
+.ic44{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;color:var(--head)}
+.pos{display:inline-block;font:500 12px/16px var(--nr);background:var(--sand);color:var(--cap);border-radius:999px;padding:3px 10px;vertical-align:middle}
+.mem{display:flex;align-items:center;gap:8px;background:var(--sand);border-radius:14px;padding:10px 12px;color:var(--cap);font:400 14px/20px var(--nr)}
+.grade{position:absolute;left:20px;right:20px;bottom:34px;display:flex;gap:8px}
+.g{height:60px;border-radius:16px;display:flex;flex-direction:column;align-items:center;justify-content:center;font:500 17px/20px var(--nr)}
+.g small{font:500 13px/16px var(--mono);opacity:.95}.g .r{display:flex;align-items:center;gap:4px}
+.g.again{flex:1.4;background:var(--againT);color:var(--err)}.g.hard{flex:1;background:var(--goldT);color:var(--gold)}.g.good{flex:1.4;background:var(--ok);color:#fff}.g.easy{flex:1;background:var(--okT);color:var(--ok)}
+.top{position:absolute;top:54px;left:8px;right:8px;height:52px;display:flex;align-items:center;justify-content:space-between}
+.prog{flex:1;margin:0 8px;height:3px;border-radius:2px;background:var(--tint);position:relative}.prog i{position:absolute;inset:0 50% 0 0;background:var(--action);border-radius:2px}
+.hl{color:var(--head);font-weight:600}
+.row{display:flex;align-items:center;gap:12px;height:56px;padding:0 16px;border-bottom:1px solid var(--div);font-size:16px}
+.row:last-child{border:0}.row .ri{width:36px;height:36px;border-radius:50%;background:var(--sand);color:var(--head);display:grid;place-items:center}.row .v{margin-left:auto;color:var(--cap);font-size:14px;display:flex;align-items:center;gap:4px}
+.sheet{position:absolute;left:0;right:0;bottom:0;background:var(--page);border-radius:24px 24px 0 0;box-shadow:var(--e2);padding:12px 20px 34px}
+.grab{width:36px;height:5px;border-radius:3px;background:#E3D3C8;margin:0 auto 14px}
+.sec{font:500 14px/20px var(--nr);color:var(--cap);margin:0 0 8px 4px}
+.cal{display:grid;grid-template-columns:repeat(7,1fr);row-gap:2px;text-align:center}
+.dow{font:500 12px/16px var(--nr);color:var(--cap);height:24px}
+.d{height:52px;display:flex;flex-direction:column;align-items:center;gap:1px;font:500 13px/22px var(--mono);color:var(--body)}
+.d.t span{background:var(--action);color:#fff;border-radius:11px;min-width:22px}.d.s{background:var(--tint);border-radius:12px;box-shadow:inset 0 0 0 2px var(--action)}
+.d em{font-style:normal;font-size:20px;line-height:24px}.d u{width:6px;height:6px;border-radius:50%;background:var(--action);margin-top:9px}.d.mu{color:var(--faint)}
+.tile{background:#fff;border-radius:20px;box-shadow:var(--e1);overflow:hidden}.tile .pv{height:140px;background:var(--sand);position:relative}
+.pv i{position:absolute;font-style:normal;font-size:44px;filter:drop-shadow(0 3px 5px rgba(102,43,49,.22))}
+.tile .tt{padding:10px 14px 12px;font:500 17px/22px var(--nr);color:var(--head)}
+.stat b{display:block;font:500 30px/34px var(--nr);color:var(--head);letter-spacing:-.6px}
+.seg{display:flex;background:var(--sand);border-radius:999px;padding:3px;height:44px;width:100%}.seg span{flex:1;display:grid;place-items:center;border-radius:999px;font-size:15px}.seg .on{background:#fff;box-shadow:var(--e1);color:var(--head);font-weight:500}
+.tog{margin-left:auto;width:51px;height:31px;border-radius:16px;background:var(--action);position:relative}.tog::after{content:"";position:absolute;right:2px;top:2px;width:27px;height:27px;border-radius:50%;background:#fff}
+.cam-bg{position:absolute;inset:0;background:#1f1818}.frame{position:absolute;left:36px;right:36px;top:130px;height:420px;border-radius:24px;border:2px solid rgba(255,255,255,.55)}
+</style></head><body>
+<svg width="0" height="0" style="position:absolute"><defs>
+<symbol id="book" viewBox="0 0 24 24"><path d="M12 7v14"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/></symbol>
+<symbol id="cal" viewBox="0 0 24 24"><path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/></symbol>
+<symbol id="cam" viewBox="0 0 24 24"><path d="M13.997 4a2 2 0 0 1 1.76 1.05l.486.9A2 2 0 0 0 18.003 7H20a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h1.997a2 2 0 0 0 1.759-1.048l.489-.904A2 2 0 0 1 10.004 4z"/><circle cx="12" cy="13" r="3"/></symbol>
+<symbol id="dash" viewBox="0 0 24 24"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></symbol>
+<symbol id="search" viewBox="0 0 24 24"><path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/></symbol>
+<symbol id="x" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></symbol>
+<symbol id="more" viewBox="0 0 24 24"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></symbol>
+<symbol id="vol" viewBox="0 0 24 24"><path d="M11 4.702a.705.705 0 0 0-1.203-.498L6.413 7.587A1.4 1.4 0 0 1 5.416 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.416a1.4 1.4 0 0 1 .997.413l3.383 3.384A.705.705 0 0 0 11 19.298z"/><path d="M16 9a5 5 0 0 1 0 6"/><path d="M19.364 18.364a9 9 0 0 0 0-12.728"/></symbol>
+<symbol id="ccw" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></symbol>
+<symbol id="up2" viewBox="0 0 24 24"><path d="m17 11-5-5-5 5"/><path d="m17 18-5-5-5 5"/></symbol>
+<symbol id="cl" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></symbol><symbol id="cr" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol><symbol id="cd" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+<symbol id="heart" viewBox="0 0 24 24"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></symbol>
+<symbol id="pin" viewBox="0 0 24 24"><path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"/><circle cx="12" cy="10" r="3"/></symbol>
+<symbol id="plus" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M12 5v14"/></symbol>
+<symbol id="arr" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></symbol>
+<symbol id="sl" viewBox="0 0 24 24"><path d="M21 4h-7"/><path d="M10 4H3"/><path d="M21 12h-9"/><path d="M8 12H3"/><path d="M21 20h-5"/><path d="M12 20H3"/><path d="M14 2v4"/><path d="M8 10v4"/><path d="M16 18v4"/></symbol>
+<symbol id="globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></symbol>
+<symbol id="bell" viewBox="0 0 24 24"><path d="M10.268 21a2 2 0 0 0 3.464 0"/><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"/></symbol>
+<symbol id="dl" viewBox="0 0 24 24"><path d="M12 15V3"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/></symbol>
+<symbol id="out" viewBox="0 0 24 24"><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/></symbol>
+<symbol id="chk" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+<symbol id="bulb" viewBox="0 0 24 24"><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/></symbol>
+</defs></svg>
+
+<h1>Tabi Stickers - Pass C, Rose refined</h1>
+<p class="sub">390 x 844 mockups. Tokens are the C-look.md values; emoji stand in for cutout photos.</p>
+<div class="wall">
+
+<!-- HOME -->
+<figure><div class="ph">
+<div class="sb"><span>9:41</span><i></i></div>
+<div class="band" style="height:172px">
+ <div style="position:absolute;left:20px;top:58px"><div class="title">Collection</div><div class="bsub" style="margin-top:2px">Today: 3 reviewed &middot; 1 found</div></div>
+ <div class="avatar">A</div></div>
+<div class="duepill"><div><b>7 due</b><span>About <span class="mono" style="display:inline;font-size:13px">7</span> min</span></div><div class="disc"><svg class="i m"><use href="#arr"/></svg></div></div>
+<div class="field" style="top:232px"><svg class="i m"><use href="#search"/></svg>Search words and notes</div>
+<div class="fbtn" style="top:232px"><svg class="i m"><use href="#sl"/></svg></div>
+<div class="chips" style="top:292px"><span class="chip on">All</span><span class="chip">Kitchen</span><span class="chip">Street</span><span class="chip">Animals</span></div>
+<div class="grid" style="top:344px">
+ <div class="cell"><div class="well"><span class="stk">&#x1F950;</span><span class="hrt"><svg class="i m" style="fill:var(--action)"><use href="#heart"/></svg></span></div><div class="t"><div class="w">le croissant</div><div class="m">croissant <span class="due">Due</span></div></div></div>
+ <div class="cell"><div class="well"><span class="stk">&#x2615;</span><span class="hrt"><svg class="i m"><use href="#heart"/></svg></span></div><div class="t"><div class="w">la tasse</div><div class="m">cup <span class="due">Due</span></div></div></div>
+ <div class="cell"><div class="well"><span class="stk">&#x1F6B2;</span><span class="hrt"><svg class="i m"><use href="#heart"/></svg></span></div><div class="t"><div class="w">le vélo</div><div class="m">bicycle</div></div></div>
+ <div class="cell"><div class="well"><span class="stk">&#x1F408;</span><span class="hrt"><svg class="i m"><use href="#heart"/></svg></span></div><div class="t"><div class="w">le chat</div><div class="m">cat</div></div></div>
+</div>
+<div class="tabbar"><div class="tab on"><svg class="i"><use href="#book"/></svg><span>Collection</span><b class="badge">7</b></div><div class="tab"><svg class="i"><use href="#cal"/></svg><span>Calendar</span></div><div class="tab cam"><div class="cb"><svg class="i l"><use href="#cam"/></svg></div><span>Scan</span></div><div class="tab"><svg class="i"><use href="#dash"/></svg><span>Boards</span></div></div>
+<div class="hi"></div></div><figcaption>Home: due pill straddles the band edge</figcaption></figure>
+
+<!-- STUDY FRONT -->
+<figure><div class="ph">
+<div class="sb"><span>9:41</span><i></i></div>
+<div class="top"><div class="ic44"><svg class="i"><use href="#x"/></svg></div><div class="prog"><i></i></div><span class="mono" style="font-size:13px;color:var(--cap);width:44px;text-align:center">1 / 2</span><div class="ic44"><svg class="i"><use href="#more"/></svg></div></div>
+<div class="card" style="position:absolute;left:20px;right:20px;top:118px;height:640px;padding:12px">
+ <div style="height:420px;border-radius:16px;background:var(--sand);display:grid;place-items:center;font-size:170px"><span class="stk" style="filter:drop-shadow(0 6px 10px rgba(102,43,49,.25))">&#x1F950;</span></div>
+ <div style="text-align:center;margin-top:28px;font:500 22px/28px var(--nr);color:var(--head)">What did you call this?</div>
+ <div style="display:flex;justify-content:center;margin-top:16px"><div class="btn sec" style="height:44px;padding:0 20px;font-size:15px"><svg class="i s"><use href="#bulb"/></svg>Hint</div></div>
+ <div class="cap" style="text-align:center;position:absolute;left:0;right:0;bottom:20px">Tap to reveal</div></div>
+<div class="hi"></div></div><figcaption>Study front: the photo, nothing else</figcaption></figure>
+
+<!-- STUDY BACK -->
+<figure><div class="ph">
+<div class="sb"><span>9:41</span><i></i></div>
+<div class="top"><div class="ic44"><svg class="i"><use href="#x"/></svg></div><div class="prog"><i></i></div><span class="mono" style="font-size:13px;color:var(--cap);width:44px;text-align:center">1 / 2</span><div class="ic44"><svg class="i"><use href="#more"/></svg></div></div>
+<div class="card" style="position:absolute;left:20px;right:20px;top:118px;height:500px;padding:24px">
+ <div style="position:absolute;right:20px;top:20px;width:56px;height:56px;border-radius:10px;background:var(--sand);display:grid;place-items:center;font-size:30px"><span class="stk">&#x2615;</span></div>
+ <div style="font:600 40px/46px var(--klee);color:var(--head);letter-spacing:-.4px;width:220px">la tasse</div>
+ <div style="display:flex;align-items:center;gap:4px;margin-top:2px"><span class="mono" style="font-size:16px;color:var(--cap)">[la tas]</span><div class="ic44" style="background:var(--tint)"><svg class="i m"><use href="#vol"/></svg></div></div>
+ <div style="margin-top:6px;font:500 22px/28px var(--nr);color:var(--body)">cup <span class="pos" style="margin-left:6px">noun &middot; f.</span></div>
+ <div style="height:1px;background:var(--div);margin:18px 0"></div>
+ <div style="font:400 20px/30px var(--klee);color:var(--body)">Je bois mon café dans une <span class="hl">tasse</span> blanche.</div>
+ <div class="cap" style="margin-top:8px;text-decoration:underline;text-underline-offset:3px">Show translation</div>
+ <div class="mem" style="margin-top:20px"><svg class="i s"><use href="#pin"/></svg>Café de Flore, Paris &middot; <span class="mono" style="font-size:13px">12 Nov</span></div>
+ <div style="display:flex;align-items:center;justify-content:space-between;height:44px;margin-top:10px;color:var(--head);font-size:16px;font-weight:500">More <svg class="i s"><use href="#cd"/></svg></div></div>
+<div class="grade">
+ <div class="g again"><span class="r"><svg class="i s"><use href="#ccw"/></svg>Again</span><small>1m</small></div>
+ <div class="g hard">Hard<small>6m</small></div>
+ <div class="g good">Good<small>10m</small></div>
+ <div class="g easy"><span class="r">Easy<svg class="i s"><use href="#up2"/></svg></span><small>4d</small></div></div>
+<div class="hi"></div></div><figcaption>Study back: word, sound, meaning, sentence; grade row below</figcaption></figure>
+
+<!-- CARD DETAIL -->
+<figure><div class="ph">
+<div class="sb"><span>9:41</span><i></i></div>
+<div style="position:absolute;top:0;left:0;right:0;height:300px;background:var(--sand);border-radius:0 0 28px 28px;display:grid;place-items:center;padding-top:40px;font-size:130px"><span class="stk" style="filter:drop-shadow(0 8px 12px rgba(102,43,49,.25))">&#x2615;</span></div>
+<div class="top"><div class="ic44" style="background:#fff;box-shadow:var(--e1);margin-left:12px"><svg class="i"><use href="#cl"/></svg></div><div style="display:flex;gap:8px;margin-right:12px"><div class="ic44" style="background:#fff;box-shadow:var(--e1);color:var(--action)"><svg class="i" style="fill:var(--action)"><use href="#heart"/></svg></div><div class="ic44" style="background:#fff;box-shadow:var(--e1)"><svg class="i"><use href="#more"/></svg></div></div></div>
+<div style="position:absolute;left:20px;right:20px;top:322px">
+ <div style="display:flex;align-items:center;justify-content:space-between"><div><div style="font:400 40px/48px var(--ian);color:var(--head)">咖啡</div><span class="mono" style="font-size:16px;color:var(--cap)">gaa3 fe1</span></div><div class="ic44" style="background:var(--tint)"><svg class="i m"><use href="#vol"/></svg></div></div>
+ <div style="margin-top:8px;font:500 22px/28px var(--nr)">coffee <span class="pos" style="margin-left:6px">noun</span></div>
+ <div style="font:400 20px/30px var(--ian);margin-top:14px">我想要一杯<span class="hl">咖啡</span>。</div><div class="cap" style="margin-top:2px">I would like a cup of coffee.</div>
+ <div class="mem" style="margin-top:14px"><svg class="i s"><use href="#pin"/></svg>Central, Hong Kong &middot; <span class="mono" style="font-size:13px">9 Nov</span></div>
+ <div class="sec" style="margin-top:20px">Progress</div>
+ <div class="card" style="display:grid;grid-template-columns:repeat(3,1fr);padding:14px 16px;gap:12px 8px">
+  <div><div class="mono" style="font-size:16px;color:var(--head)">4d</div><div class="cap" style="font-size:12px">Interval</div></div><div><div class="mono" style="font-size:16px;color:var(--head)">250%</div><div class="cap" style="font-size:12px">Ease</div></div><div><div class="mono" style="font-size:16px;color:var(--head)">0</div><div class="cap" style="font-size:12px">Lapses</div></div>
+  <div><div class="mono" style="font-size:16px;color:var(--head)">3</div><div class="cap" style="font-size:12px">Reviews</div></div><div><div class="mono" style="font-size:16px;color:var(--head)">17 Nov</div><div class="cap" style="font-size:12px">Due</div></div><div><div class="mono" style="font-size:16px;color:var(--head)">13 Nov</div><div class="cap" style="font-size:12px">Last</div></div></div></div>
+<div style="position:absolute;left:20px;right:20px;bottom:34px"><div class="btn">Test me</div></div>
+<div class="hi"></div></div><figcaption>Card detail: opens on the answer; Cantonese in Iansui</figcaption></figure>
+
+<!-- SCAN RESULT -->
+<figure><div class="ph"><div class="cam-bg"></div><div class="frame"></div>
+<div class="sb" style="color:#fff"><span style="color:#fff">9:41</span><i style="filter:invert(1)"></i></div>
+<div style="position:absolute;inset:0;background:var(--scrim)"></div>
+<div class="sheet" style="top:96px;padding-top:12px">
+ <div class="grab"></div>
+ <div style="height:150px;border-radius:16px;background:var(--sand);display:grid;place-items:center;font-size:84px"><span class="stk">&#x1F375;</span></div>
+ <div class="mono" style="font-size:12px;letter-spacing:.9px;color:var(--cap);margin:16px 0 0;text-transform:uppercase">Found</div>
+ <div style="display:flex;align-items:center;justify-content:space-between"><div><div style="font:600 40px/46px var(--klee);color:var(--head)">お茶</div><span class="mono" style="font-size:16px;color:var(--cap)">ocha</span><span style="font:500 22px var(--nr);margin-left:12px">tea</span></div><div class="ic44" style="background:var(--tint)"><svg class="i m"><use href="#vol"/></svg></div></div>
+ <div class="sec" style="margin-top:14px">Also in this photo</div>
+ <div class="card" style="border-radius:16px">
+  <div class="row"><svg class="i m" style="background:var(--action);color:#fff;border-radius:50%;padding:3px"><use href="#chk"/></svg><span style="font:500 18px var(--klee);color:var(--head)">急須</span><span class="v">teapot</span></div>
+  <div class="row"><svg class="i m" style="background:var(--action);color:#fff;border-radius:50%;padding:3px"><use href="#chk"/></svg><span style="font:500 18px var(--klee);color:var(--head)">湯呑み</span><span class="v">teacup</span></div>
+  <div class="row"><span style="width:20px;height:20px;border-radius:50%;border:1.5px solid var(--ctl)"></span><span style="font:500 18px var(--klee);color:var(--head)">お盆</span><span class="v">tray</span></div></div>
+ <div class="btn" style="margin-top:16px">Add 3 cards</div>
+ <div style="display:flex;justify-content:center;gap:8px"><div class="btn ter">Retry</div><div class="btn ter" style="color:var(--err)">Discard</div></div></div>
+<div class="hi" style="background:#fff"></div></div><figcaption>Scan result: sheet over a scrimmed camera</figcaption></figure>
+
+<!-- CALENDAR -->
+<figure><div class="ph">
+<div class="sb"><span>9:41</span><i></i></div>
+<div class="band" style="height:132px"><div style="position:absolute;left:20px;top:58px"><div class="title">Calendar</div><div class="bsub" style="margin-top:2px">Due this week: <span class="mono" style="font-size:13px">12</span></div></div><div class="avatar">A</div></div>
+<div class="card" style="position:absolute;left:20px;right:20px;top:112px;padding:8px 16px 14px">
+ <div style="display:flex;align-items:center;justify-content:space-between;height:44px"><div class="ic44"><svg class="i"><use href="#cl"/></svg></div><b style="font:500 22px var(--nr);color:var(--head)">November 2026</b><div class="ic44"><svg class="i"><use href="#cr"/></svg></div></div>
+ <div class="cal"><div class="dow">S</div><div class="dow">M</div><div class="dow">T</div><div class="dow">W</div><div class="dow">T</div><div class="dow">F</div><div class="dow">S</div>
+ <div class="d"><span>1</span><u></u></div><div class="d"><span>2</span><em class="stk">&#x1F950;</em></div><div class="d"><span>3</span><u></u></div><div class="d"><span>4</span><u></u></div><div class="d"><span>5</span><em class="stk">&#x2615;</em></div><div class="d"><span>6</span><u></u></div><div class="d"><span>7</span></div>
+ <div class="d"><span>8</span></div><div class="d"><span>9</span><em class="stk">&#x1F408;</em></div><div class="d"><span>10</span><u></u></div><div class="d"><span>11</span><u></u></div><div class="d s"><span>12</span><em class="stk">&#x1F34E;</em></div><div class="d t"><span>13</span><u></u></div><div class="d"><span>14</span></div>
+ <div class="d"><span>15</span></div><div class="d"><span>16</span></div><div class="d"><span>17</span></div><div class="d"><span>18</span></div><div class="d"><span>19</span></div><div class="d"><span>20</span></div><div class="d"><span>21</span></div>
+ <div class="d"><span>22</span></div><div class="d"><span>23</span></div><div class="d"><span>24</span></div><div class="d"><span>25</span></div><div class="d"><span>26</span></div><div class="d"><span>27</span></div><div class="d"><span>28</span></div>
+ <div class="d"><span>29</span></div><div class="d"><span>30</span></div></div></div>
+<div style="position:absolute;left:24px;right:24px;top:560px;display:flex;align-items:center;gap:12px"><div style="width:48px;height:48px;border-radius:12px;background:var(--sand);display:grid;place-items:center;font-size:26px"><span class="stk">&#x1F34E;</span></div><div><div style="font:500 17px var(--nr);color:var(--head)">Thu 12 November</div><div class="cap">1 found &middot; <span class="mono" style="font-size:13px">8</span> reviewed</div></div><svg class="i" style="margin-left:auto;color:var(--cap)"><use href="#cr"/></svg></div>
+<div style="position:absolute;left:20px;right:20px;top:618px"><div class="btn"><svg class="i m"><use href="#ccw"/></svg>Review 7 now</div></div>
+<div class="tabbar"><div class="tab"><svg class="i"><use href="#book"/></svg><span>Collection</span><b class="badge">7</b></div><div class="tab on"><svg class="i"><use href="#cal"/></svg><span>Calendar</span></div><div class="tab cam"><div class="cb"><svg class="i l"><use href="#cam"/></svg></div><span>Scan</span></div><div class="tab"><svg class="i"><use href="#dash"/></svg><span>Boards</span></div></div>
+<div class="hi"></div></div><figcaption>Calendar: finds as thumbnails, reviews as a dot</figcaption></figure>
+
+<!-- BOARDS -->
+<figure><div class="ph">
+<div class="sb"><span>9:41</span><i></i></div>
+<div class="band" style="height:132px"><div style="position:absolute;left:20px;top:58px"><div class="title">Boards</div><div class="bsub" style="margin-top:2px">4 boards &middot; <span class="mono" style="font-size:13px">23</span> stickers</div></div><div class="avatar">A</div></div>
+<div class="grid" style="top:158px">
+ <div class="tile"><div class="pv"><i style="left:18px;top:22px;transform:rotate(-8deg)">&#x1F950;</i><i style="left:76px;top:56px;transform:rotate(6deg);font-size:54px">&#x2615;</i><i style="left:30px;top:84px">&#x1F34E;</i></div><div class="tt">Kitchen<div class="cap">9 stickers</div></div></div>
+ <div class="tile"><div class="pv"><i style="left:20px;top:30px;font-size:56px;transform:rotate(5deg)">&#x1F6B2;</i><i style="left:84px;top:78px;transform:rotate(-6deg)">&#x1F956;</i></div><div class="tt">Paris trip<div class="cap">7 stickers</div></div></div>
+ <div class="tile"><div class="pv"><i style="left:40px;top:34px;font-size:60px;transform:rotate(-4deg)">&#x1F408;</i><i style="left:92px;top:90px;font-size:36px">&#x1F415;</i></div><div class="tt">Pets<div class="cap">4 stickers</div></div></div>
+ <div class="tile" style="box-shadow:none;background:transparent;border:1.5px dashed var(--ctl)"><div class="pv" style="background:transparent;display:grid;place-items:center;color:var(--head)"><div class="disc" style="background:var(--tint);color:var(--head)"><svg class="i m"><use href="#plus"/></svg></div></div><div class="tt" style="color:var(--head)">New board</div></div>
+</div>
+<div class="tabbar"><div class="tab"><svg class="i"><use href="#book"/></svg><span>Collection</span></div><div class="tab"><svg class="i"><use href="#cal"/></svg><span>Calendar</span></div><div class="tab cam"><div class="cb"><svg class="i l"><use href="#cam"/></svg></div><span>Scan</span></div><div class="tab on"><svg class="i"><use href="#dash"/></svg><span>Boards</span></div></div>
+<div class="hi"></div></div><figcaption>Boards: two-up tiles, quiet chrome</figcaption></figure>
+
+<!-- PROFILE -->
+<figure><div class="ph">
+<div class="sb"><span>9:41</span><i></i></div>
+<div class="band" style="height:160px"><div style="position:absolute;left:20px;top:56px;display:flex;align-items:center;gap:14px"><div style="width:64px;height:64px;border-radius:50%;background:#fff;display:grid;place-items:center;font:500 30px var(--nr);color:var(--head)">A</div><div><div class="title">Alex</div><div class="bsub">Learning French</div></div></div></div>
+<div class="card" style="position:absolute;left:20px;right:20px;top:130px;height:84px;display:flex;text-align:center;align-items:center">
+ <div class="stat" style="flex:1"><b>12</b><span class="cap">Cards</span></div><div class="stat" style="flex:1"><b>48</b><span class="cap">Reviewed</span></div><div class="stat" style="flex:1"><b>6</b><span class="cap">Day streak</span></div></div>
+<div style="position:absolute;left:20px;right:20px;top:236px">
+ <div class="sec">Learning</div>
+ <div class="card" style="border-radius:16px"><div style="padding:14px 16px 12px"><div class="seg"><span class="on">Français</span><span>日本語</span><span>廣東話</span></div></div>
+ <div class="row" style="border-top:1px solid var(--div)"><div class="ri"><svg class="i m"><use href="#plus"/></svg></div>New cards per day<span class="v mono" style="font-size:13px">10</span></div>
+ <div class="row"><div class="ri"><svg class="i m"><use href="#bell"/></svg></div>Daily reminder<div class="tog"></div></div></div>
+ <div class="sec" style="margin-top:18px">Account</div>
+ <div class="card" style="border-radius:16px"><div class="row"><div class="ri"><svg class="i m"><use href="#dl"/></svg></div>Export my cards<span class="v"><svg class="i s"><use href="#cr"/></svg></span></div>
+ <div class="row" style="color:var(--err)"><div class="ri" style="background:var(--errT);color:var(--err)"><svg class="i m"><use href="#out"/></svg></div>Log out</div></div>
+ <div class="cap" style="text-align:center;margin-top:16px">Tabi Stickers 1.0.0</div></div>
+<div class="hi"></div></div><figcaption>Profile: stats, then grouped settings</figcaption></figure>
+
+</div></body></html>
