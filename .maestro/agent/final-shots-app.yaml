@@ -1,0 +1,116 @@
+# Final fix pass: re-shoots the signed-in screens the whole-app review judged, into
+# research_notes/ux-redesign-2026-11/final/ (same names). No AI calls. Creates and deletes
+# one board ("Kitchen"). Never logs out.
+appId: ${APP_ID}
+---
+- runFlow: ../sign-in.yaml
+- extendedWaitUntil:
+    visible: "Start reviewing.*"
+    timeout: 20000
+- waitForAnimationToEnd:
+    timeout: 1500
+- scroll
+- waitForAnimationToEnd:
+    timeout: 1000
+- takeScreenshot: research_notes/ux-redesign-2026-11/final/02-home-scrolled
+- tapOn: "Calendar"
+- waitForAnimationToEnd:
+    timeout: 2000
+- takeScreenshot: research_notes/ux-redesign-2026-11/final/11-calendar
+- tapOn: "November 13, .*"
+- waitForAnimationToEnd:
+    timeout: 800
+- tapOn:
+    id: "calendar-selected-day"
+- extendedWaitUntil:
+    visible: "Go back"
+    timeout: 10000
+- waitForAnimationToEnd:
+    timeout: 1500
+- takeScreenshot: research_notes/ux-redesign-2026-11/final/12-calendar-day
+- tapOn: "Go back"
+- tapOn: "Collection.*"
+- extendedWaitUntil:
+    visible: "Start reviewing.*"
+    timeout: 15000
+- tapOn: "Start reviewing.*"
+- extendedWaitUntil:
+    visible: "Tap to reveal.*"
+    timeout: 10000
+- waitForAnimationToEnd:
+    timeout: 800
+- tapOn:
+    point: "50%,77%"
+- waitForAnimationToEnd:
+    timeout: 800
+- takeScreenshot: research_notes/ux-redesign-2026-11/final/06-study-hint
+- tapOn: "What did you call this.*"
+- extendedWaitUntil:
+    visible: "Good — next review in.*"
+    timeout: 10000
+- tapOn: "Good — next review in.*"
+- waitForAnimationToEnd:
+    timeout: 700
+- tapOn: "Close this card"
+- extendedWaitUntil:
+    visible: "Session done|Stopped early"
+    timeout: 10000
+- waitForAnimationToEnd:
+    timeout: 600
+- takeScreenshot: research_notes/ux-redesign-2026-11/final/08-summary
+- tapOn: "Done"
+- extendedWaitUntil:
+    visible: "Collection"
+    timeout: 10000
+- tapOn: "pomme, apple.*"
+- extendedWaitUntil:
+    visible: "Meaning, .*Edit"
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 1200
+- takeScreenshot: research_notes/ux-redesign-2026-11/final/09-card-detail
+- scroll
+- waitForAnimationToEnd:
+    timeout: 800
+- tapOn: "Close this card"
+- tapOn: "Boards"
+- waitForAnimationToEnd:
+    timeout: 2000
+- tapOn: "New board"
+- waitForAnimationToEnd
+- inputText: "Kitchen"
+- tapOn: "Create board"
+- waitForAnimationToEnd:
+    timeout: 4000
+- tapOn:
+    point: "25%,22%"
+- waitForAnimationToEnd
+- tapOn: "Close the sticker picker"
+- waitForAnimationToEnd:
+    timeout: 3000
+- takeScreenshot: research_notes/ux-redesign-2026-11/final/16-board-open
+- tapOn: "Board options"
+- waitForAnimationToEnd:
+    timeout: 2000
+- tapOn: "Delete board"
+- waitForAnimationToEnd:
+    timeout: 9000
+- tapOn: "Profile"
+- extendedWaitUntil:
+    visible: "Due tomorrow.*"
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 1500
+- extendedWaitUntil:
+    notVisible: "Board deleted"
+    timeout: 15000
+- takeScreenshot: research_notes/ux-redesign-2026-11/final/18-profile-top
+- scrollUntilVisible:
+    element: "Simple grading"
+    direction: DOWN
+    timeout: 20000
+- scroll
+- scroll
+- waitForAnimationToEnd:
+    timeout: 1000
+- takeScreenshot: research_notes/ux-redesign-2026-11/final/19-profile-scrolled

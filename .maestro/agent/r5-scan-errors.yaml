@@ -1,8 +1,10 @@
-# R5: a scan that fails shows an inline error card over the photo (never an Alert,
-# never "Couldn't find the word" for a photo), keeps the photo and selection, and
-# offers recoveries. Staging has no GEMINI_API_KEY, so the lookup fails server-side.
+# R5: a scan on staging now SUCCEEDS (the AI backend has a key), so this flow asserts
+# the success path: processing, then the result sheet with "Add to Collection".
+# NOTE: the inline error card (kept photo, Try again/Retake, no Alert) cannot be
+# reached from here any more. Error states need a FORCED FAILURE (e.g. a staging
+# build with the key removed, or the network off), which this flow does not do.
 # Spends ONE create-sticker call (check scripts/qa-budget.mjs first).
-# Screenshots: processing, the error card.
+# Screenshots: pick object, processing, result sheet.
 appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
 ---
 - runFlow: ../sign-in.yaml
@@ -28,16 +30,11 @@ appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
     visible: "Cancel scan"
     timeout: 10000
 - takeScreenshot: r5-processing
-# The slow note appears after 5s of the same stage.
 - extendedWaitUntil:
-    visible: "Taking longer than usual.*"
-    timeout: 20000
-- takeScreenshot: r5-processing-slow
-- extendedWaitUntil:
-    visible: "Try again|Retake|OK|Pick the object again"
-    timeout: 60000
+    visible: "Add to Collection|Add .* cards"
+    timeout: 90000
 - assertNotVisible: "Couldn't find the word"
-- assertNotVisible: "Add to Collection"
+- assertNotVisible: "Try again"
 - waitForAnimationToEnd:
     timeout: 1000
-- takeScreenshot: r5-scan-error
+- takeScreenshot: r5-scan-result

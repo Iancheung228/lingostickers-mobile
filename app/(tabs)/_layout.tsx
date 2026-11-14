@@ -32,6 +32,9 @@ const SLOTS: Slot[] = [
   { name: 'profile', label: 'Profile', a11y: 'Profile', Icon: User },
 ];
 
+/** Gap between the pill's edge and the active highlight; its radius is the pill's minus this. */
+const HIGHLIGHT_RING = 6;
+
 function PillTabBar({ state, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
   const { dueCount } = useDueCount();
@@ -67,7 +70,7 @@ function PillTabBar({ state, navigation }: BottomTabBarProps) {
     >
       <View style={styles.row} accessibilityRole="tabbar">
         <View style={styles.pill} pointerEvents="none" />
-        {SLOTS.map(slot => {
+        {SLOTS.map((slot, slotIndex) => {
           const focused = focusedName === slot.name;
           const badge = slot.name === 'collection' && dueCount > 0;
           const label = badge ? `${slot.a11y}, ${dueCount} due` : slot.a11y;
@@ -90,7 +93,15 @@ function PillTabBar({ state, navigation }: BottomTabBarProps) {
                 </View>
               ) : (
                 <>
-                  {focused && <View style={styles.highlight} />}
+                  {focused && (
+                    <View
+                      style={[
+                        styles.highlight,
+                        // Edge slots inset by the full ring so the highlight stays concentric with the pill's end cap.
+                        { left: slotIndex === 0 ? HIGHLIGHT_RING : 3, right: slotIndex === SLOTS.length - 1 ? HIGHLIGHT_RING : 3 },
+                      ]}
+                    />
+                  )}
                   <View>
                     <Icon size={24} color={focused ? colors.terra : colors.maroon} strokeWidth={1.75} />
                     {badge && (
@@ -179,8 +190,8 @@ const styles = StyleSheet.create({
   },
   highlight: {
     position: 'absolute',
-    top: TAB_BAR_DISC_OVERHANG + 7, bottom: 7, left: 3, right: 3,
-    borderRadius: 22,
+    top: TAB_BAR_DISC_OVERHANG + HIGHLIGHT_RING, bottom: HIGHLIGHT_RING,
+    borderRadius: TAB_BAR_HEIGHT / 2 - HIGHLIGHT_RING,
     backgroundColor: colors.white,
   },
   label: { fontSize: 12, lineHeight: 14, fontFamily: fonts.display, color: colors.maroon },

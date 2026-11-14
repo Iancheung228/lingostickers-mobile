@@ -14,7 +14,8 @@ appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
 - waitForAnimationToEnd:
     timeout: 1500
 - takeScreenshot: r4-calendar
-- tapOn: "November 12, .*"
+# The 13th is the day with activity in the QA seed (found + reviewed), so the Day screen has content.
+- tapOn: "November 13, .*"
 - tapOn:
     id: "calendar-selected-day"
 - extendedWaitUntil:

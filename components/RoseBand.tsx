@@ -3,11 +3,15 @@ import { View, Text, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, radii, spacing, type } from '@/constants/theme';
 import OfflineBanner from '@/components/OfflineBanner';
+import { BAND_HEIGHT } from '@/components/HomeHeader';
 
 // The rose band (C-look 3): title in the type scale, at most one subtitle line
 // and one right-hand control, all in maroon (the contrast fix: inkDark washes
 // out on the band). It runs up behind the status bar, so it does its own
-// top inset. `bottomPad` lets a screen reserve room for a card that overlaps it.
+// top inset. Collection, Calendar and Boards share one height (BAND_HEIGHT,
+// the Home band at rest) and one title baseline; a card below overlaps the band
+// by BAND_RADIUS. `fitContent` is for Profile only: a taller band sized by its
+// avatar, with `bottomPad` of rose under it.
 export const BAND_RADIUS = radii.lg; // 24
 
 interface RoseBandProps {
@@ -16,14 +20,16 @@ interface RoseBandProps {
   right?: ReactNode;
   /** Content to the left of the title (Profile's avatar). */
   leading?: ReactNode;
+  /** Size the band to its content (Profile, for the avatar) instead of the shared height. */
+  fitContent?: boolean;
   bottomPad?: number;
   children?: ReactNode;
 }
 
-export default function RoseBand({ title, subtitle, right, leading, bottomPad = spacing.md, children }: RoseBandProps) {
+export default function RoseBand({ title, subtitle, right, leading, fitContent, bottomPad = spacing.md, children }: RoseBandProps) {
   const insets = useSafeAreaInsets();
   return (
-    <View style={[styles.band, { paddingTop: insets.top + spacing.sm, paddingBottom: bottomPad }]}>
+    <View style={[styles.band, { paddingTop: insets.top + spacing.sm }, fitContent ? { paddingBottom: bottomPad } : { height: BAND_HEIGHT }]}>
       <View style={styles.row}>
         {leading}
         <View style={styles.titleWrap}>

@@ -16,6 +16,8 @@ import {
   WallDisplayStyle, CutoutBorderStyle,
 } from '@/lib/types';
 import BoardCanvas from '@/components/BoardCanvas';
+import RoseBand from '@/components/RoseBand';
+import IconButton from '@/components/ui/IconButton';
 import BoardMenu, { BoardMenuItem, MenuAnchor } from '@/components/BoardMenu';
 import BackgroundCropper, { CropResult } from '@/components/BackgroundCropper';
 import BackgroundDimSlider from '@/components/BackgroundDimSlider';
@@ -39,12 +41,6 @@ const BACKGROUND_MAX_SIDE = 1600;
 // entire original photo, several MB per board, uploaded to be looked at
 // approximately never.
 const SOURCE_MAX_SIDE = 2048;
-
-// Both header side slots are pinned to this, so the title between them is
-// centred on the *screen* rather than merely on the leftover space. It's the
-// width of the widest thing either slot holds — the "+ Add" pill, plus the
-// settings gear that sits to its right on every screen in the app.
-const SIDE_SLOT_W = 104;
 
 interface BoardCarouselPageProps {
   board: Board;
@@ -124,6 +120,7 @@ export default function BoardCarouselPage({
   const menuAnchorRef = useRef<View>(null);
 
   const dragCoach = useCoachMark('board-drag', isActive && !loading && items.length > 0);
+  const [dragged, setDragged] = useState(false);
 
   useEffect(() => {
     if (autoOpenPicker && !autoPromptedRef.current) {
@@ -395,64 +392,37 @@ export default function BoardCarouselPage({
 
   return (
     <View style={styles.page}>
-      <View style={styles.header}>
-        <View ref={menuAnchorRef} collapsable={false} style={[styles.side, styles.sideLeft]}>
-          <TouchableOpacity
-            onPress={onBack}
-            style={styles.iconBtn}
-            activeOpacity={0.7}
-            accessibilityRole="button"
-            accessibilityLabel="Back to boards"
-            testID="board-back"
-          >
-            <ChevronLeft size={20} color={colors.inkDark} />
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={openMenu}
-            style={styles.iconBtn}
-            activeOpacity={0.7}
-            accessibilityRole="button"
-            accessibilityLabel="Board options"
-          >
-            {uploadingBackground || loadingSource
-              ? <ActivityIndicator size="small" color={colors.inkDark} />
-              : <MoreHorizontal size={18} color={colors.inkDark} />}
-          </TouchableOpacity>
-        </View>
-
-        {/* The name is the one thing on this screen the user typed, so it's
-            editable where it's displayed rather than somewhere else. */}
-        <TouchableOpacity
-          style={styles.titleWrap}
-          onPress={() => setRenaming(true)}
-          activeOpacity={0.6}
-          accessibilityRole="button"
-          accessibilityLabel={`Rename the board “${board.name}”`}
-        >
-          <View style={styles.titleRow}>
-            <Text style={styles.title} numberOfLines={1}>{board.name}</Text>
-            <Pencil size={12} color={colors.inkLight} />
+      {/* The board's name replaces "Boards" in the band, with back on the
+          left and the board's actions on the right, so there is no second
+          title row under it. Rename lives in the "…" menu. */}
+      <RoseBand
+        title={board.name}
+        leading={
+          <IconButton onPress={onBack} label="Back to boards" testID="board-back">
+            <ChevronLeft size={22} strokeWidth={1.75} color={colors.inkDark} />
+          </IconButton>
+        }
+        right={
+          <View style={styles.bandActions}>
+            <TouchableOpacity
+              onPress={() => setPickerOpen(true)}
+              style={styles.addBtn}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 4 }}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel="Add stickers to this board"
+            >
+              <Plus size={15} color={colors.white} strokeWidth={2.75} />
+              <Text style={styles.addText}>Add</Text>
+            </TouchableOpacity>
+            <View ref={menuAnchorRef} collapsable={false}>
+              <IconButton onPress={openMenu} label="Board options" loading={uploadingBackground || loadingSource}>
+                <MoreHorizontal size={20} strokeWidth={1.75} color={colors.inkDark} />
+              </IconButton>
+            </View>
           </View>
-          <Text style={styles.subtitle}>{items.length} sticker{items.length === 1 ? '' : 's'}</Text>
-        </TouchableOpacity>
-
-        {/* Labelled, not a bare "+": the rail at the bottom of this same
-            screen has its own "+" that means "new board". Two identical
-            glyphs, two different nouns, one screen. */}
-        <View style={[styles.side, styles.sideRight]}>
-          <TouchableOpacity
-            onPress={() => setPickerOpen(true)}
-            style={styles.addBtn}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 4 }}
-            activeOpacity={0.85}
-            accessibilityRole="button"
-            accessibilityLabel="Add stickers to this board"
-          >
-            <Plus size={15} color={colors.white} strokeWidth={2.75} />
-            <Text style={styles.addText}>Add</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
+        }
+      />
 
       <View
         style={styles.canvasWrap}
@@ -470,7 +440,7 @@ export default function BoardCarouselPage({
             onMove={updatePosition}
             onRemove={handleRemove}
             onDragStart={() => onDragStateChange(true)}
-            onDragEnd={() => onDragStateChange(false)}
+            onDragEnd={() => { onDragStateChange(false); if (dragCoach.visible) { setDragged(true); dragCoach.dismiss(); } }}
             backgroundPath={board.background_path}
             backgroundDim={previewDimPct ?? board.background_dim}
             backgroundVersion={backgroundVersion}
@@ -496,15 +466,6 @@ export default function BoardCarouselPage({
           </View>
         )}
 
-        {dragCoach.visible && (
-          <TouchableOpacity style={styles.coach} onPress={dragCoach.dismiss} activeOpacity={0.9}>
-            <Text style={styles.coachText}>
-              Hold a sticker to drag it. Drop it on the bin to take it off this board — it stays in your collection.
-            </Text>
-            <X size={13} color={colors.inkMid} />
-          </TouchableOpacity>
-        )}
-
         {/* Only meaningful once there's a photo to tint — the default
             default background doesn't use the dim scrim at all. */}
         {board.background_path && (
@@ -518,6 +479,17 @@ export default function BoardCarouselPage({
           </View>
         )}
       </View>
+
+      {/* In flow, under the canvas: it never covers a sticker. Hidden once
+          dismissed (the coach mark persists that) or after a first drag. */}
+      {dragCoach.visible && !dragged && (
+        <TouchableOpacity style={styles.coach} onPress={dragCoach.dismiss} activeOpacity={0.9} accessibilityRole="button" accessibilityLabel="Dismiss tip">
+          <Text style={styles.coachText}>
+            Hold a sticker to drag it. Drop it on the bin to take it off this board. It stays in your collection.
+          </Text>
+          <X size={14} color={colors.inkMid} />
+        </TouchableOpacity>
+      )}
 
       <BoardMenu
         visible={menuOpen}
@@ -594,29 +566,7 @@ async function shrinkForStorage(source: { uri: string; width: number; height: nu
 
 const styles = StyleSheet.create({
   page: { flex: 1 },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.xs,
-    paddingBottom: spacing.sm,
-  },
-  side: { width: SIDE_SLOT_W, alignItems: 'flex-start' },
-  sideLeft: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
-  sideRight: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: spacing.sm },
-  titleWrap: { flex: 1, alignItems: 'center' },
-  titleRow: { flexDirection: 'row', alignItems: 'center', gap: 5, maxWidth: '100%' },
-  title: { fontSize: 15, fontFamily: fonts.display, color: colors.inkDark, textAlign: 'center', flexShrink: 1 },
-  subtitle: { fontSize: 13, fontFamily: fonts.text, color: colors.inkLight, marginTop: 1 },
-  iconBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: radii.full,
-    backgroundColor: colors.card,
-    alignItems: 'center',
-    justifyContent: 'center',
-    ...shadows.card,
-  },
+  bandActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   addBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -629,7 +579,7 @@ const styles = StyleSheet.create({
     ...shadows.button,
   },
   addText: { fontSize: 13, fontFamily: fonts.display, color: colors.white },
-  canvasWrap: { flex: 1, marginHorizontal: spacing.md, marginBottom: spacing.md },
+  canvasWrap: { flex: 1, marginHorizontal: spacing.md, marginTop: spacing.md, marginBottom: spacing.md },
   loader: { flex: 1 },
   empty: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.xl },
   emptyIconCircle: {
@@ -651,21 +601,11 @@ const styles = StyleSheet.create({
     ...shadows.button,
   },
   emptyBtnText: { fontSize: 15, fontFamily: fonts.display, color: colors.white },
-  // Floats over the canvas rather than sitting in the header's flow, so
-  // dismissing it doesn't reflow the board underneath.
   coach: {
-    position: 'absolute',
-    top: spacing.sm,
-    left: spacing.sm,
-    right: spacing.sm,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.ms,
-    paddingVertical: spacing.sm,
-    borderRadius: radii.md,
-    backgroundColor: 'rgba(255, 253, 244, 0.94)',
-    ...shadows.card,
+    flexDirection: 'row', alignItems: 'center', gap: spacing.sm,
+    marginHorizontal: spacing.md, marginBottom: spacing.md, minHeight: 44,
+    paddingHorizontal: spacing.ms, paddingVertical: spacing.sm,
+    borderRadius: radii.md, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border,
   },
   coachText: { flex: 1, fontSize: 12, fontFamily: fonts.display, color: colors.inkMid, lineHeight: 17 },
   tintSliderWrap: {

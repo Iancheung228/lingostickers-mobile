@@ -31,6 +31,8 @@ export default function ReviewSummary({ stats, early, nextDue, revisit, onDone, 
   const { reduced } = useMotion();
   const pop = useRef(new Animated.Value(0)).current;
   const [opened, setOpened] = useState<Sticker | null>(null);
+  // Where the card sits, so the Undo toast can ride just above it, never under the tab bar.
+  const [box, setBox] = useState<{ h: number; cardTop: number } | null>(null);
   const shown = !!stats;
 
   useEffect(() => {
@@ -50,7 +52,7 @@ export default function ReviewSummary({ stats, early, nextDue, revisit, onDone, 
           The scrim is a sibling behind the card, not its parent: an accessible
           button hides everything inside it from VoiceOver, which left the
           title, the counts and Done unreachable. */}
-      <View style={styles.overlay}>
+      <View style={styles.overlay} onLayout={e => setBox(b => ({ h: e.nativeEvent.layout.height, cardTop: b?.cardTop ?? 0 }))}>
         <Pressable
           style={StyleSheet.absoluteFill}
           onPress={onDone}
@@ -58,6 +60,7 @@ export default function ReviewSummary({ stats, early, nextDue, revisit, onDone, 
           accessibilityLabel="Close the session summary"
         />
         <Animated.View
+          onLayout={e => { const y = e.nativeEvent.layout.y; setBox(b => (b && b.cardTop === y ? b : { h: b?.h ?? 0, cardTop: y })); }}
           style={[styles.card, { opacity: pop, transform: [{ scale: reduced ? 1 : pop.interpolate({ inputRange: [0, 1], outputRange: [0.96, 1] }) }] }]}
         >
           <View style={styles.badge}>
@@ -105,7 +108,7 @@ export default function ReviewSummary({ stats, early, nextDue, revisit, onDone, 
           <Button label="Done" onPress={onDone} style={styles.done} />
         </Animated.View>
 
-        <ToastLayer />
+        <ToastLayer bottom={box && box.h && box.cardTop ? box.h - box.cardTop + 12 : undefined} />
       </View>
 
       <StudyCard

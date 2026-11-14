@@ -68,7 +68,7 @@ export default function WallScreen() {
 
   return (
     <View style={[styles.container, openBoard && { paddingBottom: bottomPad }]}>
-      <RoseBand title="Boards" />
+      {!openBoard && <RoseBand title="Boards" />}
       {openBoard ? (
         <BoardCarouselPage
           key={openBoard.id}

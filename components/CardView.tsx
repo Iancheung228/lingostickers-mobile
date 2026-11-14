@@ -101,12 +101,14 @@ const shortDate = (iso?: string | null) => {
 // Front: the photo, the question, a quiet hint. The word never appears.
 // ---------------------------------------------------------------------------
 
-export function CardFront({ card, imageUrl, hints, hasMoreHints, onHint, stillLearning }: {
+export function CardFront({ card, imageUrl, hints, hasMoreHints, totalHints, onHint, stillLearning }: {
   card: Sticker;
   imageUrl: string | null;
   /// The hint tiers revealed so far, mildest first.
   hints: string[];
   hasMoreHints: boolean;
+  /// How many hint tiers this card has in all (for "2 of 3").
+  totalHints: number;
   onHint: () => void;
   stillLearning: boolean;
 }) {
@@ -155,22 +157,34 @@ export function CardFront({ card, imageUrl, hints, hasMoreHints, onHint, stillLe
 
       <Animated.View style={[styles.hintArea, { opacity: hintFade }]}>
         {hints.length > 0 && (
-          <Text style={styles.hintText} maxFontSizeMultiplier={type.body.maxFontSizeMultiplier}>
-            {hints[hints.length - 1]}
-          </Text>
+          <View style={styles.hintBox} accessible accessibilityLabel={`Hint ${hints.length} of ${totalHints}: ${hints[hints.length - 1]}`}>
+            <Text style={styles.hintOverline} maxFontSizeMultiplier={1.3}>HINT</Text>
+            <Text style={styles.hintText} maxFontSizeMultiplier={type.body.maxFontSizeMultiplier}>
+              {hints[hints.length - 1]}
+            </Text>
+          </View>
         )}
-        {hasMoreHints && (
+        {hasMoreHints ? (
           <Pressable
             onPress={onHint}
             style={({ pressed }) => [styles.hintPill, pressed && styles.hintPillPressed]}
             accessibilityRole="button"
-            accessibilityLabel={hints.length ? 'Another hint' : 'Hint'}
+            accessibilityLabel={hints.length ? `Next hint, ${hints.length + 1} of ${totalHints}` : `Hint, 1 of ${totalHints}`}
             accessibilityHint="Shows a little more of the word. Nothing is counted against you."
           >
             <Lightbulb size={16} strokeWidth={2} color={colors.inkDark} />
-            <Text style={styles.hintPillText} maxFontSizeMultiplier={1.5}>{hints.length ? 'Another hint' : 'Hint'}</Text>
+            <Text style={styles.hintPillText} maxFontSizeMultiplier={1.5}>
+              {hints.length ? `Next hint (${hints.length + 1} of ${totalHints})` : `Hint (1 of ${totalHints})`}
+            </Text>
           </Pressable>
-        )}
+        ) : hints.length > 0 ? (
+          <View
+            style={[styles.hintPill, styles.hintPillDone]}
+            accessible accessibilityRole="button" accessibilityState={{ disabled: true }} accessibilityLabel="No more hints"
+          >
+            <Text style={[styles.hintPillText, { color: colors.inkLight }]} maxFontSizeMultiplier={1.5}>No more hints</Text>
+          </View>
+        ) : null}
       </Animated.View>
     </View>
   );
@@ -454,6 +468,11 @@ const styles = StyleSheet.create({
   stillLearning: { ...type.small, textAlign: 'center', marginTop: spacing.ms },
   prompt: { ...type.h2, textAlign: 'center', marginTop: spacing.md },
   hintArea: { minHeight: 44 + spacing.md, alignItems: 'center', justifyContent: 'flex-start', gap: spacing.sm, marginTop: spacing.ms, paddingBottom: 44 },
+  hintBox: {
+    alignItems: 'center', paddingVertical: spacing.sm, paddingHorizontal: spacing.md,
+    borderRadius: radii.md, backgroundColor: colors.sand, gap: 2, maxWidth: '100%',
+  },
+  hintOverline: { fontFamily: fonts.mono, fontSize: 11, lineHeight: 14, letterSpacing: 1, color: colors.inkMid },
   hintText: { ...type.body, color: colors.inkDark, textAlign: 'center' },
   hintPill: {
     height: 44,
@@ -464,6 +483,7 @@ const styles = StyleSheet.create({
     borderRadius: radii.full,
     backgroundColor: colors.terraLight,
   },
+  hintPillDone: { backgroundColor: colors.sand, opacity: 0.8 },
   hintPillPressed: { backgroundColor: colors.terraTintPressed },
   hintPillText: { ...type.button, fontSize: 15, lineHeight: 20 },
 
@@ -479,7 +499,7 @@ const styles = StyleSheet.create({
   readingEdit: { flexShrink: 1 },
   reading: { ...type.data, fontSize: 16, lineHeight: 22, color: colors.inkLight },
   speak: {
-    width: 36, height: 36, borderRadius: radii.full,
+    width: 44, height: 44, borderRadius: radii.full,
     alignItems: 'center', justifyContent: 'center',
     backgroundColor: colors.terraLight,
   },

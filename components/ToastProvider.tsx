@@ -5,6 +5,8 @@ import {
   AccessibilityInfo, Animated, Keyboard, PanResponder, Pressable, StyleSheet, Text, View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { usePathname } from 'expo-router';
+import { TAB_BAR_HEIGHT, TAB_BAR_DISC_OVERHANG, tabBarBottom } from '@/constants/tabBar';
 import { AlertCircle, CheckCircle2, Info, Undo2 } from 'lucide-react-native';
 import { colors, e2, fonts, radii, spacing, MIN_TAP } from '@/constants/theme';
 import { dur, useMotion } from '@/lib/motion';
@@ -49,8 +51,8 @@ interface ToastView {
 }
 const ToastViewContext = createContext<ToastView | null>(null);
 
-/** Tab pill height 68 + its 30 inset + 8 gap (C-look 3). */
-export const TAB_BAR_CLEARANCE = 68 + 30;
+/** Routes that show the floating tab bar. */
+const TAB_PATHS = ['/collection', '/calendar', '/scan', '/wall', '/profile', '/friends'];
 const MAX_WAITING = 2;
 
 type Item = Required<Pick<ToastOptions, 'kind' | 'message'>> & Pick<ToastOptions, 'action' | 'aboveTabBar'> & { id: number };
@@ -179,14 +181,19 @@ export function ToastProvider({ children }: { children: ReactNode }) {
  * inside any Modal that should show toasts (the study card, the card detail,
  * the session summary). `bottomOffset` lifts it clear of a control row.
  */
-export function ToastLayer({ root, bottomOffset = 0 }: { root?: boolean; bottomOffset?: number }) {
+export function ToastLayer({ root, bottomOffset = 0, bottom: fixedBottom }: { root?: boolean; bottomOffset?: number; bottom?: number }) {
   const insets = useSafeAreaInsets();
+  const pathname = usePathname();
   const v = useContext(ToastViewContext);
   const register = v?.registerHost;
   useEffect(() => (!root && register ? register() : undefined), [root, register]);
   if (!v || !v.current) return null;
   const { current, opacity, lift, panHandlers, pause, resume, dismiss, kb } = v;
-  const bottom = (kb > 0 ? kb + 8 : insets.bottom + (current.aboveTabBar ? TAB_BAR_CLEARANCE + 8 : 16)) + bottomOffset;
+  // On a tab screen (root layer only) the toast clears the floating bar and
+  // its raised disc: the bar's bottom edge + its height + the disc overhang + 12.
+  const overBar = !!root && (current.aboveTabBar || TAB_PATHS.includes(pathname));
+  const barTop = tabBarBottom(insets.bottom) + TAB_BAR_HEIGHT + TAB_BAR_DISC_OVERHANG + 12;
+  const bottom = fixedBottom ?? ((kb > 0 ? kb + 8 : overBar ? barTop : insets.bottom + 16) + bottomOffset);
   const Icon = current.kind === 'error' ? AlertCircle : current.kind === 'success' ? CheckCircle2 : current.kind === 'undo' ? Undo2 : Info;
 
   return (

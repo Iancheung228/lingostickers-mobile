@@ -1,3 +1,5 @@
+# DO NOT RUN: this flow needs a QA account with ZERO cards (the shared QA account has
+# cards, so it would fail at "Nothing stuck yet"). Kept for when a zero-card account exists.
 # R4: a new account's Home. Needs the QA account with zero cards (the usual seed has one):
 # the wall shows "Nothing stuck yet" and "Take a photo", with no toolbar, grid or Arrange chip.
 appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build

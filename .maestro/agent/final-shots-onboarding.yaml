@@ -1,0 +1,21 @@
+# Final fix pass: onboarding screens 1 and 3 (opened by deep link; Skip is never tapped).
+appId: ${APP_ID}
+---
+- runFlow: ../sign-in.yaml
+- openLink: "lingostickers-dev://onboarding"
+- extendedWaitUntil:
+    visible: "Photograph something near you"
+    timeout: 20000
+- waitForAnimationToEnd
+- takeScreenshot: research_notes/ux-redesign-2026-11/final/23-onboarding-1
+- tapOn: "Next"
+- extendedWaitUntil:
+    visible: "It becomes a sticker and a word"
+    timeout: 10000
+- tapOn: "Next"
+- extendedWaitUntil:
+    visible: "Review a little each day"
+    timeout: 10000
+- waitForAnimationToEnd:
+    timeout: 1500
+- takeScreenshot: research_notes/ux-redesign-2026-11/final/25-onboarding-3

@@ -362,7 +362,7 @@ export default function ProfileScreen() {
 
   return (
     <View style={styles.container}>
-      <RoseBand title="Profile" subtitle={username} leading={avatar} bottomPad={spacing.lg} />
+      <RoseBand title="Profile" subtitle={username} leading={avatar} fitContent bottomPad={spacing.lg} />
 
       <ScrollView contentContainerStyle={styles.scrollBody} showsVerticalScrollIndicator={false}>
         {/* Stats: from the cards already loaded. No streaks (SPEC). */}

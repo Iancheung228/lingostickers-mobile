@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Search, SlidersHorizontal, X } from 'lucide-react-native';
 import { colors, fonts, radii, MIN_TAP } from '@/constants/theme';
-import { haptic } from '@/lib/haptics';
+import IconButton from '@/components/ui/IconButton';
 
 export const TOOLBAR_HEIGHT = 52;
 
@@ -64,25 +64,17 @@ export default function HomeToolbar({
         <Text style={styles.title} maxFontSizeMultiplier={1.5} accessibilityRole="header">Your words</Text>
         <Text style={styles.count} maxFontSizeMultiplier={1.3}>{count}</Text>
       </View>
-      <Pressable
-        testID="home-search"
-        onPress={() => { haptic.select(); onOpenSearch(); }}
-        style={styles.btn}
-        accessibilityRole="button"
-        accessibilityLabel="Search your collection"
-      >
-        <Search size={16} strokeWidth={2} color={colors.inkDark} />
-      </Pressable>
-      <Pressable
+      <IconButton testID="home-search" label="Search your collection" onPress={onOpenSearch}>
+        <Search size={18} strokeWidth={2} color={colors.inkDark} />
+      </IconButton>
+      <IconButton
         testID="home-filter"
-        onPress={() => { haptic.select(); onOpenFilter(); }}
-        style={styles.btn}
-        accessibilityRole="button"
-        accessibilityLabel={filtersActive ? 'Sort and filter, on' : 'Sort and filter'}
+        label={filtersActive ? 'Sort and filter, on' : 'Sort and filter'}
+        onPress={onOpenFilter}
+        dot={filtersActive}
       >
-        <SlidersHorizontal size={16} strokeWidth={2} color={colors.inkDark} />
-        {filtersActive && <View style={styles.dot} />}
-      </Pressable>
+        <SlidersHorizontal size={18} strokeWidth={2} color={colors.inkDark} />
+      </IconButton>
     </View>
   );
 }
@@ -92,14 +84,8 @@ const styles = StyleSheet.create({
   titleWrap: { flex: 1, flexDirection: 'row', alignItems: 'baseline', gap: 6 },
   title: { fontSize: 17, lineHeight: 22, fontFamily: fonts.display, color: colors.inkDark },
   count: { fontSize: 13, lineHeight: 16, fontFamily: fonts.mono, color: colors.inkLight },
-  // 40pt visual (mockup); the row is 52 tall so the hit area is 44+ vertically.
-  btn: {
-    width: 40, height: 40, borderRadius: radii.full, borderWidth: 1, borderColor: colors.ctl,
-    backgroundColor: colors.card, alignItems: 'center', justifyContent: 'center',
-  },
-  dot: { position: 'absolute', top: 7, right: 8, width: 8, height: 8, borderRadius: 4, backgroundColor: colors.terra },
   field: {
-    flex: 1, height: 40, flexDirection: 'row', alignItems: 'center', gap: 8, paddingLeft: 12,
+    flex: 1, height: 44, flexDirection: 'row', alignItems: 'center', gap: 8, paddingLeft: 12,
     borderRadius: radii.full, borderWidth: 1, borderColor: colors.ctl, backgroundColor: colors.card,
   },
   input: { flex: 1, padding: 0, fontSize: 16, fontFamily: fonts.text, color: colors.inkMid },

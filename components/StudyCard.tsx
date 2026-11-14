@@ -644,6 +644,7 @@ function StudyFace({
                       imageUrl={imageUrl}
                       hints={hints}
                       hasMoreHints={hintCount < tiers.length}
+                      totalHints={tiers.length}
                       onHint={() => { haptic.select(); setHintCount(c => Math.min(c + 1, tiers.length)); }}
                       stillLearning={stillLearning}
                     />

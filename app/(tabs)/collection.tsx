@@ -340,7 +340,7 @@ export default function CollectionScreen() {
 
       {!brandNew && !loading && (
         <Animated.View style={[styles.toolbar, toolbarStyle]}>
-          <Animated.View style={[StyleSheet.absoluteFill, styles.toolbarFill, toolbarFill]} />
+          <Animated.View style={[styles.toolbarFill, toolbarFill]} />
           <HomeToolbar
             count={stickers.length}
             searchOpen={searchOpen}
@@ -426,7 +426,12 @@ const styles = StyleSheet.create({
   toolbar: {
     position: 'absolute', left: 0, right: 0, top: 0, zIndex: 10,
   },
-  toolbarFill: { backgroundColor: colors.sky, shadowColor: colors.inkDark, shadowOpacity: 0.12, shadowRadius: 8, shadowOffset: { width: 0, height: 4 } },
+  // Page colour, reaching up 24pt under the band's rounded corners so the corner
+  // wedges show the page rather than scrolled stickers. One soft shadow, no hairline.
+  toolbarFill: {
+    position: 'absolute', left: 0, right: 0, top: -24, bottom: 0, backgroundColor: colors.sky,
+    shadowColor: colors.inkDark, shadowOpacity: 0.08, shadowRadius: 6, shadowOffset: { width: 0, height: 3 },
+  },
   row: { gap: GAP, paddingHorizontal: GUTTER, marginBottom: GAP },
   cellWrap: { flex: 1 },
   cellSingle: { paddingHorizontal: GUTTER, marginBottom: GAP },

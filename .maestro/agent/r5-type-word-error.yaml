@@ -1,5 +1,8 @@
-# R5: a failed lookup in Type a word shows an inline error with Try again and keeps
-# the typed text. Spends ONE create-card call (staging has no GEMINI_API_KEY, so it fails).
+# R5: Type a word on staging now SUCCEEDS, so this flow asserts the success path: the
+# lookup returns a card preview and the button becomes "Add card". It does not add it.
+# NOTE: the failed-lookup state (inline error, Try again, typed text kept) needs a FORCED
+# FAILURE (key removed on the backend, or the network off); it cannot be triggered here.
+# Spends ONE create-card call.
 appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
 ---
 - runFlow: ../sign-in.yaml
@@ -21,9 +24,11 @@ appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
 - tapOn:
     id: "type-word-lookup"
 - extendedWaitUntil:
-    visible: "Try again"
+    visible:
+      id: "type-word-preview"
     timeout: 90000
-- assertVisible: "chat"
+- assertVisible: "Add card"
+- assertNotVisible: "Try again"
 - waitForAnimationToEnd:
     timeout: 800
-- takeScreenshot: r5-type-word-error
+- takeScreenshot: r5-type-word-result

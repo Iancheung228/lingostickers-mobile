@@ -24,6 +24,8 @@ export default function SignInScreen() {
   // So the email field's return key can hand over instead of dismissing the
   // keyboard and leaving the password box untouched two rows below it.
   const passwordRef = useRef<TextInput>(null);
+  // After a wrong attempt the password stays, focused with its text selected, so retyping replaces it.
+  const [selection, setSelection] = useState<{ start: number; end: number } | undefined>();
 
   const isFormValid = isEmail(email) && password.length > 0;
   const emailError = emailTouched && email.length > 0 && !isEmail(email) ? 'Enter a valid email address.' : null;
@@ -39,7 +41,12 @@ export default function SignInScreen() {
     if (error) {
       haptic.error();
       if (error.message === 'Email not confirmed') setUnconfirmed(true);
-      else setIssue(signInIssue(error));
+      else {
+        setIssue(signInIssue(error));
+        setSelection({ start: 0, end: password.length });
+        // Next frame: the field is still disabled-looking while `loading` clears.
+        setTimeout(() => passwordRef.current?.focus(), 50);
+      }
     }
   };
 
@@ -91,7 +98,8 @@ export default function SignInScreen() {
         ref={passwordRef}
         placeholder="Password"
         value={password}
-        onChangeText={(t) => { setPassword(t); if (issue) setIssue(null); }}
+        onChangeText={(t) => { setPassword(t); setSelection(undefined); if (issue) setIssue(null); }}
+        selection={selection}
         error={issue?.field === 'password' ? issue.message : null}
         textContentType="password"
         autoComplete="current-password"

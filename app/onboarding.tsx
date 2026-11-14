@@ -2,13 +2,14 @@ import { useRef, useState } from 'react';
 import { Animated, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Camera, CalendarCheck } from 'lucide-react-native';
+import Svg, { Circle, Ellipse, G, Path, Rect } from 'react-native-svg';
+import { ArrowRight } from 'lucide-react-native';
 import { useAuth } from '@/hooks/useAuth';
 import Button from '@/components/ui/Button';
 import { markOnboardingDone } from '@/lib/onboarding';
 import { haptic } from '@/lib/haptics';
 import { useMotion } from '@/lib/motion';
-import { colors, e1, radii, spacing, type, wordFontFor, GUTTER } from '@/constants/theme';
+import { colors, e1, fonts, radii, spacing, type, wordFontFor, GUTTER } from '@/constants/theme';
 
 // First run: three short screens (photo, sticker and word, review), then Scan.
 // Calm on purpose: a sand disc and one sentence each, no metaphor, no confetti.
@@ -29,7 +30,49 @@ const PAGES = [
   },
 ] as const;
 
+// A hand-drawn apple, the same fruit screen 2 uses. `cutout` draws it as the
+// app does a finished sticker: a white outline and a contact shadow under it.
+function Apple({ size, cutout }: { size: number; cutout?: boolean }) {
+  const body = (
+    <G>
+      <Path d="M50 28 C38 20 18 26 18 50 C18 72 34 86 50 82 C66 86 82 72 82 50 C82 26 62 20 50 28 Z" />
+      <Path d="M50 28 C50 20 54 14 60 11" strokeLinecap="round" />
+    </G>
+  );
+  return (
+    <Svg width={size} height={size} viewBox="0 0 100 100">
+      {cutout && <Ellipse cx="50" cy="90" rx="26" ry="4.5" fill={colors.maroon} fillOpacity={0.2} />}
+      {cutout && (
+        <G fill={colors.white} stroke={colors.white} strokeWidth={9} strokeLinejoin="round">{body}</G>
+      )}
+      <G fill={colors.error} stroke="none">
+        <Path d="M50 28 C38 20 18 26 18 50 C18 72 34 86 50 82 C66 86 82 72 82 50 C82 26 62 20 50 28 Z" />
+      </G>
+      <Path d="M50 28 C50 20 54 14 60 11" stroke={colors.maroon} strokeWidth={3.5} strokeLinecap="round" fill="none" />
+      <Path d="M54 22 C60 14 70 14 74 18 C68 26 60 26 54 22 Z" fill={colors.success} />
+      <Ellipse cx="34" cy="46" rx="5" ry="9" fill={colors.white} fillOpacity={0.28} transform="rotate(20 34 46)" />
+    </Svg>
+  );
+}
+
 function Visual({ page }: { page: number }) {
+  if (page === 0) {
+    // The moment a photo becomes a sticker: the photo, an arrow, the cutout.
+    return (
+      <View style={styles.moment} accessible={false} importantForAccessibility="no-hide-descendants">
+        <View style={styles.photo}>
+          <Svg width="100%" height="100%" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid slice">
+            <Rect x="0" y="0" width="100" height="100" fill={colors.sand2} />
+            <Rect x="0" y="66" width="100" height="34" fill={colors.blush} fillOpacity={0.45} />
+            <Circle cx="82" cy="20" r="14" fill={colors.sand} />
+          </Svg>
+          <View style={styles.photoApple}><Apple size={84} /></View>
+        </View>
+        <ArrowRight size={22} strokeWidth={2} color={colors.inkLight} />
+        <View style={styles.cutoutWell}><Apple size={96} cutout /></View>
+      </View>
+    );
+  }
   if (page === 1) {
     return (
       <View style={styles.card} accessible={false} importantForAccessibility="no-hide-descendants">
@@ -39,13 +82,29 @@ function Visual({ page }: { page: number }) {
       </View>
     );
   }
-  const Icon = page === 0 ? Camera : CalendarCheck;
+  // A card's answer side with its grade row, exactly as it will look in study.
   return (
-    <View style={styles.disc} accessible={false} importantForAccessibility="no-hide-descendants">
-      <Icon size={44} strokeWidth={1.75} color={colors.inkDark} />
+    <View style={styles.card3} accessible={false} importantForAccessibility="no-hide-descendants">
+      <Text style={[styles.cardWord, { fontFamily: wordFontFor('fr'), marginTop: 0 }]}>la pomme</Text>
+      <Text style={styles.cardMeaning}>apple</Text>
+      <View style={styles.miniRow}>
+        {MINI_GRADES.map(g => (
+          <View key={g.label} style={[styles.miniBtn, { backgroundColor: g.bg, flex: g.flex }]}>
+            <Text style={[styles.miniLabel, { color: g.fg }]} maxFontSizeMultiplier={1}>{g.label}</Text>
+            <Text style={[styles.miniSub, { color: g.fg }]} maxFontSizeMultiplier={1}>{g.sub}</Text>
+          </View>
+        ))}
+      </View>
     </View>
   );
 }
+
+const MINI_GRADES = [
+  { label: 'Again', sub: '1m', bg: colors.againTint, fg: colors.error, flex: 1.4 },
+  { label: 'Hard', sub: '6m', bg: colors.goldTint, fg: colors.gold, flex: 1 },
+  { label: 'Good', sub: '1d', bg: colors.success, fg: colors.white, flex: 1.4 },
+  { label: 'Easy', sub: '4d', bg: colors.successLight, fg: colors.success, flex: 1 },
+];
 
 export default function OnboardingScreen() {
   const router = useRouter();
@@ -106,10 +165,18 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.sky, paddingHorizontal: GUTTER },
   top: { alignItems: 'flex-end', minHeight: 44 },
   page: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.md },
-  disc: {
-    width: 120, height: 120, borderRadius: 60, backgroundColor: colors.sand, alignItems: 'center',
-    justifyContent: 'center', marginBottom: spacing.md,
+  moment: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.md },
+  photo: { width: 128, height: 128, borderRadius: radii.md, overflow: 'hidden', alignItems: 'center', justifyContent: 'flex-end', ...e1 },
+  photoApple: { position: 'absolute', bottom: 18 },
+  cutoutWell: { width: 128, height: 128, alignItems: 'center', justifyContent: 'center' },
+  card3: {
+    width: 288, backgroundColor: colors.card, borderRadius: radii.lg, padding: spacing.md, alignItems: 'center',
+    marginBottom: spacing.md, ...e1,
   },
+  miniRow: { flexDirection: 'row', gap: 6, alignSelf: 'stretch', marginTop: spacing.sm },
+  miniBtn: { height: 52, borderRadius: radii.md, alignItems: 'center', justifyContent: 'center' },
+  miniLabel: { fontFamily: fonts.display, fontSize: 13, lineHeight: 16 },
+  miniSub: { fontFamily: fonts.mono, fontSize: 10, lineHeight: 13 },
   card: {
     width: 200, backgroundColor: colors.card, borderRadius: radii.lg, padding: spacing.sm + 4, alignItems: 'center',
     marginBottom: spacing.md, ...e1,

@@ -196,7 +196,7 @@ export default function SignUpScreen() {
           here rather than treating it as a login box. The rule is shown up front. */}
       <PasswordField
         ref={passwordRef}
-        placeholder="Password (min 6 characters)"
+        placeholder="Password"
         value={password}
         onChangeText={(t) => { setPassword(t); clearIssue('password'); }}
         error={issue?.field === 'password' ? issue.message : null}

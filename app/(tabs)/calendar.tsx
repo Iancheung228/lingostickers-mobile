@@ -19,7 +19,7 @@ import StudySessionHost from '@/components/StudySessionHost';
 import Button from '@/components/ui/Button';
 import { Sticker } from '@/lib/types';
 import { colors, e1, fonts, radii, type, stickerShadow, MIN_TAP } from '@/constants/theme';
-import RoseBand from '@/components/RoseBand';
+import RoseBand, { BAND_RADIUS } from '@/components/RoseBand';
 import InlineError from '@/components/ui/InlineError';
 import { TAB_BAR_CLEARANCE } from '@/constants/tabBar';
 import { haptic } from '@/lib/haptics';
@@ -37,7 +37,6 @@ const A11Y_DAY_FORMAT = new Intl.DateTimeFormat('en-US', { day: 'numeric', month
 const GUTTER = 20;
 const CARD_PAD_H = 16;
 const CELL_HEIGHT = 52;
-const BAND_BOTTOM_PAD = 20 + 8; // overlap, plus a little rose under the card corners
 const THUMB = 20;
 
 const dateKey = (iso: string) => dateKeyOf(new Date(iso));
@@ -276,7 +275,7 @@ export default function CalendarScreen() {
 
   return (
     <View style={styles.container}>
-      <RoseBand title="Calendar" bottomPad={BAND_BOTTOM_PAD} />
+      <RoseBand title="Calendar" />
 
       <ScrollView
         style={styles.scroll}
@@ -385,7 +384,7 @@ export default function CalendarScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.sky },
-  scroll: { flex: 1, marginTop: -20 },
+  scroll: { flex: 1, marginTop: -BAND_RADIUS },
   loadError: { marginHorizontal: GUTTER, marginTop: 28, marginBottom: -16 },
 
   gridCard: {

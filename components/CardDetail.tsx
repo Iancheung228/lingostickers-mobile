@@ -17,6 +17,8 @@ import { languageLabel } from '@/lib/languages';
 import { dueAtMs, formatInterval, START_EASE } from '@/lib/review';
 import { speak, speakAsync, stopSpeaking } from '@/lib/speech';
 import { supabase } from '@/lib/supabase';
+import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
+import IconButton from '@/components/ui/IconButton';
 import type { Sticker } from '@/lib/types';
 import { colors, e1, fonts, radii, spacing, stickerShadow, type, MIN_TAP } from '@/constants/theme';
 
@@ -169,7 +171,7 @@ export default function CardDetail({
     <View style={styles.page}>
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: (onTest && !embedded ? 96 : 24) + insets.bottom }}
+        contentContainerStyle={{ paddingBottom: (onTest && !embedded ? TEST_ME_HEIGHT + 24 + 12 : 24) + insets.bottom }}
         keyboardShouldPersistTaps="handled"
         onScroll={e => onAtTop?.(e.nativeEvent.contentOffset.y <= 0)}
         scrollEventThrottle={16}
@@ -227,6 +229,16 @@ export default function CardDetail({
 
       {!!onTest && !embedded && (
         <View style={[styles.sticky, { paddingBottom: insets.bottom + 12 }]} pointerEvents="box-none">
+          {/* A short fade so content slides under the button instead of being sliced by it. */}
+          <Svg style={styles.fade} width="100%" height={FADE_HEIGHT} preserveAspectRatio="none" pointerEvents="none">
+            <Defs>
+              <LinearGradient id="testMeFade" x1="0" y1="0" x2="0" y2="1">
+                <Stop offset="0" stopColor={colors.sky} stopOpacity="0" />
+                <Stop offset="1" stopColor={colors.sky} stopOpacity="1" />
+              </LinearGradient>
+            </Defs>
+            <Rect x="0" y="0" width="100%" height={FADE_HEIGHT} fill="url(#testMeFade)" />
+          </Svg>
           <Button label="Test me" onPress={onTest} style={styles.testMe} />
         </View>
       )}
@@ -234,20 +246,13 @@ export default function CardDetail({
   );
 }
 
+const TEST_ME_HEIGHT = 52; // Button's height
+const FADE_HEIGHT = 28;
+
 function Disc({ onPress, label, children, selected }: {
   onPress: () => void; label: string; children: React.ReactNode; selected?: boolean;
 }) {
-  return (
-    <Pressable
-      onPress={onPress}
-      style={({ pressed }) => [styles.disc, pressed && { backgroundColor: colors.terraLight }]}
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      accessibilityState={selected === undefined ? undefined : { selected }}
-    >
-      {children}
-    </Pressable>
-  );
+  return <IconButton onPress={onPress} label={label} selected={selected}>{children}</IconButton>;
 }
 
 // ── Progress (A-card 6): everything the scheduler already stores ──
@@ -416,10 +421,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
   },
   topRight: { flexDirection: 'row', gap: spacing.sm },
-  disc: {
-    width: MIN_TAP, height: MIN_TAP, borderRadius: radii.full,
-    backgroundColor: colors.white, alignItems: 'center', justifyContent: 'center', ...e1,
-  },
+  fade: { position: 'absolute', left: 0, right: 0, top: -FADE_HEIGHT },
   sticky: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: 20, paddingTop: 12, backgroundColor: colors.sky },
   testMe: { alignSelf: 'stretch' },
 
