@@ -24,6 +24,14 @@ interface PendingDeleteApi {
   pendingDeleteIds: ReadonlySet<string>;
   /// Hide `sticker` now and delete it for real after the undo window.
   deleteWithUndo: (sticker: Sticker, opts?: { onUndo?: () => void }) => void;
+  /// The same for a board (stickers on it stay in the collection). `commit`
+  /// performs the real delete once the undo window closes; return an error to
+  /// bring the board back.
+  deleteBoardWithUndo: (
+    board: { id: string; name: string },
+    commit: () => Promise<{ error: unknown }>,
+    opts?: { onUndo?: () => void },
+  ) => void;
 }
 
 const Ctx = createContext<PendingDeleteApi | null>(null);
@@ -49,6 +57,22 @@ export function PendingDeleteProvider({ children }: { children: ReactNode }) {
   const [ids, setIds] = useState<ReadonlySet<string>>(new Set());
   // Waiting for the window to close.
   const waiting = useRef(new Map<string, { sticker: Sticker; timer: ReturnType<typeof setTimeout> }>());
+  const waitingBoards = useRef(new Map<string, {
+    board: { id: string; name: string }; run: () => Promise<{ error: unknown }>; timer: ReturnType<typeof setTimeout>;
+  }>());
+
+  const commitBoard = useCallback(async (id: string) => {
+    const entry = waitingBoards.current.get(id);
+    if (!entry) return;
+    clearTimeout(entry.timer);
+    waitingBoards.current.delete(id);
+    const { error } = await entry.run();
+    if (error) {
+      setIds(prev => { const n = new Set(prev); n.delete(id); return n; });
+      haptic.error();
+      toast.show({ kind: 'error', message: `Couldn't delete the board “${entry.board.name}”. It's back.` });
+    }
+  }, [toast]);
 
   const commit = useCallback(async (sticker: Sticker) => {
     const entry = waiting.current.get(sticker.id);
@@ -68,7 +92,8 @@ export function PendingDeleteProvider({ children }: { children: ReactNode }) {
 
   const flushAll = useCallback(() => {
     for (const { sticker } of [...waiting.current.values()]) void commit(sticker);
-  }, [commit]);
+    for (const id of [...waitingBoards.current.keys()]) void commitBoard(id);
+  }, [commit, commitBoard]);
 
   useEffect(() => {
     const sub = AppState.addEventListener('change', state => { if (state !== 'active') flushAll(); });
@@ -98,6 +123,32 @@ export function PendingDeleteProvider({ children }: { children: ReactNode }) {
     });
   }, [commit, toast]);
 
-  const api = useMemo(() => ({ pendingDeleteIds: ids, deleteWithUndo }), [ids, deleteWithUndo]);
+  const deleteBoardWithUndo = useCallback<PendingDeleteApi['deleteBoardWithUndo']>((board, run, opts) => {
+    if (waitingBoards.current.has(board.id)) return;
+    setIds(prev => new Set(prev).add(board.id));
+    const timer = setTimeout(() => { void commitBoard(board.id); }, UNDO_WINDOW_MS);
+    waitingBoards.current.set(board.id, { board, run, timer });
+    haptic.success();
+    toast.show({
+      kind: 'undo',
+      message: 'Board deleted',
+      action: {
+        label: 'Undo',
+        onPress: () => {
+          const entry = waitingBoards.current.get(board.id);
+          if (!entry) return;
+          clearTimeout(entry.timer);
+          waitingBoards.current.delete(board.id);
+          setIds(prev => { const n = new Set(prev); n.delete(board.id); return n; });
+          opts?.onUndo?.();
+        },
+      },
+    });
+  }, [commitBoard, toast]);
+
+  const api = useMemo(
+    () => ({ pendingDeleteIds: ids, deleteWithUndo, deleteBoardWithUndo }),
+    [ids, deleteWithUndo, deleteBoardWithUndo],
+  );
   return <Ctx.Provider value={api}>{children}</Ctx.Provider>;
 }

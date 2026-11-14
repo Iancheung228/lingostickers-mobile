@@ -38,12 +38,11 @@ export function useBoards(userId: string | undefined) {
   }, [userId]);
 
   const deleteBoard = useCallback(async (id: string) => {
-    const previous = boards;
-    setBoards(prev => prev.filter(b => b.id !== id));
     const { error } = await supabase.from('boards').delete().eq('id', id);
-    if (error) setBoards(previous);
+    if (error) await fetchBoards();
+    else setBoards(prev => prev.filter(b => b.id !== id));
     return { error };
-  }, [boards]);
+  }, [fetchBoards]);
 
   // The name was write-once until now: NewBoardSheet set it at creation and
   // nothing could ever change it, so fixing a typo meant deleting the board
@@ -218,10 +217,10 @@ export interface BoardPreview {
   count: number;
 }
 
-// How many cutouts a rail thumbnail scatters. Two, not a full collage — the
+// How many cutouts a rail thumbnail scatters. Three, not a full collage — the
 // tile is a miniature of the board, so the cover photo has to stay readable
 // behind them. See BoardRail's SLOTS.
-export const BOARD_PREVIEW_COUNT = 2;
+export const BOARD_PREVIEW_COUNT = 3;
 
 // One query for *every* board's preview stickers, not one per board. The
 // rail draws all boards at once, so a per-board `useBoardStickers` would

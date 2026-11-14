@@ -1,5 +1,5 @@
-# Profile cleanup: no watercolor copy, "stickers" in the note, an "App version" row at the
-# bottom. Never taps Log Out's confirm or any delete action.
+# Profile cleanup: no watercolor or "cozy corner" copy, the Cards / Reviewed / Due tomorrow stats, a
+# version line at the bottom. Never taps Log Out's confirm or any delete action.
 appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
 ---
 - launchApp:
@@ -31,14 +31,15 @@ appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
     visible: "Collection"
     timeout: 30000
 
-# Open My Profile through the settings chip in the top row (its accessibility label).
-- tapOn:
-    text: "Open your profile and settings"
+# Open Profile through the settings chip in the top row (its accessibility label).
+- tapOn: "Profile"
 - extendedWaitUntil:
-    visible: "My Profile"
+    visible: "Due tomorrow.*"
     timeout: 15000
 - assertNotVisible: ".*watercolor.*"
-- assertVisible: ".*sticker.*"
+- assertNotVisible: ".*cozy.*"
+- assertVisible: "Cards.*"
+- assertVisible: "Reviewed.*"
 - takeScreenshot: 01-profile-top
 
 # The version row sits at the very bottom of the scroll view.
@@ -56,8 +57,7 @@ appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
 # Friends is switched off for v1 (lib/features.ts SOCIAL_ENABLED), so the
 # Friends empty state is no longer reachable; hide-social-v1.yaml covers the
 # tab being gone. Leave Profile and confirm the home screen is back.
-- tapOn:
-    text: "Go back"
+- tapOn: "Collection.*"
 - extendedWaitUntil:
     visible: "Collection"
     timeout: 15000

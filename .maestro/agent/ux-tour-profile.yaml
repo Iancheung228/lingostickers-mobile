@@ -7,9 +7,9 @@ appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
 - extendedWaitUntil:
     visible: "Your words.*"
     timeout: 20000
-- tapOn: "Open your profile and settings"
+- tapOn: "Profile"
 - extendedWaitUntil:
-    visible: "My Profile"
+    visible: "Due tomorrow.*"
     timeout: 15000
 - waitForAnimationToEnd:
     timeout: 800

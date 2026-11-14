@@ -1,0 +1,47 @@
+# R6a Profile: top, scrolled, the reminder permission flow (toggle on -> system dialog),
+# and the export share sheet. Never taps Log Out or Delete Account. The permission dialog
+# is answered "Allow"; the reminder is switched off again at the end.
+appId: ${APP_ID}
+---
+- runFlow: ../sign-in.yaml
+- tapOn: "Profile"
+- extendedWaitUntil:
+    visible: "Due tomorrow.*"
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 1500
+- takeScreenshot: R6a-profile-top
+- assertNotVisible: ".*cozy.*"
+- assertNotVisible: "Blocked accounts"
+- scroll
+- waitForAnimationToEnd
+- takeScreenshot: R6a-profile-scrolled
+# Back up the page, then nudge it so the reminder row sits mid-screen.
+- swipe:
+    start: 50%,35%
+    end: 50%,90%
+- swipe:
+    start: 50%,70%
+    end: 50%,40%
+- waitForAnimationToEnd
+- tapOn:
+    id: "toggle-reminder"
+- waitForAnimationToEnd:
+    timeout: 3000
+- waitForAnimationToEnd:
+    timeout: 2000
+- takeScreenshot: R6a-reminder-permission
+- tapOn:
+    text: "Allow"
+    optional: true
+- waitForAnimationToEnd:
+    timeout: 2000
+- takeScreenshot: R6a-reminder-on
+- scrollUntilVisible:
+    element: "Export my cards.*"
+    direction: DOWN
+    timeout: 20000
+- tapOn: "Export my cards.*"
+- waitForAnimationToEnd:
+    timeout: 4000
+- takeScreenshot: R6a-export-share-sheet

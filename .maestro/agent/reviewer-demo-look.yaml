@@ -24,9 +24,9 @@ appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
 - takeScreenshot: 02-demo-collection
 
 # Sign out (Profile > Log Out > confirm). Look-only flow: no other action.
-- tapOn: "Open your profile and settings"
+- tapOn: "Profile"
 - extendedWaitUntil:
-    visible: "My Profile"
+    visible: "Due tomorrow.*"
     timeout: 15000
 - scrollUntilVisible:
     element: "Log Out"

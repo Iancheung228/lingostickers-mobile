@@ -5,9 +5,9 @@ appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
 ---
 - runFlow: ../sign-in.yaml
 
-- tapOn: "Open your profile and settings"
+- tapOn: "Profile"
 - extendedWaitUntil:
-    visible: "My Profile"
+    visible: "Due tomorrow.*"
     timeout: 15000
 - assertNotVisible: "Friends.*"
 - assertNotVisible: "Blocked accounts"
@@ -17,8 +17,8 @@ appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
     element: "Email us about a problem"
     direction: DOWN
     timeout: 30000
-- assertVisible: "SUPPORT"
-- assertNotVisible: "SAFETY"
+- assertVisible: "Support"
+- assertNotVisible: "Safety"
 # Rows are matched by accessibility label (it replaces the visible text).
 - assertVisible: "Email us about a problem"
 - assertVisible: "Open the privacy policy"

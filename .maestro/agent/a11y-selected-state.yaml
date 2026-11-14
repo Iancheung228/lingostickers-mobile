@@ -1,4 +1,4 @@
-# Accessibility state: the learning-language rows in My Profile are buttons with
+# Accessibility state: the learning-language rows in Profile are buttons with
 # selected state, and the one matching the account's language reports selected: true.
 # The crop screen title reads "Crop your sticker" (its button keeps "Make sticker").
 # Stops on the crop screen: never taps Make sticker, so no AI call is made.
@@ -6,11 +6,10 @@ appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
 ---
 - runFlow: ../sign-in.yaml
 
-# Open My Profile through the settings chip in the top row.
-- tapOn:
-    text: "Open your profile and settings"
+# Open Profile through the settings chip in the top row.
+- tapOn: "Profile"
 - extendedWaitUntil:
-    visible: "My Profile"
+    visible: "Due tomorrow.*"
     timeout: 15000
 - extendedWaitUntil:
     visible: ".*(Français|日本語|廣東話).*"
@@ -23,8 +22,7 @@ appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
 - takeScreenshot: 01-profile-language-selected
 
 # Back to the tabs, then Scan.
-- tapOn:
-    text: "Go back"
+- tapOn: "Collection.*"
 - extendedWaitUntil:
     visible: "Collection"
     timeout: 15000

@@ -35,7 +35,7 @@ export default function TypeWordSheet({
   userId: string;
   cutout?: CarriedCutout | null;
   onClose: () => void;
-  onAdded: () => void;
+  onAdded: (id?: string) => void;
 }) {
   const [text, setText] = useState('');
   const [status, setStatus] = useState<'idle' | 'loading' | 'saving'>('idle');
@@ -86,7 +86,7 @@ export default function TypeWordSheet({
   const add = async () => {
     if (!card || status !== 'idle') return;
     setStatus('saving');
-    const { error: insertError } = await supabase.from('stickers').insert({
+    const { data: inserted, error: insertError } = await supabase.from('stickers').insert({
       user_id: userId,
       language,
       ...(cutout ? {} : { source: 'text' }),
@@ -104,7 +104,7 @@ export default function TypeWordSheet({
       image_path: cutout?.imagePath ?? null,
       thumb_path: cutout?.thumbPath ?? null,
       discovered_at: new Date().toISOString(),
-    });
+    }).select('id').single();
     if (insertError) {
       haptic.error();
       setError(await friendlyError(new Error(insertError.message), "Couldn't save. Try again."));
@@ -113,7 +113,7 @@ export default function TypeWordSheet({
     }
     haptic.success();
     reset();
-    onAdded();
+    onAdded(inserted?.id);
   };
 
   const content: CardContent | null = card ? {

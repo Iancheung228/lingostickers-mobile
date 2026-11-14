@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Alert } from 'react-native';
 import {
-  Trash2, Plus, ImagePlus, ImageOff, MoreHorizontal, Pencil, Wand2, X, Crop,
-  Sticker as StickerIcon,
+  Trash2, Plus, ImagePlus, ImageOff, MoreHorizontal, Pencil, Wand2, X, Crop, GraduationCap,
+  ChevronLeft, Sticker as StickerIcon,
 } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
@@ -22,6 +22,10 @@ import BackgroundDimSlider from '@/components/BackgroundDimSlider';
 import { MAX_DIM_PCT } from '@/components/WallBackground';
 import FieldEditor from '@/components/FieldEditor';
 import StudyCard from '@/components/StudyCard';
+import StudySessionHost from '@/components/StudySessionHost';
+import { useToast } from '@/components/ToastProvider';
+import { friendlyErrorSync } from '@/lib/friendlyError';
+import { dueToday } from '@/lib/review';
 import StickerPickerModal from '@/components/StickerPickerModal';
 import { colors, shadows, radii, spacing, fonts } from '@/constants/theme';
 
@@ -52,7 +56,10 @@ interface BoardCarouselPageProps {
   /// one-time coach mark below — has to be gated on this rather than on
   /// mount, or every off-screen page burns it simultaneously.
   isActive: boolean;
-  onDeleteBoard: (id: string) => Promise<{ error: Error | null }>;
+  /// Back to the Boards grid.
+  onBack: () => void;
+  /// Delete is an undo toast owned by the Boards screen (deferred delete); it also leaves this view.
+  onDeleteBoard: () => void;
   onRenameBoard: (id: string, name: string) => Promise<{ error: Error | null }>;
   onChangeBackground: (boardId: string, path: string | null, crop?: BackgroundCrop | null) => Promise<{ error: Error | null }>;
   onChangeBackgroundDim: (boardId: string, dim: number) => Promise<{ error: Error | null }>;
@@ -73,14 +80,16 @@ interface BoardCarouselPageProps {
 
 export default function BoardCarouselPage({
   board, currentUserId, displayStyle, borderStyle, isActive,
-  onDeleteBoard, onRenameBoard, onChangeBackground, onChangeBackgroundDim,
+  onBack, onDeleteBoard, onRenameBoard, onChangeBackground, onChangeBackgroundDim,
   onDragStateChange, onContentChanged,
   autoOpenPicker, onAutoOpenHandled,
 }: BoardCarouselPageProps) {
   const {
     items, loading, addSticker, removeSticker, updatePosition, autoArrange, refetch: refetchItems,
   } = useBoardStickers(board.id);
+  const toast = useToast();
   const [selectedSticker, setSelectedSticker] = useState<Sticker | null>(null);
+  const [studyQueue, setStudyQueue] = useState<Sticker[] | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 });
   const [uploadingBackground, setUploadingBackground] = useState(false);
@@ -154,17 +163,18 @@ export default function BoardCarouselPage({
     setSelectedSticker(prev => prev && prev.id === patchId ? { ...prev, ...patch } : prev);
   }, []);
 
-  const handleDelete = () => {
-    Alert.alert('Delete Board', `Remove "${board.name}"? Your stickers stay in your collection.`, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete', style: 'destructive',
-        onPress: async () => {
-          const { error } = await onDeleteBoard(board.id);
-          if (error) Alert.alert("Couldn't delete", error.message);
-        },
-      },
-    ]);
+  // Delete is undoable (a toast), so there is no confirm; the stickers stay in the collection.
+  const handleDelete = () => onDeleteBoard();
+
+  // Study the due cards on this board. The session host takes any list of cards,
+  // so a board is just a subset of the collection.
+  const handleStudy = () => {
+    const due = dueToday(items.map(i => i.sticker));
+    if (due.length === 0) {
+      toast.show({ kind: 'info', message: 'Nothing due on this board.' });
+      return;
+    }
+    setStudyQueue(due);
   };
 
   const handleRename = async (values: Record<string, string>) => {
@@ -174,7 +184,7 @@ export default function BoardCarouselPage({
     const { error } = await onRenameBoard(board.id, next);
     setSavingName(false);
     setRenaming(false);
-    if (error) Alert.alert("Couldn't rename board", error.message);
+    if (error) toast.show({ kind: 'error', message: friendlyErrorSync(error, "Couldn't rename the board. Try again.") });
   };
 
   // Picking only stages the photo into the cropper (see BackgroundCropper) —
@@ -230,7 +240,7 @@ export default function BoardCarouselPage({
       setEditingCrop(crop);
       setPickedBackgroundAsset({ uri: downloaded.uri, width: sw, height: sh });
     } catch (err: any) {
-      Alert.alert("Couldn't open the original photo", err?.message ?? 'Something went wrong.');
+      toast.show({ kind: 'error', message: friendlyErrorSync(err, "Couldn't open the original photo. Try again.") });
     } finally {
       setLoadingSource(false);
     }
@@ -280,7 +290,7 @@ export default function BoardCarouselPage({
       setBackgroundVersion(v => v + 1);
       onContentChanged();
     } catch (err: any) {
-      Alert.alert("Couldn't set background", err?.message ?? 'Something went wrong.');
+      toast.show({ kind: 'error', message: friendlyErrorSync(err, "Couldn't set the background. Try again.") });
     } finally {
       setUploadingBackground(false);
     }
@@ -290,7 +300,7 @@ export default function BoardCarouselPage({
     if (!board.background_path) return;
     Alert.alert(
       'Remove cover photo',
-      'Go back to the default corkboard look?',
+      'Go back to the plain cream background?',
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -298,7 +308,7 @@ export default function BoardCarouselPage({
           onPress: async () => {
             const path = board.background_path!;
             const { error } = await onChangeBackground(board.id, null);
-            if (error) { Alert.alert("Couldn't remove cover photo", error.message); return; }
+            if (error) { toast.show({ kind: 'error', message: friendlyErrorSync(error, "Couldn't remove the cover photo. Try again.") }); return; }
             // The source goes with it — it exists only to re-crop this
             // background, so leaving it behind would orphan a file nothing
             // can ever reference again.
@@ -319,11 +329,11 @@ export default function BoardCarouselPage({
 
   const handleCommitDim = useCallback(async (pct: number) => {
     const { error } = await onChangeBackgroundDim(board.id, pct);
-    if (error) Alert.alert("Couldn't update tint", error.message);
+    if (error) toast.show({ kind: 'error', message: friendlyErrorSync(error, "Couldn't change the tint. Try again.") });
     // board.background_dim now reflects pct (or reverted back on error) —
     // safe to stop overriding it with the preview.
     setPreviewDimPct(null);
-  }, [board.id, onChangeBackgroundDim]);
+  }, [board.id, onChangeBackgroundDim, toast]);
 
   const openMenu = () => {
     menuAnchorRef.current?.measureInWindow((x, y, _w, h) => {
@@ -338,6 +348,7 @@ export default function BoardCarouselPage({
   // changing the cover photo was an unlabelled 26pt icon floating over the
   // canvas with "remove" hidden behind a long-press on it.
   const menuItems: BoardMenuItem[] = [
+    { key: 'study', label: 'Study this board', icon: GraduationCap, disabled: items.length === 0, onPress: handleStudy },
     { key: 'rename', label: 'Rename board', icon: Pencil, onPress: () => setRenaming(true) },
     {
       key: 'tidy',
@@ -376,11 +387,20 @@ export default function BoardCarouselPage({
   return (
     <View style={styles.page}>
       <View style={styles.header}>
-        <View ref={menuAnchorRef} collapsable={false} style={styles.side}>
+        <View ref={menuAnchorRef} collapsable={false} style={[styles.side, styles.sideLeft]}>
+          <TouchableOpacity
+            onPress={onBack}
+            style={styles.iconBtn}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel="Back to boards"
+            testID="board-back"
+          >
+            <ChevronLeft size={20} color={colors.inkDark} />
+          </TouchableOpacity>
           <TouchableOpacity
             onPress={openMenu}
             style={styles.iconBtn}
-            hitSlop={8}
             activeOpacity={0.7}
             accessibilityRole="button"
             accessibilityLabel="Board options"
@@ -402,7 +422,7 @@ export default function BoardCarouselPage({
         >
           <View style={styles.titleRow}>
             <Text style={styles.title} numberOfLines={1}>{board.name}</Text>
-            <Pencil size={11} color={colors.inkFaint} />
+            <Pencil size={12} color={colors.inkLight} />
           </View>
           <Text style={styles.subtitle}>{items.length} sticker{items.length === 1 ? '' : 's'}</Text>
         </TouchableOpacity>
@@ -477,7 +497,7 @@ export default function BoardCarouselPage({
         )}
 
         {/* Only meaningful once there's a photo to tint — the default
-            corkboard background doesn't use the dim scrim at all. */}
+            default background doesn't use the dim scrim at all. */}
         {board.background_path && (
           <View style={styles.tintSliderWrap}>
             <BackgroundDimSlider
@@ -500,12 +520,17 @@ export default function BoardCarouselPage({
       <FieldEditor
         spec={renaming ? {
           title: 'Rename board',
-          subtitle: 'Just for you — this is the name on the strip below the canvas.',
+          subtitle: 'Just for you — this is the name shown on the Boards tab.',
           inputs: [{ key: 'name', value: board.name, placeholder: 'e.g. Tokyo Trip' }],
         } : null}
         saving={savingName}
         onCancel={() => setRenaming(false)}
         onSave={handleRename}
+      />
+
+      <StudySessionHost
+        queue={studyQueue}
+        onExit={() => { setStudyQueue(null); refetchItems(); }}
       />
 
       <StudyCard
@@ -568,14 +593,15 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.sm,
   },
   side: { width: SIDE_SLOT_W, alignItems: 'flex-start' },
+  sideLeft: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   sideRight: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: spacing.sm },
   titleWrap: { flex: 1, alignItems: 'center' },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: 5, maxWidth: '100%' },
   title: { fontSize: 15, fontFamily: fonts.display, color: colors.inkDark, textAlign: 'center', flexShrink: 1 },
-  subtitle: { fontSize: 10, fontFamily: fonts.mono, color: colors.inkFaint, marginTop: 1 },
+  subtitle: { fontSize: 13, fontFamily: fonts.text, color: colors.inkLight, marginTop: 1 },
   iconBtn: {
-    width: 36,
-    height: 36,
+    width: 44,
+    height: 44,
     borderRadius: radii.full,
     backgroundColor: colors.card,
     alignItems: 'center',
@@ -607,7 +633,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   emptyTitle: { fontSize: 18, fontFamily: fonts.display, color: colors.inkDark, marginBottom: 8 },
-  emptySubtitle: { fontSize: 13, fontFamily: fonts.text, color: colors.inkFaint, textAlign: 'center', lineHeight: 20 },
+  emptySubtitle: { fontSize: 14, fontFamily: fonts.text, color: colors.inkLight, textAlign: 'center', lineHeight: 20 },
   emptyBtn: {
     flexDirection: 'row', alignItems: 'center', gap: spacing.xs,
     marginTop: spacing.lg,

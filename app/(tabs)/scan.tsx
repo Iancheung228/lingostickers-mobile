@@ -830,11 +830,19 @@ export default function ScanScreen() {
   const insets = useSafeAreaInsets();
   const [typeWordOpen, setTypeWordOpen] = useState(false);
   // After Add: a toast with View, and the new card is on Home (B-core 3).
-  const announceAdded = useCallback((count: number) => {
+  // View opens the new card (one) or Home scrolled to the newest cards (several).
+  const announceAdded = useCallback((count: number, cardId?: string) => {
     toast.show({
       kind: 'success',
       message: count === 1 ? 'Added 1 card' : `Added ${count} cards`,
-      action: { label: 'View', onPress: () => router.navigate('/(tabs)/collection') },
+      action: {
+        label: 'View',
+        onPress: () => router.navigate(
+          count === 1 && cardId
+            ? { pathname: '/(tabs)/collection', params: { open: cardId } }
+            : { pathname: '/(tabs)/collection', params: { fresh: String(Date.now()) } },
+        ),
+      },
       aboveTabBar: true,
     });
   }, [toast, router]);
@@ -848,7 +856,7 @@ export default function ScanScreen() {
     // it did not have. Read it back rather than assuming it.
     const extras = sceneBase64 ? sceneChips : [];
     const sceneId = extras.length ? newSceneId() : null;
-    const { error } = await supabase.from('stickers').insert({
+    const { data: inserted, error } = await supabase.from('stickers').insert({
       user_id: user.id,
       scene_id: sceneId,
       language: draft.language,
@@ -870,7 +878,7 @@ export default function ScanScreen() {
       latitude: draft.latitude,
       longitude: draft.longitude,
       location_label: draft.locationLabel,
-    });
+    }).select('id').single();
     setSaving(false);
     if (error) {
       // The draft stays; the message sits above the button (B-core 3).
@@ -888,7 +896,7 @@ export default function ScanScreen() {
     // Extraction" is no longer needed.
     setImportedAsset(null);
     setCameraCaptureContext(null);
-    announceAdded(1 + extras.length);
+    announceAdded(1 + extras.length, inserted?.id);
 
     // The extra words are written in the background: each needs a sentence
     // (a few seconds), and the learner has already seen and chosen them, so
@@ -1339,13 +1347,13 @@ export default function ScanScreen() {
           userId={user.id}
           cutout={typeCutout}
           onClose={closeTypeWord}
-          onAdded={() => {
+          onAdded={(newId) => {
             setTypeWordOpen(false);
             // The typed card finished the scan that failed: nothing is held any more.
             carriedRef.current = null;
             setTypeCutout(null);
             if (scanError) backToCamera();
-            announceAdded(1);
+            announceAdded(1, newId);
           }}
         />
       )}

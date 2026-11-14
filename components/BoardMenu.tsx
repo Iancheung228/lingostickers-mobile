@@ -88,10 +88,10 @@ export default function BoardMenu({ visible, anchor, items, onClose }: BoardMenu
       onRequestClose={onClose}
       onDismiss={() => { const fn = pending.current; pending.current = null; fn?.(); }}
     >
-      <Pressable style={styles.backdrop} onPress={onClose}>
+      <Pressable style={styles.backdrop} onPress={onClose} accessible={false}>
         {/* Swallows taps on the card itself so choosing an item doesn't also
             fire the backdrop's dismiss underneath it. */}
-        <Pressable style={[styles.card, { left, top }]} onPress={() => {}}>
+        <Pressable style={[styles.card, { left, top }]} onPress={() => {}} accessible={false}>
           {items.map(item => {
             const Icon = item.icon;
             const tint = item.disabled

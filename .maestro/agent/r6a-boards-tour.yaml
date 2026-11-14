@@ -1,0 +1,70 @@
+# R6a Boards: empty state, create a board (sheet), pin a sticker, open board, back to the
+# grid with a tile + "New board", then delete with the undo toast. Staging QA account only.
+appId: ${APP_ID}
+---
+- runFlow: ../sign-in.yaml
+- tapOn: "Boards"
+- waitForAnimationToEnd
+# Start clean: remove any boards left by an earlier run (each delete waits out its undo window).
+- repeat:
+    while:
+      visible: "Kitchen, .*"
+    commands:
+      - tapOn: "Kitchen, .*"
+      - waitForAnimationToEnd
+      - tapOn: "Board options"
+      - waitForAnimationToEnd:
+          timeout: 2000
+      - tapOn: "Delete board"
+      - waitForAnimationToEnd:
+          timeout: 8000
+- waitForAnimationToEnd:
+    timeout: 8000
+- takeScreenshot: R6a-boards-empty
+- tapOn: "New board"
+- waitForAnimationToEnd
+- inputText: "Kitchen"
+- takeScreenshot: R6a-new-board-sheet
+- tapOn: "Create board"
+- waitForAnimationToEnd:
+    timeout: 4000
+- takeScreenshot: R6a-board-picker
+- assertVisible: "Add to Kitchen"
+- tapOn:
+    point: "25%,22%"
+- waitForAnimationToEnd
+- takeScreenshot: R6a-board-picker-selected
+- tapOn: "Close the sticker picker"
+- waitForAnimationToEnd:
+    timeout: 3000
+- takeScreenshot: R6a-board-open
+- tapOn: "Back to boards"
+- waitForAnimationToEnd:
+    timeout: 3000
+- assertVisible: "New board"
+- takeScreenshot: R6a-boards-grid
+# Delete: open the board, menu, Delete board -> undo toast, grid is empty-state again.
+- tapOn: "Kitchen, 1 sticker"
+- waitForAnimationToEnd
+- tapOn: "Board options"
+- waitForAnimationToEnd:
+    timeout: 2000
+- takeScreenshot: R6a-board-menu
+- tapOn: "Delete board"
+- waitForAnimationToEnd
+- assertVisible: "Board deleted"
+- takeScreenshot: R6a-board-deleted-undo
+- tapOn: "Undo"
+- waitForAnimationToEnd
+- assertVisible: "Kitchen, 1 sticker"
+- takeScreenshot: R6a-board-undo-restored
+# Leave nothing behind: delete again and let the undo window close.
+- tapOn: "Kitchen, 1 sticker"
+- waitForAnimationToEnd
+- tapOn: "Board options"
+- waitForAnimationToEnd:
+    timeout: 2000
+- tapOn: "Delete board"
+- waitForAnimationToEnd:
+    timeout: 9000
+- assertVisible: "No boards yet"

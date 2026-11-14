@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, RefreshControl, ActivityIndicator, PixelRatio, 
 import Animated, {
   Extrapolation, interpolate, useAnimatedScrollHandler, useAnimatedStyle, useSharedValue,
 } from 'react-native-reanimated';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { usePendingDeletes } from '@/components/PendingDeleteProvider';
 import { useToast } from '@/components/ToastProvider';
@@ -203,6 +203,26 @@ export default function CollectionScreen() {
     listRef.current?.scrollToOffset({ offset: stickAt, animated: !reduced });
   };
   const closeSearch = () => { setSearchOpen(false); setQueryInput(''); setQuery(''); };
+
+  // The scan toast's "View": ?open=<id> opens that card; ?fresh=<n> shows the
+  // newest cards (default sort, no filters) scrolled to the grid.
+  const params = useLocalSearchParams<{ open?: string; fresh?: string }>();
+  const router = useRouter();
+  useEffect(() => {
+    if (params.fresh) {
+      setSort(DEFAULT_SORT); setFavoritesOnly(false); setDueOnly(false); closeSearch();
+      requestAnimationFrame(() => listRef.current?.scrollToOffset({ offset: stickAt, animated: !reduced }));
+      router.setParams({ fresh: undefined });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params.fresh]);
+  useEffect(() => {
+    if (!params.open) return;
+    const found = stickers.find(s => s.id === params.open);
+    if (found) { setSelectedSticker(found); router.setParams({ open: undefined }); }
+    // Not fetched yet: the focus refetch will bring it and this runs again.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params.open, stickers]);
 
   const filtersActive = sort !== DEFAULT_SORT || favoritesOnly || dueOnly;
   const brandNew = !loading && !loadError && stickers.length === 0;

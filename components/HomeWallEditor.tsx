@@ -155,7 +155,7 @@ export default function HomeWallEditor({
 
   const handleRemoveBackground = () => {
     if (!backgroundPath) return;
-    Alert.alert('Remove cover photo', 'Go back to the default corkboard look?', [
+    Alert.alert('Remove cover photo', 'Go back to the plain cream background?', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Remove', style: 'destructive',

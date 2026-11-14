@@ -2,6 +2,9 @@ import { useEffect, useRef, useState } from 'react';
 import {
   View, Text, TextInput, StyleSheet, TouchableOpacity, ActivityIndicator, Alert,
 } from 'react-native';
+import InlineError from '@/components/ui/InlineError';
+import { friendlyErrorSync } from '@/lib/friendlyError';
+import { haptic } from '@/lib/haptics';
 import BottomSheet, { BottomSheetHandle } from '@/components/BottomSheet';
 import { colors, radii, spacing, fonts } from '@/constants/theme';
 
@@ -11,29 +14,30 @@ interface NewBoardSheetProps {
   onCreate: (name: string) => Promise<{ error: Error | null }>;
 }
 
-// Naming a board is a sheet now, not the carousel's trailing page. The rail
-// below the canvas already shows every board plus a permanent "+", so the
-// carousel no longer has to reserve a slide just to be reachable — and
-// swiping past your last board no longer dead-ends on an empty form.
+// Naming a board is a sheet now, not the carousel's trailing page. 
 export default function NewBoardSheet({ visible, onCancel, onCreate }: NewBoardSheetProps) {
   const [name, setName] = useState('');
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const sheet = useRef<BottomSheetHandle>(null);
 
   // Cleared on each open rather than on close, so a cancelled draft never
   // reappears the next time the sheet is summoned.
-  useEffect(() => { if (visible) { setName(''); setSaving(false); } }, [visible]);
+  useEffect(() => { if (visible) { setName(''); setSaving(false); setError(null); } }, [visible]);
 
   const handleCreate = async () => {
     const trimmed = name.trim();
     if (!trimmed || saving) return;
     setSaving(true);
-    const { error } = await onCreate(trimmed);
+    setError(null);
+    const { error: createError } = await onCreate(trimmed);
     setSaving(false);
-    if (error) {
-      Alert.alert("Couldn't create board", error.message);
+    if (createError) {
+      haptic.error();
+      setError(friendlyErrorSync(createError, "Couldn't create the board. Try again."));
       return;
     }
+    haptic.success();
     sheet.current?.close();
   };
 
@@ -70,13 +74,16 @@ export default function NewBoardSheet({ visible, onCancel, onCreate }: NewBoardS
       <TextInput
         autoFocus
         value={name}
-        onChangeText={setName}
+        onChangeText={(t) => { setName(t); if (error) setError(null); }}
+        maxLength={40}
         placeholder="e.g. Tokyo Trip"
-        placeholderTextColor={colors.inkFaint}
+        placeholderTextColor={colors.inkLight}
         style={styles.input}
         onSubmitEditing={handleCreate}
         returnKeyType="done"
       />
+
+      {error && <InlineError message={error} testID="new-board-error" />}
 
       <View style={styles.actions}>
         <TouchableOpacity style={styles.cancelBtn} onPress={requestClose} disabled={saving}>
@@ -99,7 +106,7 @@ export default function NewBoardSheet({ visible, onCancel, onCreate }: NewBoardS
 const styles = StyleSheet.create({
   title: { fontSize: 20, fontFamily: fonts.display, color: colors.inkDark },
   subtitle: { fontSize: 13, fontFamily: fonts.text, color: colors.inkLight, lineHeight: 19, marginTop: 2 },
-  input: { marginTop: spacing.md, padding: spacing.md, borderRadius: radii.md, backgroundColor: colors.sky, borderWidth: 1.5, borderColor: colors.borderLight, fontSize: 16, fontFamily: fonts.text, color: colors.inkMid, },
+  input: { marginTop: spacing.md, marginBottom: spacing.sm, padding: spacing.md, borderRadius: radii.md, backgroundColor: colors.sky, borderWidth: 1, borderColor: colors.ctl, fontSize: 16, fontFamily: fonts.text, color: colors.inkMid, },
   actions: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.md },
   cancelBtn: {
     flex: 1, alignItems: 'center', paddingVertical: spacing.ms + 2,
