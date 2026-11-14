@@ -9,7 +9,7 @@ appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
     timeout: 20000
 - tapOn: "Calendar"
 - extendedWaitUntil:
-    visible: "Due this week.*|Nothing due this week"
+    visible: "Calendar"
     timeout: 15000
 - waitForAnimationToEnd:
     timeout: 1500

@@ -1,18 +1,22 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Modal, View, Text, Image, TouchableOpacity, StyleSheet, SafeAreaView,
-  ActivityIndicator, LayoutChangeEvent,
+  LayoutChangeEvent,
 } from 'react-native';
 import { X, Scissors } from 'lucide-react-native';
 import { useSharedValue } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import ToolModeSwitch, { ToolMode } from './ToolModeSwitch';
-import ScanProgress, { ScanStage } from './ScanProgress';
+import ScanProgress, { ScanOverlay, ScanStage } from './ScanProgress';
+import ScanErrorCard from './ScanErrorCard';
+import Button from '@/components/ui/Button';
+import { useCoachMark } from '@/lib/coachMarks';
+import type { ScanAction, ScanErrorKind } from '@/lib/scanError';
 import CropBoxOverlay from './CropBoxOverlay';
 import LassoOverlay from './LassoOverlay';
 import { Rect, Point, computeContainRect, boxToImageCrop, boundingBoxOfPoints, polygonFillRatio, padBox } from '@/lib/cropGeometry';
-import { colors, fonts } from '@/constants/theme';
+import { colors, e1, type } from '@/constants/theme';
 import { debugLog } from '@/lib/debug';
 
 interface PhotoExtractorProps {
@@ -35,6 +39,10 @@ interface PhotoExtractorProps {
   /// Which stage the scan is on, once one is running.
   stage?: ScanStage | null;
   usingServerCutout?: boolean;
+  /// A failed scan, shown over the photo with its recoveries. The photo and the
+  /// selection stay put underneath.
+  error?: ScanErrorKind | null;
+  onErrorAction?: (action: ScanAction) => void;
 }
 
 export interface ExtractResult {
@@ -161,7 +169,8 @@ export async function renderWholePhotoExtract(
   };
 }
 
-export default function PhotoExtractor({ imageUri, imageWidth, imageHeight, onClose, onExtract, processing, onCancelProcessing, stage, usingServerCutout }: PhotoExtractorProps) {
+export default function PhotoExtractor({ imageUri, imageWidth, imageHeight, onClose, onExtract, processing, onCancelProcessing, stage, usingServerCutout, error, onErrorAction }: PhotoExtractorProps) {
+  const teach = useCoachMark('pick-object', !!imageUri);
   const [mode, setMode] = useState<ToolMode>('box');
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
   const [cropping, setCropping] = useState(false);
@@ -349,7 +358,7 @@ export default function PhotoExtractor({ imageUri, imageWidth, imageHeight, onCl
     <Modal visible animationType="slide" presentationStyle="fullScreen" onRequestClose={busy ? undefined : onClose}>
       <SafeAreaView style={styles.container}>
         <View style={styles.header}>
-          <Text style={styles.headerTitle} accessibilityLabel="Crop your sticker">Extract Sticker</Text>
+          <Text style={styles.headerTitle} accessibilityRole="header" accessibilityLabel="Crop your sticker">Pick the object</Text>
           <TouchableOpacity
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -374,8 +383,8 @@ export default function PhotoExtractor({ imageUri, imageWidth, imageHeight, onCl
             {mode === 'box'
               ? 'Drag the corners to box in the object'
               : lassoReady
-                ? 'Loop locked in — redraw anytime, or tap Extract below'
-                : 'Circle the object with your finger'}
+                ? 'Loop locked in. Redraw anytime, or tap Make sticker.'
+                : 'Draw around it, or tap Lasso for tricky shapes.'}
           </Text>
           <ToolModeSwitch mode={mode} onChange={handleModeChange} />
         </View>
@@ -395,31 +404,29 @@ export default function PhotoExtractor({ imageUri, imageWidth, imageHeight, onCl
           {displayRect.width > 0 && mode === 'lasso' && (
             <LassoOverlay bounds={displayRect} onComplete={handleLassoComplete} />
           )}
+          {processing && !error && (
+            <ScanOverlay>
+              <ScanProgress stage={stage ?? 'cutting'} usingServerCutout={usingServerCutout} onCancel={onCancelProcessing} />
+            </ScanOverlay>
+          )}
+          {!!error && !processing && onErrorAction && (
+            <ScanOverlay>
+              <ScanErrorCard kind={error} onAction={onErrorAction} />
+            </ScanOverlay>
+          )}
         </View>
 
         <View style={styles.actions}>
-          <TouchableOpacity
-            style={[styles.extractButton, (busy || !canExtract) && styles.extractButtonDisabled]}
-            onPress={handleExtract}
-            disabled={busy || !canExtract}
-          >
-            {busy ? (
-              <ActivityIndicator color={colors.white} />
-            ) : (
-              <>
-                <Scissors size={20} color={colors.white} />
-                <Text style={styles.extractButtonText}>Extract Sticker</Text>
-              </>
-            )}
-          </TouchableOpacity>
-          {/* `cropping` covers the brief local crop/resize too, but `processing`
-              (the actual network call, up to ~20s) is the one worth telling
-              the user about instead of leaving a bare spinner for that long. */}
-          {processing && (
-            <View style={styles.progressWrap}>
-              <ScanProgress stage={stage ?? 'cutting'} usingServerCutout={usingServerCutout} />
-            </View>
-          )}
+          {teach.visible && <Text style={styles.teach}>You can change the outline any time before you tap Make sticker.</Text>}
+          <Button
+            label="Make sticker"
+            testID="extract-sticker"
+            icon={<Scissors size={20} color={busy || !canExtract ? colors.inkLight : colors.white} strokeWidth={1.75} />}
+            disabled={!canExtract || !!error}
+            loading={busy}
+            onPress={() => { teach.dismiss(); handleExtract(); }}
+          />
+          {!canExtract && <Text style={styles.teach}>Draw around the object first</Text>}
         </View>
       </SafeAreaView>
     </Modal>
@@ -432,43 +439,23 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingHorizontal: 20,
+    paddingVertical: 8,
   },
-  headerTitle: { fontSize: 18, fontFamily: fonts.display, color: colors.inkDark },
+  headerTitle: { ...type.h2 },
   closeButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: colors.card,
     alignItems: 'center',
     justifyContent: 'center',
+    ...e1,
   },
-  modeRow: {
-    paddingHorizontal: 16,
-    paddingBottom: 12,
-    gap: 12,
-    alignItems: 'center',
-  },
-  modeHint: { color: colors.inkMid, fontSize: 13, fontFamily: fonts.text,},
-  photoArea: { flex: 1, padding: 16 },
+  modeRow: { paddingHorizontal: 20, paddingBottom: 12, gap: 12, alignItems: 'center' },
+  modeHint: { ...type.small },
+  photoArea: { flex: 1, padding: 16, overflow: 'hidden' },
   photo: { width: '100%', height: '100%' },
-  actions: { paddingHorizontal: 16, paddingBottom: 16, paddingTop: 4 },
-  extractButton: {
-    backgroundColor: colors.terra,
-    borderRadius: 16,
-    paddingVertical: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-    shadowColor: colors.terra,
-    shadowOpacity: 0.5,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 6,
-  },
-  extractButtonDisabled: { opacity: 0.6 },
-  progressWrap: { marginTop: 12 },
-  extractButtonText: { color: colors.white, fontSize: 16, fontFamily: fonts.display, letterSpacing: 1 },
+  actions: { paddingHorizontal: 20, paddingBottom: 16, paddingTop: 4, gap: 8 },
+  teach: { ...type.small, textAlign: 'center' },
 });

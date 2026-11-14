@@ -7,7 +7,7 @@ import { GestureHandlerRootView, Gesture, GestureDetector } from 'react-native-g
 import Animated, {
   useSharedValue, useAnimatedStyle, withSpring, withTiming, runOnJS,
 } from 'react-native-reanimated';
-import { colors, radii, spacing, shadows } from '@/constants/theme';
+import { colors, radii, spacing, e2 } from '@/constants/theme';
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
@@ -157,23 +157,24 @@ export default BottomSheet;
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  scrim: { backgroundColor: 'rgba(43, 42, 40, 0.45)' },
+  scrim: { backgroundColor: colors.scrim },
   avoider: { flex: 1, justifyContent: 'flex-end' },
   sheet: {
-    backgroundColor: colors.card,
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.xl,
-    ...shadows.card,
+    // C-look 4 "Sheets": page-coloured, radius 24 top, e2, 20 gutters.
+    backgroundColor: colors.cream,
+    borderTopLeftRadius: radii.lg,
+    borderTopRightRadius: radii.lg,
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: spacing.lg,
+    ...e2,
   },
   dragZone: { paddingTop: spacing.xs, paddingBottom: spacing.xs },
   grabber: {
     alignSelf: 'center',
-    width: 40, height: 4,
+    width: 36, height: 5,
     borderRadius: radii.full,
-    backgroundColor: colors.border,
+    backgroundColor: colors.grabber,
     marginBottom: spacing.ms,
   },
 });

@@ -47,7 +47,7 @@ appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
 - takeScreenshot: 06e-gallery-picker
 - tapOn: "Photo, September 09, 8:11.*"
 - extendedWaitUntil:
-    visible: "Extract Sticker"
+    visible: "Make sticker"
     timeout: 20000
 - takeScreenshot: 06f-scan-extractor
 - tapOn:

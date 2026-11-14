@@ -1,0 +1,43 @@
+# R5: a scan that fails shows an inline error card over the photo (never an Alert,
+# never "Couldn't find the word" for a photo), keeps the photo and selection, and
+# offers recoveries. Staging has no GEMINI_API_KEY, so the lookup fails server-side.
+# Spends ONE create-sticker call (check scripts/qa-budget.mjs first).
+# Screenshots: processing, the error card.
+appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
+---
+- runFlow: ../sign-in.yaml
+- tapOn: "Scan a new sticker"
+- tapOn:
+    text: "Agree and start scanning"
+    optional: true
+- extendedWaitUntil:
+    visible: "Import a photo from your library"
+    timeout: 15000
+- tapOn: "Import a photo from your library"
+- waitForAnimationToEnd:
+    timeout: 3000
+- tapOn:
+    id: "PXGGridLayout-Info"
+    index: 0
+- extendedWaitUntil:
+    visible: "Make sticker"
+    timeout: 20000
+- takeScreenshot: r5-pick-object
+- tapOn: "Make sticker"
+- extendedWaitUntil:
+    visible: "Cancel scan"
+    timeout: 10000
+- takeScreenshot: r5-processing
+# The slow note appears after 5s of the same stage.
+- extendedWaitUntil:
+    visible: "Taking longer than usual.*"
+    timeout: 20000
+- takeScreenshot: r5-processing-slow
+- extendedWaitUntil:
+    visible: "Try again|Retake|OK|Pick the object again"
+    timeout: 60000
+- assertNotVisible: "Couldn't find the word"
+- assertNotVisible: "Add to Collection"
+- waitForAnimationToEnd:
+    timeout: 1000
+- takeScreenshot: r5-scan-error

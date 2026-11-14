@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, LayoutChangeEvent } from 'react-native';
 import Animated, { useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import { colors, fonts } from '@/constants/theme';
+import { colors, e1, fonts } from '@/constants/theme';
 
 export type ToolMode = 'box' | 'lasso';
 
@@ -68,10 +68,8 @@ export default function ToolModeSwitch({ mode, onChange }: ToolModeSwitchProps) 
 const styles = StyleSheet.create({
   track: {
     flexDirection: 'row',
-    backgroundColor: colors.card,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: colors.borderLight,
+    backgroundColor: colors.sand,
+    borderRadius: 24,
     padding: TRACK_PADDING,
   },
   pill: {
@@ -79,20 +77,17 @@ const styles = StyleSheet.create({
     top: TRACK_PADDING,
     left: TRACK_PADDING,
     bottom: TRACK_PADDING,
-    backgroundColor: colors.terra,
-    borderRadius: 16,
-    shadowColor: colors.terra,
-    shadowOpacity: 0.4,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 3,
+    backgroundColor: colors.white,
+    borderRadius: 20,
+    ...e1,
   },
   segment: {
     flex: 1,
-    paddingVertical: 10,
+    minHeight: 40,
+    paddingHorizontal: 8,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  label: { fontSize: 14, fontFamily: fonts.display, color: colors.inkMid },
+  label: { fontSize: 15, fontFamily: fonts.display, color: colors.inkLight },
   labelActive: { color: colors.inkDark },
 });

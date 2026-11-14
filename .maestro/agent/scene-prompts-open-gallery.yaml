@@ -19,7 +19,7 @@ appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
 - takeScreenshot: sp-01-picker
 - tapOn: "Photo, September 09, 8:11.*"
 - extendedWaitUntil:
-    visible: "Extract Sticker"
+    visible: "Make sticker"
     timeout: 20000
 - takeScreenshot: sp-02-extractor
 # Stage A: the one allowed scan. Tap the bottom Extract button (y~91%).

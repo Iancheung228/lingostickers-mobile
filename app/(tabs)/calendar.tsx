@@ -12,7 +12,7 @@ import { supabase } from '@/lib/supabase';
 import { useSignedUrls } from '@/hooks/useSignedUrls';
 import { listImagePath } from '@/lib/thumbnails';
 import StickerImageFallback from '@/components/StickerImageFallback';
-import { weekAhead, dueToday, dateKeyOf } from '@/lib/review';
+import { dueToday, dateKeyOf } from '@/lib/review';
 import { limitNewCards } from '@/lib/studyQueue';
 import { newCardsIntroducedToday, useStudyPrefs } from '@/lib/studyPrefs';
 import StudySessionHost from '@/components/StudySessionHost';
@@ -20,6 +20,7 @@ import Button from '@/components/ui/Button';
 import { Sticker } from '@/lib/types';
 import { colors, e1, fonts, radii, type, stickerShadow, MIN_TAP } from '@/constants/theme';
 import RoseBand from '@/components/RoseBand';
+import InlineError from '@/components/ui/InlineError';
 import { TAB_BAR_CLEARANCE } from '@/constants/tabBar';
 import { haptic } from '@/lib/haptics';
 import { dur, ease, spring, useMotion } from '@/lib/motion';
@@ -150,8 +151,6 @@ export default function CalendarScreen() {
   ));
 
   const todayKey = useMemo(() => dateKeyOf(new Date()), []);
-  const forecast = useMemo(() => weekAhead(stickers), [stickers]);
-  const dueInSevenDays = useMemo(() => forecast.reduce((sum, d) => sum + d.count, 0), [forecast]);
   // The CTA starts exactly the session Home would: after the new-card limit.
   const due = useMemo(
     () => limitNewCards(dueToday(stickers), prefs.newCardsPerDay, newCardsIntroducedToday()),
@@ -253,10 +252,8 @@ export default function CalendarScreen() {
                   <View style={styles.thumbWrap}>
                     <Thumb sticker={finds[0]} size={THUMB} url={dayIconUrls.get(listImagePath(finds[0]) ?? '') ?? null} />
                   </View>
-                ) : reviewed > 0 ? (
-                  <View style={styles.dot} />
                 ) : null}
-                {finds.length > 0 && reviewed > 0 && <View style={[styles.dot, styles.dotCorner]} />}
+                {reviewed > 0 && <View style={styles.dot} pointerEvents="none" />}
               </Pressable>
             );
           })}
@@ -279,25 +276,18 @@ export default function CalendarScreen() {
 
   return (
     <View style={styles.container}>
-      <RoseBand
-        title="Calendar"
-        bottomPad={BAND_BOTTOM_PAD}
-        subtitle={loadError ? (
-          <Pressable onPress={fetchStickers} style={styles.retry} accessibilityRole="button" accessibilityLabel="Try loading your calendar again">
-            <Text style={[styles.horizon, styles.horizonError]}>Couldn&apos;t load. Tap to retry</Text>
-          </Pressable>
-        ) : (
-          <Text style={styles.horizon} maxFontSizeMultiplier={2}>
-            {dueInSevenDays > 0 ? `Due this week: ${dueInSevenDays}` : 'Nothing due this week'}
-          </Text>
-        )}
-      />
+      <RoseBand title="Calendar" bottomPad={BAND_BOTTOM_PAD} />
 
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={{ paddingBottom: insets.bottom + TAB_BAR_CLEARANCE + 24 }}
         showsVerticalScrollIndicator={false}
       >
+        {loadError && (
+          <View style={styles.loadError}>
+            <InlineError message="Couldn't load your calendar." onRetry={fetchStickers} />
+          </View>
+        )}
         {/* ── The month card, lifted into the band ── */}
         <View style={styles.gridCard}>
           <View style={styles.monthNav}>
@@ -396,9 +386,7 @@ export default function CalendarScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.sky },
   scroll: { flex: 1, marginTop: -20 },
-  horizon: { ...type.small, color: colors.maroon },
-  horizonError: { textDecorationLine: 'underline' },
-  retry: { minHeight: 24, justifyContent: 'center' },
+  loadError: { marginHorizontal: GUTTER, marginTop: 28, marginBottom: -16 },
 
   gridCard: {
     marginHorizontal: GUTTER,
@@ -430,8 +418,9 @@ const styles = StyleSheet.create({
     borderWidth: 2, borderColor: colors.terra,
   },
   thumbWrap: { ...stickerShadow, shadowRadius: 3, shadowOffset: { width: 0, height: 1 } },
-  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.terra, marginTop: 9 },
-  dotCorner: { position: 'absolute', right: 6, bottom: 6, marginTop: 0 },
+  // One position for every day: centred, on the same baseline under the number
+  // or thumbnail (C-look "Calendar cell").
+  dot: { position: 'absolute', top: 45, left: '50%', marginLeft: -3, width: 6, height: 6, borderRadius: 3, backgroundColor: colors.terra },
 
   emptyMonth: { ...type.small, textAlign: 'center', marginTop: 10 },
 

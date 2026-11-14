@@ -1,5 +1,5 @@
 # The extractor's X stops a scan that is still running: no alert, the photo and
-# selection stay, and Extract Sticker can be tapped again. Spends at most ONE
+# selection stay, and Make sticker can be tapped again. Spends at most ONE
 # create-sticker call (the stopped one) — check scripts/qa-budget.mjs first.
 appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
 ---
@@ -22,16 +22,22 @@ appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
     id: "PXGGridLayout-Info"
     index: 0
 - extendedWaitUntil:
-    visible: "Extract Sticker"
+    visible: "Make sticker"
     timeout: 20000
 - tapOn:
     point: "50%,91%"
-# Stop while the scan is still running.
+# Stop while the scan is still running. A backend that fails instantly (staging
+# without GEMINI_API_KEY) never shows the progress card; the inline error card
+# then stands in, and the same photo-kept assertions apply.
 - extendedWaitUntil:
-    visible: "Stop this scan"
-    timeout: 10000
+    visible: "Cancel scan|Try again|Retake|OK"
+    timeout: 20000
 - takeScreenshot: 01-scanning
-- tapOn: "Stop this scan"
+- runFlow:
+    when:
+      visible: "Cancel scan"
+    commands:
+      - tapOn: "Cancel scan"
 - waitForAnimationToEnd:
     timeout: 2000
 - assertNotVisible: ".*failed.*"

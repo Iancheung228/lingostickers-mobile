@@ -80,7 +80,7 @@ appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
 # simctl addmedia gave the café photo the file date 9 Sep 8:11 PM.
 - tapOn: "Photo, September 09, 8:11.*"
 - extendedWaitUntil:
-    visible: "Extract Sticker"
+    visible: "Make sticker"
     timeout: 20000
 - waitForAnimationToEnd:
     timeout: 1500
@@ -93,7 +93,11 @@ appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
     timeout: 1500
 
 # --- Scroll to the scene section (no AI) and ask for one prompt (AI call 2) ---
-- tapOn: "More words from this photo"
+- scrollUntilVisible:
+    element:
+      text: "Also in this photo"
+    direction: DOWN
+    timeout: 10000
 - waitForAnimationToEnd:
     timeout: 1000
 - tapOn: "What's happening\\?"
@@ -103,13 +107,13 @@ appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
 # --- Pick two suggested words (checkboxes; never the Add button) ---
 - tapOn:
     text: ".*, .*"
-    below: "MORE FROM THIS PHOTO"
+    below: "Also in this photo"
     index: 0
 - waitForAnimationToEnd:
     timeout: 800
 - tapOn:
     text: ".*, .*"
-    below: "MORE FROM THIS PHOTO"
+    below: "Also in this photo"
     index: 1
 - waitForAnimationToEnd:
     timeout: 1500
@@ -117,10 +121,5 @@ appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
 
 # --- Cancel: discard the discovery. Nothing is saved. ---
 - tapOn: "Discard this discovery"
-- extendedWaitUntil:
-    visible: "Discard this discovery\\?"
-    timeout: 10000
-- tapOn:
-    text: "Discard"
 - waitForAnimationToEnd:
     timeout: 2000

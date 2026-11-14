@@ -1,8 +1,9 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
-import * as Haptics from 'expo-haptics';
+import InlineError from '@/components/ui/InlineError';
+import { haptic } from '@/lib/haptics';
 import { Check } from 'lucide-react-native';
-import { colors, radii, spacing, fonts, wordFontFor } from '@/constants/theme';
+import { colors, radii, spacing, fonts, wordFontFor, type, e1 } from '@/constants/theme';
 import { Language } from '@/lib/types';
 import { SCENE_PROMPTS, ScenePromptId, SceneChip, fetchSceneWords } from '@/lib/sceneCards';
 
@@ -39,7 +40,7 @@ export default function SceneWords({
   const ticket = useRef(0);
 
   const ask = async (id: ScenePromptId) => {
-    Haptics.selectionAsync();
+    haptic.select();
     setActive(id);
     if (answers[id]) { setStatus('done'); onAnswered?.(); return; }
     const seq = ++ticket.current;
@@ -62,15 +63,24 @@ export default function SceneWords({
 
   const isSelected = (chip: SceneChip) => selected.some((c) => c.word === chip.word);
   const toggle = (chip: SceneChip) => {
-    Haptics.selectionAsync();
+    haptic.select();
     onChangeSelected(isSelected(chip) ? selected.filter((c) => c.word !== chip.word) : [...selected, chip]);
   };
 
   const chips = active ? answers[active] : undefined;
 
+  // Loading copy escalates (B-core 3). Add is never blocked by the extras.
+  const [waited, setWaited] = useState(0);
+  useEffect(() => {
+    if (status !== 'loading') { setWaited(0); return; }
+    const t0 = Date.now();
+    const timer = setInterval(() => setWaited(Date.now() - t0), 1000);
+    return () => clearInterval(timer);
+  }, [status]);
+
   return (
     <View style={styles.wrap}>
-      <Text style={styles.heading}>MORE FROM THIS PHOTO</Text>
+      <Text style={styles.heading} accessibilityRole="header" maxFontSizeMultiplier={1.5}>Also in this photo</Text>
       <View style={styles.prompts}>
         {SCENE_PROMPTS.map((p) => (
           <TouchableOpacity
@@ -81,7 +91,7 @@ export default function SceneWords({
             accessibilityRole="button"
             accessibilityState={{ selected: active === p.id }}
           >
-            <Text style={[styles.promptText, active === p.id && styles.promptTextActive]}>{p.label}</Text>
+            <Text style={[styles.promptText, active === p.id && styles.promptTextActive]} maxFontSizeMultiplier={1.5}>{p.label}</Text>
           </TouchableOpacity>
         ))}
       </View>
@@ -89,19 +99,16 @@ export default function SceneWords({
       {status === 'loading' && (
         <View style={styles.statusRow} accessibilityLiveRegion="polite">
           <ActivityIndicator size="small" color={colors.terra} />
-          <Text style={styles.statusText}>Looking at your photo…</Text>
+          <Text style={styles.statusText}>
+            {waited > 15000 ? 'Taking a while. You can add the card now.'
+              : waited > 5000 ? 'Still looking…'
+              : 'Looking at your photo…'}
+          </Text>
         </View>
       )}
 
-      {status === 'failed' && (
-        <View style={styles.statusRow} accessibilityLiveRegion="polite">
-          <Text style={styles.statusText}>{message}</Text>
-          {!!active && (
-            <TouchableOpacity onPress={() => ask(active)} hitSlop={10}>
-              <Text style={styles.retry}>Try again</Text>
-            </TouchableOpacity>
-          )}
-        </View>
+      {status === 'failed' && !!active && (
+        <InlineError message={message} onRetry={() => ask(active)} />
       )}
 
       {status === 'done' && chips && chips.length === 0 && (
@@ -109,61 +116,60 @@ export default function SceneWords({
       )}
 
       {status === 'done' && !!chips?.length && (
-        <>
-          <Text style={styles.statusText}>Tap the words you want as cards.</Text>
-          <View style={styles.chips}>
-            {chips.map((chip) => {
-              const on = isSelected(chip);
-              return (
-                <TouchableOpacity
-                  key={chip.word}
-                  style={[styles.chip, on && styles.chipOn]}
-                  onPress={() => toggle(chip)}
-                  disabled={disabled}
-                  accessibilityRole="checkbox"
-                  accessibilityState={{ checked: on }}
-                  accessibilityLabel={`${chip.word}, ${chip.translation}`}
-                >
+        <Text style={styles.statusText}>Tap the words you want as cards.</Text>
+      )}
+      {status === 'done' && !!chips?.length && (
+        <View style={styles.list}>
+          {chips.map((chip, i) => {
+            const on = isSelected(chip);
+            return (
+              <TouchableOpacity
+                key={chip.word}
+                style={[styles.chipRow, i > 0 && styles.chipRowDivider]}
+                onPress={() => toggle(chip)}
+                disabled={disabled}
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: on }}
+                accessibilityLabel={`${chip.word}, ${chip.translation}`}
+              >
+                <View style={[styles.check, on && styles.checkOn]}>
                   {on && <Check size={13} color={colors.white} strokeWidth={3} />}
-                  <View>
-                    <Text style={[styles.chipWord, { fontFamily: wordFontFor(language) }, on && styles.chipTextOn]}>
-                      {chip.word}
-                    </Text>
-                    <Text style={[styles.chipMeaning, on && styles.chipTextOn]}>{chip.translation}</Text>
-                  </View>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        </>
+                </View>
+                <Text style={[styles.chipWord, { fontFamily: wordFontFor(language) }]} maxFontSizeMultiplier={1.3}>{chip.word}</Text>
+                <Text style={styles.chipMeaning} numberOfLines={2} maxFontSizeMultiplier={1.5}>{chip.translation}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
       )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  wrap: { alignSelf: 'stretch', marginTop: spacing.lg, gap: spacing.sm },
-  heading: { fontSize: 10, fontFamily: fonts.monoBold, color: colors.inkLight, letterSpacing: 1.4 },
+  wrap: { alignSelf: 'stretch', marginTop: spacing.md, gap: spacing.ms },
+  heading: { ...type.h2, fontSize: 18, lineHeight: 24 },
   prompts: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   prompt: {
-    paddingVertical: spacing.sm, paddingHorizontal: spacing.md,
-    borderRadius: radii.full, borderWidth: 1.5, borderColor: colors.border,
+    minHeight: 36, justifyContent: 'center', paddingHorizontal: spacing.md,
+    borderRadius: radii.full, borderWidth: 1, borderColor: colors.ctl, backgroundColor: colors.white,
   },
-  promptActive: { borderColor: colors.terra, backgroundColor: colors.sand },
-  promptText: { fontSize: 13, fontFamily: fonts.display, color: colors.inkMid },
-  promptTextActive: { color: colors.inkDark },
+  promptActive: { borderColor: colors.terra, backgroundColor: colors.terra },
+  promptText: { fontSize: 15, fontFamily: fonts.text, color: colors.inkMid },
+  promptTextActive: { color: colors.white, fontFamily: fonts.display },
   statusRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  statusText: { fontSize: 13, fontFamily: fonts.text, color: colors.inkLight, flexShrink: 1 },
-  retry: { fontSize: 13, fontFamily: fonts.display, color: colors.terra },
-  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
-  chip: {
-    flexDirection: 'row', alignItems: 'center', gap: spacing.xs,
-    paddingVertical: spacing.sm, paddingHorizontal: spacing.md,
-    borderRadius: radii.md, backgroundColor: colors.sky,
-    borderWidth: 1.5, borderColor: colors.borderLight,
+  statusText: { ...type.small, flexShrink: 1 },
+  list: { backgroundColor: colors.white, borderRadius: radii.md, overflow: 'hidden', ...e1 },
+  chipRow: {
+    flexDirection: 'row', alignItems: 'center', gap: spacing.ms,
+    minHeight: 52, paddingHorizontal: spacing.md, paddingVertical: spacing.sm,
   },
-  chipOn: { backgroundColor: colors.terra, borderColor: colors.terra },
-  chipWord: { fontSize: 16, color: colors.inkDark },
-  chipMeaning: { fontSize: 11, fontFamily: fonts.text, color: colors.inkLight },
-  chipTextOn: { color: colors.white },
+  chipRowDivider: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.divider },
+  check: {
+    width: 22, height: 22, borderRadius: 11, borderWidth: 1.5, borderColor: colors.ctl,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  checkOn: { backgroundColor: colors.terra, borderColor: colors.terra },
+  chipWord: { fontSize: 18, color: colors.inkDark },
+  chipMeaning: { flex: 1, ...type.small, textAlign: 'right' },
 });

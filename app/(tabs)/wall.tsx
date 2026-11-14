@@ -69,7 +69,7 @@ export default function WallScreen() {
 
   return (
     <View style={[styles.container, { paddingBottom: insets.bottom + TAB_BAR_CLEARANCE }]}>
-      <RoseBand title="Boards" subtitle={boards.length === 0 ? 'Arrange your stickers' : `${boards.length} board${boards.length === 1 ? '' : 's'}`} />
+      <RoseBand title="Boards" />
       {boards.length === 0 ? (
         <View style={styles.empty}>
           <View style={styles.emptyIconCircle}>

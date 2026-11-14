@@ -37,7 +37,7 @@ appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
 - tapOn:
     text: "Scan a new sticker"
 - extendedWaitUntil:
-    visible: ".*(One quick thing|Agree and start scanning|Scan what the camera).*"
+    visible: ".*(One quick thing|Agree and start scanning|Take photo).*"
     timeout: 15000
 
 # Consent gate: both controls must be visible.

@@ -1,0 +1,14 @@
+# R5: the Calendar band shows only its title, and every review dot sits in the
+# same place. No AI calls.
+appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
+---
+- runFlow: ../sign-in.yaml
+- tapOn: "Calendar"
+- extendedWaitUntil:
+    visible: "Calendar"
+    timeout: 15000
+- assertNotVisible: "Due this week.*"
+- assertNotVisible: "Nothing due this week"
+- waitForAnimationToEnd:
+    timeout: 1500
+- takeScreenshot: r5-calendar

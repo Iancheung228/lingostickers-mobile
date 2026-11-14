@@ -1,93 +1,103 @@
 import { useEffect, useRef, useState } from 'react';
 import { View, Text, ActivityIndicator, StyleSheet } from 'react-native';
+import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 import { Check } from 'lucide-react-native';
-import { colors, radii, spacing, fonts } from '@/constants/theme';
+import { colors, e2, fonts, radii, spacing, type } from '@/constants/theme';
+import { haptic } from '@/lib/haptics';
+import { useMotion } from '@/lib/motion';
+import Button from '@/components/ui/Button';
 
 // ---------------------------------------------------------------------------
-// What the app is doing while the user waits.
+// What the app is doing while the user waits (B-core 2).
 //
-// A single spinner labelled "working…" makes every wait feel identical, so a
-// slow one reads as a hang rather than as slow work. The pipeline has real,
-// nameable stages now, and naming them turns "why is this stuck" into "it's on
-// the last step" — which is the difference between a broken app and a busy one.
-//
-// Each stage also says what it is *for*, not just what it is doing. "Finding
-// the word" without "so your sticker gets its translation" is jargon; the
-// point of the wait is more reassuring than the mechanism.
+// Three named stages, each saying what it is *for*. Cancel is there from 0s and
+// aborts with no alert. Elapsed time is read from the wall clock, not counted in
+// ticks, so a scan that was backgrounded mid-stage shows the right note the
+// moment the app comes back (timers are suspended in the background; Date.now()
+// is not).
+//   > 5s   "Taking longer than usual. Still going."
+//   > 15s  "This is slow. Your photo is safe."  Keep waiting / Cancel
+//   45s    hard timeout, owned by scan.tsx (it shows the error card).
 // ---------------------------------------------------------------------------
 export type ScanStage = 'cutting' | 'saving' | 'word';
 
 const STAGES: { id: ScanStage; title: string; detail: string }[] = [
-  {
-    id: 'cutting',
-    title: 'Cutting out your sticker',
-    detail: 'Finding the object in your photo — this happens on your phone',
-  },
-  {
-    id: 'saving',
-    title: 'Saving it to your collection',
-    detail: 'Uploading the cutout',
-  },
-  {
-    id: 'word',
-    title: 'Looking up the word',
-    detail: 'Working out what this is and how to say it',
-  },
+  { id: 'cutting', title: 'Cutting out your sticker', detail: 'Finding the object in your photo. This happens on your phone.' },
+  { id: 'saving', title: 'Saving it to your collection', detail: 'Uploading the cutout' },
+  { id: 'word', title: 'Looking up the word', detail: 'Working out what this is and how to say it' },
 ];
 
-/// How long a stage may run before the copy acknowledges it. Set above the
-/// normal duration of the slowest stage, so this only ever fires when
-/// something genuinely is unusual.
-const SLOW_AFTER_MS = 6000;
+export const SLOW_AFTER_MS = 5000;
+export const STUCK_AFTER_MS = 15000;
 
 interface ScanProgressProps {
   stage: ScanStage;
-  /// Set when the device declined and the server is doing the cutout instead —
-  /// the single most common reason step one takes seconds rather than
-  /// milliseconds, and worth saying out loud rather than leaving as a mystery.
+  /// Set when the device declined and the server is doing the cutout instead.
   usingServerCutout?: boolean;
+  onCancel?: () => void;
 }
 
-export default function ScanProgress({ stage, usingServerCutout }: ScanProgressProps) {
+function Marker({ done, active, index }: { done: boolean; active: boolean; index: number }) {
+  const { reduced } = useMotion();
+  const scale = useSharedValue(done ? 1 : 1);
+  const wasDone = useRef(done);
+  useEffect(() => {
+    if (done && !wasDone.current) {
+      haptic.select();
+      if (!reduced) { scale.value = 0.8; scale.value = withSpring(1, { damping: 12, stiffness: 260 }); }
+    }
+    wasDone.current = done;
+  }, [done, reduced, scale]);
+  const pop = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
+  return (
+    <Animated.View style={[styles.marker, done && styles.markerDone, active && styles.markerActive, pop]}>
+      {done ? (
+        <Check size={13} color={colors.white} strokeWidth={3} />
+      ) : active ? (
+        <ActivityIndicator size="small" color={colors.terra} />
+      ) : (
+        <Text style={styles.markerIdle}>{index + 1}</Text>
+      )}
+    </Animated.View>
+  );
+}
+
+export default function ScanProgress({ stage, usingServerCutout, onCancel }: ScanProgressProps) {
   const activeIndex = STAGES.findIndex(s => s.id === stage);
-  const [slow, setSlow] = useState(false);
-  const stageStartedAt = useRef(Date.now());
+  const startedAt = useRef(Date.now());
+  const [elapsed, setElapsed] = useState(0);
+  const [waiting, setWaiting] = useState(false); // "Keep waiting" pressed for this stage
 
   useEffect(() => {
-    stageStartedAt.current = Date.now();
-    setSlow(false);
-    const timer = setTimeout(() => setSlow(true), SLOW_AFTER_MS);
-    return () => clearTimeout(timer);
+    startedAt.current = Date.now();
+    setElapsed(0);
+    setWaiting(false);
+    const timer = setInterval(() => setElapsed(Date.now() - startedAt.current), 500);
+    return () => clearInterval(timer);
   }, [stage]);
 
+  const slow = elapsed > SLOW_AFTER_MS;
+  const stuck = elapsed > STUCK_AFTER_MS && !waiting;
+
   return (
-    <View style={styles.container}>
+    <View style={styles.card} testID="scan-progress" accessibilityLiveRegion="polite">
       {STAGES.map((item, index) => {
         const done = index < activeIndex;
         const active = index === activeIndex;
         return (
           <View key={item.id} style={styles.row}>
-            <View style={[styles.marker, done && styles.markerDone, active && styles.markerActive]}>
-              {done ? (
-                <Check size={11} color={colors.white} strokeWidth={3} />
-              ) : active ? (
-                <ActivityIndicator size="small" color={colors.inkDark} />
-              ) : (
-                <Text style={styles.markerIdle}>{index + 1}</Text>
-              )}
-            </View>
-
+            <Marker done={done} active={active} index={index} />
             <View style={styles.text}>
               <Text
                 style={[styles.title, done && styles.titleDone, !done && !active && styles.titleIdle]}
-                numberOfLines={1}
+                maxFontSizeMultiplier={1.5}
               >
                 {item.title}
               </Text>
               {active && (
-                <Text style={styles.detail}>
+                <Text style={styles.detail} maxFontSizeMultiplier={1.5}>
                   {item.id === 'cutting' && usingServerCutout
-                    ? 'This one needs the cloud — it takes a few seconds longer'
+                    ? 'This one needs the cloud. It takes a few seconds longer.'
                     : item.detail}
                 </Text>
               )}
@@ -96,43 +106,71 @@ export default function ScanProgress({ stage, usingServerCutout }: ScanProgressP
         );
       })}
 
-      {slow && (
-        <Text style={styles.slowNote}>
-          {stage === 'word'
-            ? 'The word service is busy right now — still going.'
-            : 'Taking longer than usual — still going.'}
+      {slow && !stuck && (
+        <Text style={styles.note} testID="scan-slow-note" maxFontSizeMultiplier={1.5}>
+          Taking longer than usual. Still going.
         </Text>
       )}
+      {stuck && (
+        <Text style={styles.note} testID="scan-stuck-note" maxFontSizeMultiplier={1.5}>
+          This is slow. Your photo is safe.
+        </Text>
+      )}
+
+      <View style={styles.buttons}>
+        {stuck && <Button kind="secondary" label="Keep waiting" onPress={() => setWaiting(true)} style={styles.grow} />}
+        {onCancel && (
+          <Button
+            kind={stuck ? 'secondary' : 'tertiary'}
+            label="Cancel"
+            onPress={onCancel}
+            testID="scan-cancel"
+            accessibilityLabel="Cancel scan"
+            style={stuck ? styles.grow : undefined}
+          />
+        )}
+      </View>
+    </View>
+  );
+}
+
+/** Dims whatever is behind it (the frozen photo) and floats the card over it. */
+export function ScanOverlay({ children }: { children: React.ReactNode }) {
+  return (
+    <View style={styles.overlay} pointerEvents="box-none">
+      <View style={styles.scrim} pointerEvents="none" />
+      <View style={styles.overlayBody}>{children}</View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    gap: spacing.sm,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.md,
-    backgroundColor: colors.cardAlt,
-    borderRadius: radii.lg,
-  },
-  row: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm },
-  marker: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    alignItems: 'center',
-    justifyContent: 'center',
+  card: {
+    gap: spacing.ms,
+    padding: spacing.md,
     backgroundColor: colors.card,
-    borderWidth: 1,
-    borderColor: colors.skyNight,
+    borderRadius: radii.lg,
+    alignSelf: 'stretch',
+    ...e2,
+  },
+  row: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.ms },
+  marker: {
+    width: 24, height: 24, borderRadius: 12,
+    alignItems: 'center', justifyContent: 'center',
+    backgroundColor: colors.card, borderWidth: 1, borderColor: colors.ctl,
   },
   markerActive: { backgroundColor: colors.terraLight, borderColor: colors.terra },
-  markerDone: { backgroundColor: colors.sageDark, borderColor: colors.sageDark },
-  markerIdle: { fontSize: 11, fontFamily: fonts.display, color: colors.inkFaint },
+  markerDone: { backgroundColor: colors.success, borderColor: colors.success },
+  markerIdle: { fontSize: 12, fontFamily: fonts.mono, color: colors.inkLight },
   text: { flex: 1, paddingTop: 2 },
-  title: { fontSize: 13, fontFamily: fonts.display, color: colors.inkDark },
+  title: { ...type.body, fontFamily: fonts.display, color: colors.inkDark, lineHeight: 22 },
   titleDone: { color: colors.inkLight },
-  titleIdle: { color: colors.inkFaint },
-  detail: { fontSize: 11, fontFamily: fonts.text, color: colors.inkLight, marginTop: 2, lineHeight: 15 },
-  slowNote: { fontSize: 11, fontFamily: fonts.display, color: colors.sageDark, textAlign: 'center', marginTop: 2, },
+  titleIdle: { color: colors.inkLight },
+  detail: { ...type.small, marginTop: 2 },
+  note: { ...type.small, color: colors.inkDark, textAlign: 'center' },
+  buttons: { flexDirection: 'row', justifyContent: 'center', gap: spacing.sm },
+  grow: { flex: 1 },
+  overlay: { ...StyleSheet.absoluteFillObject, justifyContent: 'flex-end' },
+  scrim: { ...StyleSheet.absoluteFillObject, backgroundColor: colors.scrim },
+  overlayBody: { padding: spacing.md },
 });

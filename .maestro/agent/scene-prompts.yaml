@@ -22,7 +22,7 @@ appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
     timeout: 2000
 - tapOn: "Photo, September 09, 8:11.*"
 - extendedWaitUntil:
-    visible: "Extract Sticker"
+    visible: "Make sticker"
     timeout: 20000
 - tapOn:
     point: "50%,91%"
@@ -32,7 +32,11 @@ appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
 - takeScreenshot: sp-01-discovery-top
 
 # --- Scenario 1: footer button scrolls to the section (no prompt tapped) -----
-- tapOn: "More words from this photo"
+- scrollUntilVisible:
+    element:
+      text: "Also in this photo"
+    direction: DOWN
+    timeout: 10000
 - waitForAnimationToEnd:
     timeout: 1000
 - takeScreenshot: sp-s1-after-more-words

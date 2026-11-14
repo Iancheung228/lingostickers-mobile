@@ -1,5 +1,5 @@
 # Add-cards confirmation: after "Add N cards" in the discovery reveal, the scan screen
-# shows a toast "N cards added" with a "View" action that opens the Collection tab.
+# shows a toast "Added N cards" with a "View" action that opens the Collection tab.
 # Uses one scan (extract) plus one scene question ("What's happening?") to get a chip.
 appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
 ---
@@ -30,10 +30,10 @@ appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
 - tapOn:
     text: "Photo, March 30, 2018.*"
 - extendedWaitUntil:
-    visible: "Extract Sticker"
+    visible: "Make sticker"
     timeout: 30000
 - assertVisible: "Crop your sticker"
-- tapOn: "Extract Sticker"
+- tapOn: "Make sticker"
 
 # Discovery reveal: the primary button reads "Add to Collection" until scene chips are picked.
 - extendedWaitUntil:
@@ -42,10 +42,13 @@ appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
 - takeScreenshot: 01-reveal-before-scene-pick
 
 # Scene prompt: scroll to "More from this photo", ask one question, pick one chip.
-- tapOn:
-    text: "More words from this photo"
+- scrollUntilVisible:
+    element:
+      text: "Also in this photo"
+    direction: DOWN
+    timeout: 10000
 - extendedWaitUntil:
-    visible: "MORE FROM THIS PHOTO"
+    visible: "Also in this photo"
     timeout: 20000
 - tapOn:
     text: "What's happening\\?"
@@ -74,7 +77,7 @@ appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
 # Add: the reveal closes and the toast confirms the count.
 - tapOn: "Add 2 cards"
 - extendedWaitUntil:
-    visible: "2 cards added"
+    visible: "Added 2 cards"
     timeout: 15000
 - assertVisible:
     id: "toast-message"
@@ -90,5 +93,5 @@ appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
     timeout: 20000
 - assertVisible:
     id: "home-filter"
-- assertNotVisible: "2 cards added"
+- assertNotVisible: "Added 2 cards"
 - takeScreenshot: 04-collection-after-view

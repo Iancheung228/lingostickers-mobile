@@ -49,7 +49,7 @@ appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
 - tapOn:
     id: "type-word-add"
 - extendedWaitUntil:
-    visible: "1 card added"
+    visible: "Added 1 card"
     timeout: 15000
 - assertNotVisible:
     id: "type-word-preview"

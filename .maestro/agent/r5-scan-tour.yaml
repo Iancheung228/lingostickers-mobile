@@ -1,0 +1,33 @@
+# R5 tour: the consent sheet over the camera (first run only), the camera's first
+# view, and the Type a word sheet. Never taps Agree unless the consent sheet is up,
+# and makes no AI call. Screenshots land in .maestro/output.
+appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
+---
+- runFlow: ../sign-in.yaml
+- tapOn: "Scan a new sticker"
+- extendedWaitUntil:
+    visible: "Take photo|Agree and start scanning"
+    timeout: 20000
+- waitForAnimationToEnd:
+    timeout: 1500
+- runFlow:
+    when:
+      visible: "Agree and start scanning"
+    commands:
+      - takeScreenshot: r5-consent
+      - tapOn: "Agree and start scanning"
+- extendedWaitUntil:
+    visible: "Take photo"
+    timeout: 15000
+- takeScreenshot: r5-camera-first-view
+- assertVisible: "Type a word"
+- assertVisible: "Import a photo from your library"
+- tapOn:
+    id: "scan-type-word"
+- extendedWaitUntil:
+    visible:
+      id: "type-word-input"
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 1000
+- takeScreenshot: r5-type-word-sheet

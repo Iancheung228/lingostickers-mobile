@@ -1,9 +1,9 @@
 import { useState, useRef, useCallback, useMemo, useEffect } from 'react';
 import {
-  View, Text, TouchableOpacity, StyleSheet, Alert, Linking, AppState,
-  ActivityIndicator, useWindowDimensions,
+  View, Text, TouchableOpacity, StyleSheet, Linking, AppState, Image, Pressable,
+  LayoutChangeEvent,
 } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
@@ -12,10 +12,9 @@ import { GestureDetector, Gesture } from 'react-native-gesture-handler';
 import Animated, {
   useSharedValue, useAnimatedStyle, runOnJS, withTiming, withDelay,
 } from 'react-native-reanimated';
-import { ImagePlus, Zap, ZapOff } from 'lucide-react-native';
-import * as Haptics from 'expo-haptics';
+import { ImagePlus, Zap, ZapOff, Keyboard as KeyboardIcon } from 'lucide-react-native';
 import { useAuth } from '@/hooks/useAuth';
-import { colors, shadows, radii, spacing, fonts } from '@/constants/theme';
+import { colors, e1, e2, radii, spacing, type, fonts } from '@/constants/theme';
 import { TAB_BAR_CLEARANCE } from '@/constants/tabBar';
 import { useProfile } from '@/hooks/useProfile';
 import { supabase } from '@/lib/supabase';
@@ -24,13 +23,20 @@ import { Point } from '@/lib/cropGeometry';
 import { captureLocation, CapturedLocation } from '@/lib/location';
 import { getImportedPhotoMetadata } from '@/lib/photoMetadata';
 import { withThumbPath } from '@/lib/thumbnails';
-import { attemptLocalCutout, uploadCutout, cutoutPath, discardCutout, CUTOUT_DRY_RUN, type UploadOutcome } from '@/lib/cutout';
+import { attemptLocalCutout, uploadCutout, cutoutPath, CUTOUT_DRY_RUN, type UploadOutcome } from '@/lib/cutout';
 import { trackEvent } from '@/lib/analytics';
 import DiscoveryReveal from '@/components/DiscoveryReveal';
-import Toast from '@/components/Toast';
-import TypeWordSheet from '@/components/TypeWordSheet';
+import { useToast } from '@/components/ToastProvider';
+import TypeWordSheet, { type CarriedCutout } from '@/components/TypeWordSheet';
+import ScanErrorCard from '@/components/ScanErrorCard';
+import Button from '@/components/ui/Button';
+import { haptic } from '@/lib/haptics';
+import { useMotion } from '@/lib/motion';
+import { useCoachMark } from '@/lib/coachMarks';
+import { friendlyError, isNetworkError } from '@/lib/friendlyError';
+import { ScanFailure, classifyScanFailure, keepsCutout, type ScanAction, type ScanErrorKind } from '@/lib/scanError';
 import PhotoExtractor, { ExtractResult, renderWholePhotoExtract } from '@/components/PhotoExtractor';
-import ScanProgress, { ScanStage } from '@/components/ScanProgress';
+import ScanProgress, { ScanOverlay, ScanStage } from '@/components/ScanProgress';
 import GhostCutoutReveal from '@/components/GhostCutoutReveal';
 import { debugLog, debugWarn } from '@/lib/debug';
 import { alertPermissionDenied } from '@/lib/permissions';
@@ -72,6 +78,26 @@ export default function ScanScreen() {
   // take+crop+render step, kept separate from `processing` (which tracks the
   // segmentation and network work that follows it).
   const [capturing, setCapturing] = useState(false);
+  const toast = useToast();
+  const { reduced } = useMotion();
+  // A failed scan, as one of B-core 2's six rows. Null while all is well.
+  const [scanError, setScanError] = useState<ScanErrorKind | null>(null);
+  // The photo just taken, held on screen over the live camera while it is
+  // scanned (the camera path never opens the extractor).
+  const [frozenUri, setFrozenUri] = useState<string | null>(null);
+  // A cutout the scan made and uploaded before the word lookup failed. Kept so
+  // "Type the word instead" can finish the card with it; removed otherwise.
+  const carriedRef = useRef<CarriedCutout | null>(null);
+  const [typeCutout, setTypeCutout] = useState<CarriedCutout | null>(null);
+  // What the last scan was run with, so Try again re-runs exactly that.
+  const lastExtractRef = useRef<{ extract: ExtractResult; source?: { asset: CaptureAsset; camera: CameraCapture } } | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  // A discarded draft is held in memory for the Undo toast; its files are only
+  // deleted once that window closes.
+  const pendingDiscardRef = useRef<{
+    draft: StickerDraft; sceneBase64: string | null; chips: SceneChip[];
+    asset: CaptureAsset | null; camera: CameraCapture | null; timer: ReturnType<typeof setTimeout>;
+  } | null>(null);
   const [draft, setDraft] = useState<StickerDraft | null>(null);
   // The small scene copy sent with the scan, kept for scene prompts on the
   // reveal, and the extra words picked there. Both belong to the draft.
@@ -124,7 +150,7 @@ export default function ScanScreen() {
   const draftBeforeRetryRef = useRef<StickerDraft | null>(null);
   // The in-flight create-sticker call, so the extractor's X can stop a scan
   // that is taking too long, and so a scan can give up on its own.
-  const scanAbortRef = useRef<{ controller: AbortController; byUser: boolean } | null>(null);
+  const scanAbortRef = useRef<{ controller: AbortController; byUser: boolean; timedOut: boolean; startedAt: number } | null>(null);
   // Dry-run only: the device's cutout for the scan in flight, shown in the
   // reveal instead of the saved image. Cleared each scan so a failed device
   // cutout never shows the previous scan's preview.
@@ -134,16 +160,76 @@ export default function ScanScreen() {
   // which is the difference between a payload problem and a quota problem.
   const lastVocabMsRef = useRef<number | null>(null);
 
+  const extractorVisibleRef = useRef(false);
+  extractorVisibleRef.current = extractorVisible;
+
+  // Storage removal for files no card will ever point at.
+  const removeCutout = useCallback((imagePath: string | null, thumbPath?: string | null) => {
+    if (!imagePath) return;
+    supabase.storage.from('sticker-images').remove(withThumbPath(imagePath)).then(({ error }) => {
+      if (error) debugWarn('Failed to clean up unused cutout', error);
+    });
+  }, []);
+  const releaseCarried = useCallback(() => {
+    const c = carriedRef.current;
+    carriedRef.current = null;
+    if (c) removeCutout(c.imagePath, c.thumbPath);
+  }, [removeCutout]);
+  // The Undo window for a discarded draft is over: delete its files for good.
+  const flushPendingDiscard = useCallback(() => {
+    const p = pendingDiscardRef.current;
+    if (!p) return;
+    clearTimeout(p.timer);
+    pendingDiscardRef.current = null;
+    const paths = withThumbPath(p.draft.imagePath);
+    if (p.draft.memoryPhotoPath) paths.push(p.draft.memoryPhotoPath);
+    supabase.storage.from('sticker-images').remove(paths).then(({ error }) => {
+      if (error) debugWarn('Failed to remove a discarded scan', error);
+    });
+  }, []);
+
+  // Backgrounding (B-core 0): an in-flight scan continues. Timers don't run
+  // while suspended, so on return the clock is re-read: a scan past its limit is
+  // stopped at once instead of waiting for a timer that already lapsed. A
+  // discard's Undo window closes when the app leaves the foreground.
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state !== 'active') { flushPendingDiscard(); return; }
+      const scan = scanAbortRef.current;
+      if (scan && Date.now() - scan.startedAt > SCAN_TIMEOUT_MS && !scan.controller.signal.aborted) {
+        scan.timedOut = true;
+        scan.controller.abort();
+      }
+    });
+    return () => { sub.remove(); flushPendingDiscard(); };
+  }, [flushPendingDiscard]);
+
   // Rectangular (3:4 portrait) camera viewport sized to the screen width
   // (with off-white margin), capped so it doesn't dominate on tablets and
   // scaled down to fit the available vertical space on shorter screens.
-  const { width: winW, height: winH } = useWindowDimensions();
-  const camWRaw = Math.min(winW - FRAME_MARGIN * 2, 400);
+  // Measured from the space actually left between the title and the controls,
+  // not a fraction of the window, so nothing can collide with the frame.
+  const [area, setArea] = useState({ width: 0, height: 0 });
+  const onAreaLayout = useCallback((e: LayoutChangeEvent) => {
+    const { width, height } = e.nativeEvent.layout;
+    setArea((a) => (a.width === width && a.height === height ? a : { width, height }));
+  }, []);
+  const camWRaw = Math.min(area.width - FRAME_MARGIN * 2, 400);
   const camHRaw = camWRaw / ASPECT_RATIO;
-  const maxCamH = winH * 0.58;
+  const maxCamH = Math.max(area.height - 8, 0);
   const camScale = camHRaw > maxCamH ? maxCamH / camHRaw : 1;
   const camW = camWRaw * camScale;
   const camH = camHRaw * camScale;
+
+  // First-run coach mark under the frame (B-core 1): shown once, gone at 4s or
+  // on the first touch, and never over anything.
+  const hint = useCoachMark('scan-hint', true);
+  const dismissHint = useCallback(() => hint.dismiss(), [hint.dismiss]);
+  useEffect(() => {
+    if (!hint.visible) return;
+    const t = setTimeout(hint.dismiss, 4000);
+    return () => clearTimeout(t);
+  }, [hint.visible, hint.dismiss]);
 
   // Pinch-to-zoom — savedZoom anchors the zoom level at the start of each pinch
   const savedZoom = useSharedValue(0);
@@ -152,6 +238,7 @@ export default function ScanScreen() {
   const pinchGesture = useMemo(() => Gesture.Pinch()
     .onStart(() => {
       savedZoom.value = currentZoom.value;
+      runOnJS(dismissHint)();
     })
     .onUpdate((e) => {
       const next = Math.max(0, Math.min(1, savedZoom.value + (e.scale - 1) * 0.5));
@@ -165,9 +252,19 @@ export default function ScanScreen() {
   const reticleY = useSharedValue(0);
   const reticleOpacity = useSharedValue(0);
   const reticleScale = useSharedValue(1);
+  // Capture flash and shutter press scale.
+  const flash = useSharedValue(0);
+  const flashColor = useSharedValue(1); // 1 = white flash, 0 = dim (Reduce Motion)
+  const shutterScale = useSharedValue(1);
+  const flashStyle = useAnimatedStyle(() => ({
+    opacity: flash.value,
+    backgroundColor: flashColor.value === 1 ? colors.white : colors.black,
+  }));
+  const shutterStyle = useAnimatedStyle(() => ({ transform: [{ scale: shutterScale.value }] }));
 
   const handleFocusTap = useCallback((x: number, y: number) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    haptic.select();
+    hint.dismiss();
     reticleX.value = x;
     reticleY.value = y;
     reticleScale.value = 1.25;
@@ -265,14 +362,15 @@ export default function ScanScreen() {
 
     if (error) {
       const status = (error as any).context?.status;
+      // No HTTP status: the request never got an answer (offline, dropped). Keep
+      // the original so it classifies as offline, not as a slow service.
+      if (!status) throw error;
       const body = await (error as any).context?.json?.().catch(() => null);
       // 429 = the per-user daily quota is spent (see the create-sticker edge
       // function). Not a failure of the scan, so it gets its own alert title
       // rather than the alarming "Scan failed".
       if (status === 429) {
-        const limitErr: any = new Error(body?.error ?? 'Daily limit reached. Try again tomorrow.');
-        limitErr.isRateLimit = true;
-        throw limitErr;
+        throw new ScanFailure(body?.error ?? 'Daily limit reached. Try again tomorrow.', { status });
       }
       // No parseable JSON body means the response wasn't a normal app-level
       // error (those always return {error: "..."} — see create-sticker's
@@ -282,9 +380,12 @@ export default function ScanScreen() {
       // calls). The SDK's own message for that is the unhelpful generic
       // "Edge Function returned a non-2xx status code" — swap in something
       // the user can actually act on.
-      throw new Error(body?.error ?? 'This took too long and was cut off. Please try again.');
+      throw new ScanFailure(body?.error ?? 'This took too long and was cut off.', { status });
     }
-    if (data.error) throw new Error(data.error);
+    if (data.error) throw new ScanFailure(String(data.error));
+    // The model answered but named nothing: that is its own row, not a failure
+    // to reach it (B-core 2).
+    if (!String(data.word ?? '').trim()) throw new ScanFailure('Nothing recognised', { kind: 'nothing' });
     // `_debug_groqMs` is the pre-Gemini name; edge functions deploy
     // separately from app builds, so accept both for one release.
     const vocabMs = data._debug_vocabMs ?? data._debug_groqMs;
@@ -368,29 +469,25 @@ export default function ScanScreen() {
     return result.base64 ?? null;
   }, []);
 
-  const handleExtractFromPhoto = useCallback(async ({
-    base64,
-    uri,
-    lassoPolygon,
-    segmentUri,
-    segmentWidth,
-    segmentHeight,
-    selectionPolygon,
-    selectionKind,
-    fullUri,
-    fullWidth,
-    fullHeight,
-    fullSelectionPolygon,
-  }: ExtractResult,
+  const handleExtractFromPhoto = useCallback(async (extractArg: ExtractResult,
     // The live-capture path calls this in the same tick it stages its source,
     // before those setState calls have flushed — so it hands the source in
     // directly rather than letting this closure read a stale one (or, on the
     // very first scan of a session, none at all).
     sourceOverride?: { asset: CaptureAsset; camera: CameraCapture },
   ) => {
+    const {
+      base64, uri, lassoPolygon, segmentUri, segmentWidth, segmentHeight, selectionPolygon,
+      selectionKind, fullUri, fullWidth, fullHeight, fullSelectionPolygon,
+    } = extractArg;
     const asset = sourceOverride?.asset ?? importedAsset;
     const camera = sourceOverride?.camera ?? cameraCaptureContext;
     if (processing || !asset) return;
+    // Anything held from a previous attempt is finished with: a retry uploads its own.
+    lastExtractRef.current = { extract: extractArg, source: sourceOverride };
+    releaseCarried();
+    flushPendingDiscard();
+    setScanError(null);
     setStage('cutting');
     setUsingServerCutout(false);
     setProcessing(true);
@@ -411,11 +508,16 @@ export default function ScanScreen() {
     // after that point isn't reported as a failed extraction — the cutout
     // worked; it's the word that didn't come back.
     let lookingUpWord = false;
-    const scanAbort = { controller: new AbortController(), byUser: false };
+    // Hoisted so the catch can decide whether the uploaded cutout is kept for
+    // "Type the word instead" or removed.
+    let precutImagePath: string | null = null;
+    let precutThumbPath: string | null = null;
+    const scanAbort = { controller: new AbortController(), byUser: false, timedOut: false, startedAt: Date.now() };
     scanAbortRef.current = scanAbort;
-    // The server gives each model attempt 12s with retries and a failover;
-    // past this, waiting longer has never produced a card.
-    const giveUp = setTimeout(() => scanAbort.controller.abort(), SCAN_TIMEOUT_MS);
+    // Hard timeout (B-core 2): the error card, never a silent wait. The server
+    // gives each model attempt 12s with retries and a failover; past 45s,
+    // waiting longer has never produced a card.
+    const giveUp = setTimeout(() => { scanAbort.timedOut = true; scanAbort.controller.abort(); }, SCAN_TIMEOUT_MS);
 
     try {
       // Checked here rather than left to submitImageForSticker, because the
@@ -448,8 +550,6 @@ export default function ScanScreen() {
       // agreeing with the selection, a degenerate matte, an older iOS) falls
       // through to the server exactly as before. The user sees no difference
       // beyond the wait.
-      let precutImagePath: string | null = null;
-      let precutThumbPath: string | null = null;
       let upload: UploadOutcome | null = null;
       previewCutoutRef.current = null;
 
@@ -528,15 +628,9 @@ export default function ScanScreen() {
             (CUTOUT_DRY_RUN ? ' (includes rembg — dry run runs both pipelines)' : ''),
         );
       } catch (submitErr) {
-        // The cutout is already in storage but no sticker will ever point at
-        // it — most likely the daily quota was spent, which the function
-        // claims *after* this upload has happened. Nothing else will ever
-        // collect it, so collect it here.
-        if (precutImagePath) {
-          supabase.storage.from('sticker-images').remove(withThumbPath(precutImagePath)).then(({ error }) => {
-            if (error) debugWarn('Failed to clean up unused cutout', error);
-          });
-        }
+        // The cutout is already in storage but no sticker points at it. The
+        // outer catch decides: keep it for "Type the word instead", or collect
+        // it (the daily quota is claimed *after* this upload has happened).
         throw submitErr;
       }
 
@@ -553,6 +647,7 @@ export default function ScanScreen() {
       }
 
       setExtractorVisible(false);
+      setFrozenUri(null);
       // Hold off on DiscoveryReveal — show the ghost-cutout crossfade first,
       // it hands off to DiscoveryReveal once the animation completes.
       setRevealCrop(uri);
@@ -583,26 +678,29 @@ export default function ScanScreen() {
         } : prev);
       }
     } catch (err: any) {
-      // Stopped with the X: they know, and the photo is still on screen.
-      if (scanAbort.byUser) return;
-      if (scanAbort.controller.signal.aborted) {
-        Alert.alert(
-          "Couldn't find the word",
-          'The word service is taking too long right now. Your photo is still here — tap Extract Sticker to try again.',
-        );
+      // Stopped with Cancel or the X: they know, and the photo is still there.
+      // The camera path has no picker to return to, so it goes back to the camera.
+      if (scanAbort.byUser) {
+        removeCutout(precutImagePath, precutThumbPath);
+        if (!extractorVisibleRef.current) setFrozenUri(null);
         return;
       }
-      const title = err?.isRateLimit
-        ? 'Daily limit reached'
-        : lookingUpWord ? "Couldn't find the word"
-        : camera ? 'Scan failed' : 'Extraction failed';
-      Alert.alert(title, err?.message ?? 'Something went wrong. Please try again.');
+      const kind = classifyScanFailure(err, { lookingUpWord, timedOut: scanAbort.timedOut });
+      debugWarn('[scan] failed', kind, err?.status, err?.message);
+      if (precutImagePath) {
+        if (keepsCutout(kind)) {
+          carriedRef.current = { imagePath: precutImagePath, thumbPath: precutThumbPath };
+        } else {
+          removeCutout(precutImagePath, precutThumbPath);
+        }
+      }
+      setScanError(kind);
     } finally {
       clearTimeout(giveUp);
       if (scanAbortRef.current === scanAbort) scanAbortRef.current = null;
       setProcessing(false);
     }
-  }, [processing, importedAsset, cameraCaptureContext, submitImageForSticker, prepareMemoryPhoto, user]);
+  }, [processing, importedAsset, cameraCaptureContext, submitImageForSticker, prepareMemoryPhoto, user, releaseCarried, flushPendingDiscard, removeCutout]);
 
   // Captures a photo and scans it immediately — no box/lasso step.
   //
@@ -618,8 +716,16 @@ export default function ScanScreen() {
   // import still opens them up front, since an old photo was framed for
   // something other than this.
   const handleCapture = useCallback(async () => {
-    if (!cameraRef.current || capturing || !user) return;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    if (!cameraRef.current || capturing || processing || !user) return;
+    haptic.press();
+    // White flash 0 > .7 > 0 in 160 ms (Reduce Motion: a 120 ms dim instead).
+    flashColor.value = reduced ? 0 : 1;
+    flash.value = withTiming(reduced ? 0.45 : 0.7, { duration: reduced ? 60 : 60 }, () => {
+      flash.value = withTiming(0, { duration: reduced ? 60 : 100 });
+    });
+    setScanError(null);
+    releaseCarried();
+    flushPendingDiscard();
     setCapturing(true);
 
     // This photo is "now, here". GPS cold-fix can take several seconds, so
@@ -630,6 +736,8 @@ export default function ScanScreen() {
     try {
       const photo = await cameraRef.current.takePictureAsync({ quality: 0.9 });
       if (!photo) throw new Error('Failed to capture photo');
+      // Freeze on the frame that was caught while the crop and scan run.
+      setFrozenUri(photo.uri);
 
       // Crop to the centered 3:4 rectangle shown inside the viewfinder, so
       // what was framed is what gets scanned — matching what the rectangular
@@ -674,20 +782,23 @@ export default function ScanScreen() {
       setCapturing(false);
       await handleExtractFromPhoto(extract, { asset, camera });
     } catch (err: any) {
-      Alert.alert('Scan failed', err?.message ?? 'Something went wrong. Please try again.');
+      // Taking or cropping the photo failed before anything was scanned.
+      setFrozenUri(null);
+      haptic.error();
+      toast.show({ kind: 'error', message: await friendlyError(err, "Couldn't take that photo. Try again."), aboveTabBar: true });
     } finally {
       setCapturing(false);
     }
-  }, [capturing, user, handleExtractFromPhoto]);
+  }, [capturing, processing, user, handleExtractFromPhoto, reduced, releaseCarried, flushPendingDiscard, toast]);
 
   const handleToggleTorch = useCallback(() => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    haptic.tap();
     setTorchOn((prev) => !prev);
   }, []);
 
   const handleImportPhoto = useCallback(async () => {
     if (processing) return;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    haptic.tap();
     const { granted, canAskAgain } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!granted) {
       alertPermissionDenied(
@@ -704,23 +815,34 @@ export default function ScanScreen() {
     const asset = !result.canceled ? result.assets[0] : null;
     if (asset) {
       metadataPromiseRef.current = null;
+      setScanError(null);
+      releaseCarried();
+      flushPendingDiscard();
       setCameraCaptureContext(null);
       setImportedAsset({ uri: asset.uri, width: asset.width, height: asset.height, assetId: asset.assetId ?? undefined });
       setExtractorVisible(true);
     }
-  }, [processing]);
+  }, [processing, releaseCarried, flushPendingDiscard]);
 
 
   // Confirmation shown on the camera after the reveal sheet closes.
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const [addedCount, setAddedCount] = useState(0);
   const [typeWordOpen, setTypeWordOpen] = useState(false);
-  const dismissAdded = useCallback(() => setAddedCount(0), []);
+  // After Add: a toast with View, and the new card is on Home (B-core 3).
+  const announceAdded = useCallback((count: number) => {
+    toast.show({
+      kind: 'success',
+      message: count === 1 ? 'Added 1 card' : `Added ${count} cards`,
+      action: { label: 'View', onPress: () => router.navigate('/(tabs)/collection') },
+      aboveTabBar: true,
+    });
+  }, [toast, router]);
 
   const handleAdd = async () => {
-    if (!draft || !user) return;
+    if (!draft || !user || saving) return;
     setSaving(true);
+    setSaveError(null);
     // origin_author_id is deliberately NOT sent: a BEFORE INSERT trigger
     // (042) stamps it from auth.uid(), so a card can never claim an author
     // it did not have. Read it back rather than assuming it.
@@ -751,11 +873,14 @@ export default function ScanScreen() {
     });
     setSaving(false);
     if (error) {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      Alert.alert('Save failed', error.message);
+      // The draft stays; the message sits above the button (B-core 3).
+      haptic.error();
+      setSaveError(isNetworkError(new Error(error.message))
+        ? "You're offline. Your card is kept here."
+        : "Couldn't save. Try again.");
       return;
     }
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    haptic.success();
     setDraft(null);
     setSceneChips([]);
     setSceneBase64(null);
@@ -763,7 +888,7 @@ export default function ScanScreen() {
     // Extraction" is no longer needed.
     setImportedAsset(null);
     setCameraCaptureContext(null);
-    setAddedCount(1 + extras.length);
+    announceAdded(1 + extras.length);
 
     // The extra words are written in the background: each needs a sentence
     // (a few seconds), and the learner has already seen and chosen them, so
@@ -778,42 +903,56 @@ export default function ScanScreen() {
         discoveredAt: draft.discoveredAt,
       }).then(({ failed }) => {
         if (failed) {
-          Alert.alert(
-            failed === extras.length ? "Couldn't add the extra words" : `Couldn't add ${failed} of the extra words`,
-            'Your scanned word was saved. Try those words again from a new scan.',
-          );
+          toast.show({
+            kind: 'error',
+            message: failed === extras.length
+              ? "Couldn't add the extra words. Your scanned word was saved."
+              : `Couldn't add ${failed} of the extra words. Your scanned word was saved.`,
+            aboveTabBar: true,
+          });
         }
       });
     }
   };
 
-  // Deletes the just-created sticker's storage files for good — gated
-  // behind a confirm since there's no undo once this fires, and the result
-  // being thrown away just took ~10-20s (and real API cost) to produce.
+  // Discard has no confirm (B-core 3). The draft is held in memory and its files
+  // are deleted only when the Undo window closes (see flushPendingDiscard).
+  const UNDO_WINDOW_MS = 8000;
   const handleDiscard = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    Alert.alert(
-      'Discard this discovery?',
-      "You'll lose the word and photo you just found — this can't be undone.",
-      [
-        { text: 'Keep it', style: 'cancel' },
-        {
-          text: 'Discard', style: 'destructive',
-          onPress: async () => {
-            if (draft) {
-              const paths = withThumbPath(draft.imagePath);
-              if (draft.memoryPhotoPath) paths.push(draft.memoryPhotoPath);
-              await supabase.storage.from('sticker-images').remove(paths);
-            }
-            setDraft(null);
-            setSceneChips([]);
-            setSceneBase64(null);
-            setImportedAsset(null);
-            setCameraCaptureContext(null);
-          },
-        },
-      ],
-    );
+    if (!draft) return;
+    flushPendingDiscard();
+    const held = {
+      draft, sceneBase64, chips: sceneChips, asset: importedAsset, camera: cameraCaptureContext,
+      timer: setTimeout(flushPendingDiscard, UNDO_WINDOW_MS),
+    };
+    pendingDiscardRef.current = held;
+    haptic.tap();
+    setDraft(null);
+    setSceneChips([]);
+    setSceneBase64(null);
+    setImportedAsset(null);
+    setCameraCaptureContext(null);
+    setSaveError(null);
+    toast.show({
+      kind: 'undo',
+      message: 'Discarded',
+      action: { label: 'Undo', onPress: undoDiscard },
+      aboveTabBar: true,
+    });
+  };
+  const undoDiscard = () => {
+    const held = pendingDiscardRef.current;
+    if (!held) {
+      toast.show({ kind: 'error', message: "Couldn't bring that back.", aboveTabBar: true });
+      return;
+    }
+    clearTimeout(held.timer);
+    pendingDiscardRef.current = null;
+    setDraft(held.draft);
+    setSceneBase64(held.sceneBase64);
+    setSceneChips(held.chips);
+    setImportedAsset(held.asset);
+    setCameraCaptureContext(held.camera);
   };
 
   // Reopens the box/lasso step on the exact same source photo instead of
@@ -823,7 +962,7 @@ export default function ScanScreen() {
   // restored rather than lost.
   const handleRetryExtraction = useCallback(() => {
     if (!draft || !importedAsset) return;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    haptic.tap();
     draftBeforeRetryRef.current = draft;
     setDraft(null);
     setExtractorVisible(true);
@@ -840,10 +979,8 @@ export default function ScanScreen() {
         body: { englishWord: newWord, language },
       });
 
-      if (error) {
-        const body = await (error as any).context?.json?.().catch(() => null);
-        throw new Error(body?.error ?? error.message);
-      }
+      // Thrown as-is: DiscoveryReveal runs it through friendlyError (lesson 3).
+      if (error) throw error;
       if (data.error) throw new Error(data.error);
 
       setDraft((prev) => prev ? {
@@ -868,10 +1005,8 @@ export default function ScanScreen() {
         body: { englishSentence: newSentence, language },
       });
 
-      if (error) {
-        const body = await (error as any).context?.json?.().catch(() => null);
-        throw new Error(body?.error ?? error.message);
-      }
+      // Thrown as-is: DiscoveryReveal runs it through friendlyError (lesson 3).
+      if (error) throw error;
       if (data.error) throw new Error(data.error);
 
       setDraft((prev) => prev ? {
@@ -895,15 +1030,94 @@ export default function ScanScreen() {
     }
   }, [language]);
 
+  // ---- Recoveries from an inline scan error (B-core 2) ---------------------
+  const runLast = useCallback(() => {
+    const last = lastExtractRef.current;
+    if (!last) return;
+    handleExtractFromPhoto(last.extract, last.source);
+  }, [handleExtractFromPhoto]);
+
+  // Back to the live camera with nothing held.
+  const backToCamera = useCallback(() => {
+    releaseCarried();
+    setScanError(null);
+    setFrozenUri(null);
+    setExtractorVisible(false);
+    setImportedAsset(null);
+    setCameraCaptureContext(null);
+    lastExtractRef.current = null;
+  }, [releaseCarried]);
+
+  const handleScanErrorAction = useCallback(async (action: ScanAction) => {
+    haptic.tap();
+    switch (action) {
+      case 'retry':
+        runLast();
+        break;
+      case 'pickAgain':
+        releaseCarried();
+        setScanError(null);
+        setFrozenUri(null);
+        setExtractorVisible(true);
+        break;
+      case 'wholePhoto': {
+        if (!importedAsset) break;
+        try {
+          const extract = await renderWholePhotoExtract(importedAsset.uri, importedAsset.width, importedAsset.height);
+          const camera = cameraCaptureContext;
+          handleExtractFromPhoto(extract, camera ? { asset: importedAsset, camera } : undefined);
+        } catch (err) {
+          toast.show({ kind: 'error', message: await friendlyError(err, "Couldn't use the whole photo. Try again."), aboveTabBar: true });
+        }
+        break;
+      }
+      case 'typeWord':
+        setTypeCutout(carriedRef.current);
+        setTypeWordOpen(true);
+        break;
+      case 'retake':
+      case 'ok':
+        backToCamera();
+        break;
+    }
+  }, [runLast, releaseCarried, importedAsset, cameraCaptureContext, handleExtractFromPhoto, toast, backToCamera]);
+
+  const openTypeWord = useCallback(() => {
+    haptic.tap();
+    setTypeCutout(null);
+    setTypeWordOpen(true);
+  }, []);
+
+  const closeTypeWord = useCallback(() => {
+    setTypeWordOpen(false);
+    // Closed without adding: the carried cutout stays only while the error card
+    // that offered it is still on screen.
+    if (!scanError) { releaseCarried(); setTypeCutout(null); }
+  }, [scanError, releaseCarried]);
+
+  const cancelScan = useCallback(() => {
+    const scan = scanAbortRef.current;
+    if (!scan) return;
+    haptic.tap();
+    scan.byUser = true;
+    scan.controller.abort();
+  }, []);
+
   if (!permission) return <View style={styles.container} />;
 
   // Guideline 5.1.2(i): the photo goes to third-party AI, so consent comes
-  // before anything that could capture one — ahead of the camera prompt, not
-  // after it. `undefined` means the stored answer has not been read yet;
-  // rendering the gate then would flash it at people who already agreed.
-  if (user && aiConsented === false) {
-    return <AiConsentGate onAccept={acceptAiConsent} agree_testID="scan-consent-agree" privacy_testID="scan-consent-privacy" />;
-  }
+  // before anything that could capture one. `undefined` means the stored answer
+  // has not been read yet; showing the sheet then would flash it at people who
+  // already agreed. It is a sheet over whatever sits underneath (the camera, or
+  // the camera-access page), and nothing underneath is reachable until it's answered.
+  const consentSheet = user && aiConsented === false ? (
+    <AiConsentGate
+      onAccept={acceptAiConsent}
+      onNotNow={() => router.navigate('/(tabs)/collection')}
+      agree_testID="scan-consent-agree"
+      privacy_testID="scan-consent-privacy"
+    />
+  ) : null;
 
   if (!permission.granted) {
     // Once canAskAgain is false, requestPermission() resolves to denied
@@ -912,35 +1126,36 @@ export default function ScanScreen() {
     // app. Settings is the only way back; send them there instead.
     const blocked = !permission.canAskAgain;
     return (
-      <SafeAreaView style={styles.permissionContainer}>
-        <Text style={styles.permissionTitle}>Camera Access Needed</Text>
+      <View style={styles.permissionContainer}>
+        <Text style={styles.permissionTitle} accessibilityRole="header">Camera Access Needed</Text>
         <Text style={styles.permissionSubtitle}>
           {blocked
-            ? 'Camera access is turned off for Tabi Stickers. Turn it back on in Settings to scan objects and create stickers.'
-            : 'Tabi Stickers needs your camera to identify objects and create stickers.'}
+            ? 'Camera is off. Turn it on in Settings to scan objects and create stickers.'
+            : 'Tabi Stickers needs your camera to turn what you see into a card.'}
         </Text>
-        <TouchableOpacity
-          style={styles.permissionButton}
-          onPress={blocked ? () => Linking.openSettings() : requestPermission}
-          accessibilityRole="button"
+        <Button
+          label={blocked ? 'Open Settings' : 'Continue'}
           accessibilityLabel={blocked ? 'Open Settings' : 'Grant camera permission'}
-        >
-          <Text style={styles.permissionButtonText}>
-            {blocked ? 'Open Settings' : 'Grant Permission'}
-          </Text>
-        </TouchableOpacity>
-      </SafeAreaView>
+          onPress={blocked ? () => Linking.openSettings() : requestPermission}
+          style={styles.permissionButton}
+        />
+        {consentSheet}
+      </View>
     );
   }
 
+  const scanning = processing && !extractorVisible;
+  const busyShutter = processing || capturing || !!scanError;
+  const showFrozen = !!frozenUri && !extractorVisible;
+
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+    <View style={[styles.container, { paddingTop: insets.top, paddingBottom: insets.bottom + TAB_BAR_CLEARANCE }]}>
       <View style={styles.header}>
-        <Text style={styles.prompt}>What did you find?</Text>
-        <Text style={styles.promptSub}>Take a photo to learn!</Text>
+        <Text style={styles.title} accessibilityRole="header" maxFontSizeMultiplier={1.3}>What did you find?</Text>
       </View>
 
-      <View style={styles.cameraArea}>
+      <View style={styles.cameraArea} onLayout={onAreaLayout}>
+        {area.width > 0 && (
         <GestureDetector gesture={focusGesture}>
           <View style={[styles.cameraFrame, { width: camW, height: camH }]}>
             <CameraView
@@ -972,91 +1187,97 @@ export default function ScanScreen() {
               </View>
             )}
 
-            {capturing && (
-              <View style={styles.processingOverlay}>
-                <ActivityIndicator size="large" color={colors.terra} />
+            {/* Flash toggle: a 44pt control in the frame's corner, so the three
+                buttons under the frame are the three ways to start a card. */}
+            <Pressable
+              style={styles.torch}
+              onPress={handleToggleTorch}
+              accessibilityRole="button"
+              accessibilityLabel={torchOn ? 'Turn the flash off' : 'Turn the flash on'}
+              accessibilityState={{ selected: torchOn }}
+            >
+              {torchOn
+                ? <Zap size={20} strokeWidth={1.75} color={colors.white} fill={colors.white} />
+                : <ZapOff size={20} strokeWidth={1.75} color={colors.white} />}
+            </Pressable>
+
+            {/* Coach mark: once, at the frame's foot, inside it so it can never
+                overlap the title or the buttons. */}
+            {hint.visible && !showFrozen && (
+              <View style={styles.hintPill} pointerEvents="none" accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+                <Text style={styles.hintText}>Tap to focus. Pinch to zoom.</Text>
               </View>
+            )}
+
+            {showFrozen && <Image source={{ uri: frozenUri! }} style={StyleSheet.absoluteFill} resizeMode="cover" />}
+
+            <Animated.View style={[StyleSheet.absoluteFill, flashStyle]} pointerEvents="none" />
+
+            {scanning && !scanError && (
+              <ScanOverlay>
+                <ScanProgress stage={stage} usingServerCutout={usingServerCutout} onCancel={cancelScan} />
+              </ScanOverlay>
+            )}
+            {!!scanError && !extractorVisible && !processing && (
+              <ScanOverlay>
+                <ScanErrorCard kind={scanError} onAction={handleScanErrorAction} />
+              </ScanOverlay>
             )}
           </View>
         </GestureDetector>
+        )}
       </View>
 
-      {/* While a direct capture is scanning there is no PhotoExtractor on
-          screen to host the progress list, and the shutter can't be used
-          anyway — so the controls hand their space over to it rather than
-          leaving the wait unexplained. */}
-      {processing && !extractorVisible ? (
-        <View style={styles.controls}>
-          <View style={styles.scanProgressWrap}>
-            <ScanProgress stage={stage} usingServerCutout={usingServerCutout} />
-          </View>
-        </View>
-      ) : (
       <View style={styles.controls}>
-        <Text style={styles.hint}>Pinch to zoom · Tap frame to focus</Text>
-        <TouchableOpacity
-          testID="scan-type-word"
-          style={styles.typeWordBtn}
-          onPress={() => setTypeWordOpen(true)}
-          disabled={processing || capturing}
-          accessibilityRole="button"
-          accessibilityLabel="Type a word"
-          hitSlop={8}
-        >
-          <Text style={styles.typeWordText}>Type a word</Text>
-        </TouchableOpacity>
         <View style={styles.captureRow}>
-          {/* Gallery */}
           <TouchableOpacity
             style={styles.sideBtn}
             onPress={handleImportPhoto}
             accessibilityRole="button"
             accessibilityLabel="Import a photo from your library"
-            accessibilityState={{ disabled: processing || capturing }}
-            disabled={processing || capturing}
+            accessibilityState={{ disabled: busyShutter }}
+            disabled={busyShutter}
             activeOpacity={0.7}
           >
-            <View style={[styles.sideBtnCircle, (processing || capturing) && styles.sideBtnCircleDisabled]}>
-              <ImagePlus size={22} color={colors.inkMid} />
+            <View style={[styles.sideBtnCircle, busyShutter && styles.dim]}>
+              <ImagePlus size={24} strokeWidth={1.75} color={colors.inkDark} />
             </View>
-            <Text style={styles.sideBtnLabel}>Gallery</Text>
+            <Text style={styles.sideBtnLabel} maxFontSizeMultiplier={1.3}>Gallery</Text>
           </TouchableOpacity>
 
-          {/* Red shutter */}
-          <TouchableOpacity
-            style={[styles.captureButton, (processing || capturing) && styles.captureButtonDisabled]}
-            onPress={handleCapture}
-            accessibilityRole="button"
-            accessibilityLabel="Scan what the camera is pointing at"
-            accessibilityState={{ disabled: processing || capturing, busy: processing || capturing }}
-            disabled={processing || capturing}
-          >
-            <View style={styles.captureRing}>
-              <View style={styles.captureCore} />
-            </View>
-          </TouchableOpacity>
+          <Animated.View style={shutterStyle}>
+            <Pressable
+              testID="scan-shutter"
+              style={[styles.shutter, busyShutter && styles.dim]}
+              onPress={handleCapture}
+              onPressIn={() => { if (!reduced) shutterScale.value = withTiming(0.9, { duration: 80 }); }}
+              onPressOut={() => { shutterScale.value = withTiming(1, { duration: 120 }); }}
+              accessibilityRole="button"
+              accessibilityLabel="Take photo"
+              accessibilityState={{ disabled: busyShutter, busy: processing || capturing }}
+              disabled={busyShutter}
+            >
+              <View style={styles.shutterCore} />
+            </Pressable>
+          </Animated.View>
 
-          {/* Flash / torch toggle */}
           <TouchableOpacity
+            testID="scan-type-word"
             style={styles.sideBtn}
-            onPress={handleToggleTorch}
+            onPress={openTypeWord}
+            disabled={processing || capturing}
             accessibilityRole="button"
-            accessibilityLabel={torchOn ? 'Turn the flash off' : 'Turn the flash on'}
-            accessibilityState={{ selected: torchOn }}
+            accessibilityLabel="Type a word"
+            accessibilityState={{ disabled: processing || capturing }}
             activeOpacity={0.7}
           >
-            <View style={[styles.sideBtnCircle, torchOn && styles.sideBtnCircleActive]}>
-              {torchOn
-                ? <Zap size={22} color={colors.sageDark} fill={colors.sageDark} />
-                : <ZapOff size={22} color={colors.inkMid} />}
+            <View style={[styles.sideBtnCircle, (processing || capturing) && styles.dim]}>
+              <KeyboardIcon size={24} strokeWidth={1.75} color={colors.inkDark} />
             </View>
-            <Text style={[styles.sideBtnLabel, torchOn && styles.sideBtnLabelActive]}>
-              {torchOn ? 'Flash On' : 'Flash Off'}
-            </Text>
+            <Text style={styles.sideBtnLabel} maxFontSizeMultiplier={1.3}>Type a word</Text>
           </TouchableOpacity>
         </View>
       </View>
-      )}
 
       <PhotoExtractor
         imageUri={extractorVisible ? (importedAsset?.uri ?? null) : null}
@@ -1064,6 +1285,8 @@ export default function ScanScreen() {
         imageHeight={importedAsset?.height ?? 0}
         onClose={() => {
           setExtractorVisible(false);
+          releaseCarried();
+          setScanError(null);
           if (draftBeforeRetryRef.current) {
             // Cancelling a "Retry Extraction" restores the previous
             // successful draft rather than discarding it outright — only a
@@ -1077,15 +1300,12 @@ export default function ScanScreen() {
           }
         }}
         onExtract={handleExtractFromPhoto}
-        onCancelProcessing={() => {
-          const scan = scanAbortRef.current;
-          if (!scan) return;
-          scan.byUser = true;
-          scan.controller.abort();
-        }}
+        onCancelProcessing={cancelScan}
         processing={processing}
         stage={stage}
         usingServerCutout={usingServerCutout}
+        error={scanError}
+        onErrorAction={handleScanErrorAction}
       />
 
       {revealCrop && draft && (
@@ -1099,6 +1319,7 @@ export default function ScanScreen() {
       <DiscoveryReveal
         draft={revealCrop ? null : draft}
         onAdd={handleAdd}
+        saveError={saveError}
         onDiscard={handleDiscard}
         onRetryExtraction={handleRetryExtraction}
         onEditWord={handleEditWord}
@@ -1116,21 +1337,21 @@ export default function ScanScreen() {
           visible={typeWordOpen}
           language={language}
           userId={user.id}
-          onClose={() => setTypeWordOpen(false)}
-          onAdded={() => { setTypeWordOpen(false); setAddedCount(1); }}
+          cutout={typeCutout}
+          onClose={closeTypeWord}
+          onAdded={() => {
+            setTypeWordOpen(false);
+            // The typed card finished the scan that failed: nothing is held any more.
+            carriedRef.current = null;
+            setTypeCutout(null);
+            if (scanError) backToCamera();
+            announceAdded(1);
+          }}
         />
       )}
 
-      {addedCount > 0 && (
-        <Toast
-          message={addedCount === 1 ? '1 card added' : `${addedCount} cards added`}
-          bottom={insets.bottom + TAB_BAR_CLEARANCE}
-          actionLabel="View"
-          onAction={() => { setAddedCount(0); router.navigate('/(tabs)/collection'); }}
-          onDismiss={dismissAdded}
-        />
-      )}
-    </SafeAreaView>
+      {consentSheet}
+    </View>
   );
 }
 
@@ -1141,31 +1362,23 @@ const FRAME_RADIUS = 28;
 const FRAME_MARGIN = 16;
 // Viewfinder + capture-crop aspect ratio, expressed as width/height (3:4 portrait).
 const ASPECT_RATIO = 3 / 4;
-const SCAN_TIMEOUT_MS = 60_000;
+const SCAN_TIMEOUT_MS = 45_000;
 const RETICLE_SIZE = 72;
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.sky, paddingBottom: TAB_BAR_CLEARANCE },
+  container: { flex: 1, backgroundColor: colors.sky },
 
-  header: {
-    alignItems: 'center',
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.lg,
-    paddingBottom: spacing.sm,
-  },
-  prompt: { fontSize: 20, fontFamily: fonts.display, color: colors.inkDark, letterSpacing: -0.3 },
-  promptSub: { fontSize: 13, fontFamily: fonts.text, color: colors.terra, marginTop: 2, },
+  // The title sits in the top safe area, above the frame's own margin, so the
+  // two can't touch (baseline 06b).
+  header: { paddingHorizontal: 20, paddingTop: spacing.sm, paddingBottom: spacing.sm, minHeight: 52, justifyContent: 'center' },
+  title: { ...type.title },
 
   cameraArea: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   cameraFrame: {
     borderRadius: FRAME_RADIUS,
     overflow: 'hidden',
     backgroundColor: colors.black,
-    ...shadows.card,
-    shadowOpacity: 0.22,
-    shadowRadius: 20,
-    shadowOffset: { width: 0, height: 10 },
-    elevation: 10,
+    ...e2,
   },
 
   gridOverlay: { ...StyleSheet.absoluteFillObject },
@@ -1196,81 +1409,48 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: radii.full,
   },
-  zoomPillText: { color: colors.white, fontSize: 12, fontFamily: fonts.display,},
+  zoomPillText: { color: colors.white, fontSize: 12, fontFamily: fonts.mono },
 
-  processingOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.62)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 12,
+  torch: {
+    position: 'absolute',
+    top: CORNER_INSET + CORNER_SIZE + 4,
+    right: CORNER_INSET - 4,
+    width: 44, height: 44, borderRadius: 22,
+    backgroundColor: 'rgba(51,41,42,0.55)',
+    alignItems: 'center', justifyContent: 'center',
   },
-
-  controls: {
-    alignItems: 'center',
-    paddingTop: spacing.md,
-    paddingBottom: spacing.lg,
-    gap: spacing.md,
-  },
-  hint: { color: colors.inkLight, fontSize: 13, fontFamily: fonts.text,},
-  scanProgressWrap: { alignSelf: 'stretch', paddingHorizontal: spacing.lg },
-
-  captureRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.xxl,
-  },
-  sideBtn: {
-    alignItems: 'center',
-    gap: 6,
-    width: 64,
-  },
-  sideBtnCircle: {
-    width: 52,
-    height: 52,
+  hintPill: {
+    position: 'absolute',
+    bottom: CORNER_INSET + CORNER_SIZE + 6,
+    alignSelf: 'center',
+    backgroundColor: 'rgba(51,41,42,0.72)',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
     borderRadius: radii.full,
-    backgroundColor: colors.card,
-    alignItems: 'center',
-    justifyContent: 'center',
-    ...shadows.card,
   },
-  sideBtnCircleActive: {
-    backgroundColor: colors.sageLight,
-  },
-  sideBtnCircleDisabled: { opacity: 0.45 },
-  typeWordBtn: { alignSelf: 'center', paddingVertical: 6, paddingHorizontal: spacing.md },
-  typeWordText: { fontSize: 14, fontFamily: fonts.display, color: colors.terra },
-  sideBtnLabel: { fontSize: 11, fontFamily: fonts.display, color: colors.inkLight },
-  sideBtnLabelActive: { color: colors.sageDark },
+  hintText: { color: colors.white, fontSize: 14, lineHeight: 20, fontFamily: fonts.text },
 
-  captureButton: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-    ...shadows.button,
+  controls: { alignItems: 'center', paddingTop: spacing.md, paddingBottom: spacing.sm },
+  captureRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'center', gap: spacing.md },
+  sideBtn: { alignItems: 'center', gap: 6, width: 96, paddingTop: 10 },
+  sideBtnCircle: {
+    width: 52, height: 52, borderRadius: 26,
+    backgroundColor: colors.card,
+    alignItems: 'center', justifyContent: 'center',
+    ...e1,
   },
-  captureButtonDisabled: { opacity: 0.45 },
-  captureRing: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    borderWidth: 3,
-    borderColor: colors.card,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.error,
+  sideBtnLabel: { fontSize: 14, lineHeight: 18, fontFamily: fonts.display, color: colors.inkDark, textAlign: 'center' },
+  dim: { opacity: 0.45 },
+
+  // 72pt shutter: a white ring with a rose core. Rose solid is reserved for the
+  // camera (C-look 1).
+  shutter: {
+    width: 72, height: 72, borderRadius: 36,
+    backgroundColor: colors.white,
+    alignItems: 'center', justifyContent: 'center',
+    ...e2,
   },
-  captureCore: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: colors.error,
-    borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.25)',
-  },
+  shutterCore: { width: 58, height: 58, borderRadius: 29, backgroundColor: colors.terra },
 
   permissionContainer: {
     flex: 1,
@@ -1280,14 +1460,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xl,
     paddingBottom: TAB_BAR_CLEARANCE,
   },
-  permissionTitle: { fontSize: 22, fontFamily: fonts.display, color: colors.inkDark, marginBottom: spacing.sm, textAlign: 'center', },
-  permissionSubtitle: { fontSize: 14, fontFamily: fonts.text, color: colors.inkLight, textAlign: 'center', lineHeight: 22, marginBottom: spacing.xl, },
-  permissionButton: {
-    backgroundColor: colors.terra,
-    borderRadius: radii.lg,
-    paddingVertical: 14,
-    paddingHorizontal: spacing.xl,
-    ...shadows.button,
-  },
-  permissionButtonText: { color: colors.card, fontSize: 16, fontFamily: fonts.display,},
+  permissionTitle: { ...type.h2, marginBottom: spacing.sm, textAlign: 'center' },
+  permissionSubtitle: { ...type.body, textAlign: 'center', marginBottom: spacing.lg, maxWidth: 320 },
+  permissionButton: { alignSelf: 'stretch' },
 });

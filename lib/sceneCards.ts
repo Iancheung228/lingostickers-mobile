@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabase';
 import { getFunctionErrorMessage } from '@/lib/functionError';
+import { friendlyError } from '@/lib/friendlyError';
 import { Language } from '@/lib/types';
 
 /**
@@ -41,8 +42,8 @@ export async function fetchSceneWords(
   const { data, error } = await supabase.functions.invoke('scene-words', {
     body: { scene: `data:image/jpeg;base64,${sceneBase64}`, promptId, language, avoid },
   });
-  if (error) throw new Error(await getFunctionErrorMessage(error));
-  if (data?.error) throw new Error(String(data.error));
+  if (error) throw new Error(await friendlyError(error, "Couldn't look at your photo. Try again."));
+  if (data?.error) throw new Error(await friendlyError(new Error(String(data.error)), "Couldn't look at your photo. Try again."));
   return Array.isArray(data?.candidates) ? data.candidates : [];
 }
 
