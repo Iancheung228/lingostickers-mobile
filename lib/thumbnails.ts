@@ -37,6 +37,23 @@ export function thumbPathFor(imagePath: string): string {
 }
 
 /**
+ * True when the sticker is a transparent cutout, which is the only thing the
+ * Calendar draws as "the day" (never a full rectangular photo). Decided by the
+ * file extension: device cutouts upload `.png` (lib/cutout.ts), server cutouts
+ * are `.png` (create-sticker validatePrecutPath / encodePng). Rectangular
+ * images are `.jpg`: create-sticker uploads the original jpeg when background
+ * removal fails, and scene cards are `${id}-scene.jpg` (lib/sceneCards.ts).
+ */
+export function isCutout(sticker: Pick<Sticker, 'image_path'>): boolean {
+  return !!sticker.image_path && /\.png$/i.test(sticker.image_path);
+}
+
+/** A day's icon: its first cutout find, or null when none of its finds is a cutout. */
+export function firstCutout(list: readonly Sticker[] | undefined): Sticker | null {
+  return list?.find(isCutout) ?? null;
+}
+
+/**
  * The path a list surface should sign, load and cache under. Use the same
  * value for all three: expo-image caches by cacheKey, so caching a thumbnail
  * under image_path would later show it, blurry, on the full-size study card.

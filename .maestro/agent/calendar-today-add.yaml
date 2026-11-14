@@ -1,0 +1,36 @@
+# Today's "+" on the Calendar, on the staging demo account (no sticker dated today).
+# Checks: the "+" shows on today's cell; selecting another day moves the box;
+# the "+" opens the Scan screen. Never takes a photo or agrees to consent.
+# Credentials come from .maestro/calendar-demo.env, passed with -e by the caller.
+appId: ${APP_ID}   # set by the caller: the installed dev build
+---
+- runFlow: ../sign-in.yaml
+
+- tapOn:
+    id: "tab-calendar"
+- extendedWaitUntil:
+    visible: "Previous month"
+    timeout: 20000
+- waitForAnimationToEnd:
+    timeout: 2000
+- assertVisible:
+    id: "calendar-today-add"
+- takeScreenshot: today-empty
+
+# Tap a past day that has a sticker: that day gets the box, today does not.
+- tapOn:
+    id: "calendar-day-2026-11-07"
+- waitForAnimationToEnd:
+    timeout: 1000
+- assertVisible:
+    id: "calendar-today-add"
+- takeScreenshot: other-selected
+
+# The "+" opens the Scan screen (camera, or its AI consent sheet if not yet agreed).
+- tapOn:
+    id: "calendar-today-add"
+- extendedWaitUntil:
+    visible: "What did you find\\?"
+    timeout: 15000
+- assertVisible: "What did you find\\?"
+- takeScreenshot: scan-opened

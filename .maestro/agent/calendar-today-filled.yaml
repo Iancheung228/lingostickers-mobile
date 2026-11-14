@@ -1,0 +1,16 @@
+# After a sticker is dated today: today's cell shows the sticker and no "+".
+# Run after the add-today script. Credentials come from .maestro/calendar-demo.env.
+appId: ${APP_ID}   # set by the caller: the installed dev build
+---
+- runFlow: ../sign-in.yaml
+
+- tapOn:
+    id: "tab-calendar"
+- extendedWaitUntil:
+    visible: "Previous month"
+    timeout: 20000
+- waitForAnimationToEnd:
+    timeout: 2000
+- takeScreenshot: today-filled
+- assertNotVisible:
+    id: "calendar-today-add"

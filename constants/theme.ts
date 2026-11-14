@@ -30,6 +30,9 @@ export const colors = {
   inkMid:     '#4A4340', // warm charcoal — body text
   inkLight:   '#7E5559', // muted rose — captions, placeholders (5.76 on cream, 6.30 on white)
   inkFaint:   '#C4A9AB', // disabled and decoration ONLY — never text (2.0:1)
+  rule:       '#E6DBD0', // hairlines between calendar weeks (decoration only)
+  bandTrack:  'rgba(102, 43, 49, 0.12)', // segmented-control track on the rose band (maroon at 12%)
+  inkQuiet:   '#756E69', // neutral warm grey for secondary text where rose would add colour (4.6 on cream, 5.0 on white)
 
   // Journal / minimal-calendar redesign — neutral warm-black text + the
   // single accent, which is now the same deep rose as the rest of the app.

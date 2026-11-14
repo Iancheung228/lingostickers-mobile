@@ -1,0 +1,99 @@
+# Calendar visual check on the staging demo account (calendar-demo@tabi.test).
+# LOOK ONLY: no scan, grade, edit or delete. Credentials come from
+# .maestro/calendar-demo.env (MAESTRO_EMAIL / MAESTRO_PASSWORD), passed by the
+# caller with -e, never from qa.env. The sign-in subflow clears app state first,
+# so any previously signed-in account is signed out.
+appId: ${APP_ID}   # set by the caller: the installed dev build
+---
+- runFlow: ../sign-in.yaml
+
+# Calendar tab, November. Mid-reveal, then settled after ~2s.
+- tapOn:
+    id: "tab-calendar"
+- extendedWaitUntil:
+    visible: "Previous month"
+    timeout: 20000
+- takeScreenshot: demo-nov-mid
+- waitForAnimationToEnd:
+    timeout: 2000
+- takeScreenshot: demo-nov-settled
+
+# Previous month: October, shot immediately, then settled.
+- tapOn:
+    id: "calendar-prev-month"
+- takeScreenshot: demo-oct-mid
+- waitForAnimationToEnd:
+    timeout: 2000
+- assertVisible: "October 2026"
+- takeScreenshot: demo-oct-settled
+
+# Previous again: September, settled.
+- tapOn:
+    id: "calendar-prev-month"
+- waitForAnimationToEnd:
+    timeout: 2000
+- assertVisible: "September 2026"
+- takeScreenshot: demo-sep-settled
+
+# Select a September day that has a sticker: outline plus summary row.
+- tapOn:
+    text: "September (0?[1-9]|[12][0-9]|3[01]), [1-9][0-9]* stickers?.*"
+- waitForAnimationToEnd:
+    timeout: 800
+- assertVisible:
+    id: "calendar-selected-day"
+- takeScreenshot: demo-selected
+
+# Year view: Aug-Nov mosaics, Jan-Jul empty grids.
+- tapOn:
+    id: "calendar-mode-year"
+- extendedWaitUntil:
+    visible: "Previous year"
+    timeout: 10000
+- waitForAnimationToEnd:
+    timeout: 2000
+- takeScreenshot: demo-year
+
+# Tap the August mini month: back to Month mode on August.
+- tapOn:
+    id: "calendar-year-month-2026-08"
+- extendedWaitUntil:
+    visible: "August 2026"
+    timeout: 10000
+- waitForAnimationToEnd:
+    timeout: 2000
+- takeScreenshot: demo-aug-from-year
+
+# Month segment, then Year segment once more.
+- tapOn:
+    id: "calendar-mode-month"
+- waitForAnimationToEnd:
+    timeout: 1500
+- takeScreenshot: demo-aug-month
+- tapOn:
+    id: "calendar-mode-year"
+- extendedWaitUntil:
+    visible: "Previous year"
+    timeout: 10000
+- waitForAnimationToEnd:
+    timeout: 2000
+- takeScreenshot: demo-year-again
+
+# Sign out: Profile tab > Log Out > confirm. Look-only, nothing else.
+- tapOn:
+    id: "tab-profile"
+- scrollUntilVisible:
+    element: "Log Out"
+    direction: DOWN
+    timeout: 30000
+- tapOn: "Log Out"
+- extendedWaitUntil:
+    visible: "Are you sure you want to log out.*"
+    timeout: 10000
+- tapOn:
+    text: "Log Out"
+    index: 1
+- extendedWaitUntil:
+    visible: "WELCOME BACK"
+    timeout: 20000
+- takeScreenshot: demo-signed-out

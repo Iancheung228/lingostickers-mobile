@@ -13,10 +13,12 @@ appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
     timeout: 800
 - takeScreenshot: 05a-calendar-month
 
-# The seeded sticker sits on the 12th (its cell label is "12, 1 sticker").
-- tapOn: "12, 1 sticker.*"
+# The seeded sticker sits on the 13th (its cell label is "November 13, 1 sticker").
+- tapOn: "November 13, 1 sticker.*"
+- tapOn:
+    id: "calendar-selected-day"
 - extendedWaitUntil:
-    visible: "Thursday, November 12, 2026"
+    visible: ".*November 13.*"
     timeout: 15000
 - waitForAnimationToEnd:
     timeout: 800

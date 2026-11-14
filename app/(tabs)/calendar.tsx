@@ -1,43 +1,44 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { usePendingDeletes } from '@/components/PendingDeleteProvider';
-import { View, Text, Pressable, ScrollView, StyleSheet, useWindowDimensions } from 'react-native';
+import { AppState, View, Text, Pressable, ScrollView, StyleSheet, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Image } from 'expo-image';
 import { router, useFocusEffect } from 'expo-router';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import Animated, { useSharedValue, useAnimatedStyle, withTiming, withSpring, Easing, runOnJS } from 'react-native-reanimated';
+import Animated, { useSharedValue, useAnimatedStyle, withTiming, withSpring, runOnJS } from 'react-native-reanimated';
 import { ChevronLeft, ChevronRight, RotateCcw } from 'lucide-react-native';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
 import { useSignedUrls } from '@/hooks/useSignedUrls';
-import { listImagePath } from '@/lib/thumbnails';
-import StickerImageFallback from '@/components/StickerImageFallback';
+import { listImagePath, firstCutout } from '@/lib/thumbnails';
+import Thumb from '@/components/calendar/Thumb';
+import DayCell, { cellHeightFor } from '@/components/calendar/DayCell';
+import YearView from '@/components/calendar/YearView';
 import { dueToday, dateKeyOf } from '@/lib/review';
 import { limitNewCards } from '@/lib/studyQueue';
 import { newCardsIntroducedToday, useStudyPrefs } from '@/lib/studyPrefs';
 import StudySessionHost from '@/components/StudySessionHost';
-import Button from '@/components/ui/Button';
 import { Sticker } from '@/lib/types';
-import { colors, e1, fonts, radii, type, stickerShadow, MIN_TAP } from '@/constants/theme';
+import { colors, fonts, radii, type, stickerShadow, MIN_TAP } from '@/constants/theme';
 import RoseBand, { BAND_RADIUS } from '@/components/RoseBand';
 import InlineError from '@/components/ui/InlineError';
 import { TAB_BAR_CLEARANCE } from '@/constants/tabBar';
 import { haptic } from '@/lib/haptics';
-import { dur, ease, spring, useMotion } from '@/lib/motion';
+import { calendarFlipDelay, dur, ease, spring, useMotion } from '@/lib/motion';
 
 // Sunday-start week (the rest of the app doesn't otherwise commit to one).
 const WEEKDAY_LABELS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 const MONTH_FORMAT = new Intl.DateTimeFormat('en-US', { month: 'long' });
-const DAY_FORMAT = new Intl.DateTimeFormat('en-US', { weekday: 'short', day: 'numeric', month: 'long' });
 const A11Y_DAY_FORMAT = new Intl.DateTimeFormat('en-US', { day: 'numeric', month: 'long' });
+const DAY_FORMAT = new Intl.DateTimeFormat('en-US', { weekday: 'short', day: 'numeric', month: 'long' });
 
-// C-look 4 "Calendar cell": 52 tall (58 after the final review, so the badge clears the thumbnail), number in mono 13, a find shows a 20pt
-// thumbnail below, a review shows a 6pt dot. The month card overlaps the 132pt
-// band by 20.
-const GUTTER = 20;
-const CARD_PAD_H = 16;
-const CELL_HEIGHT = 58;
-const THUMB = 20;
+// Quiet grid: no card, the month sits on the page with a 16pt gutter; the
+// cell height is derived from the sticker size (components/calendar/DayCell.tsx).
+const GUTTER = 16;
+// Stickers take ~68% of a column (35pt at 390 wide), leaving air between them as in the reference.
+const STICKER_FRACTION = 0.68;
+const GRACE_MS = 3000;
+
+type Mode = 'month' | 'year';
 
 const dateKey = (iso: string) => dateKeyOf(new Date(iso));
 
@@ -61,23 +62,6 @@ function buildMonthRows(monthDate: Date): MonthCell[][] {
   return rows;
 }
 
-function Thumb({ sticker, size, url }: { sticker: Sticker; size: number; url: string | null }) {
-  return (
-    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
-      {url ? (
-        <Image
-          source={{ uri: url, cacheKey: listImagePath(sticker) ?? undefined }}
-          cachePolicy="memory-disk"
-          style={{ width: '100%', height: '100%' }}
-          contentFit="contain"
-        />
-      ) : (
-        <StickerImageFallback sticker={sticker} size={Math.round(size * 0.55)} />
-      )}
-    </View>
-  );
-}
-
 export default function CalendarScreen() {
   const { user } = useAuth();
   const [fetchedStickers, setStickers] = useState<Sticker[]>([]);
@@ -91,6 +75,23 @@ export default function CalendarScreen() {
   const [loaded, setLoaded] = useState(false);
   const [loadError, setLoadError] = useState(false);
   const [viewedMonth, setViewedMonth] = useState(() => new Date());
+  const [mode, setMode] = useState<Mode>('month');
+  const [yearShown, setYearShown] = useState(() => new Date().getFullYear());
+  // Bumped on every month change; it re-keys the month's stickers so each
+  // change starts a fresh flip cascade and cancels the old one by unmounting.
+  // Selecting a day or a refetch never touches it.
+  const [cascadeId, setCascadeId] = useState(0);
+  // If a day's signed URL never arrives its sticker still shows (fallback)
+  // after this grace; until then it waits, so it flips in with its image.
+  const [urlGrace, setUrlGrace] = useState(false);
+  // Re-read on focus and when the app returns to the foreground, so the "+" and
+  // the future-day styling stay right after midnight.
+  const [todayKey, setTodayKey] = useState(() => dateKeyOf(new Date()));
+  const refreshToday = useCallback(() => setTodayKey(dateKeyOf(new Date())), []);
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', st => { if (st === 'active') refreshToday(); });
+    return () => sub.remove();
+  }, [refreshToday]);
   const [selectedKey, setSelectedKey] = useState(() => dateKeyOf(new Date()));
   const [reviewQueue, setReviewQueue] = useState<Sticker[] | null>(null);
   const prefs = useStudyPrefs();
@@ -98,7 +99,9 @@ export default function CalendarScreen() {
 
   const insets = useSafeAreaInsets();
   const { width: screenWidth } = useWindowDimensions();
-  const pageWidth = screenWidth - GUTTER * 2 - CARD_PAD_H * 2;
+  const pageWidth = screenWidth - GUTTER * 2;
+  const stk = Math.round((pageWidth / 7) * STICKER_FRACTION);
+  const cellH = cellHeightFor(stk);
 
   const fetchStickers = useCallback(async () => {
     if (!user) return;
@@ -116,7 +119,13 @@ export default function CalendarScreen() {
     setLoaded(true);
   }, [user]);
 
-  useFocusEffect(useCallback(() => { fetchStickers(); }, [fetchStickers]));
+  useFocusEffect(useCallback(() => { fetchStickers(); refreshToday(); }, [fetchStickers, refreshToday]));
+
+  useEffect(() => {
+    if (!loaded) return;
+    const t = setTimeout(() => setUrlGrace(true), GRACE_MS);
+    return () => clearTimeout(t);
+  }, [loaded]);
 
   // Finds by the day the card was made (an import of an old photo is still
   // today's find); reviews by the day of each card's last review. Only
@@ -144,16 +153,18 @@ export default function CalendarScreen() {
 
   // One batched sign request for every thumbnail (the first sticker of each
   // day) instead of one per cell: see hooks/useSignedUrls.ts.
-  const dayIconUrls = useSignedUrls(useMemo(
-    () => Array.from(stickersByDate.values(), list => listImagePath(list[0])),
-    [stickersByDate],
-  ));
+  const dayIconUrls = useSignedUrls(useMemo(() => {
+    // Only cutouts are drawn as day icons; the selected day's summary thumbnail
+    // falls back to its first find when it has no cutout, so sign that too.
+    const paths = Array.from(stickersByDate.values(), list => { const c = firstCutout(list); return c ? listImagePath(c) : null; });
+    const sel = stickersByDate.get(selectedKey);
+    if (sel && !firstCutout(sel)) paths.push(listImagePath(sel[0]));
+    return paths;
+  }, [stickersByDate, selectedKey]));
 
-  const todayKey = useMemo(() => dateKeyOf(new Date()), []);
   // The CTA starts exactly the session Home would: after the new-card limit.
   const due = useMemo(
     () => limitNewCards(dueToday(stickers), prefs.newCardsPerDay, newCardsIntroducedToday()),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [stickers, prefs.newCardsPerDay],
   );
 
@@ -166,9 +177,44 @@ export default function CalendarScreen() {
   const dragX = useSharedValue(0);
   const isTransitioning = useSharedValue(false);
 
-  const commitSwipe = useCallback((direction: 1 | -1) => {
-    setViewedMonth(m => new Date(m.getFullYear(), m.getMonth() + direction, 1));
+  // The selection follows the visible month: today if it is in that month,
+  // else the latest day with a find, else the 1st. Silent (no haptic) and it
+  // does not touch cascadeId, so it never replays the flip.
+  const latest = useRef({ stickersByDate, todayKey, viewedMonth });
+  latest.current = { stickersByDate, todayKey, viewedMonth };
+  const followMonth = useCallback((month: Date) => {
+    const { stickersByDate: byDate, todayKey: today } = latest.current;
+    const y = month.getFullYear();
+    const m = month.getMonth();
+    if (today.startsWith(`${y}-${String(m + 1).padStart(2, '0')}-`)) { setSelectedKey(today); return; }
+    for (let d = new Date(y, m + 1, 0).getDate(); d >= 1; d--) {
+      const key = dateKeyOf(new Date(y, m, d));
+      if (byDate.has(key)) { setSelectedKey(key); return; }
+    }
+    setSelectedKey(dateKeyOf(new Date(y, m, 1)));
   }, []);
+
+  const commitSwipe = useCallback((direction: 1 | -1) => {
+    const m = latest.current.viewedMonth;
+    const next = new Date(m.getFullYear(), m.getMonth() + direction, 1);
+    followMonth(next);
+    setViewedMonth(next);
+    setCascadeId(n => n + 1);
+  }, [followMonth]);
+  const pickMonth = useCallback((month: Date) => {
+    haptic.select();
+    const next = new Date(month.getFullYear(), month.getMonth(), 1);
+    followMonth(next);
+    setViewedMonth(next);
+    setMode('month');
+    setCascadeId(n => n + 1);
+  }, [followMonth]);
+  const setModeTo = useCallback((next: Mode) => {
+    if (next === mode) return;
+    haptic.select();
+    if (next === 'year') setYearShown(viewedMonth.getFullYear());
+    setMode(next);
+  }, [mode, viewedMonth]);
   const tickHaptic = useCallback(() => haptic.select(), []);
 
   useEffect(() => {
@@ -217,52 +263,52 @@ export default function CalendarScreen() {
 
   const trackStyle = useAnimatedStyle(() => ({ transform: [{ translateX: -pageWidth + dragX.value }] }));
 
-  const selectDay = (key: string) => { haptic.select(); setSelectedKey(key); };
+  const selectDay = useCallback((key: string) => { haptic.select(); setSelectedKey(key); }, []);
 
-  const renderMonthPage = (rows: MonthCell[][], pageKey: string) => (
-    <View style={{ width: pageWidth }} key={pageKey}>
-      {rows.map((row, rowIdx) => (
-        <View key={rowIdx} style={styles.gridRow}>
-          {row.map((cell, i) => {
-            if (!cell) return <View key={i} style={styles.dayCell} accessible={false} importantForAccessibility="no-hide-descendants" />;
-            const finds = stickersByDate.get(cell.key) ?? [];
-            const reviewed = reviewsByDate.get(cell.key) ?? 0;
-            const isToday = cell.key === todayKey;
-            const isSelected = cell.key === selectedKey;
-            const parts = [A11Y_DAY_FORMAT.format(cell.date)];
-            if (isToday) parts.push('today');
-            parts.push(finds.length ? `${finds.length} sticker${finds.length === 1 ? '' : 's'}` : 'nothing found');
-            if (reviewed) parts.push(`${reviewed} reviewed`);
-            return (
-              <Pressable
-                key={i}
-                testID={`calendar-day-${cell.key}`}
-                style={styles.dayCell}
-                onPress={() => selectDay(cell.key)}
-                accessibilityRole="button"
-                accessibilityLabel={parts.join(', ')}
-                accessibilityState={{ selected: isSelected }}
-              >
-                {isSelected && <View style={styles.selectedBox} pointerEvents="none" />}
-                <View style={[styles.numWrap, isToday && styles.numToday]}>
-                  <Text style={[styles.dayNumber, isToday && styles.dayNumberToday]} maxFontSizeMultiplier={1.15}>{cell.day}</Text>
-                </View>
-                {finds.length > 0 ? (
-                  <View style={styles.thumbWrap}>
-                    <Thumb sticker={finds[0]} size={THUMB} url={dayIconUrls.get(listImagePath(finds[0]) ?? '') ?? null} />
-                  </View>
-                ) : null}
-                {reviewed > 0 && <View style={styles.dot} pointerEvents="none" />}
-              </Pressable>
-            );
-          })}
-        </View>
-      ))}
-    </View>
-  );
+  const renderMonthPage = (rows: MonthCell[][], pageKey: string, live: boolean) => {
+    const firstCol = rows[0].findIndex(Boolean);
+    return (
+      <View style={{ width: pageWidth }} key={pageKey}>
+        {rows.map((row, rowIdx) => (
+          <View key={rowIdx} style={styles.gridRow}>
+            <View style={styles.rowRule} pointerEvents="none" />
+            {row.map((cell, i) => {
+              if (!cell) return <View key={i} style={[styles.blankCell, { height: cellH }]} accessible={false} importantForAccessibility="no-hide-descendants" />;
+              const finds = stickersByDate.get(cell.key) ?? [];
+              const first = firstCutout(finds);
+              const url = first ? dayIconUrls.get(listImagePath(first) ?? '') ?? null : null;
+              return (
+                <DayCell
+                  key={`${live ? cascadeId : 'x'}-${cell.key}`}
+                  dayKey={cell.key}
+                  day={cell.day}
+                  date={cell.date}
+                  stk={stk}
+                  cellH={cellH}
+                  findCount={finds.length}
+                  firstFind={first}
+                  url={url}
+                  reviewed={reviewsByDate.get(cell.key) ?? 0}
+                  isToday={cell.key === todayKey}
+                  isFuture={cell.key > todayKey}
+                  isSelected={cell.key === selectedKey}
+                  live={live}
+                  imageReady={url !== null || urlGrace}
+                  flipDelayMs={calendarFlipDelay(rowIdx, i, firstCol)}
+                  reduced={reduced}
+                  onSelect={selectDay}
+                />
+              );
+            })}
+          </View>
+        ))}
+      </View>
+    );
+  };
 
   const selectedDate = useMemo(() => new Date(`${selectedKey}T00:00:00`), [selectedKey]);
   const selFinds = stickersByDate.get(selectedKey) ?? [];
+  const selIcon = firstCutout(selFinds) ?? selFinds[0];
   const selReviewed = reviewsByDate.get(selectedKey) ?? 0;
   const summary = selFinds.length
     ? `${selFinds.length} found${selReviewed ? ` · ${selReviewed} reviewed` : ''}`
@@ -273,13 +319,68 @@ export default function CalendarScreen() {
     return false;
   }, [stickersByDate, viewedMonth]);
 
+  const now = new Date(`${todayKey}T00:00:00`);
+  const awayFromToday = mode === 'month'
+    ? viewedMonth.getFullYear() !== now.getFullYear() || viewedMonth.getMonth() !== now.getMonth()
+    : yearShown !== now.getFullYear();
+  const goToday = () => {
+    if (mode === 'year') { haptic.select(); setYearShown(now.getFullYear()); return; }
+    pickMonth(now);
+  };
+
+  // Month | Year lives in the band's right-hand slot, so the page below is only
+  // the title row, the weekday letters and the grid.
+  const modeSwitch = (
+    <View style={styles.segment} accessibilityRole="tablist">
+      {(['month', 'year'] as const).map(m => (
+        <Pressable
+          key={m}
+          testID={`calendar-mode-${m}`}
+          onPress={() => setModeTo(m)}
+          style={[styles.segmentItem, mode === m && styles.segmentItemOn]}
+          hitSlop={{ top: 6, bottom: 6 }}
+          accessibilityRole="tab"
+          accessibilityLabel={m === 'month' ? 'Month view' : 'Year view'}
+          accessibilityState={{ selected: mode === m }}
+        >
+          <Text style={[styles.segmentText, mode === m && styles.segmentTextOn]} maxFontSizeMultiplier={1.2}>
+            {m === 'month' ? 'Month' : 'Year'}
+          </Text>
+        </Pressable>
+      ))}
+    </View>
+  );
+
+  const titleRow = (title: ReactNode, prev: () => void, next: () => void, ids: [string, string], labels: [string, string]) => (
+    <View style={styles.titleRow}>
+      <Text style={styles.title} accessibilityRole="header" numberOfLines={1} maxFontSizeMultiplier={1.3}>{title}</Text>
+      {awayFromToday && (
+        <Pressable
+          testID="calendar-today"
+          onPress={goToday}
+          style={styles.todayLink}
+          accessibilityRole="button"
+          accessibilityLabel={mode === 'month' ? 'Go to this month' : 'Go to this year'}
+        >
+          <Text style={styles.todayLinkText} maxFontSizeMultiplier={1.3}>Today</Text>
+        </Pressable>
+      )}
+      <Pressable onPress={prev} style={styles.chevron} testID={ids[0]} accessibilityRole="button" accessibilityLabel={labels[0]}>
+        <ChevronLeft size={22} strokeWidth={1.75} color={colors.inkMid} />
+      </Pressable>
+      <Pressable onPress={next} style={styles.chevron} testID={ids[1]} accessibilityRole="button" accessibilityLabel={labels[1]}>
+        <ChevronRight size={22} strokeWidth={1.75} color={colors.inkMid} />
+      </Pressable>
+    </View>
+  );
+
   return (
     <View style={styles.container}>
-      <RoseBand title="Calendar" />
+      <RoseBand title="Calendar" right={modeSwitch} />
 
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={{ paddingBottom: insets.bottom + TAB_BAR_CLEARANCE + 24 }}
+        contentContainerStyle={{ paddingTop: BAND_RADIUS + 10, paddingBottom: insets.bottom + TAB_BAR_CLEARANCE + 16 }}
         showsVerticalScrollIndicator={false}
       >
         {loadError && (
@@ -287,87 +388,95 @@ export default function CalendarScreen() {
             <InlineError message="Couldn't load your calendar." onRetry={fetchStickers} />
           </View>
         )}
-        {/* ── The month card, lifted into the band ── */}
-        <View style={styles.gridCard}>
-          <View style={styles.monthNav}>
-            <Pressable
-              onPress={() => slideTo(-1)}
-              style={styles.chevron}
-              testID="calendar-prev-month"
-              accessibilityRole="button"
-              accessibilityLabel="Previous month"
-            >
-              <ChevronLeft size={24} strokeWidth={1.75} color={colors.inkDark} />
-            </Pressable>
-            <Text style={styles.monthLabel} accessibilityRole="header" maxFontSizeMultiplier={1.3}>
-              {MONTH_FORMAT.format(viewedMonth)} {viewedMonth.getFullYear()}
-            </Text>
-            <Pressable
-              onPress={() => slideTo(1)}
-              style={styles.chevron}
-              testID="calendar-next-month"
-              accessibilityRole="button"
-              accessibilityLabel="Next month"
-            >
-              <ChevronRight size={24} strokeWidth={1.75} color={colors.inkDark} />
-            </Pressable>
-          </View>
+        <View style={styles.page}>
+          {/* Month mode stays mounted (hidden) while Year is up, so flipping back with the
+              toggle doesn't replay the cascade; only a real month change re-keys the cells. */}
+          <View style={mode === 'month' ? undefined : styles.hidden}>
+            {titleRow(
+              <>{MONTH_FORMAT.format(viewedMonth)} <Text style={styles.titleYear}>{viewedMonth.getFullYear()}</Text></>,
+              () => slideTo(-1), () => slideTo(1),
+              ['calendar-prev-month', 'calendar-next-month'], ['Previous month', 'Next month'],
+            )}
 
-          <View style={styles.weekdayRow} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-            {WEEKDAY_LABELS.map((label, i) => (
-              <View key={i} style={styles.weekdayCell}>
-                <Text style={styles.weekdayText} maxFontSizeMultiplier={1.15}>{label}</Text>
-              </View>
-            ))}
-          </View>
-
-          <GestureDetector gesture={monthSwipeGesture}>
-            <View style={[styles.monthViewport, { width: pageWidth, height: CELL_HEIGHT * currentRows.length }]}>
-              <Animated.View style={[styles.monthTrack, { width: pageWidth * 3 }, trackStyle]}>
-                {renderMonthPage(prevRows, 'prev')}
-                {renderMonthPage(currentRows, 'cur')}
-                {renderMonthPage(nextRows, 'next')}
-              </Animated.View>
+            <View style={styles.weekdayRow} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+              {WEEKDAY_LABELS.map((label, i) => (
+                <View key={i} style={styles.weekdayCell}>
+                  <Text style={styles.weekdayText} maxFontSizeMultiplier={1.15}>{label}</Text>
+                </View>
+              ))}
             </View>
-          </GestureDetector>
-          {loaded && !loadError && !monthHasAnything && (
+
+            <GestureDetector gesture={monthSwipeGesture}>
+              <View style={[styles.monthViewport, { width: pageWidth, height: cellH * currentRows.length }]}>
+                <Animated.View style={[styles.monthTrack, { width: pageWidth * 3 }, trackStyle]}>
+                  {renderMonthPage(prevRows, 'prev', false)}
+                  {renderMonthPage(currentRows, 'cur', true)}
+                  {renderMonthPage(nextRows, 'next', false)}
+                </Animated.View>
+              </View>
+            </GestureDetector>
+            <View style={styles.rule} />
+          </View>
+          {mode === 'year' && (
+            <>
+              {titleRow(
+                String(yearShown),
+                () => { haptic.select(); setYearShown(y => y - 1); },
+                () => { haptic.select(); setYearShown(y => y + 1); },
+                ['calendar-prev-year', 'calendar-next-year'], ['Previous year', 'Next year'],
+              )}
+              <YearView
+                year={yearShown}
+                stickersByDate={stickersByDate}
+                iconUrls={dayIconUrls}
+                todayKey={todayKey}
+                urlGrace={urlGrace}
+                shownMonth={viewedMonth}
+                width={pageWidth}
+                onPickMonth={pickMonth}
+              />
+            </>
+          )}
+          {mode === 'month' && loaded && !loadError && !monthHasAnything && (
             <Text style={styles.emptyMonth} maxFontSizeMultiplier={2}>No stickers this month. Scan one.</Text>
           )}
-        </View>
 
-        {/* ── The selected day: a summary row into the Day screen ── */}
-        <Pressable
-          testID="calendar-selected-day"
-          style={styles.summary}
-          disabled={selFinds.length === 0}
-          onPress={() => { haptic.tap(); router.push(`/day/${selectedKey}`); }}
-          accessibilityRole={selFinds.length ? 'button' : 'text'}
-          accessibilityLabel={`${A11Y_DAY_FORMAT.format(selectedDate)}, ${summary}`}
-          accessibilityHint={selFinds.length ? 'Opens this day' : undefined}
-        >
-          {selFinds.length > 0 && (
-            <View style={styles.summaryThumb}>
-              <View style={styles.summaryStk}>
-                <Thumb sticker={selFinds[0]} size={32} url={dayIconUrls.get(listImagePath(selFinds[0]) ?? '') ?? null} />
+          {/* ── The selected day, and the review shortcut, on one quiet row ── */}
+          <View style={styles.footer}>
+            <Pressable
+              testID="calendar-selected-day"
+              style={styles.summary}
+              disabled={selFinds.length === 0}
+              onPress={() => { haptic.tap(); router.push(`/day/${selectedKey}`); }}
+              accessibilityRole={selFinds.length ? 'button' : 'text'}
+              accessibilityLabel={`${A11Y_DAY_FORMAT.format(selectedDate)}, ${summary}`}
+              accessibilityHint={selFinds.length ? 'Opens this day' : undefined}
+            >
+              {selFinds.length > 0 && (
+                <View style={styles.summaryStk}>
+                  <Thumb sticker={selIcon} size={34} url={dayIconUrls.get(listImagePath(selIcon) ?? '') ?? null} />
+                </View>
+              )}
+              <View style={styles.summaryText}>
+                <Text style={styles.summaryTitle} numberOfLines={1} maxFontSizeMultiplier={1.5}>{DAY_FORMAT.format(selectedDate)}</Text>
+                <Text style={styles.summarySub} numberOfLines={1} maxFontSizeMultiplier={2}>{summary}</Text>
               </View>
-            </View>
-          )}
-          <View style={styles.summaryText}>
-            <Text style={styles.summaryTitle} numberOfLines={1} maxFontSizeMultiplier={1.5}>{DAY_FORMAT.format(selectedDate)}</Text>
-            <Text style={styles.summarySub} numberOfLines={1} maxFontSizeMultiplier={2}>{summary}</Text>
+              {selFinds.length > 0 && <ChevronRight size={18} strokeWidth={1.75} color={colors.inkQuiet} />}
+            </Pressable>
+            {due.length > 0 && (
+              <Pressable
+                testID="calendar-review-cta"
+                onPress={() => { haptic.press(); setReviewQueue(due); }}
+                style={({ pressed }) => [styles.review, pressed && styles.reviewPressed]}
+                accessibilityRole="button"
+                accessibilityLabel={`Review ${due.length} now`}
+              >
+                <RotateCcw size={15} strokeWidth={2} color={colors.inkMid} />
+                <Text style={styles.reviewText} maxFontSizeMultiplier={1.3}>Review {due.length}</Text>
+              </Pressable>
+            )}
           </View>
-          {selFinds.length > 0 && <ChevronRight size={20} strokeWidth={1.75} color={colors.inkLight} />}
-        </Pressable>
-
-        {due.length > 0 && (
-          <Button
-            label={`Review ${due.length} now`}
-            testID="calendar-review-cta"
-            icon={<RotateCcw size={20} strokeWidth={1.75} color={colors.white} />}
-            onPress={() => { haptic.press(); setReviewQueue(due); }}
-            style={styles.cta}
-          />
-        )}
+        </View>
       </ScrollView>
 
       <StudySessionHost
@@ -385,51 +494,48 @@ export default function CalendarScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.sky },
   scroll: { flex: 1, marginTop: -BAND_RADIUS },
-  loadError: { marginHorizontal: GUTTER, marginTop: 28, marginBottom: -16 },
+  loadError: { marginHorizontal: GUTTER, marginBottom: 8 },
 
-  gridCard: {
-    marginHorizontal: GUTTER,
-    backgroundColor: colors.card,
-    borderRadius: radii.lg,
-    paddingHorizontal: CARD_PAD_H,
-    paddingTop: 8,
-    paddingBottom: 14,
-    ...e1,
-  },
-  monthNav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', height: MIN_TAP },
-  chevron: { width: MIN_TAP, height: MIN_TAP, alignItems: 'center', justifyContent: 'center' },
-  monthLabel: { ...type.h2, color: colors.inkDark },
+  // No card: the grid sits on the page, structured only by hairlines.
+  page: { marginHorizontal: GUTTER },
+  titleRow: { flexDirection: 'row', alignItems: 'center', height: MIN_TAP, marginBottom: 6 },
+  title: { flex: 1, fontSize: 26, lineHeight: 32, fontFamily: fonts.display, color: colors.charcoal, letterSpacing: -0.3 },
+  titleYear: { color: colors.inkQuiet },
+  todayLink: { height: MIN_TAP, paddingHorizontal: 10, justifyContent: 'center' },
+  todayLinkText: { fontSize: 15, lineHeight: 20, fontFamily: fonts.display, color: colors.terra },
+  chevron: { width: 40, height: MIN_TAP, alignItems: 'center', justifyContent: 'center' },
 
-  weekdayRow: { flexDirection: 'row', height: 24, alignItems: 'center' },
+  weekdayRow: { flexDirection: 'row', height: 22, alignItems: 'center' },
   weekdayCell: { flex: 1, alignItems: 'center' },
-  weekdayText: { fontSize: 12, lineHeight: 16, fontFamily: fonts.display, color: colors.inkLight },
+  weekdayText: { fontSize: 10, lineHeight: 14, fontFamily: fonts.mono, color: colors.inkQuiet, letterSpacing: 0.8 },
 
   monthViewport: { overflow: 'hidden', alignSelf: 'center' },
   monthTrack: { flexDirection: 'row' },
   gridRow: { flexDirection: 'row' },
-  dayCell: { flex: 1, height: CELL_HEIGHT, alignItems: 'center', gap: 1 },
-  numWrap: { minWidth: 22, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
-  numToday: { backgroundColor: colors.terra },
-  dayNumber: { fontSize: 13, lineHeight: 22, fontFamily: fonts.mono, color: colors.inkMid },
-  dayNumberToday: { color: colors.white },
-  selectedBox: {
-    ...StyleSheet.absoluteFillObject, borderRadius: 12, backgroundColor: colors.terraLight,
-    borderWidth: 2, borderColor: colors.terra,
-  },
-  thumbWrap: { ...stickerShadow, shadowRadius: 3, shadowOffset: { width: 0, height: 1 } },
-  // One position for every day: centred, on the same baseline under the number
-  // or thumbnail (C-look "Calendar cell").
-  dot: { position: 'absolute', top: 45, left: '50%', marginLeft: -3, width: 6, height: 6, borderRadius: 3, backgroundColor: colors.terra },
+  rule: { height: StyleSheet.hairlineWidth * 2, backgroundColor: colors.rule },
+  rowRule: { position: 'absolute', top: 0, left: 0, right: 0, height: StyleSheet.hairlineWidth * 2, backgroundColor: colors.rule },
+  blankCell: { flex: 1 },
+  hidden: { display: 'none' },
 
-  emptyMonth: { ...type.small, textAlign: 'center', marginTop: 10 },
+  // On the band: white pill on a translucent track, maroon text (the band's ink).
+  segment: { flexDirection: 'row', padding: 2, borderRadius: radii.full, backgroundColor: colors.bandTrack },
+  segmentItem: { minWidth: 60, height: 30, paddingHorizontal: 12, borderRadius: radii.full, alignItems: 'center', justifyContent: 'center' },
+  segmentItemOn: { backgroundColor: colors.card },
+  segmentText: { fontSize: 14, lineHeight: 18, fontFamily: fonts.display, color: colors.maroon },
+  segmentTextOn: { color: colors.charcoal },
 
-  summary: {
-    marginHorizontal: GUTTER + 4, marginTop: 16, minHeight: 56, flexDirection: 'row', alignItems: 'center', gap: 12,
-  },
-  summaryThumb: { width: 48, height: 48, borderRadius: 12, backgroundColor: colors.sand, alignItems: 'center', justifyContent: 'center' },
-  summaryStk: { ...stickerShadow, shadowRadius: 3, shadowOffset: { width: 0, height: 1 } },
+  emptyMonth: { ...type.small, color: colors.inkQuiet, textAlign: 'center', marginTop: 12 },
+
+  footer: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 10 },
+  summary: { flex: 1, minHeight: 52, flexDirection: 'row', alignItems: 'center', gap: 12 },
+  summaryStk: { ...stickerShadow, shadowRadius: 2, shadowOffset: { width: 0, height: 1 } },
   summaryText: { flex: 1 },
-  summaryTitle: { fontSize: 17, lineHeight: 22, fontFamily: fonts.display, color: colors.inkDark },
-  summarySub: { ...type.small },
-  cta: { marginHorizontal: GUTTER, marginTop: 16 },
+  summaryTitle: { fontSize: 17, lineHeight: 22, fontFamily: fonts.display, color: colors.charcoal },
+  summarySub: { ...type.small, color: colors.inkQuiet },
+  review: {
+    flexDirection: 'row', alignItems: 'center', gap: 6, height: 36, paddingHorizontal: 14,
+    borderRadius: radii.full, borderWidth: 1, borderColor: colors.ctl,
+  },
+  reviewPressed: { backgroundColor: colors.border },
+  reviewText: { fontSize: 15, lineHeight: 20, fontFamily: fonts.display, color: colors.inkMid },
 });

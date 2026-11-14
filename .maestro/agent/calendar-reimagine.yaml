@@ -1,0 +1,109 @@
+# Calendar reimagined (SPEC: research_notes/calendar-reimagine-2026-11/SPEC.md).
+# Month grid with big stickers, flip-in cascade on month change, Year mosaic,
+# tapping a mini month, the selected-day row, and the today "+" -> Scan.
+# No AI calls: the "+" opens Scan and is never photographed or submitted.
+appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
+---
+- runFlow: ../sign-in.yaml
+
+# a. Month mode, right after opening the tab, then once the flip-in has settled.
+- tapOn:
+    id: "tab-calendar"
+- extendedWaitUntil:
+    visible: "Previous month"
+    timeout: 15000
+- takeScreenshot: cal-a-month-open
+- waitForAnimationToEnd:
+    timeout: 1500
+- takeScreenshot: cal-a-month-settled
+
+# Selected day: tap a day that has a sticker (a11y "November NN, N sticker(s)").
+# Its summary row must then name that date.
+- tapOn:
+    text: "November (0?[1-9]|[12][0-9]|3[01]), [1-9][0-9]* stickers?.*"
+- waitForAnimationToEnd:
+    timeout: 800
+- assertVisible:
+    id: "calendar-selected-day"
+- takeScreenshot: cal-a-selected-day
+- assertVisible:
+    text: "November (0?[1-9]|[12][0-9]|3[01]), .*"
+
+# b. Month change: prev month. Screenshot mid-cascade, then settled.
+- tapOn:
+    id: "calendar-prev-month"
+- takeScreenshot: cal-b-prev-cascade-start
+- waitForAnimationToEnd:
+    timeout: 1500
+- takeScreenshot: cal-b-prev-settled
+- assertVisible: "October 2026"
+
+# c. Year mode (viewing October, so the pale rose tile must sit on October).
+- tapOn:
+    id: "calendar-mode-year"
+- extendedWaitUntil:
+    visible: "Previous year"
+    timeout: 10000
+- waitForAnimationToEnd:
+    timeout: 1500
+- takeScreenshot: cal-c-year
+# The month grid stays mounted but hidden in Year mode: it must not be visible.
+- assertNotVisible:
+    id: "calendar-prev-month"
+- assertVisible:
+    id: "calendar-year-month-2026-11"
+
+# d. Tap the November tile (has the seeded sticker). Back in Month mode on
+# November; stickers cascade in. Screenshot mid-cascade and settled.
+- tapOn:
+    id: "calendar-year-month-2026-11"
+- extendedWaitUntil:
+    visible: "November 2026"
+    timeout: 10000
+- takeScreenshot: cal-d-back-to-month-cascade-start
+- waitForAnimationToEnd:
+    timeout: 1500
+- takeScreenshot: cal-d-back-to-month-settled
+- assertVisible:
+    text: "November (0?[1-9]|[12][0-9]|3[01]), [1-9][0-9]* stickers?.*"
+
+# d2. Year -> Month with no month change: must NOT replay the flip. Shot immediately,
+# stickers should already be settled.
+- tapOn:
+    id: "calendar-mode-year"
+- extendedWaitUntil:
+    visible: "Previous year"
+    timeout: 10000
+- tapOn:
+    id: "calendar-mode-month"
+- extendedWaitUntil:
+    visible: "November 2026"
+    timeout: 10000
+- takeScreenshot: cal-d2-toggle-back-no-replay
+
+# e. Today's "+" (only when today has no find): opens Scan. Back via the tab bar.
+- runFlow:
+    when:
+      visible:
+        id: "calendar-today-add"
+    commands:
+      - takeScreenshot: cal-e-today-add-visible
+      - tapOn:
+          id: "calendar-today-add"
+      - extendedWaitUntil:
+          visible: ".*(One quick thing|Agree and start scanning|Import a photo from your library|What did you find).*"
+          timeout: 15000
+      - waitForAnimationToEnd:
+          timeout: 1000
+      - takeScreenshot: cal-e-today-add-scan
+      - tapOn:
+          id: "tab-calendar"
+      - extendedWaitUntil:
+          visible: "Previous month"
+          timeout: 15000
+      - waitForAnimationToEnd:
+          timeout: 800
+      - takeScreenshot: cal-e-back-from-scan
+- waitForAnimationToEnd:
+    timeout: 500
+- takeScreenshot: cal-final-month
