@@ -13,7 +13,9 @@ import { haptic } from '@/lib/haptics';
 // then the sticker with air around it. The row's top hairline is drawn by the
 // month page. Today is the one accent (rose badge); a tapped day gets a thin
 // ink ring round its number.
-export const NUM_D = 22;
+// 24pt with 4pt side padding: a two-digit date keeps clear red around it, and with
+// larger iOS text the badge widens into a pill instead of clipping the digits.
+export const NUM_D = 24;
 const NUM_TOP = 7;
 const NUM_GAP = 4;
 const BOTTOM = 8;
@@ -113,7 +115,7 @@ export default memo(DayCell);
 const styles = StyleSheet.create({
   cell: { flex: 1 },
   fill: { flex: 1, alignItems: 'center', gap: NUM_GAP, paddingTop: NUM_TOP },
-  numWrap: { width: NUM_D, height: NUM_D, borderRadius: NUM_D / 2, alignItems: 'center', justifyContent: 'center' },
+  numWrap: { minWidth: NUM_D, height: NUM_D, paddingHorizontal: 4, borderRadius: NUM_D / 2, alignItems: 'center', justifyContent: 'center' },
   numToday: { backgroundColor: colors.terra },
   // Ink ring, not a fill: the selection reads without adding a colour block.
   numSelected: { borderWidth: 1.5, borderColor: colors.inkMid },
