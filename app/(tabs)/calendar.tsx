@@ -31,12 +31,12 @@ const MONTH_FORMAT = new Intl.DateTimeFormat('en-US', { month: 'long' });
 const DAY_FORMAT = new Intl.DateTimeFormat('en-US', { weekday: 'short', day: 'numeric', month: 'long' });
 const A11Y_DAY_FORMAT = new Intl.DateTimeFormat('en-US', { day: 'numeric', month: 'long' });
 
-// C-look 4 "Calendar cell": 52 tall, number in mono 13, a find shows a 20pt
+// C-look 4 "Calendar cell": 52 tall (58 after the final review, so the badge clears the thumbnail), number in mono 13, a find shows a 20pt
 // thumbnail below, a review shows a 6pt dot. The month card overlaps the 132pt
 // band by 20.
 const GUTTER = 20;
 const CARD_PAD_H = 16;
-const CELL_HEIGHT = 52;
+const CELL_HEIGHT = 58;
 const THUMB = 20;
 
 const dateKey = (iso: string) => dateKeyOf(new Date(iso));

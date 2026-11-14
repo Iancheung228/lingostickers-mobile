@@ -15,6 +15,8 @@ import CutoutSticker from '@/components/CutoutSticker';
 import { colors, wordFontFor } from '@/constants/theme';
 
 const LONG_PRESS_MS = 400;
+// Stickers are drawn at least this far from the canvas edge so none clip.
+const EDGE_INSET = 16;
 const TRASH_SIZE = 60;
 const TRASH_MARGIN = 14;
 
@@ -132,20 +134,23 @@ function CanvasTile({
 }) {
   const { reduced } = useMotion();
   const { width: tileWidth, height: tileHeight } = useMemo(() => getTileSize(item.sticker_id), [item.sticker_id]);
-  const translateX = useSharedValue(item.x);
-  const translateY = useSharedValue(item.y);
-  const startX = useSharedValue(item.x);
-  const startY = useSharedValue(item.y);
+  // Drawn at least EDGE_INSET from the canvas edge. This clamps at render only:
+  // stored positions are never rewritten until the user moves the sticker.
+  const maxX = Math.max(EDGE_INSET, canvasSize.width - tileWidth - EDGE_INSET);
+  const maxY = Math.max(EDGE_INSET, canvasSize.height - tileHeight - EDGE_INSET);
+  const drawnX = clamp(item.x, EDGE_INSET, maxX);
+  const drawnY = clamp(item.y, EDGE_INSET, maxY);
+  const translateX = useSharedValue(drawnX);
+  const translateY = useSharedValue(drawnY);
+  const startX = useSharedValue(drawnX);
+  const startY = useSharedValue(drawnY);
 
-  // Re-sync the shared position if this item's stored coordinates change
-  // from outside a gesture (e.g. a fresh fetch after re-opening the board).
+  // Re-sync the shared position if this item's stored coordinates (or the
+  // canvas) change from outside a gesture, e.g. a fresh fetch after re-opening the board.
   useEffect(() => {
-    translateX.value = item.x;
-    translateY.value = item.y;
-  }, [item.x, item.y]);
-
-  const maxX = Math.max(0, canvasSize.width - tileWidth);
-  const maxY = Math.max(0, canvasSize.height - tileHeight);
+    translateX.value = drawnX;
+    translateY.value = drawnY;
+  }, [drawnX, drawnY]);
 
   const handleTap = () => onSelect(item.sticker);
   const handleMove = (x: number, y: number) => onMove(item.sticker_id, x, y);
@@ -168,8 +173,8 @@ function CanvasTile({
       runOnJS(handlePickup)();
     })
     .onUpdate((e) => {
-      translateX.value = clamp(startX.value + e.translationX, 0, maxX);
-      translateY.value = clamp(startY.value + e.translationY, 0, maxY);
+      translateX.value = clamp(startX.value + e.translationX, EDGE_INSET, maxX);
+      translateY.value = clamp(startY.value + e.translationY, EDGE_INSET, maxY);
       const tileCenterX = translateX.value + tileWidth / 2;
       const tileCenterY = translateY.value + tileHeight / 2;
       const trashCenterX = trashBounds.left + trashBounds.size / 2;

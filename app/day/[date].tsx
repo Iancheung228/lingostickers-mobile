@@ -12,12 +12,15 @@ import { useSignedUrls } from '@/hooks/useSignedUrls';
 import { listImagePath } from '@/lib/thumbnails';
 import StickerImageFallback from '@/components/StickerImageFallback';
 import Button from '@/components/ui/Button';
+import IconButton from '@/components/ui/IconButton';
+import RoseBand from '@/components/RoseBand';
 import { useToast } from '@/components/ToastProvider';
 import { haptic } from '@/lib/haptics';
 import StudyCard from '@/components/StudyCard';
 import { colors, e1, fonts, radii, stickerShadow, wordFontFor, MIN_TAP, type } from '@/constants/theme';
 
-const DATE_FORMAT = new Intl.DateTimeFormat('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+// Short enough for the band's one-line 30pt title.
+const DATE_FORMAT = new Intl.DateTimeFormat('en-US', { weekday: 'short', month: 'long', day: 'numeric' });
 
 export default function DayScreen() {
   const { date } = useLocalSearchParams<{ date: string }>();
@@ -101,23 +104,15 @@ export default function DayScreen() {
   }, [date]);
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
-      <View style={styles.header}>
-        <Pressable
-          onPress={() => router.back()}
-          style={styles.backBtn}
-          accessibilityRole="button"
-          accessibilityLabel="Go back"
-        >
-          <ChevronLeft size={24} strokeWidth={1.75} color={colors.inkDark} />
-        </Pressable>
-        <View style={styles.headerText}>
-          <Text style={styles.title} numberOfLines={2} accessibilityRole="header" maxFontSizeMultiplier={1.3}>{formattedDate}</Text>
-          <Text style={styles.subtitle} maxFontSizeMultiplier={2}>
-            {loadError ? "Couldn't load this day" : `${stickers.length} found`}
-          </Text>
-        </View>
-      </View>
+    <View style={styles.container}>
+      <RoseBand
+        title={formattedDate}
+        leading={
+          <IconButton onPress={() => router.back()} label="Go back">
+            <ChevronLeft size={22} strokeWidth={1.75} color={colors.inkDark} />
+          </IconButton>
+        }
+      />
 
       {loading ? (
         <ActivityIndicator style={styles.loader} color={colors.terra} size="large" />
@@ -130,6 +125,7 @@ export default function DayScreen() {
       ) : (
         <FlatList
           data={stickers}
+          ListHeaderComponent={<Text style={styles.count} maxFontSizeMultiplier={2}>{`${stickers.length} found`}</Text>}
           keyExtractor={s => s.id}
           contentContainerStyle={[styles.list, { paddingBottom: insets.bottom + 32 }]}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchStickers(); }} tintColor={colors.terra} />}
@@ -200,20 +196,13 @@ export default function DayScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.sky },
-  header: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 20, paddingTop: 8, paddingBottom: 12 },
-  headerText: { flex: 1 },
-  backBtn: {
-    width: MIN_TAP, height: MIN_TAP, borderRadius: radii.full, backgroundColor: colors.card,
-    alignItems: 'center', justifyContent: 'center', ...e1,
-  },
-  title: { ...type.h2, color: colors.inkDark },
-  subtitle: { ...type.small },
+  count: { ...type.small, marginBottom: 0 },
   loader: { flex: 1 },
   emptyWrap: { alignItems: 'center', paddingHorizontal: 32, paddingTop: 48, gap: 12 },
   errorWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32, gap: 12 },
   errorTitle: { ...type.h2, textAlign: 'center' },
   errorBody: { ...type.body, color: colors.inkLight, textAlign: 'center' },
-  list: { paddingHorizontal: 20, paddingTop: 4, gap: 16 },
+  list: { paddingHorizontal: 20, paddingTop: 16, gap: 16 },
   card: { backgroundColor: colors.card, borderRadius: radii.lg, overflow: 'hidden', ...e1 },
   pressed: { opacity: 0.94 },
   well: { height: 200, backgroundColor: colors.sand, alignItems: 'center', justifyContent: 'center' },

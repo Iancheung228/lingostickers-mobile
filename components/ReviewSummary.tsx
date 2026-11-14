@@ -31,8 +31,9 @@ export default function ReviewSummary({ stats, early, nextDue, revisit, onDone, 
   const { reduced } = useMotion();
   const pop = useRef(new Animated.Value(0)).current;
   const [opened, setOpened] = useState<Sticker | null>(null);
-  // Where the card sits, so the Undo toast can ride just above it, never under the tab bar.
-  const [box, setBox] = useState<{ h: number; cardTop: number } | null>(null);
+  // Where Done sits, so the Undo toast docks in the slot just above it: inside the
+  // card, over no text and no sticker, and nowhere near the tab bar.
+  const [box, setBox] = useState<{ h: number; cardTop: number; doneY: number } | null>(null);
   const shown = !!stats;
 
   useEffect(() => {
@@ -52,7 +53,7 @@ export default function ReviewSummary({ stats, early, nextDue, revisit, onDone, 
           The scrim is a sibling behind the card, not its parent: an accessible
           button hides everything inside it from VoiceOver, which left the
           title, the counts and Done unreachable. */}
-      <View style={styles.overlay} onLayout={e => setBox(b => ({ h: e.nativeEvent.layout.height, cardTop: b?.cardTop ?? 0 }))}>
+      <View style={styles.overlay} onLayout={e => setBox(b => ({ h: e.nativeEvent.layout.height, cardTop: b?.cardTop ?? 0, doneY: b?.doneY ?? 0 }))}>
         <Pressable
           style={StyleSheet.absoluteFill}
           onPress={onDone}
@@ -60,7 +61,7 @@ export default function ReviewSummary({ stats, early, nextDue, revisit, onDone, 
           accessibilityLabel="Close the session summary"
         />
         <Animated.View
-          onLayout={e => { const y = e.nativeEvent.layout.y; setBox(b => (b && b.cardTop === y ? b : { h: b?.h ?? 0, cardTop: y })); }}
+          onLayout={e => { const y = e.nativeEvent.layout.y; setBox(b => (b && b.cardTop === y ? b : { h: b?.h ?? 0, cardTop: y, doneY: b?.doneY ?? 0 })); }}
           style={[styles.card, { opacity: pop, transform: [{ scale: reduced ? 1 : pop.interpolate({ inputRange: [0, 1], outputRange: [0.96, 1] }) }] }]}
         >
           <View style={styles.badge}>
@@ -105,10 +106,17 @@ export default function ReviewSummary({ stats, early, nextDue, revisit, onDone, 
             </View>
           )}
 
-          <Button label="Done" onPress={onDone} style={styles.done} />
+          {/* Reserved: the grade Undo toast docks here, above Done. */}
+          <View style={styles.toastSlot} />
+          <View
+            style={styles.doneWrap}
+            onLayout={e => { const y = e.nativeEvent.layout.y; setBox(b => (b && b.doneY === y ? b : { h: b?.h ?? 0, cardTop: b?.cardTop ?? 0, doneY: y })); }}
+          >
+            <Button label="Done" onPress={onDone} />
+          </View>
         </Animated.View>
 
-        <ToastLayer bottom={box && box.h && box.cardTop ? box.h - box.cardTop + 12 : undefined} />
+        <ToastLayer bottom={box && box.h && box.cardTop && box.doneY ? box.h - (box.cardTop + box.doneY) + 10 : undefined} />
       </View>
 
       <StudyCard
@@ -161,5 +169,6 @@ const styles = StyleSheet.create({
   rowWord: { flexShrink: 0, maxWidth: '50%' },
   rowMeaning: { ...type.small, flex: 1 },
 
-  done: { alignSelf: 'stretch', marginTop: spacing.lg },
+  toastSlot: { height: 84 },
+  doneWrap: { alignSelf: 'stretch' },
 });

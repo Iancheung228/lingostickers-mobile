@@ -102,7 +102,7 @@ function Visual({ page }: { page: number }) {
 const MINI_GRADES = [
   { label: 'Again', sub: '1m', bg: colors.againTint, fg: colors.error, flex: 1.4 },
   { label: 'Hard', sub: '6m', bg: colors.goldTint, fg: colors.gold, flex: 1 },
-  { label: 'Good', sub: '1d', bg: colors.success, fg: colors.white, flex: 1.4 },
+  { label: 'Good', sub: '10m', bg: colors.success, fg: colors.white, flex: 1.4 },
   { label: 'Easy', sub: '4d', bg: colors.successLight, fg: colors.success, flex: 1 },
 ];
 

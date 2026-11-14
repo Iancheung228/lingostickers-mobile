@@ -230,15 +230,16 @@ export default function CardDetail({
       {!!onTest && !embedded && (
         <View style={[styles.sticky, { paddingBottom: insets.bottom + 12 }]} pointerEvents="box-none">
           {/* A short fade so content slides under the button instead of being sliced by it. */}
-          <Svg style={styles.fade} width="100%" height={FADE_HEIGHT} preserveAspectRatio="none" pointerEvents="none">
+          <View style={styles.fade} pointerEvents="none"><Svg width="100%" height="100%" preserveAspectRatio="none">
             <Defs>
               <LinearGradient id="testMeFade" x1="0" y1="0" x2="0" y2="1">
                 <Stop offset="0" stopColor={colors.sky} stopOpacity="0" />
+                <Stop offset="0.7" stopColor={colors.sky} stopOpacity="1" />
                 <Stop offset="1" stopColor={colors.sky} stopOpacity="1" />
               </LinearGradient>
             </Defs>
-            <Rect x="0" y="0" width="100%" height={FADE_HEIGHT} fill="url(#testMeFade)" />
-          </Svg>
+            <Rect x="0" y="0" width="100%" height="100%" fill="url(#testMeFade)" />
+          </Svg></View>
           <Button label="Test me" onPress={onTest} style={styles.testMe} />
         </View>
       )}
@@ -247,7 +248,7 @@ export default function CardDetail({
 }
 
 const TEST_ME_HEIGHT = 52; // Button's height
-const FADE_HEIGHT = 28;
+const FADE_HEIGHT = 60;
 
 function Disc({ onPress, label, children, selected }: {
   onPress: () => void; label: string; children: React.ReactNode; selected?: boolean;
@@ -421,7 +422,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
   },
   topRight: { flexDirection: 'row', gap: spacing.sm },
-  fade: { position: 'absolute', left: 0, right: 0, top: -FADE_HEIGHT },
+  fade: { position: 'absolute', left: 0, right: 0, top: -FADE_HEIGHT, height: FADE_HEIGHT },
   sticky: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: 20, paddingTop: 12, backgroundColor: colors.sky },
   testMe: { alignSelf: 'stretch' },
 

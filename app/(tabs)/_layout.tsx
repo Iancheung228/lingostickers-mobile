@@ -3,6 +3,7 @@ import { View, Text, Pressable, StyleSheet, Keyboard } from 'react-native';
 import { Tabs } from 'expo-router';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 import { BookOpen, Calendar, Camera, Sticker as StickerIcon, User } from 'lucide-react-native';
 import type { LucideIcon } from 'lucide-react-native';
 import { haptic } from '@/lib/haptics';
@@ -34,6 +35,8 @@ const SLOTS: Slot[] = [
 
 /** Gap between the pill's edge and the active highlight; its radius is the pill's minus this. */
 const HIGHLIGHT_RING = 6;
+/** Height of the dissolve above the pill. */
+const TAB_BAR_FADE = 32;
 
 function PillTabBar({ state, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
@@ -61,9 +64,27 @@ function PillTabBar({ state, navigation }: BottomTabBarProps) {
     }
   };
 
+  const fadeHeight = tabBarBottom(insets.bottom) + TAB_BAR_HEIGHT + TAB_BAR_FADE;
   return (
-    // The wrapper is the overflow-visible one: the pill below has the rose
-    // fill, the disc is a sibling that overhangs it.
+    <>
+    {/* Page-colour fade behind and above the pill, so scrolled content dissolves
+        before it reaches the bar. Not touchable. Not on the camera. */}
+    {focusedName !== 'scan' && (
+      <View pointerEvents="none" style={[styles.fade, { height: fadeHeight }]}>
+        <Svg width="100%" height={fadeHeight} preserveAspectRatio="none">
+          <Defs>
+            <LinearGradient id="tabFade" x1="0" y1="0" x2="0" y2="1">
+              <Stop offset="0" stopColor={colors.sky} stopOpacity="0" />
+              <Stop offset={TAB_BAR_FADE / fadeHeight + 0.1} stopColor={colors.sky} stopOpacity="1" />
+              <Stop offset="1" stopColor={colors.sky} stopOpacity="1" />
+            </LinearGradient>
+          </Defs>
+          <Rect x="0" y="0" width="100%" height={fadeHeight} fill="url(#tabFade)" />
+        </Svg>
+      </View>
+    )}
+    {/* The wrapper is the overflow-visible one: the pill below has the rose
+        fill, the disc is a sibling that overhangs it. */}
     <View
       pointerEvents="box-none"
       style={[styles.wrap, { bottom: tabBarBottom(insets.bottom) }]}
@@ -126,6 +147,7 @@ function PillTabBar({ state, navigation }: BottomTabBarProps) {
         })}
       </View>
     </View>
+    </>
   );
 }
 
@@ -157,6 +179,7 @@ export default function TabLayout() {
 }
 
 const styles = StyleSheet.create({
+  fade: { position: 'absolute', left: 0, right: 0, bottom: 0 },
   wrap: {
     position: 'absolute',
     left: 0,

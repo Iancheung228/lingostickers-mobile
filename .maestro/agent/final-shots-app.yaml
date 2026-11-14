@@ -44,6 +44,13 @@ appId: ${APP_ID}
 - waitForAnimationToEnd:
     timeout: 800
 - takeScreenshot: research_notes/ux-redesign-2026-11/final/06-study-hint
+# Spend the last hint: the button reads "No more hints" (disabled); Maestro cannot match it
+# (it sits inside the card's accessibility element), so 06b-no-more-hints is checked by eye.
+- tapOn:
+    point: "50%,77%"
+- waitForAnimationToEnd:
+    timeout: 600
+- takeScreenshot: 06b-no-more-hints
 - tapOn: "What did you call this.*"
 - extendedWaitUntil:
     visible: "Good — next review in.*"

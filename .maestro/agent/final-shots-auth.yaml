@@ -32,6 +32,11 @@ appId: ${APP_ID}
     optional: true
 - waitForAnimationToEnd:
     timeout: 1500
+# The Simulator does not paint masked dots for ANY secure field (also while typing), so the
+# shot reveals the password with the eye to prove the value was kept.
+- tapOn: "Show password"
+- waitForAnimationToEnd:
+    timeout: 800
 - takeScreenshot: research_notes/ux-redesign-2026-11/final/21-sign-in-wrong-password
 - tapOn: ".*Sign Up.*"
 - tapOn:
