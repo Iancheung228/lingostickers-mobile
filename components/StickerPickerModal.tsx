@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useMotion } from '@/lib/motion';
 import { Modal, View, Text, FlatList, TouchableOpacity, StyleSheet, SafeAreaView, ActivityIndicator } from 'react-native';
 import { X } from 'lucide-react-native';
 import { Sticker } from '@/lib/types';
@@ -28,6 +29,7 @@ interface StickerPickerModalProps {
 export default function StickerPickerModal({
   visible, currentUserId, onSelect, onClose, title = 'Pick a Sticker', selectedIds, selectionNoun,
 }: StickerPickerModalProps) {
+  const { reduced } = useMotion();
   const [stickers, setStickers] = useState<Sticker[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -53,7 +55,7 @@ export default function StickerPickerModal({
   ));
 
   return (
-    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+    <Modal visible={visible} animationType={reduced ? 'none' : 'slide'} presentationStyle="pageSheet" onRequestClose={onClose}>
       <SafeAreaView style={styles.container}>
         <View style={styles.header}>
           <View style={styles.headerText}>

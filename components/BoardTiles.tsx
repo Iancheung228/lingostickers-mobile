@@ -148,12 +148,11 @@ const styles = StyleSheet.create({
   name: { ...type.button, fontSize: 17, lineHeight: 22 },
   caption: { ...type.small },
   createTile: {
-    borderRadius: 20, borderWidth: 1.5, borderStyle: 'dashed', borderColor: colors.ctl,
-    overflow: 'hidden', backgroundColor: colors.transparent,
+    borderRadius: 20, overflow: 'hidden', backgroundColor: colors.terraLight,
   },
-  createPreview: { height: PREVIEW_H - 3, alignItems: 'center', justifyContent: 'center' },
+  createPreview: { height: PREVIEW_H, alignItems: 'center', justifyContent: 'center' },
   plusDisc: {
-    width: 44, height: 44, borderRadius: radii.full, backgroundColor: colors.terraLight,
+    width: 44, height: 44, borderRadius: radii.full, backgroundColor: colors.card,
     alignItems: 'center', justifyContent: 'center',
   },
 });

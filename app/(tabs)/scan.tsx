@@ -27,6 +27,7 @@ import { attemptLocalCutout, uploadCutout, cutoutPath, CUTOUT_DRY_RUN, type Uplo
 import { trackEvent } from '@/lib/analytics';
 import DiscoveryReveal from '@/components/DiscoveryReveal';
 import { useToast } from '@/components/ToastProvider';
+import { useRequireOnline } from '@/hooks/useRequireOnline';
 import TypeWordSheet, { type CarriedCutout } from '@/components/TypeWordSheet';
 import ScanErrorCard from '@/components/ScanErrorCard';
 import Button from '@/components/ui/Button';
@@ -79,6 +80,7 @@ export default function ScanScreen() {
   // segmentation and network work that follows it).
   const [capturing, setCapturing] = useState(false);
   const toast = useToast();
+  const { online, gate } = useRequireOnline();
   const { reduced } = useMotion();
   // A failed scan, as one of B-core 2's six rows. Null while all is well.
   const [scanError, setScanError] = useState<ScanErrorKind | null>(null);
@@ -717,6 +719,7 @@ export default function ScanScreen() {
   // something other than this.
   const handleCapture = useCallback(async () => {
     if (!cameraRef.current || capturing || processing || !user) return;
+    if (!gate('Scanning needs a connection.')) return;
     haptic.press();
     // White flash 0 > .7 > 0 in 160 ms (Reduce Motion: a 120 ms dim instead).
     flashColor.value = reduced ? 0 : 1;
@@ -798,6 +801,7 @@ export default function ScanScreen() {
 
   const handleImportPhoto = useCallback(async () => {
     if (processing) return;
+    if (!gate('Scanning needs a connection.')) return;
     haptic.tap();
     const { granted, canAskAgain } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!granted) {
@@ -1091,6 +1095,7 @@ export default function ScanScreen() {
   }, [runLast, releaseCarried, importedAsset, cameraCaptureContext, handleExtractFromPhoto, toast, backToCamera]);
 
   const openTypeWord = useCallback(() => {
+    if (!gate('Adding a word needs a connection.')) return;
     haptic.tap();
     setTypeCutout(null);
     setTypeWordOpen(true);
@@ -1243,11 +1248,11 @@ export default function ScanScreen() {
             onPress={handleImportPhoto}
             accessibilityRole="button"
             accessibilityLabel="Import a photo from your library"
-            accessibilityState={{ disabled: busyShutter }}
+            accessibilityState={{ disabled: busyShutter || !online }}
             disabled={busyShutter}
             activeOpacity={0.7}
           >
-            <View style={[styles.sideBtnCircle, busyShutter && styles.dim]}>
+            <View style={[styles.sideBtnCircle, (busyShutter || !online) && styles.dim]}>
               <ImagePlus size={24} strokeWidth={1.75} color={colors.inkDark} />
             </View>
             <Text style={styles.sideBtnLabel} maxFontSizeMultiplier={1.3}>Gallery</Text>
@@ -1256,13 +1261,13 @@ export default function ScanScreen() {
           <Animated.View style={shutterStyle}>
             <Pressable
               testID="scan-shutter"
-              style={[styles.shutter, busyShutter && styles.dim]}
+              style={[styles.shutter, (busyShutter || !online) && styles.dim]}
               onPress={handleCapture}
               onPressIn={() => { if (!reduced) shutterScale.value = withTiming(0.9, { duration: 80 }); }}
               onPressOut={() => { shutterScale.value = withTiming(1, { duration: 120 }); }}
               accessibilityRole="button"
               accessibilityLabel="Take photo"
-              accessibilityState={{ disabled: busyShutter, busy: processing || capturing }}
+              accessibilityState={{ disabled: busyShutter || !online, busy: processing || capturing }}
               disabled={busyShutter}
             >
               <View style={styles.shutterCore} />
@@ -1276,10 +1281,10 @@ export default function ScanScreen() {
             disabled={processing || capturing}
             accessibilityRole="button"
             accessibilityLabel="Type a word"
-            accessibilityState={{ disabled: processing || capturing }}
+            accessibilityState={{ disabled: processing || capturing || !online }}
             activeOpacity={0.7}
           >
-            <View style={[styles.sideBtnCircle, (processing || capturing) && styles.dim]}>
+            <View style={[styles.sideBtnCircle, (processing || capturing || !online) && styles.dim]}>
               <KeyboardIcon size={24} strokeWidth={1.75} color={colors.inkDark} />
             </View>
             <Text style={styles.sideBtnLabel} maxFontSizeMultiplier={1.3}>Type a word</Text>

@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, radii, spacing, type } from '@/constants/theme';
+import OfflineBanner from '@/components/OfflineBanner';
 
 // The rose band (C-look 3): title in the type scale, at most one subtitle line
 // and one right-hand control, all in maroon (the contrast fix: inkDark washes
@@ -33,6 +34,7 @@ export default function RoseBand({ title, subtitle, right, leading, bottomPad = 
         </View>
         {right}
       </View>
+      <OfflineBanner inline />
       {children}
     </View>
   );

@@ -1,4 +1,3 @@
-import { Alert } from 'react-native';
 import * as MediaLibrary from 'expo-media-library';
 import * as Sharing from 'expo-sharing';
 import { File, Paths } from 'expo-file-system';
@@ -7,6 +6,7 @@ import { supabase } from '@/lib/supabase';
 import { trackEvent } from '@/lib/analytics';
 import { Sticker } from '@/lib/types';
 import { alertPermissionDenied } from '@/lib/permissions';
+import { friendlyErrorSync } from '@/lib/friendlyError';
 
 /**
  * Getting a sticker out of the app and into the rest of the phone — the
@@ -64,7 +64,7 @@ async function downloadCutoutUri(sticker: Sticker): Promise<string> {
  * (lib/photoMetadata.ts) is a separate, much wider permission — don't
  * collapse the two into one request just because both say "photos".
  */
-export async function saveStickerToPhotos(sticker: Sticker): Promise<boolean> {
+export async function saveStickerToPhotos(sticker: Sticker, onError?: (message: string) => void): Promise<boolean> {
   try {
     const { granted, canAskAgain } = await MediaLibrary.requestPermissionsAsync(true);
     if (!granted) {
@@ -85,7 +85,7 @@ export async function saveStickerToPhotos(sticker: Sticker): Promise<boolean> {
     trackEvent('sticker_saved_to_photos');
     return true;
   } catch (err: any) {
-    Alert.alert("Couldn't save the sticker", err?.message ?? 'Something went wrong.');
+    onError?.(friendlyErrorSync(err, "Couldn't save the sticker. Try again."));
     return false;
   }
 }
@@ -96,10 +96,10 @@ export async function saveStickerToPhotos(sticker: Sticker): Promise<boolean> {
  * not tell us whether anything was sent, so there's no success message here
  * on purpose: the sheet was the feedback.
  */
-export async function shareSticker(sticker: Sticker): Promise<boolean> {
+export async function shareSticker(sticker: Sticker, onError?: (message: string) => void): Promise<boolean> {
   try {
     if (!(await Sharing.isAvailableAsync())) {
-      Alert.alert('Sharing unavailable', "This device can't open the share sheet.");
+      onError?.("This device can't open the share sheet.");
       return false;
     }
 
@@ -113,7 +113,7 @@ export async function shareSticker(sticker: Sticker): Promise<boolean> {
     trackEvent('sticker_shared');
     return true;
   } catch (err: any) {
-    Alert.alert("Couldn't share the sticker", err?.message ?? 'Something went wrong.');
+    onError?.(friendlyErrorSync(err, "Couldn't share the sticker. Try again."));
     return false;
   }
 }

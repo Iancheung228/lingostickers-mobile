@@ -1,16 +1,19 @@
 import { useRef, useState } from 'react';
-import {
-  View, Text, TextInput, TouchableOpacity,
-  StyleSheet, KeyboardAvoidingView, Platform, ActivityIndicator,
-} from 'react-native';
-import { Link, useRouter, useLocalSearchParams } from 'expo-router';
+import { ActivityIndicator, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useAuth } from '@/hooks/useAuth';
-import CozyBackground from '@/components/CozyBackground';
+import AuthShell, { AuthLink } from '@/components/AuthShell';
 import PasswordField from '@/components/PasswordField';
-import { colors, shadows, radii, spacing, typography, fonts } from '@/constants/theme';
+import Button from '@/components/ui/Button';
+import InlineError from '@/components/ui/InlineError';
+import { colors, fonts, radii, spacing } from '@/constants/theme';
+import { authActionMessage } from '@/lib/authErrors';
+import { haptic } from '@/lib/haptics';
 
 export default function ResetPasswordScreen() {
   const { updatePassword, session, clearPasswordRecovery, signOut } = useAuth();
+  // Set by the root layout when the emailed link couldn't be used. Only its
+  // presence matters: the copy is ours, never the server's.
   const { error: linkError } = useLocalSearchParams<{ error?: string }>();
   const router = useRouter();
   const [password, setPassword] = useState('');
@@ -23,27 +26,27 @@ export default function ResetPasswordScreen() {
 
   const isFormValid =
     password.length >= 6 && confirmPassword.length >= 6 && password === confirmPassword;
-  // The button is disabled until the two match, which on its own is a dead
-  // control with no stated reason — the one thing more frustrating than an
-  // error is a button that just doesn't respond. Only shown once the second
-  // field has enough characters to be a real attempt rather than mid-typing.
+  // A disabled button with no stated reason is worse than an error, so the
+  // mismatch is said once the second field is long enough to be a real attempt.
   const mismatch = confirmPassword.length >= 6 && password !== confirmPassword;
 
   const handleUpdate = async () => {
-    if (!isFormValid) return;
+    if (!isFormValid || loading) return;
     setError(null);
     setLoading(true);
     const { error } = await updatePassword(password);
     setLoading(false);
-    if (error) { setError(error.message); return; }
+    if (error) {
+      haptic.error();
+      setError(authActionMessage(error, "Couldn't update your password. The link may have expired. Request a new one."));
+      return;
+    }
     clearPasswordRecovery();
     setSuccess(true);
   };
 
-  // The recovery session is only ever meant to be used to set a new
-  // password — leaving it signed in without doing that would strand the
-  // user in a half-authenticated state, so cancel signs it out rather than
-  // just clearing the flag and leaving.
+  // The recovery session exists only to set a new password, so cancel signs it
+  // out rather than leaving the user half-authenticated.
   const handleCancel = async () => {
     clearPasswordRecovery();
     await signOut();
@@ -52,190 +55,79 @@ export default function ResetPasswordScreen() {
 
   if (linkError) {
     return (
-      <CozyBackground variant="full">
-        <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-          <View style={styles.inner}>
-            <Text style={styles.title}>Link Expired</Text>
-            <Text style={styles.subtitle}>{linkError}</Text>
-            <View style={styles.card}>
-              <Link href="/(auth)/forgot-password" asChild>
-                <TouchableOpacity style={styles.button} activeOpacity={0.8}>
-                  <Text style={styles.buttonText}>Request a New Link</Text>
-                </TouchableOpacity>
-              </Link>
-            </View>
-          </View>
-        </KeyboardAvoidingView>
-      </CozyBackground>
+      <AuthShell title="Link Expired" tagline="That reset link has expired or was already used." intro={false}>
+        <Button label="Request a New Link" onPress={() => router.replace('/(auth)/forgot-password')} />
+        <View style={styles.foot}>
+          <AuthLink prefix="Back to" accent="Sign In" onPress={() => router.replace('/(auth)/sign-in')} />
+        </View>
+      </AuthShell>
     );
   }
 
   if (!session) {
     return (
-      <CozyBackground variant="full">
-        <View style={styles.inner}>
-          <ActivityIndicator size="large" color={colors.terra} />
-          <Text style={[typography.body, { marginTop: spacing.md, color: colors.inkMid, textAlign: 'center' }]}>
-            Verifying your link…
-          </Text>
-          <TouchableOpacity style={styles.linkButton} onPress={handleCancel}>
-            <Text style={styles.linkText}>Back to <Text style={styles.linkAccent}>Sign In</Text></Text>
-          </TouchableOpacity>
+      <AuthShell title="New Password" tagline="Verifying your link…" intro={false}>
+        <View style={styles.wait}><ActivityIndicator size="large" color={colors.terra} /></View>
+        <View style={styles.foot}>
+          <AuthLink prefix="Back to" accent="Sign In" onPress={handleCancel} />
         </View>
-      </CozyBackground>
+      </AuthShell>
     );
   }
 
   return (
-    <CozyBackground variant="full">
-      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-        <View style={styles.inner}>
-          <Text style={styles.title}>New Password</Text>
-          <Text style={styles.subtitle}>Choose a new password for your account</Text>
+    <AuthShell title="New Password" tagline="Choose a new password for your account" intro={false}>
+      <PasswordField
+        placeholder="New password (min 6 characters)"
+        value={password}
+        onChangeText={setPassword}
+        editable={!success}
+        textContentType="newPassword"
+        autoComplete="new-password"
+        returnKeyType="next"
+        submitBehavior="submit"
+        onSubmitEditing={() => confirmRef.current?.focus()}
+      />
+      <PasswordField
+        ref={confirmRef}
+        placeholder="Confirm new password"
+        value={confirmPassword}
+        onChangeText={setConfirmPassword}
+        editable={!success}
+        error={mismatch ? "Those two don't match yet." : null}
+        textContentType="newPassword"
+        autoComplete="new-password"
+        returnKeyType="go"
+        onSubmitEditing={handleUpdate}
+      />
 
-          <View style={styles.card}>
-            <PasswordField
-              style={styles.input}
-              placeholder="New password (min 6 characters)"
-              placeholderTextColor={colors.inkFaint}
-              value={password}
-              onChangeText={setPassword}
-              editable={!success}
-              textContentType="newPassword"
-              autoComplete="new-password"
-              returnKeyType="next"
-              submitBehavior="submit"
-              onSubmitEditing={() => confirmRef.current?.focus()}
-            />
-            <PasswordField
-              ref={confirmRef}
-              style={styles.input}
-              placeholder="Confirm new password"
-              placeholderTextColor={colors.inkFaint}
-              value={confirmPassword}
-              onChangeText={setConfirmPassword}
-              editable={!success}
-              textContentType="newPassword"
-              autoComplete="new-password"
-              returnKeyType="go"
-              onSubmitEditing={handleUpdate}
-            />
-
-            {mismatch && (
-              <Text style={styles.mismatchHint} accessibilityLiveRegion="polite">
-                Those two don&apos;t match yet.
-              </Text>
-            )}
-
-            {error && (
-              <View style={styles.errorBox} accessibilityRole="alert" accessibilityLiveRegion="polite">
-                <Text style={styles.errorText}>{error}</Text>
-                <Link href="/(auth)/forgot-password" asChild>
-                  <TouchableOpacity>
-                    <Text style={styles.errorLink}>Request a new link</Text>
-                  </TouchableOpacity>
-                </Link>
-              </View>
-            )}
-
-            {success && (
-              <View style={styles.messageBox} accessibilityLiveRegion="polite">
-                <Text style={styles.messageText}>Password updated! Taking you to your collection…</Text>
-              </View>
-            )}
-
-            {!success && (
-              <TouchableOpacity
-                style={[styles.button, (!isFormValid || loading) && styles.buttonDisabled]}
-                onPress={handleUpdate}
-                disabled={!isFormValid || loading}
-                activeOpacity={0.8}
-              >
-                {loading ? (
-                  <ActivityIndicator color={colors.card} />
-                ) : (
-                  <Text style={styles.buttonText}>Update Password</Text>
-                )}
-              </TouchableOpacity>
-            )}
-
-            {!success && (
-              <TouchableOpacity style={styles.linkButton} onPress={handleCancel}>
-                <Text style={styles.linkText}>Back to <Text style={styles.linkAccent}>Sign In</Text></Text>
-              </TouchableOpacity>
-            )}
-          </View>
+      {error && (
+        <View style={styles.block}>
+          <InlineError message={error} onRetry={() => router.replace('/(auth)/forgot-password')} retryLabel="Request a new link" />
         </View>
-      </KeyboardAvoidingView>
-    </CozyBackground>
+      )}
+
+      {success ? (
+        <View style={styles.done} accessibilityLiveRegion="polite">
+          <Text style={styles.doneText} maxFontSizeMultiplier={2}>Password updated. Taking you to your collection…</Text>
+        </View>
+      ) : (
+        <Button label="Update Password" onPress={handleUpdate} disabled={!isFormValid} loading={loading} />
+      )}
+
+      {!success && (
+        <View style={styles.foot}>
+          <AuthLink prefix="Back to" accent="Sign In" onPress={handleCancel} />
+        </View>
+      )}
+    </AuthShell>
   );
 }
 
 const styles = StyleSheet.create({
-  flex: { flex: 1 },
-  inner: { flex: 1, justifyContent: 'center', paddingHorizontal: spacing.lg },
-  title: {
-    fontSize: 34,
-    fontFamily: fonts.display,
-    color: colors.inkDark,
-    textAlign: 'center',
-    marginBottom: spacing.sm,
-    letterSpacing: -0.5,
-  },
-  subtitle: {
-    ...typography.body,
-    color: colors.inkMid,
-    textAlign: 'center',
-    marginBottom: spacing.lg,
-  },
-  card: {
-    backgroundColor: colors.card,
-    borderRadius: radii.xl,
-    padding: spacing.lg,
-    ...shadows.card,
-  },
-  input: { backgroundColor: colors.sky, borderRadius: radii.md, paddingHorizontal: spacing.md, paddingVertical: 14, fontSize: 15, fontFamily: fonts.text, color: colors.inkDark, marginBottom: spacing.md, borderWidth: 1.5, borderColor: colors.border, },
-  button: {
-    backgroundColor: colors.terra,
-    borderRadius: radii.lg,
-    paddingVertical: 16,
-    alignItems: 'center',
-    marginTop: spacing.xs,
-    marginBottom: spacing.sm,
-    ...shadows.button,
-  },
-  buttonDisabled: { backgroundColor: colors.terraLight, shadowOpacity: 0, elevation: 0 },
-  buttonText: { color: colors.card, fontSize: 16, fontFamily: fonts.display, letterSpacing: 0.3 },
-  messageBox: {
-    borderRadius: radii.md,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm + 2,
-    marginBottom: spacing.md,
-    backgroundColor: colors.successLight,
-    borderWidth: 1.5,
-    borderColor: colors.success,
-  },
-  messageText: { fontSize: 14, fontFamily: fonts.display, color: colors.success },
-  mismatchHint: {
-    fontSize: 13,
-    fontFamily: fonts.text,
-    color: colors.error,
-    marginTop: -spacing.sm,
-    marginBottom: spacing.ms,
-  },
-  errorBox: {
-    borderRadius: radii.md,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm + 2,
-    marginBottom: spacing.md,
-    backgroundColor: colors.errorLight,
-    borderWidth: 1.5,
-    borderColor: colors.error,
-    gap: spacing.xs,
-  },
-  errorText: { fontSize: 14, fontFamily: fonts.display, color: colors.error },
-  errorLink: { fontSize: 13, fontFamily: fonts.display, color: colors.inkDark, textDecorationLine: 'underline' },
-  linkButton: { alignItems: 'center', marginTop: spacing.sm },
-  linkText: { color: colors.inkLight, fontSize: 14, fontFamily: fonts.text },
-  linkAccent: { color: colors.terra, fontFamily: fonts.display },
+  block: { marginBottom: spacing.ms },
+  wait: { alignItems: 'center', paddingVertical: spacing.lg },
+  done: { backgroundColor: colors.successLight, borderRadius: radii.md, padding: spacing.ms },
+  doneText: { fontFamily: fonts.text, fontSize: 14, lineHeight: 20, color: colors.success },
+  foot: { alignItems: 'center', marginTop: spacing.sm },
 });

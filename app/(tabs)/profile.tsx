@@ -12,6 +12,8 @@ import RoseBand from '@/components/RoseBand';
 import Row, { RowGroup } from '@/components/ui/Row';
 import Button from '@/components/ui/Button';
 import { useToast } from '@/components/ToastProvider';
+import { isOnline } from '@/lib/connectivity';
+import { showMenu } from '@/lib/actionMenu';
 import { usePendingDeletes } from '@/components/PendingDeleteProvider';
 import BottomSheet, { BottomSheetHandle } from '@/components/BottomSheet';
 import Avatar from '@/components/Avatar';
@@ -156,6 +158,10 @@ export default function ProfileScreen() {
   const stat = (n: number) => (loading || loadError ? '–' : String(n));
 
   const update = async (run: () => Promise<{ error: Error | null }>, fallback: string) => {
+    if (!isOnline()) {
+      toast.show({ kind: 'info', message: 'Changing this needs a connection.', aboveTabBar: true });
+      return;
+    }
     const { error } = await run();
     if (error) {
       haptic.error();
@@ -198,14 +204,14 @@ export default function ProfileScreen() {
 
   const handleAvatarPress = () => {
     if (!profile?.avatar_path) { handleChangeAvatar(); return; }
-    Alert.alert('Profile picture', undefined, [
-      { text: 'Choose a new photo', onPress: handleChangeAvatar },
+    // Three choices is an action sheet, not an alert (B-app 8).
+    showMenu([
+      { label: 'Choose a new photo', onPress: handleChangeAvatar },
       {
-        text: 'Remove photo', style: 'destructive',
+        label: 'Remove photo', destructive: true,
         onPress: () => { void update(() => removeAvatar(), "Couldn't remove your photo. Try again."); },
       },
-      { text: 'Cancel', style: 'cancel' },
-    ]);
+    ], 'Profile picture');
   };
 
   // ── reminder ──
@@ -345,8 +351,8 @@ export default function ProfileScreen() {
     <View style={styles.switchBox}><Switch
       value={value}
       onValueChange={onChange}
-      trackColor={{ false: colors.border, true: colors.terra }}
-      ios_backgroundColor={colors.border}
+      trackColor={{ false: colors.trackOff, true: colors.terra }}
+      ios_backgroundColor={colors.trackOff}
       accessibilityLabel={label}
       testID={testID}
     /></View>

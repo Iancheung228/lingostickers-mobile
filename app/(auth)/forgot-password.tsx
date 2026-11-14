@@ -1,45 +1,55 @@
 import { useState } from 'react';
-import {
-  View, Text, TextInput, TouchableOpacity,
-  StyleSheet, KeyboardAvoidingView, Platform, ActivityIndicator,
-} from 'react-native';
-import { Link } from 'expo-router';
+import { StyleSheet, Text, View } from 'react-native';
+import { useRouter } from 'expo-router';
 import { useAuth } from '@/hooks/useAuth';
-import CozyBackground from '@/components/CozyBackground';
-import { colors, shadows, radii, spacing, typography, fonts } from '@/constants/theme';
-import { isEmail } from '@/lib/authErrors';
+import AuthShell, { AuthLink } from '@/components/AuthShell';
+import Field from '@/components/ui/Field';
+import Button from '@/components/ui/Button';
+import InlineError from '@/components/ui/InlineError';
+import { colors, fonts, radii, spacing } from '@/constants/theme';
+import { authActionMessage, isEmail } from '@/lib/authErrors';
+import { isNetworkError } from '@/lib/friendlyError';
 import { debugWarn } from '@/lib/debug';
+import { haptic } from '@/lib/haptics';
 
 export default function ForgotPasswordScreen() {
   const { resetPasswordForEmail, verifyRecoveryOtp } = useAuth();
+  const router = useRouter();
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
   const [code, setCode] = useState('');
   const [verifying, setVerifying] = useState(false);
   const [verifyError, setVerifyError] = useState<string | null>(null);
+  const [sendError, setSendError] = useState<string | null>(null);
   const [resent, setResent] = useState(false);
 
   const isFormValid = isEmail(email);
   const isCodeValid = code.trim().length > 0;
 
   const handleSend = async () => {
-    if (!isFormValid) return;
+    if (!isFormValid || loading) return;
+    setSendError(null);
     setLoading(true);
     const { error } = await resetPasswordForEmail(email.trim());
     setLoading(false);
-    if (error) debugWarn('resetPasswordForEmail error:', error.message);
-    // Reported as sent either way, deliberately: saying "no such account"
-    // here would turn this box into a way to test which addresses are
-    // registered.
+    if (error) {
+      debugWarn('resetPasswordForEmail error:', error.message);
+      // Only a network or rate-limit failure is reported. Anything else (an
+      // unknown address included) reads as sent, deliberately: saying "no such
+      // account" would turn this box into a way to test which addresses exist.
+      if (isNetworkError(error) || /rate limit|too many/i.test(error.message)) {
+        haptic.error();
+        setSendError(authActionMessage(error, "Couldn't send the code. Try again."));
+        return;
+      }
+    }
     if (sent) setResent(true);
     setSent(true);
   };
 
-  // Once the code has been sent, this screen used to have exactly two exits:
-  // type the right code, or go back to sign-in and start over. A code that
-  // never arrives, or an address with a typo in it, had no route out — so
-  // both are offered below the field.
+  // Once the code has been sent, a code that never arrives or an address with a
+  // typo needs a way out besides starting over from sign-in.
   const handleUseDifferentEmail = () => {
     setSent(false);
     setCode('');
@@ -48,196 +58,91 @@ export default function ForgotPasswordScreen() {
   };
 
   const handleVerify = async () => {
-    if (!isCodeValid) return;
+    if (!isCodeValid || verifying) return;
     setVerifyError(null);
     setVerifying(true);
     const { error } = await verifyRecoveryOtp(email.trim(), code.trim());
     setVerifying(false);
     if (error) {
-      setVerifyError('That code is invalid or expired. Check the latest email and try again.');
+      haptic.error();
+      setVerifyError(
+        isNetworkError(error)
+          ? authActionMessage(error, '')
+          : 'That code is invalid or expired. Check the latest email and try again.',
+      );
     }
   };
 
   return (
-    <CozyBackground variant="full">
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      >
-        <View style={styles.inner}>
-          <Text style={styles.title}>Reset Password</Text>
-          <Text style={styles.subtitle}>
-            {sent ? 'Enter the code we emailed you' : "We'll email you a code to reset it"}
-          </Text>
+    <AuthShell
+      title="Reset Password"
+      tagline={sent ? 'Enter the code we emailed you' : "We'll email you a code to reset it"}
+    >
+      {sendError && <View style={styles.block}><InlineError message={sendError} /></View>}
 
-          <View style={styles.card}>
-            <TextInput
-              style={styles.input}
-              placeholder="Email"
-              placeholderTextColor={colors.inkFaint}
-              value={email}
-              onChangeText={setEmail}
-              autoCapitalize="none"
-              autoCorrect={false}
-              keyboardType="email-address"
-              textContentType="emailAddress"
-              autoComplete="email"
-              returnKeyType="send"
-              onSubmitEditing={handleSend}
-              editable={!sent}
-            />
+      <Field
+        placeholder="Email"
+        value={email}
+        onChangeText={setEmail}
+        autoCapitalize="none"
+        autoCorrect={false}
+        keyboardType="email-address"
+        textContentType="emailAddress"
+        autoComplete="email"
+        returnKeyType="send"
+        onSubmitEditing={handleSend}
+        editable={!sent}
+      />
 
-            {!sent && (
-              <TouchableOpacity
-                style={[styles.button, (!isFormValid || loading) && styles.buttonDisabled]}
-                onPress={handleSend}
-                disabled={!isFormValid || loading}
-                activeOpacity={0.8}
-              >
-                {loading ? (
-                  <ActivityIndicator color={colors.card} />
-                ) : (
-                  <Text style={styles.buttonText}>Send Reset Code</Text>
-                )}
-              </TouchableOpacity>
-            )}
+      {!sent && <Button label="Send Reset Code" onPress={handleSend} disabled={!isFormValid} loading={loading} />}
 
-            {sent && (
-              <>
-                <View style={styles.messageBox} accessibilityLiveRegion="polite">
-                  <Text style={styles.messageText}>
-                    If an account exists for that email, we sent a code. Check your inbox.
-                  </Text>
-                </View>
-
-                {/* oneTimeCode is what puts the code from the email onto the
-                    keyboard's suggestion bar, so it can be filled with one
-                    tap instead of memorised and typed back in. */}
-                <TextInput
-                  style={styles.input}
-                  placeholder="Code from email"
-                  placeholderTextColor={colors.inkFaint}
-                  value={code}
-                  onChangeText={setCode}
-                  keyboardType="number-pad"
-                  textContentType="oneTimeCode"
-                  autoComplete="one-time-code"
-                  autoFocus
-                  returnKeyType="go"
-                  onSubmitEditing={handleVerify}
-                />
-
-                {verifyError && (
-                  <View style={styles.errorBox} accessibilityRole="alert" accessibilityLiveRegion="polite">
-                    <Text style={styles.errorText}>{verifyError}</Text>
-                  </View>
-                )}
-
-                <TouchableOpacity
-                  style={[styles.button, (!isCodeValid || verifying) && styles.buttonDisabled]}
-                  onPress={handleVerify}
-                  disabled={!isCodeValid || verifying}
-                  activeOpacity={0.8}
-                >
-                  {verifying ? (
-                    <ActivityIndicator color={colors.card} />
-                  ) : (
-                    <Text style={styles.buttonText}>Verify Code</Text>
-                  )}
-                </TouchableOpacity>
-
-                <View style={styles.recoveryRow}>
-                  <TouchableOpacity onPress={handleSend} disabled={loading} hitSlop={8}>
-                    <Text style={[styles.recoveryLink, loading && styles.recoveryLinkBusy]}>
-                      {resent ? 'Code sent again' : 'Send another code'}
-                    </Text>
-                  </TouchableOpacity>
-                  <Text style={styles.recoveryDot}>·</Text>
-                  <TouchableOpacity onPress={handleUseDifferentEmail} hitSlop={8}>
-                    <Text style={styles.recoveryLink}>Use a different email</Text>
-                  </TouchableOpacity>
-                </View>
-              </>
-            )}
-
-            <Link href="/(auth)/sign-in" asChild>
-              <TouchableOpacity style={styles.linkButton}>
-                <Text style={styles.linkText}>Back to <Text style={styles.linkAccent}>Sign In</Text></Text>
-              </TouchableOpacity>
-            </Link>
+      {sent && (
+        <>
+          <View style={styles.sentNote} accessibilityLiveRegion="polite">
+            <Text style={styles.sentText} maxFontSizeMultiplier={2}>
+              If an account exists for that email, we sent a code. Check your inbox.
+            </Text>
           </View>
-        </View>
-      </KeyboardAvoidingView>
-    </CozyBackground>
+
+          {/* oneTimeCode puts the emailed code on the keyboard's suggestion bar. */}
+          <Field
+            placeholder="Code from email"
+            value={code}
+            onChangeText={setCode}
+            error={verifyError}
+            keyboardType="number-pad"
+            textContentType="oneTimeCode"
+            autoComplete="one-time-code"
+            autoFocus
+            returnKeyType="go"
+            onSubmitEditing={handleVerify}
+          />
+
+          <Button label="Verify Code" onPress={handleVerify} disabled={!isCodeValid} loading={verifying} />
+
+          <View style={styles.recovery}>
+            <Button
+              kind="tertiary"
+              label={resent ? 'Code sent again' : 'Send another code'}
+              onPress={handleSend}
+              disabled={loading}
+            />
+            <Button kind="tertiary" label="Use a different email" onPress={handleUseDifferentEmail} />
+          </View>
+        </>
+      )}
+
+      <View style={styles.foot}>
+        <AuthLink prefix="Back to" accent="Sign In" onPress={() => router.replace('/(auth)/sign-in')} />
+      </View>
+    </AuthShell>
   );
 }
 
 const styles = StyleSheet.create({
-  flex: { flex: 1 },
-  inner: { flex: 1, justifyContent: 'center', paddingHorizontal: spacing.lg },
-  title: {
-    fontSize: 34,
-    fontFamily: fonts.display,
-    color: colors.inkDark,
-    textAlign: 'center',
-    marginBottom: spacing.sm,
-    letterSpacing: -0.5,
-  },
-  subtitle: {
-    ...typography.body,
-    color: colors.inkMid,
-    textAlign: 'center',
-    marginBottom: spacing.lg,
-  },
-  card: {
-    backgroundColor: colors.card,
-    borderRadius: radii.xl,
-    padding: spacing.lg,
-    ...shadows.card,
-  },
-  input: { backgroundColor: colors.sky, borderRadius: radii.md, paddingHorizontal: spacing.md, paddingVertical: 14, fontSize: 15, fontFamily: fonts.text, color: colors.inkDark, marginBottom: spacing.md, borderWidth: 1.5, borderColor: colors.border, },
-  button: {
-    backgroundColor: colors.terra,
-    borderRadius: radii.lg,
-    paddingVertical: 16,
-    alignItems: 'center',
-    marginTop: spacing.xs,
-    marginBottom: spacing.md,
-    ...shadows.button,
-  },
-  buttonDisabled: { backgroundColor: colors.terraLight, shadowOpacity: 0, elevation: 0 },
-  buttonText: { color: colors.card, fontSize: 16, fontFamily: fonts.display, letterSpacing: 0.3 },
-  messageBox: {
-    borderRadius: radii.md,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm + 2,
-    marginBottom: spacing.md,
-    backgroundColor: colors.successLight,
-    borderWidth: 1.5,
-    borderColor: colors.success,
-  },
-  messageText: { fontSize: 14, fontFamily: fonts.display, color: colors.success },
-  recoveryRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-    marginBottom: spacing.md,
-  },
-  recoveryLink: { fontSize: 13, fontFamily: fonts.display, color: colors.terra },
-  recoveryLinkBusy: { color: colors.inkFaint },
-  recoveryDot: { fontSize: 13, color: colors.inkFaint },
-  errorBox: {
-    borderRadius: radii.md,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm + 2,
-    marginBottom: spacing.md,
-    backgroundColor: colors.errorLight,
-    borderWidth: 1.5,
-    borderColor: colors.error,
-  },
-  errorText: { fontSize: 14, fontFamily: fonts.display, color: colors.error },
-  linkButton: { alignItems: 'center' },
-  linkText: { color: colors.inkLight, fontSize: 14, fontFamily: fonts.text },
-  linkAccent: { color: colors.terra, fontFamily: fonts.display },
+  block: { marginBottom: spacing.ms },
+  sentNote: { backgroundColor: colors.successLight, borderRadius: radii.md, padding: spacing.ms, marginBottom: spacing.ms },
+  sentText: { fontFamily: fonts.text, fontSize: 14, lineHeight: 20, color: colors.success },
+  recovery: { alignItems: 'center', marginTop: spacing.sm },
+  foot: { alignItems: 'center', marginTop: spacing.sm },
 });

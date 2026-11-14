@@ -1,3 +1,4 @@
+import { friendlyError } from '@/lib/friendlyError';
 import { useEffect, useRef, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
 import InlineError from '@/components/ui/InlineError';
@@ -55,7 +56,7 @@ export default function SceneWords({
       onAnswered?.();
     } catch (err: any) {
       if (seq !== ticket.current) return;
-      setMessage(err?.message ?? 'Something went wrong.');
+      setMessage(await friendlyError(err, "Couldn't find more words. Try again."));
       setStatus('failed');
       onAnswered?.();
     }

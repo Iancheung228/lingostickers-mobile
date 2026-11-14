@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Animated, StyleSheet, Text, View } from 'react-native';
 import { colors, fonts } from '@/constants/theme';
+import { useMotion } from '@/lib/motion';
 
 interface AuthIntroProps {
   children: React.ReactNode;
@@ -13,19 +14,23 @@ const INTRO_HOLD_MS = 450;
 const FADE_MS = 380;
 
 export default function AuthIntro({ children }: AuthIntroProps) {
-  const [introVisible, setIntroVisible] = useState(true);
+  const { reduced, fade } = useMotion();
+  // Under Reduce Motion there is no brand moment to wait through: show the form.
+  const [introVisible, setIntroVisible] = useState(!reduced);
   const introOpacity = useRef(new Animated.Value(1)).current;
   const contentOpacity = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
+    if (reduced) { contentOpacity.setValue(1); setIntroVisible(false); return; }
     const timer = setTimeout(() => {
       Animated.parallel([
-        Animated.timing(introOpacity, { toValue: 0, duration: FADE_MS, useNativeDriver: true }),
-        Animated.timing(contentOpacity, { toValue: 1, duration: FADE_MS, useNativeDriver: true }),
+        Animated.timing(introOpacity, { toValue: 0, duration: fade(FADE_MS), useNativeDriver: true }),
+        Animated.timing(contentOpacity, { toValue: 1, duration: fade(FADE_MS), useNativeDriver: true }),
       ]).start(() => setIntroVisible(false));
     }, INTRO_HOLD_MS);
     return () => clearTimeout(timer);
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reduced]);
 
   return (
     <View style={styles.root}>

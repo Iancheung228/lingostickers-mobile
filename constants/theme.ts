@@ -76,6 +76,7 @@ export const colors = {
   // Utility
   border:     '#EADFD6', // decorative edges only (1.2:1); controls use ctl
   ctl:        '#957579', // input, chip, secondary-outline borders (3.76 on cream, 4.12 on white)
+  trackOff:   '#9C8A82', // switch off-track, warm taupe (3.3:1 on card, 3.0 on cream)
   divider:    '#F0E6DC', // row dividers inside cards
   scrim:      'rgba(51, 41, 42, 0.42)', // sheet and modal backdrop
   grabber:    '#E3D3C8',

@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useMotion } from '@/lib/motion';
 import {
   Modal, View, Text, StyleSheet, TouchableOpacity, FlatList,
-  SafeAreaView, ActivityIndicator, Alert, useWindowDimensions,
+  SafeAreaView, ActivityIndicator, useWindowDimensions,
 } from 'react-native';
 import { GestureHandlerRootView, Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
@@ -16,6 +17,8 @@ import { supabase } from '@/lib/supabase';
 import { useSignedUrls } from '@/hooks/useSignedUrls';
 import { homeCanvasSize, homeTileFraction, maxPlacement, HOME_WALL_CAP } from '@/lib/homeWall';
 import { alertPermissionDenied } from '@/lib/permissions';
+import { ToastLayer, useToast } from '@/components/ToastProvider';
+import { friendlyErrorSync } from '@/lib/friendlyError';
 import HomeWallField from '@/components/HomeWallField';
 import BackgroundCropper, { CropResult } from '@/components/BackgroundCropper';
 import CutoutSticker from '@/components/CutoutSticker';
@@ -56,6 +59,8 @@ export default function HomeWallEditor({
   onAdd, onRemove, onMove, onTidy,
   backgroundPath, backgroundDim, backgroundVersion, onChangeBackground, onBackgroundUploaded,
 }: HomeWallEditorProps) {
+  const { reduced } = useMotion();
+  const toast = useToast();
   const { width: screenWidth } = useWindowDimensions();
   // Derived from the same constants the home panel uses, so the canvas here
   // is the panel's exact aspect ratio on every device — which is the whole
@@ -147,30 +152,41 @@ export default function HomeWallEditor({
       if (error) throw error;
       onBackgroundUploaded();
     } catch (err: any) {
-      Alert.alert("Couldn't set cover photo", err?.message ?? 'Something went wrong.');
+      toast.show({ kind: 'error', message: friendlyErrorSync(err, "Couldn't set the cover photo. Try again.") });
     } finally {
       setUploadingBackground(false);
     }
   };
 
-  const handleRemoveBackground = () => {
+  // Removing the cover is an undo toast, not a confirm (B-app 8): the row is
+  // cleared at once, the stored photo goes after the undo window.
+  const handleRemoveBackground = async () => {
     if (!backgroundPath) return;
-    Alert.alert('Remove cover photo', 'Go back to the plain cream background?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Remove', style: 'destructive',
-        onPress: async () => {
-          const path = backgroundPath;
-          const { error } = await onChangeBackground(null);
-          if (error) { Alert.alert("Couldn't remove cover photo", error.message); return; }
-          await supabase.storage.from('sticker-images').remove([path]);
+    const path = backgroundPath;
+    const { error } = await onChangeBackground(null);
+    if (error) { toast.show({ kind: 'error', message: friendlyErrorSync(error, "Couldn't remove the cover photo. Try again.") }); return; }
+    let undone = false;
+    const timer = setTimeout(() => {
+      if (!undone) void supabase.storage.from('sticker-images').remove([path]);
+    }, 6500);
+    toast.show({
+      kind: 'undo',
+      message: 'Cover photo removed',
+      action: {
+        label: 'Undo',
+        onPress: () => {
+          undone = true;
+          clearTimeout(timer);
+          void onChangeBackground(path).then(({ error: e }) => {
+            if (e) toast.show({ kind: 'error', message: friendlyErrorSync(e, "Couldn't bring the cover photo back.") });
+          });
         },
       },
-    ]);
+    });
   };
 
   return (
-    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+    <Modal visible={visible} animationType={reduced ? 'none' : 'slide'} presentationStyle="pageSheet" onRequestClose={onClose}>
       {/* A RN Modal renders into its own view hierarchy, outside the root
           provider in app/_layout.tsx — without its own root here, none of
           the drag gestures below would ever fire. */}
@@ -324,6 +340,7 @@ export default function HomeWallEditor({
           onCancel={() => setPickedAsset(null)}
           onConfirm={handleCropConfirm}
         />
+        <ToastLayer />
       </GestureHandlerRootView>
     </Modal>
   );
@@ -347,6 +364,7 @@ function DraggableTile({
   hoverTrash: SharedValue<number>;
   trashBounds: { left: number; top: number; size: number };
 }) {
+  const { reduced } = useMotion();
   const side = homeTileFraction(item.sticker_id) * canvas.width;
   const { maxX: maxFx, maxY: maxFy } = maxPlacement(homeTileFraction(item.sticker_id), canvas.aspect);
   const maxX = maxFx * canvas.width;
@@ -364,8 +382,10 @@ function DraggableTile({
   // is and an incoming echo of its own last write would fight it.
   useEffect(() => {
     if (lifted.value !== 0) return;
-    x.value = withTiming(item.x * canvas.width, { duration: 220 });
-    y.value = withTiming(item.y * canvas.height, { duration: 220 });
+    // Reduce Motion: tidy-up moves the tile without travelling.
+    x.value = reduced ? item.x * canvas.width : withTiming(item.x * canvas.width, { duration: 220 });
+    y.value = reduced ? item.y * canvas.height : withTiming(item.y * canvas.height, { duration: 220 });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [item.x, item.y, canvas.width, canvas.height]);
 
   const commitMove = (nx: number, ny: number) => {
@@ -385,8 +405,8 @@ function DraggableTile({
     .onStart(() => {
       startX.value = x.value;
       startY.value = y.value;
-      lifted.value = withSpring(1, { damping: 18, stiffness: 260 });
-      dragActive.value = withTiming(1, { duration: 150 });
+      lifted.value = reduced ? 1 : withSpring(1, { damping: 18, stiffness: 260 });
+      dragActive.value = withTiming(1, { duration: reduced ? 120 : 150 });
       runOnJS(pickup)();
     })
     .onUpdate((e) => {
@@ -401,15 +421,15 @@ function DraggableTile({
       hoverTrash.value = now;
     })
     .onEnd(() => {
-      lifted.value = withSpring(0, { damping: 18, stiffness: 260 });
-      dragActive.value = withTiming(0, { duration: 150 });
+      lifted.value = reduced ? 0 : withSpring(0, { damping: 18, stiffness: 260 });
+      dragActive.value = withTiming(0, { duration: reduced ? 120 : 150 });
       if (hoverTrash.value === 1) {
         hoverTrash.value = 0;
         runOnJS(commitRemove)();
       } else {
         runOnJS(commitMove)(x.value, y.value);
       }
-    }), [maxX, maxY, side, trashBounds.left, trashBounds.top, trashBounds.size]);
+    }), [maxX, maxY, side, trashBounds.left, trashBounds.top, trashBounds.size, reduced]);
 
   // Picked-up tiles scale up and straighten out, and their shadow deepens —
   // enough of the tile shows around a fingertip to see what you're placing,

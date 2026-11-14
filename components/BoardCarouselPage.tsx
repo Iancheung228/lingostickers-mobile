@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
 import {
   Trash2, Plus, ImagePlus, ImageOff, MoreHorizontal, Pencil, Wand2, X, Crop, GraduationCap,
   ChevronLeft, Sticker as StickerIcon,
@@ -77,6 +77,8 @@ interface BoardCarouselPageProps {
   autoOpenPicker: boolean;
   onAutoOpenHandled: () => void;
 }
+
+const COVER_UNDO_MS = 6500;
 
 export default function BoardCarouselPage({
   board, currentUserId, displayStyle, borderStyle, isActive,
@@ -296,29 +298,36 @@ export default function BoardCarouselPage({
     }
   };
 
-  const handleRemoveBackground = () => {
+  // Removing a cover is an undo toast, not a confirm (B-app 8). The row is
+  // cleared at once; the stored files go only after the undo window closes, so
+  // Undo can put the very same photo and crop back.
+  const handleRemoveBackground = async () => {
     if (!board.background_path) return;
-    Alert.alert(
-      'Remove cover photo',
-      'Go back to the plain cream background?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Remove', style: 'destructive',
-          onPress: async () => {
-            const path = board.background_path!;
-            const { error } = await onChangeBackground(board.id, null);
-            if (error) { toast.show({ kind: 'error', message: friendlyErrorSync(error, "Couldn't remove the cover photo. Try again.") }); return; }
-            // The source goes with it — it exists only to re-crop this
-            // background, so leaving it behind would orphan a file nothing
-            // can ever reference again.
-            await supabase.storage.from('sticker-images')
-              .remove(sourcePath ? [path, sourcePath] : [path]);
-            onContentChanged();
-          },
+    const path = board.background_path;
+    const crop = board.background_crop ?? null;
+    const files = sourcePath ? [path, sourcePath] : [path];
+    const { error } = await onChangeBackground(board.id, null);
+    if (error) { toast.show({ kind: 'error', message: friendlyErrorSync(error, "Couldn't remove the cover photo. Try again.") }); return; }
+    onContentChanged();
+    let undone = false;
+    const timer = setTimeout(() => {
+      if (!undone) void supabase.storage.from('sticker-images').remove(files);
+    }, COVER_UNDO_MS);
+    toast.show({
+      kind: 'undo',
+      message: 'Cover photo removed',
+      action: {
+        label: 'Undo',
+        onPress: () => {
+          undone = true;
+          clearTimeout(timer);
+          void onChangeBackground(board.id, path, crop).then(({ error: e }) => {
+            if (e) toast.show({ kind: 'error', message: friendlyErrorSync(e, "Couldn't bring the cover photo back.") });
+            else onContentChanged();
+          });
         },
-      ]
-    );
+      },
+    });
   };
 
   // Only the actual release commits to the DB (see BackgroundDimSlider) —

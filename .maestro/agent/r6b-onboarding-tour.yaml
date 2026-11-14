@@ -1,0 +1,48 @@
+# R6b: the three onboarding screens (opened by deep link, so the account and seed are
+# untouched), Skip, the Boards "New board" tile, and the Profile toggles. Skip writes the
+# onboarding-done flag for the QA account, which already has a card, so nothing changes.
+appId: ${APP_ID}
+---
+- runFlow: ../sign-in.yaml
+- openLink: "lingostickers-dev://onboarding"
+- extendedWaitUntil:
+    visible: "Photograph something near you"
+    timeout: 20000
+- waitForAnimationToEnd
+- takeScreenshot: R6b-onboarding-1
+- tapOn: "Next"
+- extendedWaitUntil:
+    visible: "It becomes a sticker and a word"
+    timeout: 10000
+- waitForAnimationToEnd
+- takeScreenshot: R6b-onboarding-2
+- tapOn: "Next"
+- extendedWaitUntil:
+    visible: "Review a little each day"
+    timeout: 10000
+- waitForAnimationToEnd
+- assertVisible: "Get started"
+- assertVisible: "Skip"
+- takeScreenshot: R6b-onboarding-3
+- waitForAnimationToEnd:
+    timeout: 2000
+- tapOn: "Skip"
+- waitForAnimationToEnd:
+    timeout: 3000
+- extendedWaitUntil:
+    visible: "Collection"
+    timeout: 15000
+- tapOn: "Boards"
+- waitForAnimationToEnd:
+    timeout: 2000
+- takeScreenshot: R6b-boards-tile
+- tapOn: "Profile"
+- extendedWaitUntil:
+    visible: "Due tomorrow.*"
+    timeout: 15000
+- scrollUntilVisible:
+    element: "Simple grading"
+    direction: DOWN
+    timeout: 20000
+- waitForAnimationToEnd
+- takeScreenshot: R6b-toggles

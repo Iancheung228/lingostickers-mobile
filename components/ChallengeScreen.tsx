@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useMotion } from '@/lib/motion';
 import {
   Modal, View, Text, TextInput, TouchableOpacity, StyleSheet,
   SafeAreaView, Image, ActivityIndicator, Alert, KeyboardAvoidingView, Platform, ScrollView,
@@ -39,6 +40,7 @@ export default function ChallengeScreen({ challenge, onClose, onWin }: Challenge
   const challengeIdRef = useRef(challenge?.id);
   challengeIdRef.current = challenge?.id;
   const [reportOpen, setReportOpen] = useState(false);
+  const { reduced } = useMotion();
   const shakeX = useSharedValue(0);
   const { submitAnswer, requestHint, getChallengeImageUrl } = useChallenges();
   const { blockUser } = useFriends();
@@ -80,7 +82,7 @@ export default function ChallengeScreen({ challenge, onClose, onWin }: Challenge
   const shakeStyle = useAnimatedStyle(() => ({ transform: [{ translateX: shakeX.value }] }));
 
   const shake = () => {
-    shakeX.value = withSequence(
+    if (!reduced) shakeX.value = withSequence(
       withTiming(-10, { duration: 60 }),
       withTiming(10, { duration: 60 }),
       withTiming(-8, { duration: 60 }),

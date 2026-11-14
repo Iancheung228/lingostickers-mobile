@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useMotion } from '@/lib/motion';
 import { Modal, View, Text, StyleSheet, SafeAreaView, Pressable } from 'react-native';
 import Animated, {
   useSharedValue, useAnimatedStyle, withDelay, withTiming, runOnJS, Easing,
@@ -33,6 +34,7 @@ const URL_DEADLINE_MS = 6000;
 // underneath — then hands off to DiscoveryReveal.
 export default function GhostCutoutReveal({ croppedUri, imagePath, onComplete }: GhostCutoutRevealProps) {
   const [cutoutUrl, setCutoutUrl] = useState<string | null>(null);
+  const { reduced } = useMotion();
   const progress = useSharedValue(0);
 
   // Three things can finish this screen — the animation ending, the deadline
@@ -63,15 +65,16 @@ export default function GhostCutoutReveal({ croppedUri, imagePath, onComplete }:
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     progress.value = withDelay(
       HOLD_MS,
-      withTiming(1, { duration: FADE_MS, easing: Easing.out(Easing.cubic) }, (finished) => {
+      withTiming(1, { duration: reduced ? 120 : FADE_MS, easing: Easing.out(Easing.cubic) }, (finished) => {
         if (finished) runOnJS(finish)();
       }),
     );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cutoutUrl, finish]);
 
   const ghostStyle = useAnimatedStyle(() => ({
     opacity: 1 - progress.value,
-    transform: [{ scale: 1 + progress.value * GHOST_SCALE_DELTA }],
+    transform: [{ scale: 1 + progress.value * (reduced ? 0 : GHOST_SCALE_DELTA) }],
   }));
   const cutoutStyle = useAnimatedStyle(() => ({
     opacity: progress.value,

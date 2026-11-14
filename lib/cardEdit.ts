@@ -1,6 +1,6 @@
 import type { EditorSpec, Suggestion } from '@/components/FieldEditor';
 import { supabase } from '@/lib/supabase';
-import { getFunctionErrorMessage } from '@/lib/functionError';
+import { friendlyBody, friendlyError, UserFacingError } from '@/lib/friendlyError';
 import { languageLabel } from '@/lib/languages';
 import type { Sticker } from '@/lib/types';
 import { fonts, wordFontFor, sentenceFontFor } from '@/constants/theme';
@@ -118,9 +118,9 @@ export async function wordForMeaning(englishWord: string, language: Sticker['lan
   const { data, error } = await supabase.functions.invoke('translate-word', {
     body: { englishWord, language },
   });
-  if (error) throw new Error(await getFunctionErrorMessage(error));
-  if (data?.error) throw new Error(String(data.error));
-  if (!data?.word) throw new Error('No word came back.');
+  if (error) throw new UserFacingError(await friendlyError(error, "Couldn't look that up. Try again."));
+  if (data?.error) throw new UserFacingError(friendlyBody(String(data.error), "Couldn't look that up. Try again."));
+  if (!data?.word) throw new UserFacingError("Couldn't find a word for that. Try another.");
   // Only keys the model actually returned — an `undefined` in the patch would
   // travel to Supabase as a column being set, not as one being left alone.
   const fields: Record<string, string> = { word: String(data.word) };
@@ -138,9 +138,9 @@ export async function readingForWord(word: string, language: Sticker['language']
   const { data, error } = await supabase.functions.invoke('translate-word', {
     body: { word, language },
   });
-  if (error) throw new Error(await getFunctionErrorMessage(error));
-  if (data?.error) throw new Error(String(data.error));
-  if (!data?.reading && !data?.translation) throw new Error('Nothing came back.');
+  if (error) throw new UserFacingError(await friendlyError(error, "Couldn't look that up. Try again."));
+  if (data?.error) throw new UserFacingError(friendlyBody(String(data.error), "Couldn't look that up. Try again."));
+  if (!data?.reading && !data?.translation) throw new UserFacingError("Couldn't find anything for that. Try another.");
   // The word stays exactly as typed: the learner was correcting it, and a
   // model "fixing" their fix back would be maddening.
   const fields: Record<string, string> = {};

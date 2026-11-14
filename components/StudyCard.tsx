@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Modal, View, Text, StyleSheet, Pressable, Animated, AccessibilityInfo, ScrollView, Alert,
+  Modal, View, Text, StyleSheet, Pressable, Animated, AccessibilityInfo, ScrollView,
   PanResponder, useWindowDimensions, NativeSyntheticEvent, NativeScrollEvent,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -198,14 +198,12 @@ export default function StudyCard({
       // about an apple, so ask now, while the learner is here.
       const newWord = typeof patch.word === 'string' ? patch.word : null;
       if (newWord && newWord !== sticker.word && sticker.sentence && !splitAroundWord(sticker.sentence, newWord)) {
-        Alert.alert(
-          'Update the sentence too?',
-          `Your example sentence doesn't use ${newWord} yet.`,
-          [
-            { text: 'Leave it', style: 'cancel' },
-            { text: 'Edit sentence', onPress: () => openEditor('sentence') },
-          ],
-        );
+        // A nudge, not a decision: a toast with the action, nothing blocks the edit.
+        toast.show({
+          kind: 'info',
+          message: `Your example sentence doesn't use ${newWord} yet.`,
+          action: { label: 'Edit sentence', onPress: () => openEditor('sentence') },
+        });
       }
     } catch {
       // The sheet stays, with the edit in it (lesson #3: never error.message).

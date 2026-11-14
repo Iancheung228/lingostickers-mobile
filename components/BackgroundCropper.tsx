@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
-import { Modal, View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
+import { Modal, View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { useSharedValue, useAnimatedStyle } from 'react-native-reanimated';
 import { X, Check, RotateCw } from 'lucide-react-native';
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import { CropRect } from '@/lib/types';
+import { ToastLayer, useToast } from '@/components/ToastProvider';
+import { friendlyErrorSync } from '@/lib/friendlyError';
 import { colors, radii, spacing, fonts, shadows } from '@/constants/theme';
 
 export interface PickedAsset {
@@ -63,6 +65,7 @@ function clampTranslate(value: number, displayedSize: number, frameSize: number)
 export default function BackgroundCropper({
   asset, frameWidth, frameHeight, maxOutputSide, initialCrop, onCancel, onConfirm,
 }: BackgroundCropperProps) {
+  const toast = useToast();
   const [working, setWorking] = useState<PickedAsset | null>(asset);
   const [rotating, setRotating] = useState(false);
   const [confirming, setConfirming] = useState(false);
@@ -156,7 +159,7 @@ export default function BackgroundCropper({
       const saved = await rendered.saveAsync({ compress: 0.9, format: SaveFormat.JPEG });
       setWorking({ uri: saved.uri, width: rendered.width, height: rendered.height });
     } catch (err: any) {
-      Alert.alert("Couldn't rotate photo", err?.message ?? 'Something went wrong.');
+      toast.show({ kind: 'error', message: friendlyErrorSync(err, "Couldn't rotate the photo. Try again.") });
     } finally {
       setRotating(false);
     }
@@ -195,7 +198,7 @@ export default function BackgroundCropper({
         },
       });
     } catch (err: any) {
-      Alert.alert("Couldn't crop photo", err?.message ?? 'Something went wrong.');
+      toast.show({ kind: 'error', message: friendlyErrorSync(err, "Couldn't crop the photo. Try again.") });
     } finally {
       setConfirming(false);
     }
@@ -262,6 +265,7 @@ export default function BackgroundCropper({
             <Text style={styles.rotateBtnText}>Rotate</Text>
           </TouchableOpacity>
         </View>
+        <ToastLayer />
       </View>
     </Modal>
   );

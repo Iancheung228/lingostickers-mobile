@@ -9,6 +9,16 @@ import { getFunctionErrorMessage } from '@/lib/functionError';
 // for users, so a *known short sentence* from one is passed through after the
 // raw-looking ones (stack traces, SQL, status text) are filtered out.
 
+/**
+ * An error whose message was already written for the user (it went through
+ * friendlyError at the boundary that threw it). friendlyError passes it through,
+ * so a lower layer can pick the copy once and screens still never read
+ * `error.message` themselves.
+ */
+export class UserFacingError extends Error {
+  constructor(message: string) { super(message); this.name = 'UserFacingError'; }
+}
+
 const DEFAULT_FALLBACK = "Something went wrong. Please try again.";
 
 const NETWORK = /network request failed|failed to fetch|network error|internet connection|timed out|timeout|econn|offline|load failed/i;
@@ -29,6 +39,7 @@ function plain(msg: string, fallback: string): string {
 
 /** Synchronous mapping; use when you already have a message or can't await. */
 export function friendlyErrorSync(err: unknown, fallback: string = DEFAULT_FALLBACK): string {
+  if (err instanceof UserFacingError) return err.message;
   const msg = err instanceof Error ? err.message : typeof err === 'string' ? err : '';
   return plain(msg, fallback);
 }
@@ -38,12 +49,14 @@ export function friendlyErrorSync(err: unknown, fallback: string = DEFAULT_FALLB
  * sentence is trusted; everything else falls back to plain copy.
  */
 export async function friendlyError(err: unknown, fallback: string = DEFAULT_FALLBACK): Promise<string> {
-  if (err instanceof FunctionsHttpError) {
-    const body = await getFunctionErrorMessage(err);
-    if (body && body.length <= 140 && !RAW.test(body) && !NETWORK.test(body) && !AUTH.test(body) && /[.!?]$/.test(body.trim())) {
-      return body.trim();
-    }
-    return plain(body, fallback);
-  }
+  if (err instanceof FunctionsHttpError) return friendlyBody(await getFunctionErrorMessage(err), fallback);
   return friendlyErrorSync(err, fallback);
+}
+
+/** For a body string an edge function wrote ({ error: '...' }): a short clean sentence passes, anything else maps. */
+export function friendlyBody(body: string, fallback: string = DEFAULT_FALLBACK): string {
+  if (body && body.length <= 140 && !RAW.test(body) && !NETWORK.test(body) && !AUTH.test(body) && /[.!?]$/.test(body.trim())) {
+    return body.trim();
+  }
+  return plain(body, fallback);
 }

@@ -1,0 +1,56 @@
+# R6b: settled screenshots of the restyled auth screens, plus an inline field error.
+# Does not submit a real sign-up or reset (no email is sent).
+appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
+---
+- launchApp:
+    clearState: true
+- openLink: "exp+lingostickers-mobile://expo-development-client/?url=http%3A%2F%2Flocalhost%3A${METRO_PORT}"
+- tapOn:
+    text: "Open"
+    optional: true
+- extendedWaitUntil:
+    visible: "WELCOME BACK"
+    timeout: 60000
+- waitForAnimationToEnd:
+    timeout: 3000
+- takeScreenshot: R6b-sign-in
+- tapOn: "Email"
+- waitForAnimationToEnd:
+    timeout: 1500
+- tapOn: "Email"
+- inputText: ${MAESTRO_EMAIL}
+- tapOn: "Password"
+- waitForAnimationToEnd:
+    timeout: 1500
+- tapOn: "Password"
+- inputText: "definitely-wrong-password"
+- tapOn: "Sign In"
+- extendedWaitUntil:
+    visible: ".*That email and password don't match.*"
+    timeout: 20000
+- assertNotVisible: ".*Invalid login credentials.*"
+- tapOn:
+    text: "Not Now"
+    optional: true
+- takeScreenshot: R6b-sign-in-error
+- tapOn: "Forgot password\\?"
+- tapOn:
+    text: "Not Now"
+    optional: true
+- extendedWaitUntil:
+    visible: "We'll email you a code to reset it"
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 1500
+- takeScreenshot: R6b-forgot-password
+- tapOn: ".*Sign In.*"
+- extendedWaitUntil:
+    visible: "WELCOME BACK"
+    timeout: 15000
+- tapOn: ".*Sign Up.*"
+- extendedWaitUntil:
+    visible: "Create your collection"
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 1500
+- takeScreenshot: R6b-sign-up

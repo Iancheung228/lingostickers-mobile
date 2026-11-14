@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useMotion } from '@/lib/motion';
 import { View, Text, TouchableOpacity, StyleSheet, LayoutChangeEvent } from 'react-native';
 import Animated, { useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
@@ -25,9 +26,11 @@ export default function ToolModeSwitch({ mode, onChange }: ToolModeSwitchProps) 
   const segmentWidth = trackWidth > 0 ? (trackWidth - TRACK_PADDING * 2) / OPTIONS.length : 0;
   const activeIndex = OPTIONS.findIndex((option) => option.key === mode);
 
+  const { reduced, spring } = useMotion();
   const pillX = useSharedValue(0);
   useEffect(() => {
-    pillX.value = withSpring(activeIndex * segmentWidth, { damping: 18, stiffness: 220 });
+    pillX.value = reduced || !spring ? activeIndex * segmentWidth : withSpring(activeIndex * segmentWidth, spring);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeIndex, segmentWidth]);
 
   const pillStyle = useAnimatedStyle(() => ({

@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
+import { useMotion } from '@/lib/motion';
 import { View, StyleSheet } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
@@ -65,6 +66,7 @@ function centroidOf(points: Point[]): Point {
 }
 
 export default function LassoOverlay({ bounds, onComplete }: LassoOverlayProps) {
+  const { reduced } = useMotion();
   const [points, setPoints] = useState<Point[]>([]);
   const [settled, setSettled] = useState(false);
   const [badgeCenter, setBadgeCenter] = useState<Point | null>(null);
@@ -102,14 +104,20 @@ export default function LassoOverlay({ bounds, onComplete }: LassoOverlayProps) 
     if (current.length < MIN_LOOP_POINTS) return;
     setSettled(true);
     setBadgeCenter(centroidOf(current));
-    settle.value = withSequence(
-      withTiming(1, { duration: 120 }),
-      withSpring(0.82, { damping: 8, stiffness: 200 }),
-      withSpring(1, { damping: 14, stiffness: 180 }),
-    );
-    badgeScale.value = withDelay(90, withSpring(1, { damping: 11, stiffness: 200 }));
+    if (reduced) {
+      // No pulse or pop under Reduce Motion: the badge just appears.
+      settle.value = 1;
+      badgeScale.value = 1;
+    } else {
+      settle.value = withSequence(
+        withTiming(1, { duration: 120 }),
+        withSpring(0.82, { damping: 8, stiffness: 200 }),
+        withSpring(1, { damping: 14, stiffness: 180 }),
+      );
+      badgeScale.value = withDelay(90, withSpring(1, { damping: 11, stiffness: 200 }));
+    }
     onComplete(current);
-  }, [onComplete]);
+  }, [onComplete, reduced]);
 
   const pan = useMemo(() => Gesture.Pan()
     .onStart((e) => {

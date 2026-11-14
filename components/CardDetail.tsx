@@ -80,7 +80,8 @@ export default function CardDetail({
     if (busy) return;
     setBusy(true);
     try {
-      const ok = kind === 'save' ? await saveStickerToPhotos(sticker) : await shareSticker(sticker);
+      const onError = (message: string) => { haptic.error(); toast.show({ kind: 'error', message }); };
+      const ok = kind === 'save' ? await saveStickerToPhotos(sticker, onError) : await shareSticker(sticker, onError);
       if (ok && kind === 'save') toast.show({ kind: 'success', message: 'Saved to Photos. Long-press it there to lift it out as a chat sticker.' });
     } catch {
       toast.show({ kind: 'error', message: "Couldn't export that sticker. Try again." });
@@ -129,10 +130,14 @@ export default function CardDetail({
   const removeFromBoard = () => {
     if (!onRemoveFromBoard) return;
     const { boardName, remove } = onRemoveFromBoard;
-    Alert.alert('Remove from board', `Take “${sticker.word}” off “${boardName}”? It stays in your collection.`, [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Remove', onPress: async () => { await remove(); haptic.tap(); onClose(); } },
-    ]);
+    // Not destructive (the card stays in the collection), so no confirm: say what
+    // happened instead.
+    void (async () => {
+      await remove();
+      haptic.tap();
+      onClose();
+      toast.show({ kind: 'info', message: `Removed from “${boardName}”. It's still in your collection.` });
+    })();
   };
 
   // The action sheet's Delete row IS the confirm. Delete is deferred behind an

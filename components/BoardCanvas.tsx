@@ -1,4 +1,5 @@
 import { useEffect, useMemo } from 'react';
+import { useMotion } from '@/lib/motion';
 import { View, Text, StyleSheet } from 'react-native';
 import { Image } from 'expo-image';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
@@ -129,6 +130,7 @@ function CanvasTile({
   hoverTrash: SharedValue<number>;
   trashBounds: TrashBounds;
 }) {
+  const { reduced } = useMotion();
   const { width: tileWidth, height: tileHeight } = useMemo(() => getTileSize(item.sticker_id), [item.sticker_id]);
   const translateX = useSharedValue(item.x);
   const translateY = useSharedValue(item.y);
@@ -162,7 +164,7 @@ function CanvasTile({
     .onStart(() => {
       startX.value = translateX.value;
       startY.value = translateY.value;
-      dragActive.value = withTiming(1, { duration: 150 });
+      dragActive.value = withTiming(1, { duration: reduced ? 120 : 150 });
       runOnJS(handlePickup)();
     })
     .onUpdate((e) => {
@@ -180,7 +182,7 @@ function CanvasTile({
       hoverTrash.value = nowOverTrash;
     })
     .onEnd(() => {
-      dragActive.value = withTiming(0, { duration: 150 });
+      dragActive.value = withTiming(0, { duration: reduced ? 120 : 150 });
       runOnJS(handleDragEnd)();
       if (hoverTrash.value === 1) {
         hoverTrash.value = 0;
@@ -188,7 +190,7 @@ function CanvasTile({
       } else {
         runOnJS(handleMove)(translateX.value, translateY.value);
       }
-    }), [maxX, maxY, trashBounds.left, trashBounds.top, trashBounds.size]);
+    }), [maxX, maxY, trashBounds.left, trashBounds.top, trashBounds.size, reduced]);
 
   const tap = useMemo(() => Gesture.Tap()
     .maxDuration(LONG_PRESS_MS)

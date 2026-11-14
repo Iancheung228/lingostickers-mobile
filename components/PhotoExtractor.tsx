@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useMotion } from '@/lib/motion';
 import {
   Modal, View, Text, Image, TouchableOpacity, StyleSheet, SafeAreaView,
   LayoutChangeEvent,
@@ -170,6 +171,7 @@ export async function renderWholePhotoExtract(
 }
 
 export default function PhotoExtractor({ imageUri, imageWidth, imageHeight, onClose, onExtract, processing, onCancelProcessing, stage, usingServerCutout, error, onErrorAction }: PhotoExtractorProps) {
+  const { reduced } = useMotion();
   const teach = useCoachMark('pick-object', !!imageUri);
   const [mode, setMode] = useState<ToolMode>('box');
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
@@ -355,7 +357,7 @@ export default function PhotoExtractor({ imageUri, imageWidth, imageHeight, onCl
   const canExtract = mode === 'box' || lassoReady;
 
   return (
-    <Modal visible animationType="slide" presentationStyle="fullScreen" onRequestClose={busy ? undefined : onClose}>
+    <Modal visible animationType={reduced ? 'none' : 'slide'} presentationStyle="fullScreen" onRequestClose={busy ? undefined : onClose}>
       <SafeAreaView style={styles.container}>
         <View style={styles.header}>
           <Text style={styles.headerTitle} accessibilityRole="header" accessibilityLabel="Crop your sticker">Pick the object</Text>

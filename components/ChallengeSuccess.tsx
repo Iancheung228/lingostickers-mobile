@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useMotion } from '@/lib/motion';
 import { Modal, View, Text, TouchableOpacity, StyleSheet, SafeAreaView, Image, Pressable } from 'react-native';
 import Animated, {
   useSharedValue, useAnimatedStyle, withSequence, withTiming, withDelay, interpolate, Easing,
@@ -20,6 +21,7 @@ export default function ChallengeSuccess({ challenge, wonStickerId, onClose }: C
   const [sticker, setSticker] = useState<Sticker | null>(null);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [memoryImageUrl, setMemoryImageUrl] = useState<string | null>(null);
+  const { reduced } = useMotion();
   const scale = useSharedValue(0);
   const opacity = useSharedValue(0);
   const flipProgress = useSharedValue(0);
@@ -55,8 +57,9 @@ export default function ChallengeSuccess({ challenge, wonStickerId, onClose }: C
     });
 
     flipProgress.value = 0;
-    opacity.value = withTiming(1, { duration: 300 });
-    scale.value = withSequence(
+    // Reduce Motion: an opacity fade, no pop.
+    opacity.value = withTiming(1, { duration: reduced ? 120 : 300 });
+    scale.value = reduced ? 1 : withSequence(
       withTiming(0, { duration: 0 }),
       withDelay(100, withTiming(1.15, { duration: 350 })),
       withTiming(1, { duration: 200 })
@@ -88,7 +91,7 @@ export default function ChallengeSuccess({ challenge, wonStickerId, onClose }: C
     if (!sticker?.memory_photo_path) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     flipProgress.value = withTiming(flipProgress.value === 0 ? 1 : 0, {
-      duration: 500,
+      duration: reduced ? 0 : 500,
       easing: Easing.out(Easing.cubic),
     });
   };

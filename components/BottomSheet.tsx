@@ -1,4 +1,5 @@
 import { forwardRef, useCallback, useImperativeHandle, useMemo, useRef } from 'react';
+import { useMotion } from '@/lib/motion';
 import {
   Modal, View, StyleSheet, Pressable, Keyboard,
   KeyboardAvoidingView, Platform, LayoutChangeEvent, DimensionValue,
@@ -53,6 +54,7 @@ interface BottomSheetProps {
 const BottomSheet = forwardRef<BottomSheetHandle, BottomSheetProps>(function BottomSheet(
   { onRequestClose, onClosed, header, children, maxHeight }, ref,
 ) {
+  const { reduced } = useMotion();
   const y = useSharedValue(0);
   // Measured, not assumed: the exit has to clear the sheet's real height or
   // its bottom edge stays visible above the home indicator. Seeded large so a
@@ -67,12 +69,13 @@ const BottomSheet = forwardRef<BottomSheetHandle, BottomSheetProps>(function Bot
     if (closing.value) return;
     closing.value = true;
     Keyboard.dismiss();
-    y.value = withTiming(height.value, { duration: EXIT_MS }, finished => {
+    // Reduce Motion: no travel, the sheet just goes (the scrim follows y).
+    y.value = withTiming(height.value, { duration: reduced ? 0 : EXIT_MS }, finished => {
       if (finished) runOnJS(onClosed)();
     });
   };
 
-  const settle = () => { y.value = withSpring(0, SPRING); };
+  const settle = () => { y.value = reduced ? 0 : withSpring(0, SPRING); };
 
   useImperativeHandle(ref, () => ({ close, settle }));
 
@@ -100,8 +103,8 @@ const BottomSheet = forwardRef<BottomSheetHandle, BottomSheetProps>(function Bot
       // Asks rather than closes. The sheet holds its dragged position for the
       // one frame it takes the owner to answer.
       if (left) runOnJS(askToClose)();
-      else y.value = withSpring(0, SPRING);
-    }), []);
+      else y.value = reduced ? 0 : withSpring(0, SPRING);
+    }), [reduced]);
 
   const sheetStyle = useAnimatedStyle(() => ({ transform: [{ translateY: y.value }] }));
 
@@ -116,7 +119,7 @@ const BottomSheet = forwardRef<BottomSheetHandle, BottomSheetProps>(function Bot
   };
 
   return (
-    <Modal visible transparent animationType="slide" statusBarTranslucent onRequestClose={onRequestClose}>
+    <Modal visible transparent animationType={reduced ? 'none' : 'slide'} statusBarTranslucent onRequestClose={onRequestClose}>
       {/* Gestures inside an RN Modal need their own root — the one in
           app/_layout.tsx sits outside the modal's view hierarchy. */}
       <GestureHandlerRootView style={styles.root}>

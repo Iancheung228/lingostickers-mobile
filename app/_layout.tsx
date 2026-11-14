@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { AppState, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Stack, useRouter, useSegments, type ErrorBoundaryProps } from 'expo-router';
 import * as Linking from 'expo-linking';
@@ -29,6 +29,8 @@ import { handleAuthDeepLink } from '@/lib/deepLinks';
 import { flushPendingAvatar } from '@/lib/pendingAvatar';
 import { initAnalytics, trackEvent } from '@/lib/analytics';
 import { ToastProvider } from '@/components/ToastProvider';
+import { onOnboardingDone, shouldShowOnboarding } from '@/lib/onboarding';
+import { useConnectivityProbe } from '@/hooks/useConnectivityProbe';
 import { PendingDeleteProvider } from '@/components/PendingDeleteProvider';
 import { SOCIAL_ENABLED } from '@/lib/features';
 import { colors, fonts as themeFonts, radii, spacing, typography } from '@/constants/theme';
@@ -57,6 +59,11 @@ export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
 
 function RootLayout() {
   const { session, loading, isPasswordRecovery } = useAuth();
+  useConnectivityProbe();
+  // First-run onboarding: which user it was decided for, and the verdict. null
+  // until decided, so a signed-in user is held on the splash-coloured index for
+  // the (usually local-only) check rather than flashing Home first.
+  const [onboarding, setOnboarding] = useState<{ userId: string; needed: boolean } | null>(null);
   const router = useRouter();
   const segments = useSegments();
   // Which notification tap has already been routed, so the response the hook
@@ -102,12 +109,12 @@ function RootLayout() {
 
   useEffect(() => {
     const onUrl = async ({ url }: { url: string }) => {
-      const { type, error } = await handleAuthDeepLink(url);
+      const { type, error } = await handleAuthDeepLink(url); // failure copy is ours (reset-password.tsx)
       // On success, the PASSWORD_RECOVERY auth event (handled below) takes
       // care of routing to reset-password. Only the failure case needs
       // explicit handling here, since no session/event will follow it.
       if (type === 'recovery' && error) {
-        router.replace({ pathname: '/(auth)/reset-password', params: { error: error.message } });
+        router.replace({ pathname: '/(auth)/reset-password', params: { error: 'link' } });
       }
     };
 
@@ -115,6 +122,15 @@ function RootLayout() {
     const sub = Linking.addEventListener('url', onUrl);
     return () => sub.remove();
   }, []);
+
+  const userId = session?.user?.id ?? null;
+  useEffect(() => {
+    if (!userId) { setOnboarding(null); return; }
+    let alive = true;
+    shouldShowOnboarding(userId).then((needed) => { if (alive) setOnboarding({ userId, needed }); });
+    return () => { alive = false; };
+  }, [userId]);
+  useEffect(() => onOnboardingDone((id) => setOnboarding({ userId: id, needed: false })), []);
 
   useEffect(() => {
     if (loading) return;
@@ -126,7 +142,7 @@ function RootLayout() {
     // "open board" flow). Without this, the generic "session -> tabs"
     // redirect below fires on every one of these and instantly bounces the
     // user back to the collection tab.
-    const inStandaloneAuthenticatedRoute = ['day'].includes(segments[0] as string);
+    const inStandaloneAuthenticatedRoute = ['day', 'onboarding'].includes(segments[0] as string);
     const onResetPasswordScreen = (segments as string[])[1] === 'reset-password';
 
     // A recovery session looks identical to a normal sign-in session, so it
@@ -139,10 +155,16 @@ function RootLayout() {
 
     if (!session && !inAuthGroup) {
       router.replace('/(auth)/sign-in');
-    } else if (session && !inTabsGroup && !inStandaloneAuthenticatedRoute) {
-      router.replace('/(tabs)/collection');
+    } else if (session) {
+      // Wait for the onboarding verdict before landing anywhere.
+      if (!onboarding || onboarding.userId !== session.user.id) return;
+      if (onboarding.needed && segments[0] !== 'onboarding') {
+        router.replace('/onboarding');
+      } else if (!onboarding.needed && !inTabsGroup && !inStandaloneAuthenticatedRoute) {
+        router.replace('/(tabs)/collection');
+      }
     }
-  }, [session, loading, segments, isPasswordRecovery]);
+  }, [session, loading, segments, isPasswordRecovery, onboarding]);
 
   useEffect(() => {
     if (!session?.user?.id) return;
@@ -208,6 +230,7 @@ function RootLayout() {
         <Stack.Screen name="index" />
         <Stack.Screen name="(auth)" />
         <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="onboarding" options={{ gestureEnabled: false }} />
         <Stack.Screen name="day/[date]" options={{ presentation: 'card' }} />
       </Stack>
     </>

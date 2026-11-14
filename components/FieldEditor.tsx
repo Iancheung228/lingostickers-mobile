@@ -1,3 +1,4 @@
+import { friendlyErrorSync } from '@/lib/friendlyError';
 import { createRef, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View, Text, TextInput, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, Alert,
@@ -199,7 +200,7 @@ export default function FieldEditor({ spec, saving, error, onCancel, onSave }: F
       (err: unknown) => {
         // The reason, when there is one worth reading (a spent daily limit);
         // fetch() is expected to have made it human already.
-        const message = err instanceof Error && err.message ? err.message : 'Something went wrong.';
+        const message = friendlyErrorSync(err, "Couldn't look that up. Try again.");
         if (seq === followSeq.current) setFollow({ status: 'failed', text, message });
         return null;
       },

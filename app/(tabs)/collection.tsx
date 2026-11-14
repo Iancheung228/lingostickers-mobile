@@ -7,6 +7,9 @@ import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { usePendingDeletes } from '@/components/PendingDeleteProvider';
 import { useToast } from '@/components/ToastProvider';
+import OfflineBanner from '@/components/OfflineBanner';
+import { useOnline } from '@/lib/connectivity';
+import { readStickerCache, writeStickerCache } from '@/lib/stickerCache';
 import { useAuth } from '@/hooks/useAuth';
 import { useDueCount } from '@/hooks/useDueCount';
 import { useProfile } from '@/hooks/useProfile';
@@ -54,6 +57,7 @@ export default function CollectionScreen() {
     [fetchedStickers, pendingDeleteIds],
   );
   const [loading, setLoading] = useState(true);
+  const online = useOnline();
   // Distinguishes "you have no stickers" from "we couldn't ask".
   const [loadError, setLoadError] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -92,6 +96,7 @@ export default function CollectionScreen() {
       .eq('user_id', user.id)
       .order('created_at', { ascending: false });
     if (mine !== ticket.current) return;
+    hadFetch.current = true;
     if (error) {
       // Keep a good list on screen; only a cold failure shows the error page.
       setLoadError(true);
@@ -99,10 +104,25 @@ export default function CollectionScreen() {
     } else if (data) {
       setLoadError(false);
       setStickers(data as Sticker[]);
+      void writeStickerCache(user.id, data as Sticker[]);
     }
     setLoading(false);
     setRefreshing(false);
   }, [user, toast]);
+
+  // Cold start: show the saved list at once, then let the fetch replace it. If the
+  // fetch fails the cached list stays up (the offline banner explains).
+  const hadFetch = useRef(false);
+  useEffect(() => {
+    if (!user) return;
+    let alive = true;
+    readStickerCache(user.id).then((cached) => {
+      if (!alive || hadFetch.current || !cached) return;
+      setStickers(cached);
+      setLoading(false);
+    });
+    return () => { alive = false; };
+  }, [user]);
 
   useFocusEffect(useCallback(() => { fetchStickers(); }, [fetchStickers]));
   const onRefresh = () => { setRefreshing(true); fetchStickers(); };
@@ -173,8 +193,16 @@ export default function CollectionScreen() {
     ...stickers.map(s => s.memory_photo_path),
   ], [visible, stickers]));
   const getUrl = useCallback(
-    (path: string | null | undefined) => (path ? priorityUrls.get(path) ?? deferredUrls.get(path) ?? null : null),
-    [priorityUrls, deferredUrls],
+    (path: string | null | undefined) => {
+      if (!path) return null;
+      const signed = priorityUrls.get(path) ?? deferredUrls.get(path);
+      if (signed) return signed;
+      // Offline nothing can be signed. expo-image looks the file up by cacheKey
+      // (the storage path) before it touches the network, so a placeholder URL
+      // is enough to show an image it already holds.
+      return online ? null : `https://offline.invalid/${path}`;
+    },
+    [priorityUrls, deferredUrls, online],
   );
 
   const startReview = () => {
@@ -332,6 +360,7 @@ export default function CollectionScreen() {
         onStartReview={startReview}
         scrollY={scrollY}
       />
+      <OfflineBanner top={slim} />
       {refreshing && (
         <View style={[styles.refreshing, { top: slim + 8 }]} pointerEvents="none">
           <ActivityIndicator color={colors.terra} />

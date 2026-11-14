@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useMotion } from '@/lib/motion';
 import { Modal, View, Text, Image, TouchableOpacity, TextInput, StyleSheet, ScrollView, ActivityIndicator, KeyboardAvoidingView, Platform, Pressable } from 'react-native';
 import { X, Info, Check } from 'lucide-react-native';
 import { StickerDraft } from '@/lib/types';
@@ -37,6 +38,7 @@ interface DiscoveryRevealProps {
 }
 
 export default function DiscoveryReveal({ draft, onAdd, saveError, onDiscard, onRetryExtraction, onEditWord, onEditSentence, saving, retranslating, retranslatingSentence, sceneBase64, sceneSelected, onSceneSelected }: DiscoveryRevealProps) {
+  const { reduced } = useMotion();
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const sheetRef = useRef<BottomSheetHandle>(null);
   const toast = useToast();
@@ -130,7 +132,7 @@ export default function DiscoveryReveal({ draft, onAdd, saveError, onDiscard, on
         onContentSizeChange={() => {
           if (!revealSceneRef.current) return;
           revealSceneRef.current = false;
-          scrollRef.current?.scrollToEnd({ animated: true });
+          scrollRef.current?.scrollToEnd({ animated: !reduced });
         }}
         style={styles.bodyScroll}
         contentContainerStyle={styles.body}
@@ -185,7 +187,7 @@ export default function DiscoveryReveal({ draft, onAdd, saveError, onDiscard, on
             disabled={saving}
             onAnswered={() => {
               revealSceneRef.current = true;
-              setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 60);
+              setTimeout(() => scrollRef.current?.scrollToEnd({ animated: !reduced }), 60);
             }}
           />
         )}

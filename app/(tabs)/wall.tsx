@@ -8,6 +8,7 @@ import { useProfile } from '@/hooks/useProfile';
 import { useBoards, useBoardPreviews } from '@/hooks/useBoards';
 import BoardCarouselPage from '@/components/BoardCarouselPage';
 import BoardTiles from '@/components/BoardTiles';
+import { useRequireOnline } from '@/hooks/useRequireOnline';
 import NewBoardSheet from '@/components/NewBoardSheet';
 import RoseBand from '@/components/RoseBand';
 import EmptyState from '@/components/ui/EmptyState';
@@ -31,6 +32,7 @@ export default function WallScreen() {
     [fetchedBoards, pendingDeleteIds],
   );
   const insets = useSafeAreaInsets();
+  const { gate } = useRequireOnline();
   const [openId, setOpenId] = useState<string | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
   const createdRef = useRef<string | null>(null);
@@ -43,6 +45,8 @@ export default function WallScreen() {
 
   // The open board vanishing (deleted, undo window open) closes the view.
   const openBoard = boards.find(b => b.id === openId) ?? null;
+
+  const openCreate = () => { if (gate('Creating a board needs a connection.')) setSheetOpen(true); };
 
   const handleCreateBoard = async (name: string) => {
     const { error, board } = await createBoard(name);
@@ -90,7 +94,7 @@ export default function WallScreen() {
             title="No boards yet"
             body="A board is a page you arrange yourself. Pin any stickers from your collection onto it."
             actionLabel="New board"
-            onAction={() => setSheetOpen(true)}
+            onAction={openCreate}
             testID="boards-empty"
           />
         </View>
@@ -99,7 +103,7 @@ export default function WallScreen() {
           boards={boards}
           previews={previews}
           onOpen={b => setOpenId(b.id)}
-          onCreate={() => setSheetOpen(true)}
+          onCreate={openCreate}
           bottomPad={bottomPad}
         />
       )}

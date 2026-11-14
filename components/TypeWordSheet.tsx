@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useMotion } from '@/lib/motion';
 import {
   Modal, View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator,
   KeyboardAvoidingView, Platform, ScrollView, Image, Keyboard,
@@ -37,6 +38,7 @@ export default function TypeWordSheet({
   onClose: () => void;
   onAdded: (id?: string) => void;
 }) {
+  const { reduced } = useMotion();
   const [text, setText] = useState('');
   const [status, setStatus] = useState<'idle' | 'loading' | 'saving'>('idle');
   const [card, setCard] = useState<any>(null);
@@ -132,7 +134,7 @@ export default function TypeWordSheet({
   const lookupDisabled = !card && !text.trim();
 
   return (
-    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={close}>
+    <Modal visible={visible} animationType={reduced ? 'none' : 'slide'} presentationStyle="pageSheet" onRequestClose={close}>
       <KeyboardAvoidingView style={styles.wrap} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <View style={styles.header}>
           <Text style={styles.title} accessibilityRole="header" maxFontSizeMultiplier={1.3}>Type a word</Text>
