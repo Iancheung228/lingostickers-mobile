@@ -348,14 +348,14 @@ export default function ProfileScreen() {
   );
 
   const toggle = (value: boolean, onChange: (v: boolean) => void, label: string, testID?: string) => (
-    <View style={styles.switchBox}><Switch
+    <View style={styles.switchBox}><View style={[styles.switchRing, !value && styles.switchRingOff]}><Switch
       value={value}
       onValueChange={onChange}
       trackColor={{ false: colors.trackOff, true: colors.terra }}
       ios_backgroundColor={colors.trackOff}
       accessibilityLabel={label}
       testID={testID}
-    /></View>
+    /></View></View>
   );
 
   const iconProps = { size: 20, strokeWidth: 1.75, color: colors.inkDark } as const;
@@ -694,6 +694,9 @@ const styles = StyleSheet.create({
   segmentCaption: { ...type.small, marginTop: spacing.sm },
 
   switchBox: { height: MIN_TAP, justifyContent: 'center' },
+  // A 1.5px ring that is always there (so toggling never shifts layout) and only painted when OFF.
+  switchRing: { borderRadius: 17, borderWidth: 1.5, borderColor: 'transparent' },
+  switchRingOff: { borderColor: colors.trackOffRing },
   stepper: { flexDirection: 'row', alignItems: 'center' },
   stepBtn: { width: MIN_TAP, height: MIN_TAP, alignItems: 'center', justifyContent: 'center' },
   stepValue: { ...type.data, fontSize: 15, minWidth: 28, textAlign: 'center', color: colors.inkDark },
