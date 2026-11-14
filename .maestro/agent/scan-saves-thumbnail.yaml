@@ -52,11 +52,11 @@ appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
           id: "toast-action"
 - runFlow:
     when:
-      notVisible: "Latest stickers.*"
+      notVisible: "Your words.*"
     commands:
       - tapOn: "Collection"
 - extendedWaitUntil:
-    visible: "Latest stickers.*"
+    visible: "Your words.*"
     timeout: 20000
 - waitForAnimationToEnd:
     timeout: 1500

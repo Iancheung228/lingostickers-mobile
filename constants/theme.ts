@@ -193,6 +193,17 @@ export const stickerShadow = {
   shadowOffset: { width: 0, height: 3 },
 };
 
+/** The Home sticker wall field (SPEC "Sticker wall"): radial cream, or a photo under these washes. */
+export const wall = {
+  fieldStops: ['#FCF8F0', '#F6EEDD', '#EEE1C9'] as const,
+  creamWash: 'rgba(250, 244, 234, 0.38)',
+  roseScrim: 'rgba(102, 43, 49, 0.22)',
+  contact: 'rgba(102, 43, 49, 0.20)',
+  chip: 'rgba(255, 251, 244, 0.82)',
+  chipRing: 'rgba(149, 117, 121, 0.28)',
+  shadowTop: 'rgba(255, 255, 255, 0.7)',
+};
+
 // Legacy names, now aliases of the two steps so every screen picks them up.
 export const shadows = {
   card: e1,

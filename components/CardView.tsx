@@ -267,11 +267,11 @@ function CardBackImpl({
         <Pressable
           onPress={onSpeak}
           style={({ pressed }) => [styles.speak, pressed && styles.speakPressed]}
-          hitSlop={{ top: 4, bottom: 4 }}
+          hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
           accessibilityRole="button"
           accessibilityLabel={`Hear ${card.word} pronounced`}
         >
-          <Volume2 size={20} strokeWidth={1.75} color={colors.inkDark} />
+          <Volume2 size={18} strokeWidth={1.75} color={colors.inkDark} />
         </Pressable>
       </View>
 
@@ -479,7 +479,7 @@ const styles = StyleSheet.create({
   readingEdit: { flexShrink: 1 },
   reading: { ...type.data, fontSize: 16, lineHeight: 22, color: colors.inkLight },
   speak: {
-    width: MIN_TAP, height: MIN_TAP, borderRadius: radii.full,
+    width: 36, height: 36, borderRadius: radii.full,
     alignItems: 'center', justifyContent: 'center',
     backgroundColor: colors.terraLight,
   },

@@ -1,0 +1,14 @@
+# R4: a new account's Home. Needs the QA account with zero cards (the usual seed has one):
+# the wall shows "Nothing stuck yet" and "Take a photo", with no toolbar, grid or Arrange chip.
+appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
+---
+- runFlow: ../sign-in.yaml
+- extendedWaitUntil:
+    visible: "Nothing stuck yet"
+    timeout: 20000
+- assertVisible: "Take a photo"
+- assertNotVisible: "Your words.*"
+- assertNotVisible: "Start reviewing.*"
+- waitForAnimationToEnd:
+    timeout: 1000
+- takeScreenshot: r4-home-new

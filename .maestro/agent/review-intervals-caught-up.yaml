@@ -40,9 +40,9 @@ appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
 - takeScreenshot: 02-session-done
 - tapOn: "Done"
 
-# Nothing due: caught-up line, no start button.
+# Nothing due: the pill is hidden (no caught-up line), no start button.
 - extendedWaitUntil:
-    visible: "All caught up.*"
+    visible: "Collection"
     timeout: 15000
 - assertNotVisible: "Start reviewing.*"
 - takeScreenshot: 03-caught-up

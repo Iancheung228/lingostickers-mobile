@@ -52,7 +52,7 @@ appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
     text: "Don't Allow"
     optional: true
 - extendedWaitUntil:
-    visible: "FOUND"
+    visible: "Collection"
     timeout: 30000
 # First load after sign-in sometimes fails ("Couldn't load your collection"
 # and an empty "All caught up" home). Retry once if so; the data is intact.

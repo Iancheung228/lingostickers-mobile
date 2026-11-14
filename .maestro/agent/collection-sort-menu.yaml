@@ -1,45 +1,41 @@
-# Collection sort control: the pill (testID collection-sort) opens a "Sort by" BottomSheet
-# with three modes, the current one checked. Picking "Date added — newest" closes the
-# sheet and the pill label changes to that mode. The pill's accessibilityLabel is
-# "Sort: <mode>. Tap to change.", so match that with a regex.
+# Collection sort and filter: the toolbar's filter button (testID home-filter) opens a
+# "Sort and filter" sheet with four sorts (Newest checked) and the Show toggles. Picking
+# "A to Z" changes the sort; after Done the button reads "Sort and filter, on".
 appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
 ---
 - runFlow: ../sign-in.yaml
 
-- tapOn: "Collection"
+- tapOn: "Collection.*"
 - extendedWaitUntil:
-    visible: "Latest stickers.*"
+    visible: "Your words.*"
     timeout: 20000
 - takeScreenshot: 01-collection-default-sort
 
-# Open the sort sheet from the pill.
 - tapOn:
-    id: "collection-sort"
+    id: "home-filter"
 - extendedWaitUntil:
-    visible: "Sort by"
+    visible: "Sort and filter"
     timeout: 10000
 - assertVisible:
     id: "collection-sort-newest"
 - assertVisible:
     id: "collection-sort-oldest"
 - assertVisible:
-    id: "collection-sort-recentlyAdded"
-- assertVisible: "Photo date — oldest"
-- assertVisible: "Date added — newest"
+    id: "collection-sort-due"
+- assertVisible:
+    id: "collection-sort-az"
+- assertVisible: "Favourites only"
+- assertVisible: "Due only"
 - takeScreenshot: 02-sort-sheet-open
 
-# Pick the third mode: sheet closes, pill shows the new label.
 - tapOn:
-    id: "collection-sort-recentlyAdded"
+    id: "collection-sort-az"
+- tapOn:
+    id: "home-filter-done"
 - extendedWaitUntil:
-    notVisible: "Sort by"
+    notVisible: "Sort and filter"
     timeout: 10000
 - waitForAnimationToEnd:
     timeout: 1000
-- assertNotVisible: "Sort by"
-- assertNotVisible:
-    id: "collection-sort-oldest"
-- assertVisible:
-    id: "collection-sort"
-- assertVisible: ".*Date added — newest.*"
-- takeScreenshot: 03-sort-date-added
+- assertVisible: "Sort and filter, on"
+- takeScreenshot: 03-sort-az

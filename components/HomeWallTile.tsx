@@ -1,12 +1,12 @@
 import { View, Text, StyleSheet } from 'react-native';
+import Svg, { Defs, Ellipse, RadialGradient, Stop } from 'react-native-svg';
 import { CutoutBorderStyle, Sticker } from '@/lib/types';
-import { seededRandom } from '@/lib/seededRandom';
 import CutoutSticker from '@/components/CutoutSticker';
 import { listImagePath } from '@/lib/thumbnails';
 import StickerImageFallback from '@/components/StickerImageFallback';
 import { colors, radii, wordFontFor } from '@/constants/theme';
 
-// One pinned cutout, taped to the home wall. Shared by the panel on the
+// One cutout on the home wall, with its contact shadow (no tape). Shared by the panel on the
 // home feed and by the editor sheet so the two can't drift apart in how a
 // tile looks — the same reason WallBackdrop was split out of
 // WallBackground. Position and size are the caller's business (both derive
@@ -27,24 +27,21 @@ export default function HomeWallTile({
   // meant to read as a picture rather than a labelled list.
   showWord?: boolean;
 }) {
-  const tapeColor = TAPE_COLORS[Math.floor(seededRandom(sticker.id, 6) * TAPE_COLORS.length)];
-  const tapeRotation = (seededRandom(sticker.id, 7) * 2 - 1) * 16;
-
   return (
     <>
-      <View
-        style={[
-          styles.tape,
-          {
-            backgroundColor: tapeColor,
-            width: size * 0.42,
-            height: size * 0.17,
-            marginLeft: -size * 0.21,
-            top: -size * 0.09,
-            transform: [{ rotate: `${tapeRotation}deg` }],
-          },
-        ]}
-      />
+      {/* Attached contact shadow (SPEC): an ellipse at 82% of the height. */}
+      <View pointerEvents="none" style={styles.contact}>
+        <Svg width="100%" height="100%">
+          <Defs>
+            <RadialGradient id="contact" cx="50%" cy="50%" rx="50%" ry="50%">
+              <Stop offset="0" stopColor={colors.maroon} stopOpacity="0.30" />
+              <Stop offset="0.6" stopColor={colors.maroon} stopOpacity="0.16" />
+              <Stop offset="1" stopColor={colors.maroon} stopOpacity="0" />
+            </RadialGradient>
+          </Defs>
+          <Ellipse cx="50%" cy="50%" rx="50%" ry="50%" fill="url(#contact)" />
+        </Svg>
+      </View>
       {url ? (
         <CutoutSticker uri={url} cacheKey={listImagePath(sticker) ?? undefined} borderStyle={borderStyle} />
       ) : (
@@ -65,11 +62,10 @@ export default function HomeWallTile({
   );
 }
 
-const TAPE_COLORS = [colors.skyNight + 'CC', colors.sageLight + 'EE', colors.terraLight + 'EE'];
-
 const styles = StyleSheet.create({
   loader: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  tape: { position: 'absolute', left: '50%', borderRadius: 2, zIndex: 2 },
+  // 9pt ellipse at 82% of the height, softened by a radial fade (RN has no blur).
+  contact: { position: 'absolute', left: '14%', right: '14%', top: '79%', height: 15 },
   wordChip: {
     position: 'absolute',
     bottom: -5,

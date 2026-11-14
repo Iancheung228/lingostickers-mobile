@@ -30,7 +30,7 @@ appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
     text: "Not Now"
     optional: true
 - extendedWaitUntil:
-    visible: "FOUND"
+    visible: "Collection"
     timeout: 30000
 
 # Open the Scan tab from the floating tab bar.

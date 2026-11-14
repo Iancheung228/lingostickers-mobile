@@ -103,6 +103,9 @@ export default function StudyCard({
   const [testing, setTesting] = useState(false);
   // The card detail, opened over a study session ("Edit card", the memory line).
   const [detailOpen, setDetailOpen] = useState(false);
+  // On the front the grade row isn't there, so the toast sits in its slot; on
+  // the back it lifts clear above it.
+  const [faceFlipped, setFaceFlipped] = useState(false);
   const [editing, setEditing] = useState<{ target: EditTarget; spec: EditorSpec } | null>(null);
   const [savingField, setSavingField] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -283,10 +286,11 @@ export default function StudyCard({
             onGraded={onGraded}
             onUndoGrade={onUndoGrade}
             onToggleFavorite={toggleFavorite}
+            onFlippedChange={setFaceFlipped}
             onOpenDetail={() => setDetailOpen(true)}
           />
         )}
-        <ToastLayer bottomOffset={mode === 'review' ? 84 : 0} />
+        <ToastLayer bottomOffset={mode === 'review' ? (faceFlipped ? 84 : 14) : 0} />
       </GestureHandlerRootView>
 
       <FieldEditor
@@ -360,7 +364,7 @@ function useDismiss(onClose: () => void, enabled: () => boolean) {
 // ---------------------------------------------------------------------------
 function StudyFace({
   sticker, review, progress, stillLearning, startFlipped, imageUrl,
-  onClose, onGraded, onUndoGrade, onToggleFavorite, onOpenDetail,
+  onClose, onGraded, onUndoGrade, onToggleFavorite, onFlippedChange, onOpenDetail,
 }: {
   sticker: Sticker;
   review: boolean;
@@ -372,6 +376,7 @@ function StudyFace({
   onGraded?: StudyCardProps['onGraded'];
   onUndoGrade?: () => void;
   onToggleFavorite: () => void;
+  onFlippedChange?: (flipped: boolean) => void;
   onOpenDetail: () => void;
 }) {
   const insets = useSafeAreaInsets();
@@ -380,6 +385,7 @@ function StudyFace({
   const prefs = useStudyPrefs();
 
   const [flipped, setFlipped] = useState(false);
+  useEffect(() => { onFlippedChange?.(flipped); }, [flipped]);
   const [hintCount, setHintCount] = useState(0);
   const [grading, setGrading] = useState(false);
   const flip = useRef(new Animated.Value(0)).current;
@@ -647,9 +653,9 @@ function StudyFace({
                 </View>
               </Animated.View>
 
-              <Animated.View style={[styles.face, backFace]} pointerEvents={flipped ? 'auto' : 'none'}>
-                <View style={styles.card}>
-                  <View style={styles.clip}>
+              <Animated.View style={[styles.face, styles.backFaceBox, backFace]} pointerEvents={flipped ? 'auto' : 'none'}>
+                <View style={styles.backCard}>
+                  <View style={styles.backClip}>
                     <ScrollView
                       key={`back-${visit}`}
                       showsVerticalScrollIndicator={false}
@@ -730,6 +736,11 @@ const styles = StyleSheet.create({
   // casts a shadow loses the shadow on iOS.
   card: { flex: 1, backgroundColor: colors.card, borderRadius: radii.lg, ...e1 },
   clip: { flex: 1, borderRadius: radii.lg, overflow: 'hidden' },
+  // The back hugs its content (a short card is not 60% empty white) and scrolls
+  // once it outgrows the area. The empty space below still taps to flip back.
+  backFaceBox: { justifyContent: 'flex-start' },
+  backCard: { maxHeight: '100%', flexShrink: 1, backgroundColor: colors.card, borderRadius: radii.lg, ...e1 },
+  backClip: { flexShrink: 1, borderRadius: radii.lg, overflow: 'hidden' },
   backScroll: { padding: 24, paddingBottom: 16 },
 
   revealHint: { position: 'absolute', left: 0, right: 0, bottom: 20, alignItems: 'center' },

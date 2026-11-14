@@ -5,13 +5,13 @@ appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
 - runFlow: ../sign-in.yaml
 - tapOn: "Collection"
 - extendedWaitUntil:
-    visible: "Latest stickers.*"
+    visible: "Your words.*"
     timeout: 20000
 - waitForAnimationToEnd:
     timeout: 800
 - takeScreenshot: 09a-dark-home-top
 
-- tapOn: "pomme, \\[pɔm\\], Apple, Hear.*"
+- tapOn: "pomme, apple.*"
 - extendedWaitUntil:
     visible: "What did you call this\\?"
     timeout: 15000

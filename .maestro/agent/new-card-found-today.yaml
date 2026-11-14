@@ -11,7 +11,7 @@ appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
 - extendedWaitUntil:
     visible: "0"
     timeout: 15000
-- assertVisible: "FOUND"
+- assertVisible: "Collection"
 - assertVisible: "TODAY"
 - takeScreenshot: 01-home-zero-found-today
 
@@ -64,7 +64,7 @@ appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
     visible: "Latest finds"
     timeout: 20000
 - assertVisible: "1"
-- assertVisible: "FOUND"
+- assertVisible: "Collection"
 - assertVisible: "TODAY"
 - assertNotVisible: "0"
 - takeScreenshot: 04-collection-1-found-today-latest-finds

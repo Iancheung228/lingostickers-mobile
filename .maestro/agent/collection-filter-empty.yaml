@@ -1,38 +1,36 @@
-# Collection favourites filter with zero matches: the hero, Latest finds and Latest
-# stickers blocks are hidden and the grid shows "No favourites yet". Toggling the
-# heart back to All restores the blocks and the pomme card.
+# Collection favourites filter with zero matches: the filter sheet's "Favourites only"
+# turns the grid into "No favourites yet" (seeded cards have no heart), and the wall and
+# toolbar stay. Switching it off brings the pomme card back.
 appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
 ---
 - runFlow: ../sign-in.yaml
 
-- tapOn: "Collection"
+- tapOn: "Collection.*"
 - extendedWaitUntil:
-    visible: "Latest stickers.*"
+    visible: "Your words.*"
     timeout: 20000
 - takeScreenshot: 01-collection-all
 
-# Heart icon turns the grid into favourites only.
 - tapOn:
-    text: "Show favourites only"
+    id: "home-filter"
+- extendedWaitUntil:
+    visible: "Sort and filter"
+    timeout: 10000
+- tapOn:
+    id: "home-filter-fav"
+- tapOn:
+    id: "home-filter-done"
+- waitForAnimationToEnd:
+    timeout: 1500
 - extendedWaitUntil:
     visible: "No favourites yet.*"
     timeout: 10000
 - assertNotVisible: ".*No stickers yet.*"
-- assertNotVisible: ".*Latest stickers.*"
-- assertNotVisible: ".*Latest finds.*"
+- assertVisible: "Your words.*"
 - takeScreenshot: 02-favourites-empty
 
-# Heart again (now labelled "Showing favourites only...") goes back to All.
-- extendedWaitUntil:
-    visible: "Showing favourites only.*"
-    timeout: 10000
-- tapOn:
-    text: "Showing favourites only.*"
-- waitForAnimationToEnd:
-    timeout: 1500
-- extendedWaitUntil:
-    visible: "Latest stickers.*"
-    timeout: 10000
+# "Show all" in the empty state clears the filter.
+- tapOn: "Show all"
 - extendedWaitUntil:
     visible: ".*pomme.*"
     timeout: 10000

@@ -7,7 +7,7 @@ appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
 - runFlow: ../sign-in.yaml
 - tapOn: "Collection"
 - extendedWaitUntil:
-    visible: "Latest stickers.*"
+    visible: "Your words.*"
     timeout: 20000
 - waitForAnimationToEnd:
     timeout: 800
@@ -27,12 +27,12 @@ appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
 - tapOn:
     id: "collection-search-cancel"
 - extendedWaitUntil:
-    visible: "Latest stickers.*"
+    visible: "Your words.*"
     timeout: 10000
 
 # Sort menu open (sheet), then keep the default newest-first mode.
 - tapOn:
-    id: "collection-sort"
+    id: "home-filter"
 - extendedWaitUntil:
     visible: "Sort by"
     timeout: 10000
@@ -58,7 +58,7 @@ appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
 - tapOn:
     text: "Showing favourites only.*"
 - extendedWaitUntil:
-    visible: "Latest stickers.*"
+    visible: "Your words.*"
     timeout: 10000
 
 # Scrolled down the Collection list.

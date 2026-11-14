@@ -1,0 +1,38 @@
+# R4 tour: Home at rest, scrolled, search, filter sheet, then the calendar and a day.
+# Screenshots land in .maestro/output; no AI calls. Best with several cards seeded.
+appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
+---
+- runFlow: ../sign-in.yaml
+- extendedWaitUntil:
+    visible: "Start reviewing.*"
+    timeout: 20000
+- waitForAnimationToEnd:
+    timeout: 1500
+- takeScreenshot: r4-home
+- swipe:
+    start: "50%,80%"
+    end: "50%,25%"
+    duration: 400
+- waitForAnimationToEnd:
+    timeout: 800
+- takeScreenshot: r4-home-scrolled
+- tapOn:
+    id: "home-search"
+- extendedWaitUntil:
+    visible:
+      id: "collection-search-input"
+    timeout: 10000
+- inputText: "ta"
+- waitForAnimationToEnd:
+    timeout: 1200
+- takeScreenshot: r4-search
+- tapOn:
+    id: "collection-search-cancel"
+- tapOn:
+    id: "home-filter"
+- extendedWaitUntil:
+    visible: "Sort and filter"
+    timeout: 10000
+- waitForAnimationToEnd:
+    timeout: 800
+- takeScreenshot: r4-filter

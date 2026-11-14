@@ -1,16 +1,21 @@
 import { useCallback, useMemo, useState } from 'react';
 import { usePendingDeletes } from '@/components/PendingDeleteProvider';
-import { View, Text, FlatList, TouchableOpacity, StyleSheet, SafeAreaView, ActivityIndicator } from 'react-native';
+import { View, Text, FlatList, Pressable, StyleSheet, RefreshControl, ActivityIndicator } from 'react-native';
+import { Image } from 'expo-image';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
-import { ArrowLeft } from 'lucide-react-native';
+import { ChevronLeft, Heart, MapPin } from 'lucide-react-native';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
 import { Sticker } from '@/lib/types';
 import { useSignedUrls } from '@/hooks/useSignedUrls';
 import { listImagePath } from '@/lib/thumbnails';
-import StickerCard from '@/components/StickerCard';
+import StickerImageFallback from '@/components/StickerImageFallback';
+import Button from '@/components/ui/Button';
+import { useToast } from '@/components/ToastProvider';
+import { haptic } from '@/lib/haptics';
 import StudyCard from '@/components/StudyCard';
-import { colors, shadows, radii, spacing, fonts } from '@/constants/theme';
+import { colors, e1, fonts, radii, stickerShadow, wordFontFor, MIN_TAP, type } from '@/constants/theme';
 
 const DATE_FORMAT = new Intl.DateTimeFormat('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
 
@@ -28,6 +33,9 @@ export default function DayScreen() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [selectedSticker, setSelectedSticker] = useState<Sticker | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const insets = useSafeAreaInsets();
+  const toast = useToast();
 
   const fetchStickers = useCallback(async () => {
     // Returning without lowering `loading` would leave this screen spinning
@@ -53,6 +61,7 @@ export default function DayScreen() {
       setStickers(data as Sticker[]);
     }
     setLoading(false);
+    setRefreshing(false);
   }, [user, date]);
 
   useFocusEffect(useCallback(() => { fetchStickers(); }, [fetchStickers]));
@@ -70,15 +79,19 @@ export default function DayScreen() {
     const target = stickers.find(s => s.id === id);
     if (!target) return;
     const next = !target.is_favorite;
+    haptic.tap();
     patchSticker(id, { is_favorite: next });
     const { error } = await supabase.from('stickers').update({ is_favorite: next }).eq('id', id);
-    if (error) patchSticker(id, { is_favorite: !next });
-  }, [stickers, patchSticker]);
+    if (error) {
+      patchSticker(id, { is_favorite: !next });
+      toast.show({ kind: 'error', message: "Couldn't update the favourite. Try again." });
+    }
+  }, [stickers, patchSticker, toast]);
 
   // One batched sign request for the whole day's grid — see
   // hooks/useSignedUrls.ts.
   const urls = useSignedUrls(useMemo(
-    () => stickers.flatMap(s => [listImagePath(s), s.voice_note_path]),
+    () => stickers.map(listImagePath),
     [stickers]
   ));
 
@@ -88,24 +101,22 @@ export default function DayScreen() {
   }, [date]);
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={[styles.container, { paddingTop: insets.top }]}>
       <View style={styles.header}>
-        <TouchableOpacity
+        <Pressable
           onPress={() => router.back()}
           style={styles.backBtn}
-          hitSlop={8}
           accessibilityRole="button"
           accessibilityLabel="Go back"
         >
-          <ArrowLeft size={18} color={colors.inkMid} />
-        </TouchableOpacity>
+          <ChevronLeft size={24} strokeWidth={1.75} color={colors.inkDark} />
+        </Pressable>
         <View style={styles.headerText}>
-          <Text style={styles.title}>{formattedDate}</Text>
-          <Text style={styles.subtitle}>
-            {loadError ? "couldn't load this day" : `${stickers.length} captured`}
+          <Text style={styles.title} numberOfLines={2} accessibilityRole="header" maxFontSizeMultiplier={1.3}>{formattedDate}</Text>
+          <Text style={styles.subtitle} maxFontSizeMultiplier={2}>
+            {loadError ? "Couldn't load this day" : `${stickers.length} found`}
           </Text>
         </View>
-        <View style={{ width: 36, height: 36 }} />
       </View>
 
       {loading ? (
@@ -113,58 +124,67 @@ export default function DayScreen() {
       ) : loadError ? (
         <View style={styles.errorWrap}>
           <Text style={styles.errorTitle}>Couldn&apos;t load this day</Text>
-          <Text style={styles.errorBody}>
-            Nothing has been lost. Check your connection and try again.
-          </Text>
-          <TouchableOpacity
-            style={styles.retryBtn}
-            onPress={fetchStickers}
-            activeOpacity={0.85}
-            accessibilityRole="button"
-            accessibilityLabel="Try loading this day again"
-          >
-            <Text style={styles.retryText}>Try Again</Text>
-          </TouchableOpacity>
+          <Text style={styles.errorBody}>Nothing has been lost. Check your connection and try again.</Text>
+          <Button label="Try again" onPress={fetchStickers} />
         </View>
       ) : (
         <FlatList
           data={stickers}
           keyExtractor={s => s.id}
-          numColumns={2}
-          columnWrapperStyle={styles.row}
-          contentContainerStyle={styles.grid}
-          // Reachable by deleting the last sticker of a day from the card
-          // that opens out of this very grid: the list emptied and the screen
-          // went blank under a header still offering to go back, with nothing
-          // saying what had happened.
+          contentContainerStyle={[styles.list, { paddingBottom: insets.bottom + 32 }]}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchStickers(); }} tintColor={colors.terra} />}
+          // Reachable by deleting the last sticker of a day from the card that
+          // opens out of this very list.
           ListEmptyComponent={
             <View style={styles.emptyWrap}>
               <Text style={styles.errorTitle}>Nothing left on this day</Text>
-              <Text style={styles.errorBody}>
-                Every sticker found on this date has been deleted.
-              </Text>
-              <TouchableOpacity
-                style={styles.retryBtn}
-                onPress={() => router.back()}
-                activeOpacity={0.85}
-                accessibilityRole="button"
-                accessibilityLabel="Back to the calendar"
-              >
-                <Text style={styles.retryText}>Back to calendar</Text>
-              </TouchableOpacity>
+              <Text style={styles.errorBody}>Every sticker found on this date has been deleted.</Text>
+              <Button label="Back to calendar" onPress={() => router.back()} />
             </View>
           }
-          renderItem={({ item }) => (
-            <View style={styles.cardWrapper}>
-              <StickerCard
-                sticker={item}
+          renderItem={({ item }) => {
+            const url = urls.get(listImagePath(item) ?? '') ?? null;
+            const fav = !!item.is_favorite;
+            return (
+              <Pressable
+                style={({ pressed }) => [styles.card, pressed && styles.pressed]}
                 onPress={() => setSelectedSticker(item)}
-                onToggleFavorite={handleToggleFavorite}
-                imageUrl={urls.get(listImagePath(item) ?? '') ?? null}
-                voiceUrl={item.voice_note_path ? urls.get(item.voice_note_path) ?? null : null}
-              />
-            </View>
-          )}
+                accessibilityRole="button"
+                accessibilityLabel={`${item.word}, ${item.translation}`}
+                accessibilityActions={[{ name: 'favourite', label: fav ? 'Remove from favourites' : 'Add to favourites' }]}
+                onAccessibilityAction={e => { if (e.nativeEvent.actionName === 'favourite') handleToggleFavorite(item.id); }}
+              >
+                <View style={styles.well}>
+                  <View style={styles.stk}>
+                    {url ? (
+                      <Image
+                        source={{ uri: url, cacheKey: listImagePath(item) ?? undefined }}
+                        cachePolicy="memory-disk"
+                        style={styles.img}
+                        contentFit="contain"
+                      />
+                    ) : (
+                      <StickerImageFallback sticker={item} size={56} />
+                    )}
+                  </View>
+                  <Pressable onPress={() => handleToggleFavorite(item.id)} style={styles.heart} accessible={false} importantForAccessibility="no">
+                    <Heart size={20} strokeWidth={1.75} color={colors.terra} fill={fav ? colors.terra : 'transparent'} />
+                  </Pressable>
+                </View>
+                <View style={styles.text}>
+                  <Text style={[styles.word, { fontFamily: wordFontFor(item.language) }]} numberOfLines={2} maxFontSizeMultiplier={1.3}>{item.word}</Text>
+                  <Text style={styles.meaning} maxFontSizeMultiplier={2}>{item.translation}</Text>
+                  {!!item.notes?.trim() && <Text style={styles.note} maxFontSizeMultiplier={2}>{item.notes.trim()}</Text>}
+                  {!!item.location_label && (
+                    <View style={styles.place}>
+                      <MapPin size={14} strokeWidth={1.75} color={colors.inkLight} />
+                      <Text style={styles.placeText} numberOfLines={1} maxFontSizeMultiplier={2}>{item.location_label}</Text>
+                    </View>
+                  )}
+                </View>
+              </Pressable>
+            );
+          }}
         />
       )}
 
@@ -174,60 +194,36 @@ export default function DayScreen() {
         onDeleted={() => { setSelectedSticker(null); fetchStickers(); }}
         onUpdate={patchSticker}
       />
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.sky },
+  header: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 20, paddingTop: 8, paddingBottom: 12 },
   headerText: { flex: 1 },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.ms,
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.md,
-  },
   backBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: radii.full,
-    backgroundColor: colors.card,
-    alignItems: 'center',
-    justifyContent: 'center',
-    ...shadows.card,
+    width: MIN_TAP, height: MIN_TAP, borderRadius: radii.full, backgroundColor: colors.card,
+    alignItems: 'center', justifyContent: 'center', ...e1,
   },
-  title: { fontSize: 15, fontFamily: fonts.display, color: colors.inkDark },
-  subtitle: { fontSize: 10, fontFamily: fonts.mono, color: colors.inkFaint, marginTop: 1 },
+  title: { ...type.h2, color: colors.inkDark },
+  subtitle: { ...type.small },
   loader: { flex: 1 },
-  // Not `errorWrap`: that one is a whole-screen replacement and uses flex:1,
-  // which collapses to nothing inside a list's content container.
-  emptyWrap: {
-    alignItems: 'center',
-    paddingHorizontal: spacing.xl,
-    paddingTop: spacing.xxl,
-    gap: spacing.ms,
-  },
-  errorWrap: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: spacing.xl,
-    gap: spacing.ms,
-  },
-  errorTitle: { fontSize: 17, fontFamily: fonts.display, color: colors.inkDark, textAlign: 'center' },
-  errorBody: { fontSize: 14, fontFamily: fonts.text, color: colors.inkLight, textAlign: 'center', lineHeight: 20 },
-  retryBtn: {
-    marginTop: spacing.xs,
-    backgroundColor: colors.terra,
-    borderRadius: radii.lg,
-    paddingVertical: 12,
-    paddingHorizontal: spacing.lg,
-    ...shadows.button,
-  },
-  retryText: { color: colors.white, fontSize: 14, fontFamily: fonts.display, letterSpacing: 0.3 },
-  grid: { paddingHorizontal: spacing.md, paddingBottom: spacing.xxl, paddingTop: spacing.sm },
-  row: { gap: spacing.sm, marginBottom: spacing.sm },
-  cardWrapper: { flex: 1 },
+  emptyWrap: { alignItems: 'center', paddingHorizontal: 32, paddingTop: 48, gap: 12 },
+  errorWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32, gap: 12 },
+  errorTitle: { ...type.h2, textAlign: 'center' },
+  errorBody: { ...type.body, color: colors.inkLight, textAlign: 'center' },
+  list: { paddingHorizontal: 20, paddingTop: 4, gap: 16 },
+  card: { backgroundColor: colors.card, borderRadius: radii.lg, overflow: 'hidden', ...e1 },
+  pressed: { opacity: 0.94 },
+  well: { height: 200, backgroundColor: colors.sand, alignItems: 'center', justifyContent: 'center' },
+  stk: { width: '62%', height: '80%', ...stickerShadow },
+  img: { width: '100%', height: '100%' },
+  heart: { position: 'absolute', top: 4, right: 4, width: MIN_TAP, height: MIN_TAP, alignItems: 'center', justifyContent: 'center' },
+  text: { padding: 16, gap: 4 },
+  word: { fontSize: 30, lineHeight: 38, color: colors.inkDark },
+  meaning: { ...type.h2, color: colors.inkMid },
+  note: { ...type.body, color: colors.inkMid, marginTop: 4 },
+  place: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 },
+  placeText: { ...type.small, flexShrink: 1 },
 });

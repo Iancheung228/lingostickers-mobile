@@ -24,8 +24,13 @@ import { seededRandom } from '@/lib/seededRandom';
 // place things. At 150 a tile could only travel ~85pt vertically, so "drag
 // it a bit higher" wasn't really an available move. This is the one number
 // to turn if the home feed feels crowded.
-export const HOME_WALL_INSET = 16;
-export const HOME_WALL_HEIGHT = 200;
+export const HOME_WALL_INSET = 20;
+export const HOME_WALL_HEIGHT = 224;
+/** Wall and band bottom radius are both 24 and the wall overlaps the band by exactly 24 (SPEC). */
+export const HOME_WALL_RADIUS = 24;
+export const HOME_WALL_OVERLAP = 24;
+/** Stickers keep this far from the wall's edge (and 16 from the Arrange chip). */
+export const HOME_WALL_SAFE = 12;
 
 /** The canvas both the panel and the editor draw on, given a screen width. */
 export function homeCanvasSize(screenWidth: number) {
@@ -186,4 +191,26 @@ export function findFreeSpot(
     }
   }
   return best;
+}
+
+// ── The auto arrangement (SPEC "Sticker wall") ───────────────────────────
+// Until the user arranges the wall by hand it shows a bouquet of up to six:
+// the newest is the hero, two flank it, up to three sit behind. Offsets are
+// from the canvas centre x and cy = 45% of its height; then the box size.
+export interface BouquetSlot { dx: number; dy: number; size: number; tilt: number; z: number }
+
+const BOUQUET: Record<number, Array<[number, number, number]>> = {
+  1: [[-8, -6, 150]],
+  2: [[-50, 8, 118], [58, 14, 96]],
+  3: [[0, 12, 112], [-104, 22, 84], [104, 24, 84]],
+  4: [[0, 16, 108], [-104, 24, 80], [104, 26, 80], [0, -58, 56]],
+  5: [[0, 16, 108], [-104, 24, 80], [104, 26, 80], [-74, -42, 56], [74, -42, 56]],
+  6: [[0, 16, 108], [-104, 24, 80], [104, 26, 80], [-74, -42, 56], [74, -42, 56], [0, -60, 56]],
+};
+const BOUQUET_Z = [30, 28, 28, 12, 12, 8];
+const BOUQUET_TILT = [0, -6, 5, -3, 4, 6];
+
+export function bouquetSlots(n: number): BouquetSlot[] {
+  const rows = BOUQUET[Math.min(Math.max(n, 0), 6)] ?? [];
+  return rows.map(([dx, dy, size], i) => ({ dx, dy, size, tilt: BOUQUET_TILT[i], z: BOUQUET_Z[i] }));
 }

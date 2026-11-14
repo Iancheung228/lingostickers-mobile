@@ -48,7 +48,7 @@ appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
 - extendedWaitUntil:
     visible: "Collection"
     timeout: 10000
-- tapOn: "pomme, .*Hear.*"
+- tapOn: "pomme, apple.*"
 - extendedWaitUntil:
     visible: "Meaning, .*Edit"
     timeout: 15000

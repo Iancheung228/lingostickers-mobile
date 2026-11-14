@@ -45,7 +45,7 @@ appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
 - assertNotVisible:
     id: "collection-search-input"
 - extendedWaitUntil:
-    visible: "Latest stickers"
+    visible: "Your words"
     timeout: 10000
 - takeScreenshot: 03-home-after-cancel
 

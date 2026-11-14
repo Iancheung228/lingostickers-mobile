@@ -1,84 +1,48 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { usePendingDeletes } from '@/components/PendingDeleteProvider';
-import { View, Text, TouchableOpacity, StyleSheet, useWindowDimensions } from 'react-native';
+import { View, Text, Pressable, ScrollView, StyleSheet, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { router, useFocusEffect } from 'expo-router';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { useSharedValue, useAnimatedStyle, withTiming, withSpring, Easing, runOnJS } from 'react-native-reanimated';
-import { ChevronLeft, ChevronRight, Clock } from 'lucide-react-native';
-import * as Haptics from 'expo-haptics';
+import { ChevronLeft, ChevronRight, RotateCcw } from 'lucide-react-native';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
 import { useSignedUrls } from '@/hooks/useSignedUrls';
 import { listImagePath } from '@/lib/thumbnails';
 import StickerImageFallback from '@/components/StickerImageFallback';
-import { weekAhead, weekActivity, dueToday, dueCountsByDate, dateKeyOf, reviewMinutes, heaviestDay } from '@/lib/review';
-import WeekActivityTracker from '@/components/WeekActivityTracker';
+import { weekAhead, dueToday, dateKeyOf } from '@/lib/review';
+import { limitNewCards } from '@/lib/studyQueue';
+import { newCardsIntroducedToday, useStudyPrefs } from '@/lib/studyPrefs';
 import StudySessionHost from '@/components/StudySessionHost';
+import Button from '@/components/ui/Button';
 import { Sticker } from '@/lib/types';
-import { colors, spacing, fonts, radii, shadows, type } from '@/constants/theme';
+import { colors, e1, fonts, radii, type, stickerShadow, MIN_TAP } from '@/constants/theme';
 import RoseBand from '@/components/RoseBand';
 import { TAB_BAR_CLEARANCE } from '@/constants/tabBar';
+import { haptic } from '@/lib/haptics';
+import { dur, ease, spring, useMotion } from '@/lib/motion';
 
-// Sunday-start week, matching the minimal-journal reference layout (the
-// rest of the app doesn't otherwise commit to a week-start convention).
+// Sunday-start week (the rest of the app doesn't otherwise commit to one).
 const WEEKDAY_LABELS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 const MONTH_FORMAT = new Intl.DateTimeFormat('en-US', { month: 'long' });
+const DAY_FORMAT = new Intl.DateTimeFormat('en-US', { weekday: 'short', day: 'numeric', month: 'long' });
+const A11Y_DAY_FORMAT = new Intl.DateTimeFormat('en-US', { day: 'numeric', month: 'long' });
 
-// ── Reference geometry ─────────────────────────────────────────────────────
-// Measured off the design mockup, which is drawn at a 430pt frame, so these
-// read one-to-one as dp. They're constants rather than spacing-scale rungs
-// because the layout depends on them agreeing with each other — the band's
-// padding has to leave room for exactly GRID_OVERLAP, and the tracker card's
-// column centres have to land on the month grid's.
+// C-look 4 "Calendar cell": 52 tall, number in mono 13, a find shows a 20pt
+// thumbnail below, a review shows a 6pt dot. The month card overlaps the 132pt
+// band by 20.
+const GUTTER = 20;
+const CARD_PAD_H = 16;
+const CELL_HEIGHT = 52;
+const BAND_BOTTOM_PAD = 20 + 8; // overlap, plus a little rose under the card corners
+const THUMB = 20;
 
-// Both cards and the band's content share one gutter, so the segmented
-// control's right edge sits directly above the card corner below it.
-const SCREEN_PAD = 20;
-// The month card's own inset. With SCREEN_PAD this is what sets the day
-// column width, and WeekAheadTracker's slightly wider inset is chosen to
-// land its bars on these same centres.
-const CARD_PAD_H = 13;
-const CARD_RADIUS = 28;
-// A day cell's pitch. The screen is laid out to fit without scrolling, so the
-// six rows divide whatever height is left after the band, the tracker and the
-// CTA have taken theirs — measured, not derived from the window, because that
-// leftover depends on which of those are actually on screen. The bounds keep
-// a tall phone from stretching the month into a wall of whitespace and a
-// short one from squeezing the numerals together.
-const ROW_HEIGHT_MAX = 59;
-const ROW_HEIGHT_MIN = 38;
-// The due-count ring, and the filled disc on today. Same size so the month
-// reads as one column of markers rather than two — shrunk in step with the
-// row when the row is short, since it hangs below the numeral inside it.
-const MARKER_SIZE = 30;
-const MARKER_MIN = 20;
-// How far the month card lifts into the rose band above it. The band reserves
-// this at its own bottom edge, plus the gap that stays visible either side.
-const GRID_OVERLAP = 63;
-const BAND_GAP = 27;
-// A day that owes something but isn't the week's heaviest. Deliberately not a
-// tint of the ring beside it: the muted ring is "there's work here", the full
-// one is "this is the day", and a scale between them would invite reading a
-// count off the colour.
-const RING_MUTED = '#C49497';
+const dateKey = (iso: string) => dateKeyOf(new Date(iso));
 
-// Local-time date key (not UTC) so a sticker captured at 11pm doesn't get
-// bucketed into the next day. Shares lib/review.ts's key format so a day's
-// finds and its due count can be looked up with the same string.
-function dateKey(iso: string): string {
-  return dateKeyOf(new Date(iso));
-}
+type MonthCell = { day: number; key: string; date: Date } | null;
 
-// What the month grid is showing. 'finds' is the collection's own history —
-// the day's sticker cutouts, as before. 'reviews' is the schedule ahead.
-type CalendarMode = 'finds' | 'reviews';
-
-type MonthCell = { day: number; key: string } | null;
-
-// Always padded to exactly 6 rows (42 cells) so neighboring months in the
-// swipe carousel never cause a layout jump mid-drag.
 function buildMonthRows(monthDate: Date): MonthCell[][] {
   const year = monthDate.getFullYear();
   const month = monthDate.getMonth();
@@ -87,25 +51,24 @@ function buildMonthRows(monthDate: Date): MonthCell[][] {
   const cells: MonthCell[] = [];
   for (let i = 0; i < firstWeekday; i++) cells.push(null);
   for (let day = 1; day <= daysInMonth; day++) {
-    cells.push({ day, key: `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}` });
+    const date = new Date(year, month, day);
+    cells.push({ day, key: dateKeyOf(date), date });
   }
-  while (cells.length < 42) cells.push(null);
+  // Only the rows the month needs (4 to 6), so a short month isn't a card of white.
+  while (cells.length % 7 !== 0) cells.push(null);
   const rows: MonthCell[][] = [];
   for (let i = 0; i < cells.length; i += 7) rows.push(cells.slice(i, i + 7));
   return rows;
 }
 
-// Replaces the date number entirely on days with a capture — mirrors the
-// reference's "icon instead of numeral" treatment, using the day's own
-// sticker photo rather than a fixed illustration set.
-function DayIcon({ sticker, size, url }: { sticker: Sticker; size: number; url: string | null }) {
+function Thumb({ sticker, size, url }: { sticker: Sticker; size: number; url: string | null }) {
   return (
-    <View style={[styles.dayIcon, { width: size, height: size }]}>
+    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
       {url ? (
         <Image
           source={{ uri: url, cacheKey: listImagePath(sticker) ?? undefined }}
           cachePolicy="memory-disk"
-          style={styles.dayIconImage}
+          style={{ width: '100%', height: '100%' }}
           contentFit="contain"
         />
       ) : (
@@ -125,25 +88,17 @@ export default function CalendarScreen() {
     () => (pendingDeleteIds.size ? fetchedStickers.filter(s => !pendingDeleteIds.has(s.id)) : fetchedStickers),
     [fetchedStickers, pendingDeleteIds],
   );
+  const [loaded, setLoaded] = useState(false);
   const [loadError, setLoadError] = useState(false);
   const [viewedMonth, setViewedMonth] = useState(() => new Date());
-  const [mode, setMode] = useState<CalendarMode>('finds');
+  const [selectedKey, setSelectedKey] = useState(() => dateKeyOf(new Date()));
   const [reviewQueue, setReviewQueue] = useState<Sticker[] | null>(null);
+  const prefs = useStudyPrefs();
+  const { reduced } = useMotion();
 
   const insets = useSafeAreaInsets();
   const { width: screenWidth } = useWindowDimensions();
-  const pageWidth = screenWidth - SCREEN_PAD * 2 - CARD_PAD_H * 2;
-
-  // The month grid is the one block that gives: everything else on the screen
-  // is fixed height, so the grid takes the slack and divides it into its six
-  // rows. Measured off the viewport rather than computed from the window so
-  // the CTA appearing or disappearing resizes the rows on its own.
-  const [gridHeight, setGridHeight] = useState(0);
-  const rowHeight = gridHeight > 0
-    ? Math.min(ROW_HEIGHT_MAX, Math.max(ROW_HEIGHT_MIN, gridHeight / 6))
-    : ROW_HEIGHT_MAX;
-  const markerSize = Math.min(MARKER_SIZE, Math.max(MARKER_MIN, rowHeight - 19));
-  const dayIconSize = Math.min(pageWidth / 7 - 10, rowHeight - 8);
+  const pageWidth = screenWidth - GUTTER * 2 - CARD_PAD_H * 2;
 
   const fetchStickers = useCallback(async () => {
     if (!user) return;
@@ -158,15 +113,18 @@ export default function CalendarScreen() {
       setLoadError(false);
       setStickers(data as Sticker[]);
     }
+    setLoaded(true);
   }, [user]);
 
   useFocusEffect(useCallback(() => { fetchStickers(); }, [fetchStickers]));
 
+  // Finds by the day the card was made (an import of an old photo is still
+  // today's find); reviews by the day of each card's last review. Only
+  // last_reviewed_at is stored, so a card reviewed on two days shows under the
+  // later one: the dot is "you reviewed something", never a count to trust.
   const stickersByDate = useMemo(() => {
     const map = new Map<string, Sticker[]>();
     for (const sticker of stickers) {
-      // The day the card was made, not the photo's date (an import of an
-      // old photo is still today's find).
       const key = dateKey(sticker.created_at);
       const list = map.get(key) ?? [];
       list.push(sticker);
@@ -174,38 +132,32 @@ export default function CalendarScreen() {
     }
     return map;
   }, [stickers]);
+  const reviewsByDate = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const s of stickers) {
+      if (!s.last_reviewed_at) continue;
+      const key = dateKey(s.last_reviewed_at);
+      map.set(key, (map.get(key) ?? 0) + 1);
+    }
+    return map;
+  }, [stickers]);
 
-  // One batched sign request for every day-icon photo (only the first
-  // sticker of each day is ever shown) instead of one per rendered cell —
-  // see hooks/useSignedUrls.ts.
+  // One batched sign request for every thumbnail (the first sticker of each
+  // day) instead of one per cell: see hooks/useSignedUrls.ts.
   const dayIconUrls = useSignedUrls(useMemo(
     () => Array.from(stickersByDate.values(), list => listImagePath(list[0])),
-    [stickersByDate]
+    [stickersByDate],
   ));
 
-  const today = useMemo(() => new Date(), []);
-  // Recomputed only when the collection changes, not on every render: these
-  // read the clock, and a chart that reshuffled mid-swipe would be worse than
-  // one that's a few minutes stale.
+  const todayKey = useMemo(() => dateKeyOf(new Date()), []);
   const forecast = useMemo(() => weekAhead(stickers), [stickers]);
-  // The week behind, for the chart: what was found and what was reviewed each
-  // day. The forecast above still feeds the band's horizon line and the grid's
-  // heavy-day ring — the two windows point in opposite directions on purpose,
-  // and only the backward one can be split by activity.
-  const week = useMemo(() => weekActivity(stickers), [stickers]);
-  const dueCounts = useMemo(() => dueCountsByDate(stickers), [stickers]);
-  const due = useMemo(() => dueToday(stickers), [stickers]);
-  const dueInSevenDays = useMemo(
-    () => forecast.reduce((sum, d) => sum + d.count, 0),
-    [forecast]
+  const dueInSevenDays = useMemo(() => forecast.reduce((sum, d) => sum + d.count, 0), [forecast]);
+  // The CTA starts exactly the session Home would: after the new-card limit.
+  const due = useMemo(
+    () => limitNewCards(dueToday(stickers), prefs.newCardsPerDay, newCardsIntroducedToday()),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [stickers, prefs.newCardsPerDay],
   );
-  // The day the chart's caption names, rung in full colour in the grid so
-  // both halves of the screen point at the same Thursday.
-  const heavyKey = useMemo(() => {
-    const heaviest = heaviestDay(forecast);
-    return heaviest ? dateKeyOf(heaviest.date) : null;
-  }, [forecast]);
-  const todayKey = dateKey(today.toISOString());
 
   const prevMonth = useMemo(() => new Date(viewedMonth.getFullYear(), viewedMonth.getMonth() - 1, 1), [viewedMonth]);
   const nextMonth = useMemo(() => new Date(viewedMonth.getFullYear(), viewedMonth.getMonth() + 1, 1), [viewedMonth]);
@@ -215,24 +167,27 @@ export default function CalendarScreen() {
 
   const dragX = useSharedValue(0);
   const isTransitioning = useSharedValue(false);
-  const hasTriggeredThresholdHaptic = useSharedValue(false);
 
   const commitSwipe = useCallback((direction: 1 | -1) => {
     setViewedMonth(m => new Date(m.getFullYear(), m.getMonth() + direction, 1));
   }, []);
-
-  const triggerThresholdHaptic = useCallback(() => {
-    Haptics.selectionAsync();
-  }, []);
-
-  const triggerCommitHaptic = useCallback(() => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-  }, []);
+  const tickHaptic = useCallback(() => haptic.select(), []);
 
   useEffect(() => {
     dragX.value = 0;
     isTransitioning.value = false;
   }, [viewedMonth, dragX, isTransitioning]);
+
+  // Swipe (or the chevrons) changes month: a 200 ms slide, an instant swap under Reduce Motion.
+  const slideTo = useCallback((direction: 1 | -1) => {
+    if (isTransitioning.value) return;
+    haptic.select();
+    if (reduced) { commitSwipe(direction); return; }
+    isTransitioning.value = true;
+    dragX.value = withTiming(-direction * pageWidth, { duration: dur.base, easing: ease }, finished => {
+      if (finished) runOnJS(commitSwipe)(direction);
+    });
+  }, [reduced, pageWidth, commitSwipe, dragX, isTransitioning]);
 
   const monthSwipeGesture = useMemo(() => {
     const COMMIT_DISTANCE = pageWidth * 0.3;
@@ -240,114 +195,69 @@ export default function CalendarScreen() {
     return Gesture.Pan()
       .activeOffsetX([-15, 15])
       .failOffsetY([-10, 10])
-      .onStart(() => {
-        hasTriggeredThresholdHaptic.value = false;
-      })
-      .onUpdate((e) => {
-        if (isTransitioning.value) return;
+      .onUpdate(e => {
+        if (isTransitioning.value || reduced) return;
         dragX.value = e.translationX;
-        const pastThreshold = Math.abs(e.translationX) >= COMMIT_DISTANCE;
-        if (pastThreshold && !hasTriggeredThresholdHaptic.value) {
-          hasTriggeredThresholdHaptic.value = true;
-          runOnJS(triggerThresholdHaptic)();
-        } else if (!pastThreshold && hasTriggeredThresholdHaptic.value) {
-          hasTriggeredThresholdHaptic.value = false;
-        }
       })
-      .onEnd((e) => {
+      .onEnd(e => {
         if (isTransitioning.value) return;
         const goingNext = e.translationX <= -COMMIT_DISTANCE || e.velocityX <= -COMMIT_VELOCITY;
         const goingPrev = e.translationX >= COMMIT_DISTANCE || e.velocityX >= COMMIT_VELOCITY;
         if (goingNext || goingPrev) {
-          isTransitioning.value = true;
-          runOnJS(triggerCommitHaptic)();
           const direction = goingNext ? 1 : -1;
-          dragX.value = withTiming(-direction * pageWidth, { duration: 240, easing: Easing.out(Easing.cubic) }, (finished) => {
+          runOnJS(tickHaptic)();
+          if (reduced) { runOnJS(commitSwipe)(direction); return; }
+          isTransitioning.value = true;
+          dragX.value = withTiming(-direction * pageWidth, { duration: dur.base, easing: ease }, finished => {
             if (finished) runOnJS(commitSwipe)(direction);
           });
         } else {
-          dragX.value = withSpring(0, { damping: 30, stiffness: 260 });
+          dragX.value = withSpring(0, spring);
         }
       });
-  }, [pageWidth, commitSwipe, dragX, isTransitioning, hasTriggeredThresholdHaptic, triggerThresholdHaptic, triggerCommitHaptic]);
+  }, [pageWidth, reduced, commitSwipe, dragX, isTransitioning, tickHaptic]);
 
-  const trackStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: -pageWidth + dragX.value }],
-  }));
+  const trackStyle = useAnimatedStyle(() => ({ transform: [{ translateX: -pageWidth + dragX.value }] }));
 
-  const renderMonthPage = (rows: MonthCell[][]) => (
-    <View style={{ width: pageWidth }}>
+  const selectDay = (key: string) => { haptic.select(); setSelectedKey(key); };
+
+  const renderMonthPage = (rows: MonthCell[][], pageKey: string) => (
+    <View style={{ width: pageWidth }} key={pageKey}>
       {rows.map((row, rowIdx) => (
         <View key={rowIdx} style={styles.gridRow}>
           {row.map((cell, i) => {
-            if (!cell) return <View key={i} style={[styles.dayCell, { height: rowHeight }]} />;
-            const dayStickers = stickersByDate.get(cell.key) ?? [];
+            if (!cell) return <View key={i} style={styles.dayCell} accessible={false} importantForAccessibility="no-hide-descendants" />;
+            const finds = stickersByDate.get(cell.key) ?? [];
+            const reviewed = reviewsByDate.get(cell.key) ?? 0;
             const isToday = cell.key === todayKey;
-
-            // Reviews mode: the numeral always shows, with a marker beneath
-            // it. A counted circle is what the schedule owes that day —
-            // filled on today, outlined ahead. The small hollow ring means
-            // only "you found something here", which is why it is drawn
-            // differently: it is a memory marker, not a review count, and
-            // conflating the two would have the grid quietly reporting the
-            // wrong metric. Past days therefore carry no review data — only
-            // last_reviewed_at is stored, never one row per review, so what
-            // you studied on the 12th is genuinely unrecoverable.
-            if (mode === 'reviews') {
-              const count = dueCounts.get(cell.key) ?? 0;
-              const marked = count > 0 || dayStickers.length > 0;
-              return (
-                <View key={i} style={[styles.dayCell, { height: rowHeight }]}>
-                  {isToday && <View style={styles.todayBox} pointerEvents="none" />}
-                  <Text style={[styles.dayNumber, marked && styles.dayNumberMarked, isToday && styles.dayNumberToday]}>{cell.day}</Text>
-                  {count > 0 ? (
-                    <View
-                      style={[
-                        styles.dueRing,
-                        { minWidth: markerSize, height: markerSize },
-                        cell.key === heavyKey && styles.dueRingHeavy,
-                        isToday && styles.dueRingToday,
-                      ]}
-                    >
-                      <Text style={[styles.dueRingText, isToday && styles.dueRingTextToday]}>{count}</Text>
-                    </View>
-                  ) : dayStickers.length > 0 ? (
-                    <View style={styles.findDot} />
-                  ) : null}
-                </View>
-              );
-            }
-
+            const isSelected = cell.key === selectedKey;
+            const parts = [A11Y_DAY_FORMAT.format(cell.date)];
+            if (isToday) parts.push('today');
+            parts.push(finds.length ? `${finds.length} sticker${finds.length === 1 ? '' : 's'}` : 'nothing found');
+            if (reviewed) parts.push(`${reviewed} reviewed`);
             return (
-              <TouchableOpacity
+              <Pressable
                 key={i}
-                style={[styles.dayCell, styles.dayCellCentered, { height: rowHeight }]}
-                onPress={() => router.push(`/day/${cell.key}`)}
-                disabled={dayStickers.length === 0}
-                activeOpacity={0.7}
+                testID={`calendar-day-${cell.key}`}
+                style={styles.dayCell}
+                onPress={() => selectDay(cell.key)}
                 accessibilityRole="button"
-                // A day with finds draws its first sticker's cutout instead of
-                // its number, which leaves a screen reader with an unlabelled
-                // image where the date should be. The label says both, and
-                // says whether there is anything behind the tap.
-                accessibilityLabel={
-                  dayStickers.length === 0
-                    ? `${cell.day}, nothing found`
-                    : `${cell.day}, ${dayStickers.length} sticker${dayStickers.length === 1 ? '' : 's'}`
-                }
-                accessibilityState={{ disabled: dayStickers.length === 0 }}
+                accessibilityLabel={parts.join(', ')}
+                accessibilityState={{ selected: isSelected }}
               >
-                {isToday && <View style={styles.todayBox} pointerEvents="none" />}
-                {dayStickers.length > 0 ? (
-                  <DayIcon
-                    sticker={dayStickers[0]}
-                    size={dayIconSize}
-                    url={dayIconUrls.get(listImagePath(dayStickers[0]) ?? '') ?? null}
-                  />
-                ) : (
-                  <Text style={[styles.dayNumber, isToday && styles.dayNumberToday]}>{cell.day}</Text>
-                )}
-              </TouchableOpacity>
+                {isSelected && <View style={styles.selectedBox} pointerEvents="none" />}
+                <View style={[styles.numWrap, isToday && styles.numToday]}>
+                  <Text style={[styles.dayNumber, isToday && styles.dayNumberToday]} maxFontSizeMultiplier={1.15}>{cell.day}</Text>
+                </View>
+                {finds.length > 0 ? (
+                  <View style={styles.thumbWrap}>
+                    <Thumb sticker={finds[0]} size={THUMB} url={dayIconUrls.get(listImagePath(finds[0]) ?? '') ?? null} />
+                  </View>
+                ) : reviewed > 0 ? (
+                  <View style={styles.dot} />
+                ) : null}
+                {finds.length > 0 && reviewed > 0 && <View style={[styles.dot, styles.dotCorner]} />}
+              </Pressable>
             );
           })}
         </View>
@@ -355,122 +265,121 @@ export default function CalendarScreen() {
     </View>
   );
 
-  const commitMonth = (direction: 1 | -1) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setViewedMonth(m => new Date(m.getFullYear(), m.getMonth() + direction, 1));
-  };
+  const selectedDate = useMemo(() => new Date(`${selectedKey}T00:00:00`), [selectedKey]);
+  const selFinds = stickersByDate.get(selectedKey) ?? [];
+  const selReviewed = reviewsByDate.get(selectedKey) ?? 0;
+  const summary = selFinds.length
+    ? `${selFinds.length} found${selReviewed ? ` · ${selReviewed} reviewed` : ''}`
+    : selReviewed ? `Reviewed ${selReviewed} card${selReviewed === 1 ? '' : 's'}` : 'Nothing found or reviewed';
+  const monthHasAnything = useMemo(() => {
+    const prefix = `${viewedMonth.getFullYear()}-${String(viewedMonth.getMonth() + 1).padStart(2, '0')}-`;
+    for (const k of stickersByDate.keys()) if (k.startsWith(prefix)) return true;
+    return false;
+  }, [stickersByDate, viewedMonth]);
 
   return (
     <View style={styles.container}>
-      {/* ── Rose band ── */}
       <RoseBand
         title="Calendar"
-        bottomPad={GRID_OVERLAP + BAND_GAP}
+        bottomPad={BAND_BOTTOM_PAD}
         subtitle={loadError ? (
-          <TouchableOpacity
-            onPress={fetchStickers}
-            hitSlop={8}
-            accessibilityRole="button"
-            accessibilityLabel="Try loading your calendar again"
-          >
+          <Pressable onPress={fetchStickers} style={styles.retry} accessibilityRole="button" accessibilityLabel="Try loading your calendar again">
             <Text style={[styles.horizon, styles.horizonError]}>Couldn&apos;t load. Tap to retry</Text>
-          </TouchableOpacity>
+          </Pressable>
         ) : (
-          <Text style={styles.horizon}>
+          <Text style={styles.horizon} maxFontSizeMultiplier={2}>
             {dueInSevenDays > 0 ? `Due this week: ${dueInSevenDays}` : 'Nothing due this week'}
           </Text>
         )}
-        right={(
-          /* One toggle decides what the grid means, so the two readings of
-             a day (what you found, what you owe) can't be confused. */
-          <View style={styles.segmented}>
-            {(['finds', 'reviews'] as CalendarMode[]).map(m => (
-              <TouchableOpacity
-                key={m}
-                style={[styles.segment, mode === m && styles.segmentActive]}
-                onPress={() => { Haptics.selectionAsync(); setMode(m); }}
-              >
-                <Text style={[styles.segmentText, mode === m && styles.segmentTextActive]}>
-                  {m === 'finds' ? 'Finds' : 'Reviews'}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        )}
       />
 
-      {/* Everything below the band is one non-scrolling column: the week
-          ahead lifts into the rose, and the month card underneath it takes
-          whatever height is left. */}
-      <View style={[styles.body, { paddingBottom: insets.bottom + TAB_BAR_CLEARANCE }]}>
-        <View style={styles.tracker}>
-          <WeekActivityTracker week={week} active={mode} />
-        </View>
-
-        {/* ── Month grid card ── */}
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={{ paddingBottom: insets.bottom + TAB_BAR_CLEARANCE + 24 }}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* ── The month card, lifted into the band ── */}
         <View style={styles.gridCard}>
           <View style={styles.monthNav}>
-            <TouchableOpacity
-              onPress={() => commitMonth(-1)}
-              hitSlop={14}
+            <Pressable
+              onPress={() => slideTo(-1)}
+              style={styles.chevron}
               testID="calendar-prev-month"
               accessibilityRole="button"
               accessibilityLabel="Previous month"
             >
-              <ChevronLeft size={16} color={colors.inkDark} />
-            </TouchableOpacity>
-            <Text style={styles.monthLabel}>
-              {MONTH_FORMAT.format(viewedMonth).toUpperCase()} {viewedMonth.getFullYear()}
+              <ChevronLeft size={24} strokeWidth={1.75} color={colors.inkDark} />
+            </Pressable>
+            <Text style={styles.monthLabel} accessibilityRole="header" maxFontSizeMultiplier={1.3}>
+              {MONTH_FORMAT.format(viewedMonth)} {viewedMonth.getFullYear()}
             </Text>
-            <TouchableOpacity
-              onPress={() => commitMonth(1)}
-              hitSlop={14}
+            <Pressable
+              onPress={() => slideTo(1)}
+              style={styles.chevron}
               testID="calendar-next-month"
               accessibilityRole="button"
               accessibilityLabel="Next month"
             >
-              <ChevronRight size={16} color={colors.inkDark} />
-            </TouchableOpacity>
+              <ChevronRight size={24} strokeWidth={1.75} color={colors.inkDark} />
+            </Pressable>
           </View>
 
-          <View style={styles.weekdayRow}>
+          <View style={styles.weekdayRow} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
             {WEEKDAY_LABELS.map((label, i) => (
               <View key={i} style={styles.weekdayCell}>
-                <Text style={styles.weekdayText}>{label}</Text>
+                <Text style={styles.weekdayText} maxFontSizeMultiplier={1.15}>{label}</Text>
               </View>
             ))}
           </View>
 
           <GestureDetector gesture={monthSwipeGesture}>
-            <View
-              style={[styles.monthViewport, { width: pageWidth }]}
-              onLayout={e => setGridHeight(e.nativeEvent.layout.height)}
-            >
+            <View style={[styles.monthViewport, { width: pageWidth, height: CELL_HEIGHT * currentRows.length }]}>
               <Animated.View style={[styles.monthTrack, { width: pageWidth * 3 }, trackStyle]}>
-                {renderMonthPage(prevRows)}
-                {renderMonthPage(currentRows)}
-                {renderMonthPage(nextRows)}
+                {renderMonthPage(prevRows, 'prev')}
+                {renderMonthPage(currentRows, 'cur')}
+                {renderMonthPage(nextRows, 'next')}
               </Animated.View>
             </View>
           </GestureDetector>
+          {loaded && !loadError && !monthHasAnything && (
+            <Text style={styles.emptyMonth} maxFontSizeMultiplier={2}>No stickers this month. Scan one.</Text>
+          )}
         </View>
 
+        {/* ── The selected day: a summary row into the Day screen ── */}
+        <Pressable
+          testID="calendar-selected-day"
+          style={styles.summary}
+          disabled={selFinds.length === 0}
+          onPress={() => { haptic.tap(); router.push(`/day/${selectedKey}`); }}
+          accessibilityRole={selFinds.length ? 'button' : 'text'}
+          accessibilityLabel={`${A11Y_DAY_FORMAT.format(selectedDate)}, ${summary}`}
+          accessibilityHint={selFinds.length ? 'Opens this day' : undefined}
+        >
+          {selFinds.length > 0 && (
+            <View style={styles.summaryThumb}>
+              <View style={styles.summaryStk}>
+                <Thumb sticker={selFinds[0]} size={32} url={dayIconUrls.get(listImagePath(selFinds[0]) ?? '') ?? null} />
+              </View>
+            </View>
+          )}
+          <View style={styles.summaryText}>
+            <Text style={styles.summaryTitle} numberOfLines={1} maxFontSizeMultiplier={1.5}>{DAY_FORMAT.format(selectedDate)}</Text>
+            <Text style={styles.summarySub} numberOfLines={1} maxFontSizeMultiplier={2}>{summary}</Text>
+          </View>
+          {selFinds.length > 0 && <ChevronRight size={20} strokeWidth={1.75} color={colors.inkLight} />}
+        </Pressable>
+
         {due.length > 0 && (
-          <TouchableOpacity
-            style={styles.reviewCta}
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-              setReviewQueue(due);
-            }}
-            activeOpacity={0.88}
-          >
-            <Clock size={18} color={colors.white} />
-            <Text style={styles.reviewCtaText}>
-              Review {due.length} now · {reviewMinutes(due.length)} min
-            </Text>
-          </TouchableOpacity>
+          <Button
+            label={`Review ${due.length} now`}
+            testID="calendar-review-cta"
+            icon={<RotateCcw size={20} strokeWidth={1.75} color={colors.white} />}
+            onPress={() => { haptic.press(); setReviewQueue(due); }}
+            style={styles.cta}
+          />
         )}
-      </View>
+      </ScrollView>
 
       <StudySessionHost
         queue={reviewQueue}
@@ -486,180 +395,53 @@ export default function CalendarScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.sky },
-  // The overlap lives on this column's frame, not on the card inside it, so
-  // the cards stay a later sibling than the band and paint on top of the rose
-  // rather than under it. flex: 1 is also what makes the month grid elastic —
-  // the column is exactly the leftover screen, and the grid card inside it
-  // absorbs whatever the tracker and CTA don't use.
-  body: { flex: 1, marginTop: -GRID_OVERLAP },
-
-  // ── rose band ──
-  band: {
-    backgroundColor: colors.blush,
-    borderBottomLeftRadius: CARD_RADIUS,
-    borderBottomRightRadius: CARD_RADIUS,
-    paddingHorizontal: SCREEN_PAD,
-    // Deep enough for the grid card to lift into it and still leave BAND_GAP
-    // of rose showing below the card's top corners — see scrollView's negative
-    // margin, which pulls up by all but that gap.
-    paddingBottom: GRID_OVERLAP + BAND_GAP,
-  },
-  // The month heading sits on the card it labels, so the band is left with
-  // the screen's title, its one forward-looking line, and the mode toggle.
-  // The count of what's due lives on the CTA at the bottom, which is the
-  // thing you'd actually act on — a second copy of it up here was a headline
-  // that did nothing.
-  monthNav: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.xs,
-    marginBottom: 11,
-  },
-  monthLabel: { fontSize: 12, fontFamily: fonts.monoBold, color: colors.inkDark, letterSpacing: 1.8 },
-
-  bandRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.md,
-  },
-  // Takes the slack and gives it back: the toggle beside it is a fixed size,
-  // so the title is the side that's allowed to wrap or shrink.
-  bandTitleWrap: { flex: 1 },
-  // lineHeight is set generously on purpose. The band used to lead with a
-  // 58pt numeral in a 50pt line box, which clipped the digits top and bottom;
-  // a display serif has real ascenders and descenders and needs the room.
-  title: {
-    fontSize: 27,
-    lineHeight: 34,
-    fontFamily: fonts.display,
-    color: colors.maroon,
-    letterSpacing: -0.4,
-  },
-  // The week ahead in one line. The screen's other numbers are all
-  // retrospective — this is the only forward-looking one, which is why it
-  // rides with the title rather than sitting among the cards.
+  scroll: { flex: 1, marginTop: -20 },
   horizon: { ...type.small, color: colors.maroon },
-  // Same slot, same metrics — only the colour changes, so a failed load
-  // reads as a state of this line rather than as new furniture appearing.
   horizonError: { textDecorationLine: 'underline' },
+  retry: { minHeight: 24, justifyContent: 'center' },
 
-
-  segmented: {
-    flexDirection: 'row',
-    backgroundColor: '#EFC4C4',
-    borderRadius: radii.full,
-    padding: 4,
-  },
-  segment: { paddingHorizontal: spacing.ms, paddingVertical: 9, borderRadius: radii.full },
-  segmentActive: { backgroundColor: colors.white },
-  segmentText: { fontSize: 12, fontFamily: fonts.display, color: colors.maroon },
-  segmentTextActive: { color: colors.blushDeep },
-
-  findDot: {
-    width: 8,
-    height: 8,
-    borderRadius: radii.full,
-    borderWidth: 1.5,
-    borderColor: '#E0C3C6',
-    marginTop: 8,
-  },
-
-  // ── month grid card ──
   gridCard: {
-    flex: 1,
-    marginHorizontal: SCREEN_PAD,
+    marginHorizontal: GUTTER,
     backgroundColor: colors.card,
-    borderRadius: CARD_RADIUS,
+    borderRadius: radii.lg,
     paddingHorizontal: CARD_PAD_H,
-    paddingTop: 13,
-    paddingBottom: 10,
-    ...shadows.card,
+    paddingTop: 8,
+    paddingBottom: 14,
+    ...e1,
   },
+  monthNav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', height: MIN_TAP },
+  chevron: { width: MIN_TAP, height: MIN_TAP, alignItems: 'center', justifyContent: 'center' },
+  monthLabel: { ...type.h2, color: colors.inkDark },
 
-  // The week ahead is the card that now lifts into the band, so it carries no
-  // top margin of its own — the column's negative one already placed it.
-  tracker: { marginBottom: 14 },
-
-  // A count in a ring for a day that owes something; today's is filled, the
-  // way the reference marks the day you are standing on. minWidth rather than
-  // width so a day owing ten or more grows into a pill instead of clipping.
-  dueRing: {
-    marginTop: 4,
-    paddingHorizontal: 4,
-    borderRadius: radii.full,
-    borderWidth: 2,
-    borderColor: RING_MUTED,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  dueRingHeavy: { borderColor: colors.blushDeep },
-  dueRingToday: {
-    backgroundColor: colors.blushDeep,
-    borderColor: colors.blushDeep,
-    shadowColor: colors.blushDeep,
-    shadowOpacity: 0.35,
-    shadowRadius: 5,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 3,
-  },
-  dueRingText: { fontSize: 13, fontFamily: fonts.display, color: colors.blushDeep },
-  dueRingTextToday: { color: colors.white },
-
-  reviewCta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.ms,
-    marginHorizontal: SCREEN_PAD,
-    marginTop: 12,
-    paddingVertical: 17,
-    borderRadius: radii.full,
-    backgroundColor: colors.blushDeep,
-    ...shadows.card,
-  },
-  reviewCtaText: { fontSize: 16, fontFamily: fonts.display, color: colors.white },
-
-  weekdayRow: { flexDirection: 'row', marginBottom: 8 },
+  weekdayRow: { flexDirection: 'row', height: 24, alignItems: 'center' },
   weekdayCell: { flex: 1, alignItems: 'center' },
-  weekdayText: { fontSize: 11, fontFamily: fonts.mono, color: colors.inkLight },
+  weekdayText: { fontSize: 12, lineHeight: 16, fontFamily: fonts.display, color: colors.inkLight },
 
-  monthViewport: { flex: 1, overflow: 'hidden', alignSelf: 'center' },
+  monthViewport: { overflow: 'hidden', alignSelf: 'center' },
   monthTrack: { flexDirection: 'row' },
   gridRow: { flexDirection: 'row' },
-  // Top-aligned, not centred: every cell's numeral has to sit on one line
-  // across the row whether or not it carries a marker below it. Height is
-  // applied at the call site — it's measured, not fixed.
-  dayCell: { flex: 1, alignItems: 'center' },
-  // Finds mode hangs nothing below the cell's first line, so its content sits
-  // in the middle of the cell rather than under a marker slot it never uses.
-  dayCellCentered: { justifyContent: 'center' },
-  // Muted by default; a day only darkens once it actually carries something,
-  // which is what gives the month its texture at a glance.
-  dayNumber: { fontSize: 12, lineHeight: 16, fontFamily: fonts.mono, color: colors.inkLight },
-  dayNumberMarked: { color: colors.inkDark, fontFamily: fonts.monoBold },
-  dayNumberToday: { color: colors.blushDeep, fontFamily: fonts.monoBold },
-
-  // Today, in both modes. It has to be the cell's *backdrop* rather than a
-  // treatment of what's in the cell, because in Finds mode the day's sticker
-  // photo replaces the numeral entirely — there is nothing left to recolour —
-  // and in Reviews mode a day owing nothing draws no marker at all. Absolutely
-  // positioned so it costs the row no width: insetting a flex: 1 cell would
-  // hand its lost points to its six neighbours and walk the whole row off the
-  // weekday header above it.
-  todayBox: {
-    position: 'absolute',
-    left: 2,
-    right: 2,
-    top: 1,
-    bottom: 1,
-    borderRadius: radii.md,
-    backgroundColor: '#FBF0F0',
-    borderWidth: 1.5,
-    borderColor: colors.blush,
+  dayCell: { flex: 1, height: CELL_HEIGHT, alignItems: 'center', gap: 1 },
+  numWrap: { minWidth: 22, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
+  numToday: { backgroundColor: colors.terra },
+  dayNumber: { fontSize: 13, lineHeight: 22, fontFamily: fonts.mono, color: colors.inkMid },
+  dayNumberToday: { color: colors.white },
+  selectedBox: {
+    ...StyleSheet.absoluteFillObject, borderRadius: 12, backgroundColor: colors.terraLight,
+    borderWidth: 2, borderColor: colors.terra,
   },
+  thumbWrap: { ...stickerShadow, shadowRadius: 3, shadowOffset: { width: 0, height: 1 } },
+  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.terra, marginTop: 9 },
+  dotCorner: { position: 'absolute', right: 6, bottom: 6, marginTop: 0 },
 
-  dayIcon: { alignItems: 'center', justifyContent: 'center' },
-  dayIconImage: { width: '100%', height: '100%' },
+  emptyMonth: { ...type.small, textAlign: 'center', marginTop: 10 },
+
+  summary: {
+    marginHorizontal: GUTTER + 4, marginTop: 16, minHeight: 56, flexDirection: 'row', alignItems: 'center', gap: 12,
+  },
+  summaryThumb: { width: 48, height: 48, borderRadius: 12, backgroundColor: colors.sand, alignItems: 'center', justifyContent: 'center' },
+  summaryStk: { ...stickerShadow, shadowRadius: 3, shadowOffset: { width: 0, height: 1 } },
+  summaryText: { flex: 1 },
+  summaryTitle: { fontSize: 17, lineHeight: 22, fontFamily: fonts.display, color: colors.inkDark },
+  summarySub: { ...type.small },
+  cta: { marginHorizontal: GUTTER, marginTop: 16 },
 });

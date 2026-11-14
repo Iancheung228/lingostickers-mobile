@@ -1,7 +1,7 @@
 appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
 # Same journey as .maestro/study-grade.yaml through "Done". Once the only due
-# card is graded Good (learning, ~10 min), home must show the quiet caught-up
-# line where the due pill was, and must not show a "Start reviewing" button.
+# card is graded Good (learning, ~10 min), home must not show the
+# "Review N" pill (hidden at 0, no caught-up line).
 ---
 - runFlow: ../sign-in.yaml
 
@@ -44,14 +44,10 @@ appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
 - assertVisible: "1 card reviewed"
 - tapOn: "Done"
 - extendedWaitUntil:
-    visible: "FOUND"
+    visible: "Collection"
     timeout: 10000
 
-# Nothing due: the quiet line replaces the pill; no start button.
-- extendedWaitUntil:
-    visible: "All caught up.*"
-    timeout: 10000
-- assertVisible: "All caught up.*"
-- assertVisible: "All caught up · next due in 10m"
+# Nothing due: the "Review N" pill is hidden entirely (no caught-up line, SPEC).
 - assertNotVisible: "Start reviewing.*"
+- assertNotVisible: "Review 1"
 - takeScreenshot: 07-home-caught-up

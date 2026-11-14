@@ -1,6 +1,6 @@
 # Typed card placeholder: a card made with the Scan screen's "Type a word" sheet has
 # no image_path. It must show its word's first character (faint ink), not a spinner,
-# in the Collection grid, the "Latest stickers" row and the StudyCard front face.
+# in the Collection grid, the "Your words" row and the StudyCard front face.
 # The seeded picture card "pomme" must still show its picture.
 # Costs ONE AI lookup (create-card). Budget-tight: do not add more lookups here.
 # Selectors are from the code (not yet run on the Simulator): see the report.
@@ -58,10 +58,10 @@ appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
 - tapOn:
     id: "toast-action"
 - extendedWaitUntil:
-    visible: "Latest stickers.*"
+    visible: "Your words.*"
     timeout: 20000
 - assertVisible:
-    id: "collection-sort"
+    id: "home-filter"
 - extendedWaitUntil:
     visible: ".*quokka.*"
     timeout: 20000
@@ -70,7 +70,7 @@ appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
     timeout: 20000
 
 # LOCATIONS 1-2 (top of Collection): the hero wall tile and "Latest finds" cards, and
-# the "Latest stickers" row with its picture-less thumbnail.
+# the "Your words" row with its picture-less thumbnail.
 - takeScreenshot: 12-collection-latest-and-grid
 
 # LOCATION 4: the collection grid card. The card is ONE element whose label joins its

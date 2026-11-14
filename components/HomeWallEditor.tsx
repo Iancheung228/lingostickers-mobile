@@ -16,7 +16,7 @@ import { supabase } from '@/lib/supabase';
 import { useSignedUrls } from '@/hooks/useSignedUrls';
 import { homeCanvasSize, homeTileFraction, maxPlacement, HOME_WALL_CAP } from '@/lib/homeWall';
 import { alertPermissionDenied } from '@/lib/permissions';
-import WallBackground from '@/components/WallBackground';
+import HomeWallField from '@/components/HomeWallField';
 import BackgroundCropper, { CropResult } from '@/components/BackgroundCropper';
 import CutoutSticker from '@/components/CutoutSticker';
 import HomeWallTile from '@/components/HomeWallTile';
@@ -192,7 +192,7 @@ export default function HomeWallEditor({
 
           <View style={styles.canvasWrap}>
             <View style={[styles.canvas, { width: canvas.width, height: canvas.height }]}>
-              <WallBackground path={backgroundPath} dim={backgroundDim} version={backgroundVersion} />
+              <HomeWallField path={backgroundPath} version={backgroundVersion} />
 
               {items.map(item => (
                 <DraggableTile
@@ -419,7 +419,7 @@ function DraggableTile({
     left: x.value,
     top: y.value,
     zIndex: 10 + Math.round(lifted.value * 10),
-    shadowOpacity: 0.22 + lifted.value * 0.2,
+    shadowOpacity: lifted.value * 0.3,
     shadowRadius: 4 + lifted.value * 8,
     transform: [
       { rotate: `${item.rotation * (1 - lifted.value)}deg` },
@@ -464,9 +464,7 @@ const styles = StyleSheet.create({
   // The same white mount the home panel wears, so this reads as that panel
   // pulled forward rather than as a different surface.
   canvas: {
-    borderRadius: radii.xl,
-    borderWidth: 5,
-    borderColor: colors.white,
+    borderRadius: 24,
     overflow: 'hidden',
     ...shadows.card,
   },

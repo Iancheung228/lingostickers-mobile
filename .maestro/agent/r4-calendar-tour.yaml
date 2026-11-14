@@ -1,0 +1,64 @@
+# R4 tour: Calendar month, the selected day's summary row, the Day screen, the study
+# back (a short card hugs its content) and the card detail (sticky "Test me").
+# Screenshots land in .maestro/output; no AI calls. Best with several cards seeded.
+appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
+---
+- runFlow: ../sign-in.yaml
+- extendedWaitUntil:
+    visible: "Start reviewing.*"
+    timeout: 20000
+- tapOn: "Calendar"
+- extendedWaitUntil:
+    visible: "Due this week.*|Nothing due this week"
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 1500
+- takeScreenshot: r4-calendar
+- tapOn: "November 12, .*"
+- tapOn:
+    id: "calendar-selected-day"
+- extendedWaitUntil:
+    visible: "Go back"
+    timeout: 10000
+- waitForAnimationToEnd:
+    timeout: 1500
+- takeScreenshot: r4-day
+- tapOn: "Go back"
+- tapOn: "Collection.*"
+- extendedWaitUntil:
+    visible: "Start reviewing.*"
+    timeout: 15000
+- tapOn: "Start reviewing.*"
+- extendedWaitUntil:
+    visible: "Tap to reveal.*"
+    timeout: 10000
+- tapOn: "What did you call this.*"
+- extendedWaitUntil:
+    visible: "Good — next review in.*"
+    timeout: 10000
+- waitForAnimationToEnd:
+    timeout: 1200
+- takeScreenshot: r4-study-back
+- tapOn: "Good — next review in.*"
+- waitForAnimationToEnd:
+    timeout: 700
+- takeScreenshot: r4-undo-toast
+- tapOn: "Close this card"
+- extendedWaitUntil:
+    visible: "Stopped early|Session done"
+    timeout: 10000
+- tapOn: "Done"
+- extendedWaitUntil:
+    visible: "Collection"
+    timeout: 10000
+- tapOn: "pomme, apple.*"
+- extendedWaitUntil:
+    visible: "Meaning, .*Edit"
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 1200
+- takeScreenshot: r4-detail
+- scroll
+- waitForAnimationToEnd:
+    timeout: 800
+- takeScreenshot: r4-detail-scrolled

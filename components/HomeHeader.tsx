@@ -1,57 +1,96 @@
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, Pressable } from 'react-native';
+import Animated, { interpolate, Extrapolation, useAnimatedStyle, type SharedValue } from 'react-native-reanimated';
 import { ChevronRight } from 'lucide-react-native';
-import RoseBand from '@/components/RoseBand';
-import { colors, radii, spacing, fonts } from '@/constants/theme';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { colors, e1, radii, spacing, type } from '@/constants/theme';
+import { haptic } from '@/lib/haptics';
+import { useMotion } from '@/lib/motion';
+
+/** The rose band at rest is 140pt tall (SPEC "Home band copy"). */
+export const BAND_HEIGHT = 140;
+/** Its slim form: the title row and nothing else. */
+export function slimBandHeight(insetTop: number) { return insetTop + 52; }
 
 interface HomeHeaderProps {
   dueCount: number;
   reviewMinutes: number;
   onStartReview: () => void;
+  /** The list's scroll offset: the band collapses to a slim bar as it grows. */
+  scrollY: SharedValue<number>;
 }
 
-// The rose band at the top of Home: the title and, when something is due, the
-// "Review N" pill (40pt). Nothing else (owner, 2026-11-13). The wall card
-// below overlaps the band's bottom edge, so the bottom padding reserves the
-// overlap — see WALL_OVERLAP in collection.tsx.
-export default function HomeHeader({ dueCount, reviewMinutes, onStartReview }: HomeHeaderProps) {
+// The band shows only "Collection" and, when something is due, "Review N"
+// (hidden at 0, no caught-up line). Two layers make the collapse work with the
+// wall overlapping the band at rest: `fill` sits BEHIND the list (so the wall
+// card can overlap its bottom 24pt) and slides up as you scroll; `bar` sits
+// ABOVE the list with the title and pill and is always the slim height. At rest
+// they are the same rose, so together they read as one 140pt band.
+export function HomeBandFill({ scrollY }: { scrollY: SharedValue<number> }) {
+  const insets = useSafeAreaInsets();
+  const { reduced } = useMotion();
+  const travel = BAND_HEIGHT - slimBandHeight(insets.top);
+  const style = useAnimatedStyle(() => ({
+    transform: [{ translateY: reduced ? (scrollY.value > 8 ? -travel : 0) : -Math.min(Math.max(scrollY.value, 0), travel) }],
+  }));
+  return <Animated.View pointerEvents="none" style={[styles.fill, style]} />;
+}
+
+export default function HomeHeader({ dueCount, reviewMinutes, onStartReview, scrollY }: HomeHeaderProps) {
+  const insets = useSafeAreaInsets();
+  const { reduced } = useMotion();
+  const slim = slimBandHeight(insets.top);
+
+  const title = useAnimatedStyle(() => {
+    const y = scrollY.value;
+    const t = reduced ? (y > 40 ? 1 : 0) : interpolate(y, [0, 60], [0, 1], Extrapolation.CLAMP);
+    return { fontSize: 30 - 8 * t, lineHeight: 34 - 6 * t, letterSpacing: -0.6 + 0.2 * t };
+  });
   return (
-    <RoseBand
-      title="Collection"
-      bottomPad={56 + spacing.sm}
-      right={dueCount > 0 ? (
-        <TouchableOpacity
-          style={styles.duePill}
-          onPress={onStartReview}
-          activeOpacity={0.85}
-          accessibilityRole="button"
-          accessibilityLabel={`Start reviewing — ${dueCount} card${dueCount === 1 ? '' : 's'} due, about ${reviewMinutes} minute${reviewMinutes === 1 ? '' : 's'}`}
-        >
-          <Text style={styles.dueText} maxFontSizeMultiplier={1.3}>Review {dueCount}</Text>
-          <View style={styles.arrow}><ChevronRight size={18} color={colors.white} strokeWidth={2.5} /></View>
-        </TouchableOpacity>
-      ) : undefined}
-    />
+    <Animated.View style={[styles.bar, { height: slim, paddingTop: insets.top + spacing.sm }]}>
+      <View style={styles.row}>
+        <Animated.Text style={[styles.title, title]} accessibilityRole="header" numberOfLines={1} maxFontSizeMultiplier={1.3}>
+          Collection
+        </Animated.Text>
+        {dueCount > 0 && (
+          <Pressable
+            testID="home-review-pill"
+            style={({ pressed }) => [styles.duePill, pressed && styles.pillPressed]}
+            onPress={() => { haptic.press(); onStartReview(); }}
+            hitSlop={{ top: 4, bottom: 4 }}
+            accessibilityRole="button"
+            accessibilityLabel={`Start reviewing — ${dueCount} card${dueCount === 1 ? '' : 's'} due, about ${reviewMinutes} minute${reviewMinutes === 1 ? '' : 's'}`}
+          >
+            <Text style={styles.dueText} maxFontSizeMultiplier={1.3}>Review {dueCount}</Text>
+            <View style={styles.arrow}><ChevronRight size={18} color={colors.white} strokeWidth={2.5} /></View>
+          </Pressable>
+        )}
+      </View>
+    </Animated.View>
   );
 }
 
 const styles = StyleSheet.create({
-  duePill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    height: 40,
-    backgroundColor: colors.white,
-    borderRadius: radii.full,
-    paddingLeft: spacing.md,
-    paddingRight: 4,
-    gap: spacing.sm,
+  fill: {
+    position: 'absolute', left: 0, right: 0, top: 0, height: BAND_HEIGHT,
+    backgroundColor: colors.blush,
+    borderBottomLeftRadius: 24, borderBottomRightRadius: 24,
   },
-  dueText: { fontSize: 17, lineHeight: 22, fontFamily: fonts.display, color: colors.inkDark },
+  bar: {
+    position: 'absolute', left: 0, right: 0, top: 0, zIndex: 20,
+    backgroundColor: colors.blush,
+    borderBottomLeftRadius: 24, borderBottomRightRadius: 24,
+    paddingHorizontal: 20,
+  },
+  row: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, minHeight: 44 },
+  title: { flex: 1, fontFamily: type.title.fontFamily, color: colors.maroon },
+  duePill: {
+    flexDirection: 'row', alignItems: 'center', height: 40, backgroundColor: colors.white,
+    borderRadius: radii.full, paddingLeft: spacing.md, paddingRight: 4, gap: spacing.sm, ...e1,
+  },
+  pillPressed: { backgroundColor: colors.terraLight },
+  dueText: { ...type.button, color: colors.inkDark },
   arrow: {
-    width: 32,
-    height: 32,
-    borderRadius: radii.full,
-    backgroundColor: colors.terra,
-    alignItems: 'center',
-    justifyContent: 'center',
+    width: 32, height: 32, borderRadius: radii.full, backgroundColor: colors.terra,
+    alignItems: 'center', justifyContent: 'center',
   },
 });

@@ -86,9 +86,9 @@ appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
 - tapOn:
     id: "toast-action"
 - extendedWaitUntil:
-    visible: "Latest stickers.*"
+    visible: "Your words.*"
     timeout: 20000
 - assertVisible:
-    id: "collection-sort"
+    id: "home-filter"
 - assertNotVisible: "2 cards added"
 - takeScreenshot: 04-collection-after-view

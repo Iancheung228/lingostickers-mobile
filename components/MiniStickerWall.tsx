@@ -1,21 +1,21 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity, ActivityIndicator,
-  Animated, useWindowDimensions,
+  View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Pressable, useWindowDimensions,
 } from 'react-native';
-import { useFocusEffect } from 'expo-router';
-import * as Haptics from 'expo-haptics';
-import { Pencil } from 'lucide-react-native';
+import { router, useFocusEffect } from 'expo-router';
+import { Camera, Move } from 'lucide-react-native';
 import { CutoutBorderStyle, Sticker, WallBackgroundDim } from '@/lib/types';
 import { useSignedUrls } from '@/hooks/useSignedUrls';
 import { useHomeWall } from '@/hooks/useHomeWall';
-import { seededRandom } from '@/lib/seededRandom';
-import { homeCanvasSize, homeTileFraction, HOME_WALL_HEIGHT, HOME_WALL_INSET } from '@/lib/homeWall';
-import WallBackground from '@/components/WallBackground';
+import {
+  bouquetSlots, homeCanvasSize, homeTileFraction, HOME_WALL_HEIGHT, HOME_WALL_INSET, HOME_WALL_RADIUS, HOME_WALL_SAFE,
+} from '@/lib/homeWall';
+import HomeWallField from '@/components/HomeWallField';
 import HomeWallTile from '@/components/HomeWallTile';
 import { listImagePath } from '@/lib/thumbnails';
 import HomeWallEditor from '@/components/HomeWallEditor';
-import { colors, radii, fonts, spacing, shadows } from '@/constants/theme';
+import { haptic } from '@/lib/haptics';
+import { colors, fonts, radii, wall } from '@/constants/theme';
 
 interface MiniStickerWallProps {
   stickers: Sticker[]; // newest-first, as fetched by the caller
@@ -35,36 +35,13 @@ interface MiniStickerWallProps {
   borderStyle: CutoutBorderStyle;
 }
 
-// How many the auto fan shows before the user has arranged anything.
+// How many the auto bouquet shows before the user has arranged anything.
 const PREVIEW_COUNT = 6;
-const NEW_WINDOW_MS = 24 * 60 * 60 * 1000;
-const BASE_TILE = 72;
 
-// ── The auto fan: what an un-arranged wall looks like ────────────────────
-//
-// Kept, rather than starting everyone at an empty canvas, because a brand
-// new user has nothing to arrange yet and "here's what you just captured"
-// is a better first thing to see than a blank board and a chore. The first
-// time the user opens the editor, whatever's in this fan is seeded as their
-// real arrangement (useHomeWall.seedFrom), so the hand-off is invisible.
-
-function fanSlots(n: number): number[] {
-  if (n === 0) return [];
-  // Center-out: 0, +1, -1, +2, -2, … — the newest sticker always lands at
-  // slot 0 (front and center), older ones alternate out to either side.
-  const seq: number[] = [0];
-  let k = 1;
-  while (seq.length < n) {
-    seq.push(k);
-    if (seq.length < n) seq.push(-k);
-    k++;
-  }
-  return seq;
-}
-
-// "Most fav or recent": the newest capture anchors the center, the rest is
-// a blend of favorites and latest additions — favoriting is a direct way to
-// make something show up here.
+// "Most fav or recent": the newest capture is the hero, the rest is a blend of
+// favourites and latest additions: favouriting is a direct way to make
+// something show up here. The first time the user opens the editor, whatever is
+// in the bouquet is seeded as their real arrangement (useHomeWall.seedFrom).
 function pickPreview(stickers: Sticker[]): Sticker[] {
   if (stickers.length === 0) return [];
   const [hero, ...rest] = stickers;
@@ -75,104 +52,7 @@ function pickPreview(stickers: Sticker[]): Sticker[] {
   return [hero, ...favorites, ...recents.slice(0, fillCount)];
 }
 
-function FanTile({
-  sticker, slot, canvasWidth, canvasHeight, isHero, heroScale, opacity, url, onPress, borderStyle,
-}: {
-  sticker: Sticker; slot: number; canvasWidth: number; canvasHeight: number;
-  isHero: boolean; heroScale: Animated.Value; opacity: Animated.Value;
-  url: string | null; onPress: () => void; borderStyle: CutoutBorderStyle;
-}) {
-  const scale = Math.max(0.7, 1.15 - Math.abs(slot) * 0.09);
-  const size = BASE_TILE * scale;
-  const jitter = (seededRandom(sticker.id, 5) * 2 - 1) * 4;
-  const rotation = slot * 6 + jitter;
-  const spread = Math.min(BASE_TILE * 0.62, (canvasWidth / 2 - size / 2) / 3.2);
-  const x = canvasWidth / 2 + slot * spread - size / 2;
-  const y = canvasHeight / 2 + Math.abs(slot) * 5 - size / 2;
-  const isFresh = Date.now() - new Date(sticker.created_at).getTime() < NEW_WINDOW_MS;
-
-  return (
-    <Animated.View
-      style={[
-        styles.tile,
-        {
-          left: x, top: y, width: size, height: size,
-          zIndex: 10 - Math.abs(slot),
-          opacity,
-          transform: [{ rotate: `${rotation}deg` }, { scale: isHero ? heroScale : 1 }],
-        },
-      ]}
-    >
-      {/* The wall is a pile of cutouts with no text on it at all, so without
-          a label every tile is an anonymous image to a screen reader — and
-          the wall is one of the two main ways into a card. */}
-      <TouchableOpacity
-        style={StyleSheet.absoluteFill}
-        onPress={onPress}
-        activeOpacity={0.85}
-        accessibilityRole="button"
-        accessibilityLabel={`${sticker.word} — ${sticker.translation}`}
-      >
-        <HomeWallTile sticker={sticker} size={size} url={url} borderStyle={borderStyle} />
-      </TouchableOpacity>
-      {isHero && isFresh && (
-        <View style={styles.newBadge}>
-          <Text style={styles.newBadgeText}>✨ new</Text>
-        </View>
-      )}
-    </Animated.View>
-  );
-}
-
-// Owns the entrance stagger + hero "breathing" idle animation. Keyed by the
-// caller on the joined preview ids, so it fully remounts only when the set
-// of stickers shown actually changes — not on every unrelated re-render.
-function TileFan({
-  preview, slots, canvasWidth, canvasHeight, urls, onPressSticker, borderStyle,
-}: {
-  preview: Sticker[]; slots: number[]; canvasWidth: number; canvasHeight: number;
-  urls: Map<string, string>; onPressSticker: (s: Sticker) => void;
-  borderStyle: CutoutBorderStyle;
-}) {
-  const opacities = useRef(preview.map(() => new Animated.Value(0))).current;
-  const heroScale = useRef(new Animated.Value(1)).current;
-
-  useEffect(() => {
-    Animated.stagger(45, opacities.map(v =>
-      Animated.timing(v, { toValue: 1, duration: 260, useNativeDriver: true })
-    )).start();
-
-    const breathe = Animated.loop(
-      Animated.sequence([
-        Animated.timing(heroScale, { toValue: 1.035, duration: 1800, useNativeDriver: true }),
-        Animated.timing(heroScale, { toValue: 1, duration: 1800, useNativeDriver: true }),
-      ])
-    );
-    breathe.start();
-    return () => breathe.stop();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  return (
-    <>
-      {preview.map((sticker, i) => (
-        <FanTile
-          key={sticker.id}
-          sticker={sticker}
-          slot={slots[i]}
-          canvasWidth={canvasWidth}
-          canvasHeight={canvasHeight}
-          isHero={slots[i] === 0}
-          heroScale={heroScale}
-          opacity={opacities[i]}
-          url={urls.get(listImagePath(sticker) ?? '') ?? null}
-          onPress={() => onPressSticker(sticker)}
-          borderStyle={borderStyle}
-        />
-      ))}
-    </>
-  );
-}
+const clamp = (v: number, lo: number, hi: number) => Math.min(Math.max(v, lo), Math.max(lo, hi));
 
 export default function MiniStickerWall({
   stickers, userId, backgroundPath, backgroundDim, onChangeBackground,
@@ -190,7 +70,7 @@ export default function MiniStickerWall({
   // Mounted here, once, and handed to the editor as props — two call sites
   // of this hook would each fetch their own copy and diverge the moment one
   // of them mutated (skills.md #1).
-  const wall = useHomeWall(userId);
+  const wall_ = useHomeWall(userId);
 
   // Deleting a sticker from the collection cascades its home_stickers row
   // away in the database, but this component has no way to hear about that
@@ -198,16 +78,16 @@ export default function MiniStickerWall({
   // never render a pin whose sticker isn't in the collection the parent
   // just fetched, so a delete on this same screen takes effect immediately
   // rather than leaving a tile pointing at nothing.
-  useFocusEffect(useCallback(() => { wall.refetch(); }, [wall.refetch]));
+  useFocusEffect(useCallback(() => { wall_.refetch(); }, [wall_.refetch]));
 
   const items = useMemo(() => {
-    if (stickers.length === 0) return wall.items; // still loading — don't blank the wall
+    if (stickers.length === 0) return wall_.items; // still loading — don't blank the wall
     const live = new Set(stickers.map(s => s.id));
-    return wall.items.filter(i => live.has(i.sticker_id));
-  }, [wall.items, stickers]);
+    return wall_.items.filter(i => live.has(i.sticker_id));
+  }, [wall_.items, stickers]);
 
   const preview = useMemo(() => pickPreview(stickers), [stickers]);
-  const slots = fanSlots(preview.length);
+  const slots = bouquetSlots(preview.length);
   const previewKey = preview.map(s => s.id).join(',');
   // One batched sign request for whichever set is on screen, rather than
   // each tile minting its own — see hooks/useSignedUrls.ts.
@@ -218,14 +98,15 @@ export default function MiniStickerWall({
   const urls = useSignedUrls(shownPaths);
 
   const openEditor = async () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (seeding) return;
+    haptic.tap();
     // First open: adopt whatever the fan is currently showing as the
     // starting arrangement, and only then flip the profile flag — if the
     // seed insert fails we stay on the fan rather than dropping the user
     // onto a wall that lost everything it had on it.
     if (!arranged && !seeding) {
       setSeeding(true);
-      const { error } = await wall.seedFrom(preview.map(s => s.id), canvas.aspect);
+      const { error } = await wall_.seedFrom(preview.map(s => s.id), canvas.aspect);
       setSeeding(false);
       if (error) return;
       const { error: flagError } = await onArranged();
@@ -235,86 +116,137 @@ export default function MiniStickerWall({
   };
 
   const showEmpty = arranged ? items.length === 0 : preview.length === 0;
+  const brandNew = stickers.length === 0;
+  const cy = canvas.height * 0.45;
+  const cx = canvas.width / 2;
 
   return (
     <>
-      <View style={styles.panel}>
-        <WallBackground path={backgroundPath} dim={backgroundDim} version={backgroundVersion} />
+      {/* Outer view casts the shadow, inner view clips (a view that does both
+          loses its shadow on iOS). */}
+      <View style={styles.shadow}>
+        <View style={styles.panel}>
+          <HomeWallField path={backgroundPath} version={backgroundVersion} />
+          <View pointerEvents="none" style={styles.topLight} />
 
-        {showEmpty ? (
-          <View style={styles.emptyWrap}>
-            <Text style={styles.emptyText}>
-              {stickers.length === 0
-                ? 'Your wall is empty — scan something to start filling it in!'
-                : 'Nothing pinned yet — tap Arrange to put stickers up.'}
-            </Text>
-          </View>
-        ) : arranged ? (
-          items.map(item => {
-            const side = homeTileFraction(item.sticker_id) * canvas.width;
-            return (
-              <TouchableOpacity
-                key={item.sticker_id}
-                style={[
-                  styles.tile,
-                  {
-                    left: item.x * canvas.width,
-                    top: item.y * canvas.height,
-                    width: side,
-                    height: side,
-                    transform: [{ rotate: `${item.rotation}deg` }],
-                  },
-                ]}
-                activeOpacity={0.85}
-                onPress={() => onPressSticker(item.sticker)}
-                accessibilityRole="button"
-                accessibilityLabel={`${item.sticker.word} — ${item.sticker.translation}`}
-              >
-                <HomeWallTile
-                  sticker={item.sticker}
-                  size={side}
-                  url={urls.get(listImagePath(item.sticker) ?? '') ?? null}
-                  borderStyle={borderStyle}
-                />
-              </TouchableOpacity>
-            );
-          })
-        ) : (
-          canvas.width > 0 && (
-            <TileFan
-              key={previewKey}
-              preview={preview}
-              slots={slots}
-              canvasWidth={canvas.width}
-              canvasHeight={canvas.height}
-              urls={urls}
-              onPressSticker={onPressSticker}
-              borderStyle={borderStyle}
+          {/* Long-press anywhere on the wall also opens Arrange; stickers sit above it. */}
+          {!showEmpty && (
+            <Pressable
+              style={StyleSheet.absoluteFill}
+              onLongPress={() => { haptic.press(); openEditor(); }}
+              delayLongPress={450}
+              accessibilityElementsHidden
+              importantForAccessibility="no"
             />
-          )
-        )}
-
-        {/* The one control on the panel now. It used to sit next to a
-            cover-photo button and a whole-panel tap target that both went
-            somewhere else; the cover photo moved inside the editor (it's an
-            arranging decision), and the Boards tab is already reachable
-            from the tab bar and doesn't need a second door here. */}
-        <TouchableOpacity
-          style={styles.arrangeBtn}
-          onPress={openEditor}
-          activeOpacity={0.85}
-          disabled={seeding}
-          accessibilityRole="button"
-          accessibilityLabel="Arrange your wall"
-          accessibilityState={{ disabled: seeding, busy: seeding }}
-        >
-          {seeding ? (
-            <ActivityIndicator size="small" color={colors.inkDark} />
-          ) : (
-            <Pencil size={12} color={colors.inkDark} />
           )}
-          <Text style={styles.arrangeText}>Arrange</Text>
-        </TouchableOpacity>
+
+          {showEmpty ? (
+            <View style={styles.emptyWrap}>
+              <Text style={styles.emptyTitle} maxFontSizeMultiplier={1.3}>
+                {brandNew ? 'Nothing stuck yet' : 'Nothing pinned yet'}
+              </Text>
+              <Text style={styles.emptyText} maxFontSizeMultiplier={1.5}>
+                {brandNew
+                  ? 'Photograph something near you. It becomes a sticker and a word.'
+                  : 'Tap Arrange to put stickers up.'}
+              </Text>
+              {brandNew && (
+                <Pressable
+                  testID="home-wall-take-photo"
+                  onPress={() => { haptic.tap(); router.push('/scan'); }}
+                  style={({ pressed }) => [styles.photoBtn, pressed && styles.photoBtnPressed]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Take a photo"
+                >
+                  <Camera size={18} strokeWidth={1.75} color={colors.white} />
+                  <Text style={styles.photoText} maxFontSizeMultiplier={1.3}>Take a photo</Text>
+                </Pressable>
+              )}
+            </View>
+          ) : arranged ? (
+            items.map(item => {
+              const side = homeTileFraction(item.sticker_id) * canvas.width;
+              return (
+                <TouchableOpacity
+                  key={item.sticker_id}
+                  style={[
+                    styles.tile,
+                    {
+                      left: clamp(item.x * canvas.width, HOME_WALL_SAFE, canvas.width - side - HOME_WALL_SAFE),
+                      top: clamp(item.y * canvas.height, HOME_WALL_SAFE, canvas.height - side - HOME_WALL_SAFE),
+                      width: side,
+                      height: side,
+                      transform: [{ rotate: `${Math.max(-6, Math.min(6, item.rotation))}deg` }],
+                    },
+                  ]}
+                  activeOpacity={0.85}
+                  onPress={() => onPressSticker(item.sticker)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${item.sticker.word} — ${item.sticker.translation}`}
+                >
+                  <HomeWallTile
+                    sticker={item.sticker}
+                    size={side}
+                    url={urls.get(listImagePath(item.sticker) ?? '') ?? null}
+                    borderStyle={borderStyle}
+                  />
+                </TouchableOpacity>
+              );
+            })
+          ) : (
+            canvas.width > 0 && preview.map((sticker, i) => {
+              const slot = slots[i];
+              if (!slot) return null;
+              return (
+                <TouchableOpacity
+                  key={sticker.id}
+                  style={[
+                    styles.tile,
+                    {
+                      left: cx + slot.dx - slot.size / 2,
+                      top: cy + slot.dy - slot.size / 2,
+                      width: slot.size,
+                      height: slot.size,
+                      zIndex: slot.z,
+                      transform: [{ rotate: `${slot.tilt}deg` }],
+                    },
+                  ]}
+                  activeOpacity={0.85}
+                  onPress={() => onPressSticker(sticker)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${sticker.word} — ${sticker.translation}`}
+                >
+                  <HomeWallTile
+                    sticker={sticker}
+                    size={slot.size}
+                    url={urls.get(listImagePath(sticker) ?? '') ?? null}
+                    borderStyle={borderStyle}
+                  />
+                </TouchableOpacity>
+              );
+            })
+          )}
+
+          {/* The one control on the wall: 28pt visible, 44pt hit, bottom-right. */}
+          {(!brandNew || !showEmpty) && (
+            <Pressable
+              testID="home-wall-arrange"
+              style={styles.chipHit}
+              onPress={openEditor}
+              disabled={seeding}
+              accessibilityRole="button"
+              accessibilityLabel="Arrange your wall"
+              accessibilityState={{ disabled: seeding, busy: seeding }}
+            >
+              <View style={styles.chip}>
+                {seeding
+                  ? <ActivityIndicator size="small" color={colors.inkDark} />
+                  : <Move size={14} strokeWidth={2} color={colors.inkDark} />}
+                <Text style={styles.chipText} maxFontSizeMultiplier={1.15}>Arrange</Text>
+              </View>
+            </Pressable>
+          )}
+        </View>
       </View>
 
       <HomeWallEditor
@@ -324,10 +256,10 @@ export default function MiniStickerWall({
         userId={userId}
         stickers={stickers}
         items={items}
-        onAdd={wall.addSticker}
-        onRemove={wall.removeSticker}
-        onMove={wall.moveSticker}
-        onTidy={wall.tidy}
+        onAdd={wall_.addSticker}
+        onRemove={wall_.removeSticker}
+        onMove={wall_.moveSticker}
+        onTidy={wall_.tidy}
         backgroundPath={backgroundPath}
         backgroundDim={backgroundDim}
         backgroundVersion={backgroundVersion}
@@ -339,64 +271,43 @@ export default function MiniStickerWall({
 }
 
 const styles = StyleSheet.create({
-  panel: {
+  shadow: {
     marginHorizontal: HOME_WALL_INSET,
-    marginBottom: spacing.sm,
     height: HOME_WALL_HEIGHT,
-    borderRadius: radii.xl,
-    // The white mount is what lets the panel sit half-over the home
-    // screen's rose band and still read as one card rather than a hole
-    // punched in the band. The editor wears the same mount.
-    borderWidth: 5,
-    borderColor: colors.white,
-    overflow: 'hidden',
-    ...shadows.card,
+    borderRadius: HOME_WALL_RADIUS,
+    backgroundColor: wall.fieldStops[1],
+    shadowColor: colors.maroon,
+    shadowOpacity: 0.16,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 6,
   },
-  // No card behind a tile on purpose — just the sticker's own cutout PNG,
-  // so the panel shows photos floating on the board rather than boxed in
-  // white index cards. Android ignores PNG alpha for shadow shape, so
-  // elevation is dropped there (matches BoardCanvas's cutout tiles).
-  tile: {
-    position: 'absolute',
-    shadowColor: colors.inkDark,
-    shadowOpacity: 0.22,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 0,
-  },
-  newBadge: {
-    position: 'absolute',
-    top: -6,
-    right: -6,
-    backgroundColor: colors.sage,
-    paddingHorizontal: 5,
-    paddingVertical: 2,
-    borderRadius: radii.full,
-    zIndex: 3,
-    ...shadows.card,
-  },
-  newBadgeText: { fontSize: 8, fontFamily: fonts.monoBold, color: colors.inkDark },
+  panel: { flex: 1, borderRadius: HOME_WALL_RADIUS, overflow: 'hidden' },
+  topLight: { position: 'absolute', left: 0, right: 0, top: 0, height: 1, backgroundColor: wall.shadowTop },
+  tile: { position: 'absolute' },
   emptyWrap: {
     ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: spacing.xl,
+    paddingHorizontal: 40,
+    gap: 10,
   },
-  emptyText: { fontSize: 13, fontFamily: fonts.display, color: colors.inkDark, textAlign: 'center', opacity: 0.8 },
-  arrangeBtn: {
-    position: 'absolute',
-    left: spacing.sm,
-    bottom: spacing.sm,
-    zIndex: 20,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    backgroundColor: 'rgba(255,255,255,0.92)',
-    paddingLeft: spacing.ms,
-    paddingRight: spacing.md,
-    paddingVertical: 7,
-    borderRadius: radii.full,
-    ...shadows.card,
+  emptyTitle: { fontSize: 20, lineHeight: 26, fontFamily: fonts.display, color: colors.inkDark, textAlign: 'center' },
+  emptyText: { fontSize: 15, lineHeight: 21, fontFamily: fonts.text, color: colors.inkLight, textAlign: 'center', maxWidth: 240 },
+  photoBtn: {
+    marginTop: 4, height: 40, paddingHorizontal: 16, borderRadius: radii.full, backgroundColor: colors.terra,
+    flexDirection: 'row', alignItems: 'center', gap: 6,
   },
-  arrangeText: { fontSize: 12, fontFamily: fonts.display, color: colors.inkDark },
+  photoBtnPressed: { backgroundColor: colors.terraDark },
+  photoText: { fontSize: 15, fontFamily: fonts.display, color: colors.white },
+  chipHit: {
+    position: 'absolute', right: 8, bottom: 8, height: 44, paddingHorizontal: 4,
+    justifyContent: 'center', zIndex: 40,
+  },
+  chip: {
+    height: 28, paddingLeft: 8, paddingRight: 10, borderRadius: radii.full,
+    backgroundColor: wall.chip, borderWidth: 1, borderColor: wall.chipRing,
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+  },
+  chipText: { fontSize: 13, fontFamily: fonts.display, color: colors.inkDark },
 });

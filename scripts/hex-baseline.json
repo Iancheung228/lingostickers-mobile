@@ -1,6 +1,4 @@
 {
-  "app/(tabs)/calendar.tsx": 4,
   "components/CutoutSticker.tsx": 1,
-  "components/WeekActivityTracker.tsx": 3,
   "components/illustrations/BackgroundScene.tsx": 21
 }
