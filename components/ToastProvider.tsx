@@ -6,7 +6,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { usePathname } from 'expo-router';
-import { TAB_BAR_HEIGHT, TAB_BAR_DISC_OVERHANG, tabBarBottom } from '@/constants/tabBar';
+import { TAB, tabBarBottom } from '@/constants/tabBar';
 import { AlertCircle, CheckCircle2, Info, Undo2 } from 'lucide-react-native';
 import { colors, e2, fonts, radii, spacing, MIN_TAP } from '@/constants/theme';
 import { dur, useMotion } from '@/lib/motion';
@@ -190,9 +190,9 @@ export function ToastLayer({ root, bottomOffset = 0, bottom: fixedBottom }: { ro
   if (!v || !v.current) return null;
   const { current, opacity, lift, panHandlers, pause, resume, dismiss, kb } = v;
   // On a tab screen (root layer only) the toast clears the floating bar and
-  // its raised disc: the bar's bottom edge + its height + the disc overhang + 12.
+  // its crest: the bar's bottom edge + its height + the crest + 12.
   const overBar = !!root && (current.aboveTabBar || TAB_PATHS.includes(pathname));
-  const barTop = tabBarBottom(insets.bottom) + TAB_BAR_HEIGHT + TAB_BAR_DISC_OVERHANG + 12;
+  const barTop = tabBarBottom(insets.bottom) + TAB.height + TAB.crest + 12;
   const bottom = fixedBottom ?? ((kb > 0 ? kb + 8 : overBar ? barTop : insets.bottom + 16) + bottomOffset);
   const Icon = current.kind === 'error' ? AlertCircle : current.kind === 'success' ? CheckCircle2 : current.kind === 'undo' ? Undo2 : Info;
 

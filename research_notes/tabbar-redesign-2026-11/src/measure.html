@@ -1,0 +1,4 @@
+<!doctype html><meta charset=utf-8><style>@font-face{font-family:Newsreader;font-weight:500;src:url(../fonts/Newsreader_500Medium.ttf)}</style><pre id=o></pre><script>
+document.fonts.load('500 11px Newsreader').then(()=>{const c=document.createElement('canvas').getContext('2d');const out={};
+for(const s of [11,12.65,14.3]){c.font='500 '+s+'px Newsreader';out[s]={};for(const w of ['Collection','Calendar','Scan','Boards','Profile'])out[s][w]=+c.measureText(w).width.toFixed(1)}
+document.getElementById('o').textContent=JSON.stringify(out)})</script>

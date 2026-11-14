@@ -49,7 +49,7 @@ export function AiConsentGate({
     <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
       {/* The scrim does not dismiss: this gates the feature. */}
       <View style={styles.scrim} />
-      <View style={[styles.sheet, { bottom: insets.bottom + TAB_BAR_CLEARANCE - 8 }]}>
+      <View style={[styles.sheet, { bottom: insets.bottom + TAB_BAR_CLEARANCE + 8 }]}>
         <ScrollView showsVerticalScrollIndicator={false} bounces={false} style={styles.scroll}>
           <Text style={styles.title} accessibilityRole="header" maxFontSizeMultiplier={1.3}>One quick thing</Text>
           <Text style={styles.intro} maxFontSizeMultiplier={2}>To turn your photo into a sticker, we send it to:</Text>

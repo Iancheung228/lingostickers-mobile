@@ -1,0 +1,10 @@
+import { out, BASE, COL, bar, FR, cream, fadeLayer } from './gen3.mjs';
+const V = { a: ['(a) all five labels, pill 64', { label: 'all' }], b: ['(b) no labels, pill 56', { label: 'none' }], c: ['(c) label on the active tab only, pill 58', { label: 'active' }], d: ['(d) labels on side tabs, none under Scan', { label: 'sides' }] };
+let cells = '';
+for (const [k, [n, o]] of Object.entries(V)) for (const [a, b] of [['collection', '3'], ['calendar', ''], ['scan', '']]) cells += `<div class="cell"><div class="strip" style="height:112px">${cream()}${bar({ active: a, badge: b, bottom: 14, discState: a === 'scan' ? 'active' : 'idle', ...o })}</div><span class="cap">${n}, ${a} active</span></div>`;
+out('g-labels', `<!doctype html><meta charset=utf-8><style>${BASE}</style><div class="t">Label study: four variants x three states</div><div style="display:grid;grid-template-columns:repeat(3,393px);gap:12px 18px;padding:20px 24px">${cells}</div>`);
+const crop = (inner) => `<div style="position:relative;width:393px;height:300px;overflow:hidden;background:${COL.cream};border-radius:14px"><div style="position:absolute;left:0;top:-552px;width:393px;height:852px">${inner}</div></div>`;
+const scene = (key, o) => { const f = FR[key]; return `<div style="position:absolute;inset:0;background:${COL.cream}"></div><div style="position:absolute;left:0;top:0;width:393px;height:718px;background:url(../img/${f.img}.png) top left/393px auto"></div>${f.extra}${fadeLayer()}${bar({ active: f.active, badge: f.badge, ...o })}<div style="position:absolute;left:129.5px;bottom:8px;width:134px;height:5px;border-radius:3px;background:#1a1313"></div>`; };
+let ph = '';
+for (const key of ['home', 'scrolled']) for (const k of ['a', 'b', 'c', 'd']) ph += `<div class="cell">${crop(scene(key, V[k][1]))}<span class="cap">${V[k][0]} / ${key}</span></div>`;
+out('g-labels-ph', `<!doctype html><meta charset=utf-8><style>${BASE}</style><div class="t">Label study on real screens (bottom 300 pt)</div><div style="display:grid;grid-template-columns:repeat(4,393px);gap:14px 18px;padding:20px 24px">${ph}</div>`);

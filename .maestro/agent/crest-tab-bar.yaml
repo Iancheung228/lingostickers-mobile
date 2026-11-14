@@ -1,0 +1,44 @@
+# Crest tab bar: every tab reachable by id, screenshots of each screen for judging.
+appId: ${APP_ID}
+---
+- runFlow: ../sign-in.yaml
+- extendedWaitUntil:
+    visible: "Start reviewing — 1 card due.*"
+    timeout: 20000
+- waitForAnimationToEnd:
+    timeout: 4000
+- assertVisible:
+    id: "tab-collection"
+- assertVisible:
+    id: "tab-calendar"
+- assertVisible:
+    id: "tab-scan"
+- assertVisible:
+    id: "tab-wall"
+- assertVisible:
+    id: "tab-profile"
+- takeScreenshot: crest-collection
+- tapOn:
+    id: "tab-calendar"
+- waitForAnimationToEnd
+- takeScreenshot: crest-calendar
+- tapOn:
+    id: "tab-wall"
+- waitForAnimationToEnd
+- takeScreenshot: crest-boards
+- tapOn:
+    id: "tab-profile"
+- waitForAnimationToEnd
+- takeScreenshot: crest-profile
+- tapOn:
+    id: "tab-scan"
+- waitForAnimationToEnd:
+    timeout: 4000
+- takeScreenshot: crest-scan
+- tapOn:
+    id: "tab-collection"
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: "Start reviewing — 1 card due.*"
+    timeout: 15000
+- takeScreenshot: crest-collection-return
