@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Modal, View, Text, StyleSheet, Pressable, Animated, AccessibilityInfo, ScrollView,
+  Alert, Modal, View, Text, StyleSheet, Pressable, Animated, AccessibilityInfo, ScrollView,
   PanResponder, useWindowDimensions, NativeSyntheticEvent, NativeScrollEvent,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -76,6 +76,12 @@ interface StudyCardProps {
   onRemoveFromBoard?: { boardName: string; remove: () => void | Promise<void> };
   /// Opened over a study session: no Delete, no Test me.
   embedded?: boolean;
+  /// "Test me" on the card: the screen starts a practice session for it. When
+  /// absent, the card falls back to its own ungraded browse quiz.
+  onTest?: (sticker: Sticker) => void;
+  /// Review mode, but nothing is written (see lib/practice.ts): the grade row
+  /// drops its interval previews and the header says so.
+  practice?: boolean;
 }
 
 // How far down, or how fast, the card has to be pulled before letting go means
@@ -96,7 +102,7 @@ const SWIPE_VELOCITY = 600;
 
 export default function StudyCard({
   sticker, mode = 'browse', onClose, onGraded, progress, stillLearning, startFlipped, onUndoGrade,
-  onDeleted, onUpdate, onRemoveFromBoard, embedded,
+  onDeleted, onUpdate, onRemoveFromBoard, embedded, onTest, practice,
 }: StudyCardProps) {
   const toast = useToast();
   const { reduced } = useMotion();
@@ -198,12 +204,18 @@ export default function StudyCard({
       // about an apple, so ask now, while the learner is here.
       const newWord = typeof patch.word === 'string' ? patch.word : null;
       if (newWord && newWord !== sticker.word && sticker.sentence && !splitAroundWord(sticker.sentence, newWord)) {
-        // A nudge, not a decision: a toast with the action, nothing blocks the edit.
-        toast.show({
-          kind: 'info',
-          message: `Your example sentence doesn't use ${newWord} yet.`,
-          action: { label: 'Edit sentence', onPress: () => openEditor('sentence') },
-        });
+        // After the field editor's modal has finished leaving: an Alert raised
+        // mid-dismissal can be dropped by iOS.
+        setTimeout(() => {
+          Alert.alert(
+            'Update the sentence too?',
+            `Your example sentence doesn't use ${newWord} yet.`,
+            [
+              { text: 'Leave it', style: 'cancel' },
+              { text: 'Edit sentence', onPress: () => openEditor('sentence') },
+            ],
+          );
+        }, 400);
       }
     } catch {
       // The sheet stays, with the edit in it (lesson #3: never error.message).
@@ -263,11 +275,12 @@ export default function StudyCard({
                 imageUrl={imageUrl}
                 onClose={onClose}
                 onEdit={openEditor}
-                onTest={embedded ? undefined : () => setTesting(true)}
+                onTest={embedded ? undefined : () => { if (onTest) onTest(sticker); else setTesting(true); }}
                 onUpdate={onUpdate}
                 onDeleted={onDeleted}
                 onRemoveFromBoard={onRemoveFromBoard}
                 embedded={embedded}
+                noScheduleWrites={practice}
                 onAtTop={top => { detailAtTop.current = top; }}
               />
             </Animated.View>
@@ -276,6 +289,7 @@ export default function StudyCard({
           <StudyFace
             sticker={sticker}
             review={mode === 'review'}
+            practice={!!practice}
             progress={progress}
             stillLearning={!!stillLearning}
             startFlipped={!!startFlipped}
@@ -304,6 +318,7 @@ export default function StudyCard({
           sticker={sticker}
           mode="browse"
           embedded
+          practice={practice}
           onClose={() => setDetailOpen(false)}
           onUpdate={onUpdate}
         />
@@ -361,11 +376,12 @@ function useDismiss(onClose: () => void, enabled: () => boolean) {
 // The study loop: top bar, the flipping card, the grade row
 // ---------------------------------------------------------------------------
 function StudyFace({
-  sticker, review, progress, stillLearning, startFlipped, imageUrl,
+  sticker, review, practice, progress, stillLearning, startFlipped, imageUrl,
   onClose, onGraded, onUndoGrade, onToggleFavorite, onFlippedChange, onOpenDetail,
 }: {
   sticker: Sticker;
   review: boolean;
+  practice: boolean;
   progress?: StudyCardProps['progress'];
   stillLearning: boolean;
   startFlipped: boolean;
@@ -616,6 +632,12 @@ function StudyFace({
           ) : <View style={styles.topBtn} />}
         </View>
 
+        {practice && (
+          <Text style={styles.practiceCaption} maxFontSizeMultiplier={type.small.maxFontSizeMultiplier}>
+            Practice · doesn&apos;t change your schedule
+          </Text>
+        )}
+
         <GestureDetector gesture={pan}>
           <Reanimated.View style={[styles.cardArea, cardAnim]}>
             <Pressable
@@ -702,7 +724,7 @@ function StudyFace({
           <View style={styles.gradeSlot}>
             {flipped && (
               <Animated.View style={{ opacity: rise, transform: [{ translateY: rise.interpolate({ inputRange: [0, 1], outputRange: [8, 0] }) }] }}>
-                <GradeRow sticker={sticker} simple={prefs.simpleGrading} disabled={grading} onGrade={g => commit(g)} />
+                <GradeRow sticker={sticker} practice={practice} simple={prefs.simpleGrading} disabled={grading} onGrade={g => commit(g)} />
               </Animated.View>
             )}
           </View>
@@ -724,6 +746,7 @@ const styles = StyleSheet.create({
   topBtn: { width: MIN_TAP, height: MIN_TAP, borderRadius: radii.full, alignItems: 'center', justifyContent: 'center' },
   topBtnPressed: { backgroundColor: colors.terraLight },
   flexSpace: { flex: 1 },
+  practiceCaption: { ...type.small, textAlign: 'center', paddingBottom: spacing.sm },
   track: { flex: 1, height: 3, borderRadius: 2, backgroundColor: colors.terraLight, overflow: 'hidden' },
   fill: { height: 3, borderRadius: 2, backgroundColor: colors.terra },
   count: { ...type.data, color: colors.inkLight, minWidth: 48, textAlign: 'center' },

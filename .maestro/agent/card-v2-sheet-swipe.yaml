@@ -1,0 +1,33 @@
+# Probe: does a swipe DOWN on the Details sheet close only the sheet, or the card too?
+# LOOK ONLY. Demo account, staging. No AI calls.
+appId: ${APP_ID}
+---
+- runFlow: ../sign-in.yaml
+- extendedWaitUntil:
+    visible: "Collection"
+    timeout: 20000
+- tapOn:
+    id: "sticker-cell-orange"
+- extendedWaitUntil:
+    visible:
+      id: "card-flip"
+    timeout: 15000
+- tapOn:
+    id: "card-flip"
+- extendedWaitUntil:
+    visible: "Meaning, .*Edit"
+    timeout: 15000
+- tapOn:
+    id: "card-details"
+- extendedWaitUntil:
+    visible: "Say it yourself"
+    timeout: 10000
+- waitForAnimationToEnd:
+    timeout: 800
+- swipe:
+    start: "50%,60%"
+    end: "50%,95%"
+    duration: 600
+- waitForAnimationToEnd:
+    timeout: 1500
+- takeScreenshot: 09-sheet-swiped-down

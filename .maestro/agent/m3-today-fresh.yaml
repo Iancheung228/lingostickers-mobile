@@ -1,0 +1,20 @@
+# M3 check 2 + 8: nothing due (fresh seed). The Today card says "All caught up",
+# no count above 5 anywhere on Collection. Demo account, staging; creds via -e.
+appId: ${APP_ID}   # set by the caller: the installed dev build
+---
+- runFlow: ../sign-in.yaml
+- extendedWaitUntil:
+    visible: "Collection"
+    timeout: 20000
+- extendedWaitUntil:
+    visible: "All caught up\\..*"
+    timeout: 20000
+- assertVisible:
+    id: "today-card"
+- assertNotVisible: "Today · .*"
+- assertNotVisible: "Welcome back.*"
+- assertNotVisible:
+    id: "today-start"
+- waitForAnimationToEnd:
+    timeout: 1500
+- takeScreenshot: m3-02-fresh-today

@@ -1,0 +1,26 @@
+# Final check D (#4, #7), Collection path: "Test me" on the orange card closes the card and
+# opens practice (header says it changes nothing); in practice, More actions has no "Reset progress".
+# Demo account, staging. Practice writes nothing.
+appId: ${APP_ID}   # set by the caller: the installed dev build
+---
+- runFlow: ../sign-in.yaml
+- extendedWaitUntil:
+    visible: "Collection"
+    timeout: 20000
+- tapOn: "orange — orange.*"
+- extendedWaitUntil:
+    visible:
+      id: "card-test-me"
+    timeout: 15000
+- tapOn:
+    id: "card-test-me"
+- extendedWaitUntil:
+    visible: "Practice · doesn't change your schedule"
+    timeout: 15000
+- assertNotVisible:
+    id: "card-test-me"
+- tapOn: "More actions"
+- waitForAnimationToEnd:
+    timeout: 800
+- takeScreenshot: d-practice-more-actions
+- assertNotVisible: "Reset progress"

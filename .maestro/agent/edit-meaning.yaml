@@ -5,7 +5,13 @@ appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
 - runFlow: ../sign-in.yaml
 - tapOn: "Collection"
 - tapOn: "pomme, apple.*"
-# The detail opens on the answer (R3); no flip needed.
+# Browse opens on the front (card v2); flip to the back for the answer rows.
+- extendedWaitUntil:
+    visible:
+      id: "card-flip"
+    timeout: 15000
+- tapOn:
+    id: "card-flip"
 - extendedWaitUntil:
     visible: "Meaning, .*Edit"
     timeout: 15000

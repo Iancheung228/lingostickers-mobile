@@ -24,9 +24,9 @@ import HomeToolbar, { TOOLBAR_HEIGHT } from '@/components/HomeToolbar';
 import HomeFilterSheet, { DEFAULT_SORT, type SortMode } from '@/components/HomeFilterSheet';
 import StickerGridCell, { WELL_HEIGHT } from '@/components/StickerGridCell';
 import StudySessionHost from '@/components/StudySessionHost';
-import { dueAtMs, dueToday, reviewMinutes } from '@/lib/review';
+import { buildTodayPlan, dueAtMs, nextDueWhen, QUICK_SESSION_SIZE } from '@/lib/review';
 import { newCardsIntroducedToday, useStudyPrefs } from '@/lib/studyPrefs';
-import { limitNewCards } from '@/lib/studyQueue';
+import TodayCard, { TODAY_CARD_HEIGHT } from '@/components/TodayCard';
 import { haptic } from '@/lib/haptics';
 import { useMotion } from '@/lib/motion';
 import { HOME_WALL_HEIGHT, HOME_WALL_OVERLAP } from '@/lib/homeWall';
@@ -37,8 +37,9 @@ import { TAB_BAR_CLEARANCE } from '@/constants/tabBar';
 // toolbar sits 12 under the wall and sticks under the slim band, the grid
 // follows. The list scrolls under the band, and everything fixed is an overlay.
 const WALL_TOP = BAND_HEIGHT - HOME_WALL_OVERLAP; // 116
-const TOOLBAR_Y = WALL_TOP + HOME_WALL_HEIGHT + 12; // 352
-const GRID_TOP = TOOLBAR_Y + TOOLBAR_HEIGHT + 8; // 412
+const TODAY_GAP = 12;
+const TOOLBAR_Y = WALL_TOP + HOME_WALL_HEIGHT + TODAY_GAP + TODAY_CARD_HEIGHT + 12;
+const GRID_TOP = TOOLBAR_Y + TOOLBAR_HEIGHT + 8;
 const GUTTER = 20;
 const GAP = 12;
 
@@ -63,6 +64,9 @@ export default function CollectionScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [selectedSticker, setSelectedSticker] = useState<Sticker | null>(null);
   const [reviewQueue, setReviewQueue] = useState<Sticker[] | null>(null);
+  const [practiceQueue, setPracticeQueue] = useState<Sticker[] | null>(null);
+  // A Quick 5 just ended with more waiting: the Today card offers "5 more".
+  const [afterSession, setAfterSession] = useState(false);
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
   const { reduced } = useMotion();
@@ -104,6 +108,8 @@ export default function CollectionScreen() {
     } else if (data) {
       setLoadError(false);
       setStickers(data as Sticker[]);
+      // Fresh data (refresh, refocus, a new scan): the "Nice. 5 more?" moment is over.
+      setAfterSession(false);
       void writeStickerCache(user.id, data as Sticker[]);
     }
     setLoading(false);
@@ -170,15 +176,19 @@ export default function CollectionScreen() {
     return out;
   }, [stickers, query, favoritesOnly, dueOnly, sort]);
 
-  // The pill (and the tab badge) show what a session will actually contain: the
-  // due queue after the daily new-card limit, not the raw due count.
-  const due = useMemo(
-    () => limitNewCards(dueToday(stickers), prefs.newCardsPerDay, newCardsIntroducedToday()),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  // Today's capped queue (new-card limit, daily review cap, catch-up), and
+  // the Quick 5 sessions drawn from it. The tab badge shows at most one session.
+  const today = useMemo(
+    () => buildTodayPlan(stickers, { newCardsPerDay: prefs.newCardsPerDay, introducedToday: newCardsIntroducedToday() }),
     [stickers, prefs.newCardsPerDay],
   );
   const { setDueCount } = useDueCount();
-  useEffect(() => { setDueCount(due.length); }, [due.length, setDueCount]);
+  useEffect(() => { setDueCount(Math.min(today.queue.length, QUICK_SESSION_SIZE)); }, [today.queue.length, setDueCount]);
+  useEffect(() => { if (today.queue.length === 0) setAfterSession(false); }, [today.queue.length]);
+  const nextWhen = useMemo(
+    () => (today.queue.length === 0 ? nextDueWhen(stickers) : null),
+    [today.queue.length, stickers],
+  );
 
   // Sign the first screenful fast, the rest (voice notes, memory photos) behind.
   const PRIORITY_COUNT = 24;
@@ -205,9 +215,10 @@ export default function CollectionScreen() {
     [priorityUrls, deferredUrls, online],
   );
 
-  const startReview = () => {
-    if (due.length === 0) return;
-    setReviewQueue(due);
+  const startQuick = () => {
+    if (today.queue.length === 0) return;
+    setAfterSession(false);
+    setReviewQueue(today.queue.slice(0, QUICK_SESSION_SIZE));
   };
 
   // ── scroll-linked chrome ──
@@ -271,6 +282,17 @@ export default function CollectionScreen() {
         onPressSticker={setSelectedSticker}
       />
     </View>
+    {!brandNew && !loading && !loadError && (
+      <View style={{ marginTop: TODAY_GAP, paddingHorizontal: GUTTER }}>
+        <TodayCard
+          queueCount={today.queue.length}
+          catchUp={today.catchUp}
+          afterSession={afterSession}
+          nextWhen={nextWhen}
+          onStart={startQuick}
+        />
+      </View>
+    )}
   </View>;
 
   const empty = loading ? (
@@ -354,12 +376,7 @@ export default function CollectionScreen() {
         </Animated.View>
       )}
 
-      <HomeHeader
-        dueCount={due.length}
-        reviewMinutes={reviewMinutes(due.length)}
-        onStartReview={startReview}
-        scrollY={scrollY}
-      />
+      <HomeHeader scrollY={scrollY} />
       <OfflineBanner top={slim} />
       {refreshing && (
         <View style={[styles.refreshing, { top: slim + 8 }]} pointerEvents="none">
@@ -372,6 +389,11 @@ export default function CollectionScreen() {
       <StudyCard
         sticker={selectedSticker}
         mode="browse"
+        onTest={sticker => {
+          setSelectedSticker(null);
+          // Present the practice Modal only once the browse Modal has left.
+          setTimeout(() => setPracticeQueue([sticker]), 400);
+        }}
         onClose={() => setSelectedSticker(null)}
         onDeleted={() => { setSelectedSticker(null); fetchStickers(); }}
         onUpdate={patchSticker}
@@ -380,8 +402,17 @@ export default function CollectionScreen() {
       <StudySessionHost
         queue={reviewQueue}
         onExit={() => setReviewQueue(null)}
+        onFinished={graded => setAfterSession(graded > 0)}
         onUpdate={patchSticker}
         onDeleted={fetchStickers}
+      />
+
+      {/* Test me on a card: one card, graded, schedule untouched. */}
+      <StudySessionHost
+        queue={practiceQueue}
+        mode="practice"
+        onExit={() => setPracticeQueue(null)}
+        onUpdate={patchSticker}
       />
 
       {filterOpen && (

@@ -1,0 +1,121 @@
+# Card v2 look check (dev build): the "orange" card opened from Collection.
+# Front (keepsake), flip to back, Details sheet, More actions menu (dismissed
+# without choosing), close, then "Test me" into a practice study face (closed
+# without grading). LOOK ONLY: no grade, edit, delete, scan or AI call.
+# Demo account (staging); credentials come from the caller via -e.
+appId: ${APP_ID}   # set by the caller: the installed dev build
+---
+- runFlow: ../sign-in.yaml
+- extendedWaitUntil:
+    visible: "Collection"
+    timeout: 20000
+- waitForAnimationToEnd:
+    timeout: 1500
+- tapOn: "orange — orange.*"
+- extendedWaitUntil:
+    visible:
+      id: "card-front"
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 1200
+
+# 1. Front: keepsake face, no quiz prompt, no edit pencils.
+- assertVisible:
+    id: "card-flip"
+- assertVisible:
+    id: "card-test-me"
+- assertVisible:
+    id: "card-close"
+- assertNotVisible: "What did you call this.*"
+- assertNotVisible: "Meaning, .*Edit"
+- takeScreenshot: 01-front
+
+# 2. Flip to the reference back.
+- tapOn:
+    id: "card-flip"
+- extendedWaitUntil:
+    visible: "Meaning, .*Edit"
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 1000
+- assertVisible:
+    id: "card-details"
+- assertVisible:
+    id: "card-test-me"
+- takeScreenshot: 02-back
+- swipe:
+    direction: UP
+    duration: 500
+- waitForAnimationToEnd:
+    timeout: 1000
+- takeScreenshot: 03-back-scrolled
+
+# 3. Details sheet: Progress and Say it yourself.
+- tapOn:
+    id: "card-details"
+- extendedWaitUntil:
+    visible: "Say it yourself"
+    timeout: 10000
+- waitForAnimationToEnd:
+    timeout: 1000
+- assertVisible: "Progress"
+- takeScreenshot: 04-details
+# Close the sheet by tapping its scrim (the dimmed band above the sheet).
+- tapOn:
+    point: "50%,30%"
+- waitForAnimationToEnd:
+    timeout: 1200
+- assertNotVisible: "Say it yourself"
+- assertVisible: "Meaning, .*Edit"
+
+# Back to the front.
+- tapOn:
+    id: "card-flip"
+- extendedWaitUntil:
+    visible:
+      id: "card-front"
+    timeout: 10000
+- waitForAnimationToEnd:
+    timeout: 800
+
+# 4. More actions menu: look, then dismiss by tapping outside it.
+- tapOn: "More actions"
+- waitForAnimationToEnd:
+    timeout: 1000
+- takeScreenshot: 05-menu
+- assertVisible: "Favourite|Remove from favourites"
+# Dismiss the popover by tapping the cream margin outside it (not an item).
+- tapOn:
+    point: "3%,50%"
+- waitForAnimationToEnd:
+    timeout: 1000
+- assertNotVisible: "Delete card"
+- takeScreenshot: 06-menu-dismissed
+- tapOn:
+    id: "card-close"
+- extendedWaitUntil:
+    visible: "Collection"
+    timeout: 10000
+- waitForAnimationToEnd:
+    timeout: 1000
+
+# 5. Test me on the same card: study face, closed without grading.
+- tapOn: "orange — orange.*"
+- extendedWaitUntil:
+    visible:
+      id: "card-test-me"
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 800
+- tapOn:
+    id: "card-test-me"
+- extendedWaitUntil:
+    visible: "What did you call this.*|Tap to reveal.*"
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 1000
+- takeScreenshot: 07-test-me-face
+- tapOn: "Close this card"
+- waitForAnimationToEnd:
+    timeout: 1200
+- takeScreenshot: 08-after-test-me-close

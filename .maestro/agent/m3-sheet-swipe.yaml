@@ -1,0 +1,40 @@
+# M3 check 1 (bug fix): on the Details sheet, a swipe DOWN closes only the sheet.
+# Swipe starts on the sheet grabber/title strip (~42% height) and ends at 95%.
+# The card stays on its back face. Demo account, staging; creds via -e.
+appId: ${APP_ID}   # set by the caller: the installed dev build
+---
+- runFlow: ../sign-in.yaml
+- extendedWaitUntil:
+    visible: "Collection"
+    timeout: 20000
+# The orange card is on the wall at the top (label "orange — orange"); the grid
+# cell with id sticker-cell-orange is not in the hierarchy on this account.
+- tapOn: "orange — orange.*"
+- extendedWaitUntil:
+    visible:
+      id: "card-flip"
+    timeout: 15000
+- tapOn:
+    id: "card-flip"
+- extendedWaitUntil:
+    visible: "Meaning, .*Edit"
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 800
+- tapOn:
+    id: "card-details"
+- extendedWaitUntil:
+    visible: "Say it yourself"
+    timeout: 10000
+- waitForAnimationToEnd:
+    timeout: 800
+- takeScreenshot: m3-01a-sheet-open
+- swipe:
+    start: "50%,42%"
+    end: "50%,95%"
+    duration: 600
+- waitForAnimationToEnd:
+    timeout: 1500
+- takeScreenshot: m3-01b-sheet-swiped-card-stays
+- assertNotVisible: "Say it yourself"
+- assertVisible: "Meaning, .*Edit"

@@ -1,0 +1,36 @@
+# M3 check 4, part B: "Test me" on the orange card opens a practice session.
+# Header says it changes nothing; grade buttons carry no interval text; grade it.
+# Then reopen the card and open Details (caller compares with part A).
+# Demo account, staging. Grading here writes nothing (practice).
+appId: ${APP_ID}   # set by the caller: the installed dev build
+---
+- runFlow: ../sign-in.yaml
+- extendedWaitUntil:
+    visible: "Collection"
+    timeout: 20000
+- tapOn: "orange — orange.*"
+- extendedWaitUntil:
+    visible:
+      id: "card-test-me"
+    timeout: 15000
+- tapOn:
+    id: "card-test-me"
+- extendedWaitUntil:
+    visible: "Practice · doesn't change your schedule"
+    timeout: 15000
+- extendedWaitUntil:
+    visible: "What did you call this\\?"
+    timeout: 10000
+- takeScreenshot: m3-04b-practice-front
+- tapOn: "What did you call this\\?"
+- extendedWaitUntil:
+    visible: "Good"
+    timeout: 10000
+- assertVisible: "Practice · doesn't change your schedule"
+- assertNotVisible: ".*next review in.*"
+- assertNotVisible: ".*Next review.*"
+- takeScreenshot: m3-04c-practice-grades
+- tapOn: "Good"
+- waitForAnimationToEnd:
+    timeout: 1500
+- takeScreenshot: m3-04d-practice-after-grade

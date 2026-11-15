@@ -1,0 +1,156 @@
+# M4 reminders, checks 1-4 (demo account, staging, no AI calls).
+# 1. switch on -> readout rows (today: "A quick 5 is ready", later days: generic)
+# 2. add a second and a third time (add row goes at 3), remove the second
+# 3. background + foreground -> list still there
+# 4. switch off -> readout gone; no notification permission prompt after the first switch-on
+# Needs the card state "due" (scratchpad setup-state.mjs due). Times picked: 9:00 PM,
+# 10:30 PM, 7:30 AM. The dev readout labels rows "timeInterval" (not the time), so
+# assertions use the "Scheduled (N)" header count and the bodies.
+appId: ${APP_ID}   # set by the caller: the installed dev build
+---
+- runFlow: ../sign-in.yaml
+- tapOn: "Profile"
+- extendedWaitUntil:
+    visible: "Reminders"
+    timeout: 20000
+- waitForAnimationToEnd:
+    timeout: 800
+
+# Check 1: switch on. The first switch-on may show the system permission alert.
+- tapOn:
+    id: "toggle-reminder"
+- tapOn:
+    text: "Allow"
+    optional: true
+- scrollUntilVisible:
+    element:
+      id: "reminders-debug"
+    direction: DOWN
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 800
+- takeScreenshot: m4-01a-switched-on-default-9am
+- assertVisible: "Scheduled \\(6\\) · dev only"
+- assertVisible: ".*Your Tabi cards are ready"
+
+# Change the first time to 9:00 PM (today, still in the future).
+- tapOn:
+    id: "reminder-time"
+- extendedWaitUntil:
+    visible: "Remind me at"
+    timeout: 10000
+- repeat:
+    while:
+      notVisible: "9:00 PM"
+    commands:
+      - swipe:
+          start: "50%,75%"
+          end: "50%,40%"
+          duration: 300
+      - waitForAnimationToEnd:
+          timeout: 300
+- tapOn: "9:00 PM"
+- waitForAnimationToEnd:
+    timeout: 1000
+- scrollUntilVisible:
+    element: ".*A quick 5 is ready · about 1 min"
+    direction: DOWN
+    timeout: 15000
+- assertVisible: ".*A quick 5 is ready · about 1 min"
+- scrollUntilVisible:
+    element: "Scheduled \\(7\\) · dev only"
+    direction: UP
+    timeout: 15000
+- assertVisible: "Scheduled \\(7\\) · dev only"
+- assertVisible: ".*Your Tabi cards are ready"
+- takeScreenshot: m4-01b-readout-9pm
+
+# Check 2: add a second time (sheet opens for it), then pick 10:30 PM.
+- tapOn:
+    id: "reminder-add-time"
+- extendedWaitUntil:
+    visible: "Remind me at"
+    timeout: 10000
+- repeat:
+    while:
+      notVisible: "10:30 PM"
+    commands:
+      - swipe:
+          start: "50%,75%"
+          end: "50%,40%"
+          duration: 300
+      - waitForAnimationToEnd:
+          timeout: 300
+- tapOn: "10:30 PM"
+- waitForAnimationToEnd:
+    timeout: 1000
+- scrollUntilVisible:
+    element: "Scheduled \\(14\\) · dev only"
+    direction: UP
+    timeout: 15000
+- assertVisible: "Scheduled \\(14\\) · dev only"
+- takeScreenshot: m4-02a-two-times
+
+# Third time: 7:30 AM (on the sheet's top rows). Three set: the add row goes.
+- tapOn:
+    id: "reminder-add-time"
+- extendedWaitUntil:
+    visible: "Remind me at"
+    timeout: 10000
+- tapOn: "7:30 AM"
+- waitForAnimationToEnd:
+    timeout: 1000
+- scrollUntilVisible:
+    element: "Scheduled \\(20\\) · dev only"
+    direction: UP
+    timeout: 15000
+- assertVisible: "Scheduled \\(20\\) · dev only"
+- assertNotVisible:
+    id: "reminder-add-time"
+- takeScreenshot: m4-02b-three-times
+
+# Remove the second time (10:30 PM, the list keeps insertion order): 20 - 7 = 13 rows.
+- tapOn:
+    id: "reminder-remove-2"
+- waitForAnimationToEnd:
+    timeout: 1000
+- scrollUntilVisible:
+    element: "Scheduled \\(13\\) · dev only"
+    direction: UP
+    timeout: 15000
+- assertVisible: "Scheduled \\(13\\) · dev only"
+- takeScreenshot: m4-02c-removed-second
+- assertNotVisible: ".*Send You Notifications.*"
+- assertNotVisible: "Don.t Allow"
+
+# Check 3: background, then bring the app back. The list must still be there.
+- pressKey: Home
+- waitForAnimationToEnd:
+    timeout: 2000
+- launchApp:
+    clearState: false
+- extendedWaitUntil:
+    visible: "Collection"
+    timeout: 30000
+- tapOn: "Profile"
+- scrollUntilVisible:
+    element:
+      id: "reminders-debug"
+    direction: DOWN
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 800
+- assertVisible: "Scheduled \\(13\\) · dev only"
+- assertVisible: ".*Your Tabi cards are ready"
+- takeScreenshot: m4-03-after-foreground
+
+# Check 4: switch off. The readout goes; no permission prompt appears.
+- tapOn:
+    id: "toggle-reminder"
+- waitForAnimationToEnd:
+    timeout: 1500
+- assertNotVisible:
+    id: "reminders-debug"
+- assertNotVisible: ".*Send You Notifications.*"
+- assertNotVisible: "Don.t Allow"
+- takeScreenshot: m4-04-switched-off

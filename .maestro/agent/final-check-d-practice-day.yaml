@@ -1,0 +1,42 @@
+# Final check D (#4, #7), Day-screen path: Calendar -> a day with a card -> open the card from the
+# Day screen -> "Test me" closes the card and opens practice (header says it changes nothing);
+# More actions has no "Reset progress". Demo account, staging. Practice writes nothing.
+appId: ${APP_ID}   # set by the caller: the installed dev build
+---
+- runFlow: ../sign-in.yaml
+- tapOn:
+    id: "tab-calendar"
+- extendedWaitUntil:
+    visible: "Previous month"
+    timeout: 20000
+- waitForAnimationToEnd:
+    timeout: 1500
+- tapOn:
+    id: "calendar-day-2026-11-07"
+- waitForAnimationToEnd:
+    timeout: 1000
+- tapOn:
+    id: "calendar-selected-day"
+- extendedWaitUntil:
+    visible: "Go back"
+    timeout: 10000
+- waitForAnimationToEnd:
+    timeout: 1500
+- tapOn: "orange, orange.*"
+- extendedWaitUntil:
+    visible:
+      id: "card-test-me"
+    timeout: 15000
+- tapOn:
+    id: "card-test-me"
+- extendedWaitUntil:
+    visible: "Practice · doesn't change your schedule"
+    timeout: 15000
+- assertNotVisible:
+    id: "card-test-me"
+- takeScreenshot: d-day-practice
+- tapOn: "More actions"
+- waitForAnimationToEnd:
+    timeout: 800
+- assertNotVisible: "Reset progress"
+- takeScreenshot: d-day-practice-more-actions

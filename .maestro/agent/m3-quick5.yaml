@@ -1,0 +1,61 @@
+# M3 check 3: DUE state (8 review cards due 1 h ago). Today card offers a Quick 5;
+# grade the 5 (Good), then "Nice. 5 more?" -> the remaining 3 -> "All caught up".
+# Staging demo account; grading allowed here (account is reset afterwards).
+appId: ${APP_ID}   # set by the caller: the installed dev build
+---
+- runFlow: ../sign-in.yaml
+- extendedWaitUntil:
+    visible:
+      id: "today-start"
+    timeout: 20000
+- assertVisible:
+    id: "today-start"
+- takeScreenshot: m3-03a-today-due
+- tapOn:
+    id: "today-start"
+- extendedWaitUntil:
+    visible: "1 / 5"
+    timeout: 15000
+- takeScreenshot: m3-03b-quick5-first
+# card 1 of the Quick 5
+- runFlow: final-grade-card.yaml
+# card 2 of the Quick 5
+- runFlow: final-grade-card.yaml
+# card 3 of the Quick 5
+- runFlow: final-grade-card.yaml
+# card 4 of the Quick 5
+- runFlow: final-grade-card.yaml
+# card 5 of the Quick 5
+- runFlow: final-grade-card.yaml
+- extendedWaitUntil:
+    visible: "Session done"
+    timeout: 15000
+- takeScreenshot: m3-03c-quick5-done
+- tapOn: "Done"
+- extendedWaitUntil:
+    visible:
+      id: "today-more"
+    timeout: 15000
+- assertVisible: "Nice\\. 5 more\\?"
+- waitForAnimationToEnd:
+    timeout: 1500
+- takeScreenshot: m3-03d-nice-5-more
+- tapOn:
+    id: "today-more"
+- extendedWaitUntil:
+    visible: "1 / 3"
+    timeout: 15000
+- takeScreenshot: m3-03e-remaining-3
+- runFlow: final-grade-card.yaml
+- runFlow: final-grade-card.yaml
+- runFlow: final-grade-card.yaml
+- extendedWaitUntil:
+    visible: "Session done"
+    timeout: 15000
+- tapOn: "Done"
+- extendedWaitUntil:
+    visible: "All caught up\\..*"
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 1500
+- takeScreenshot: m3-03f-all-caught-up

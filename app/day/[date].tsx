@@ -17,6 +17,7 @@ import RoseBand from '@/components/RoseBand';
 import { useToast } from '@/components/ToastProvider';
 import { haptic } from '@/lib/haptics';
 import StudyCard from '@/components/StudyCard';
+import StudySessionHost from '@/components/StudySessionHost';
 import { colors, e1, fonts, radii, stickerShadow, wordFontFor, MIN_TAP, type } from '@/constants/theme';
 
 // Short enough for the band's one-line 30pt title.
@@ -37,6 +38,7 @@ export default function DayScreen() {
   const [loadError, setLoadError] = useState(false);
   const [selectedSticker, setSelectedSticker] = useState<Sticker | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [practiceQueue, setPracticeQueue] = useState<Sticker[] | null>(null);
   const insets = useSafeAreaInsets();
   const toast = useToast();
 
@@ -125,7 +127,23 @@ export default function DayScreen() {
       ) : (
         <FlatList
           data={stickers}
-          ListHeaderComponent={<Text style={styles.count} maxFontSizeMultiplier={2}>{`${stickers.length} found`}</Text>}
+          ListHeaderComponent={
+            <View style={styles.headerRow}>
+              <Text style={styles.count} maxFontSizeMultiplier={2}>{`${stickers.length} found`}</Text>
+              {stickers.length > 0 && (
+                <Pressable
+                  testID="practice-day"
+                  onPress={() => { haptic.tap(); setPracticeQueue(stickers); }}
+                  style={({ pressed }) => [styles.practiceBtn, pressed && { backgroundColor: colors.terraLight }]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Practice this day"
+                  accessibilityHint="Quiz these cards without changing your review schedule"
+                >
+                  <Text style={styles.practiceText} maxFontSizeMultiplier={1.4}>Practice this day</Text>
+                </Pressable>
+              )}
+            </View>
+          }
           keyExtractor={s => s.id}
           contentContainerStyle={[styles.list, { paddingBottom: insets.bottom + 32 }]}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchStickers(); }} tintColor={colors.terra} />}
@@ -189,6 +207,18 @@ export default function DayScreen() {
         onClose={() => setSelectedSticker(null)}
         onDeleted={() => { setSelectedSticker(null); fetchStickers(); }}
         onUpdate={patchSticker}
+        onTest={sticker => {
+          setSelectedSticker(null);
+          // Present the practice Modal only once the browse Modal has left.
+          setTimeout(() => setPracticeQueue([sticker]), 400);
+        }}
+      />
+
+      <StudySessionHost
+        queue={practiceQueue}
+        mode="practice"
+        onExit={() => setPracticeQueue(null)}
+        onUpdate={patchSticker}
       />
     </View>
   );
@@ -197,6 +227,12 @@ export default function DayScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.sky },
   count: { ...type.small, marginBottom: 0 },
+  headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+  practiceBtn: {
+    minHeight: MIN_TAP, paddingHorizontal: 16, borderRadius: radii.full, borderWidth: 1.5, borderColor: colors.terra,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  practiceText: { ...type.button, fontSize: 14, color: colors.terra },
   loader: { flex: 1 },
   emptyWrap: { alignItems: 'center', paddingHorizontal: 32, paddingTop: 48, gap: 12 },
   errorWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32, gap: 12 },

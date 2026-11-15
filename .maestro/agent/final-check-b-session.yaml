@@ -1,0 +1,95 @@
+# Final check B (#2/#13): reminders on with a slot later today (10:30 PM), DUE state (8 due).
+# Complete a Quick 5 from today-start, then go to Profile within seconds: the readout must
+# already show the updated count (3 cards) without a relaunch. Demo account, staging.
+appId: ${APP_ID}   # set by the caller: the installed dev build
+---
+- runFlow: ../sign-in.yaml
+- extendedWaitUntil:
+    visible: "Collection"
+    timeout: 20000
+- tapOn:
+    id: "tab-profile"
+- extendedWaitUntil:
+    visible: "Reminders"
+    timeout: 20000
+- waitForAnimationToEnd:
+    timeout: 800
+- scrollUntilVisible:
+    element:
+      id: "toggle-reminder"
+    direction: DOWN
+    timeout: 15000
+    centerElement: true
+# Sign-in clears local state, so reminders start OFF here: switch on first.
+- tapOn:
+    id: "toggle-reminder"
+- tapOn:
+    text: "Allow"
+    optional: true
+- scrollUntilVisible:
+    element:
+      id: "reminder-time"
+    direction: DOWN
+    timeout: 15000
+    centerElement: true
+- tapOn:
+    id: "reminder-time"
+- extendedWaitUntil:
+    visible: "Remind me at"
+    timeout: 10000
+- repeat:
+    while:
+      notVisible: "10:30 PM"
+    commands:
+      - swipe:
+          start: "50%,75%"
+          end: "50%,40%"
+          duration: 300
+      - waitForAnimationToEnd:
+          timeout: 300
+- tapOn: "10:30 PM"
+- waitForAnimationToEnd:
+    timeout: 1000
+- scrollUntilVisible:
+    element:
+      id: "reminders-debug"
+    direction: DOWN
+    timeout: 15000
+- takeScreenshot: 02a-readout-before-session
+- assertVisible: ".*A quick 5 is ready · about 1 min"
+# Go to Collection, start the Quick 5 from today.
+- tapOn:
+    id: "tab-collection"
+- extendedWaitUntil:
+    visible:
+      id: "today-start"
+    timeout: 20000
+- tapOn:
+    id: "today-start"
+- extendedWaitUntil:
+    visible: "1 / 5"
+    timeout: 15000
+- runFlow: final-grade-card.yaml
+- runFlow: final-grade-card.yaml
+- runFlow: final-grade-card.yaml
+- runFlow: final-grade-card.yaml
+- runFlow: final-grade-card.yaml
+- extendedWaitUntil:
+    visible: "Session done"
+    timeout: 15000
+- tapOn: "Done"
+- waitForAnimationToEnd:
+    timeout: 500
+# Straight to Profile: the readout must already be rebuilt (3 left), no relaunch.
+- tapOn:
+    id: "tab-profile"
+- scrollUntilVisible:
+    element:
+      id: "reminders-debug"
+    direction: DOWN
+    timeout: 8000
+- waitForAnimationToEnd:
+    timeout: 500
+- takeScreenshot: 02b-readout-after-session
+- assertVisible: ".*3 cards · about 1 min.*"
+- assertNotVisible: ".*A quick 5 is ready · about 1 min"

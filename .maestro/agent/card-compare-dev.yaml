@@ -1,0 +1,39 @@
+# Design comparison, DEV code: Collection grid, one card opened (browse), scrolled,
+# then the study card from "Test me" (front, then flipped). LOOK ONLY: no grade,
+# edit, delete, scan or regenerate. Demo account, staging.
+appId: ${APP_ID}
+---
+- runFlow: ../sign-in.yaml
+- extendedWaitUntil:
+    visible: "Collection"
+    timeout: 20000
+- waitForAnimationToEnd:
+    timeout: 1500
+- takeScreenshot: 01-collection-grid
+- tapOn:
+    id: "sticker-cell-orange"
+- waitForAnimationToEnd:
+    timeout: 2000
+- takeScreenshot: 02-card-opened-top
+- swipe:
+    direction: UP
+    duration: 500
+- waitForAnimationToEnd:
+    timeout: 1000
+- takeScreenshot: 03-card-opened-scrolled
+- swipe:
+    direction: UP
+    duration: 500
+- waitForAnimationToEnd:
+    timeout: 1000
+- takeScreenshot: 04-card-opened-scrolled-more
+- tapOn: "Test me"
+- waitForAnimationToEnd:
+    timeout: 2000
+- takeScreenshot: 05-study-front
+- tapOn:
+    text: ".*Tap to reveal.*"
+    optional: true
+- waitForAnimationToEnd:
+    timeout: 2000
+- takeScreenshot: 06-study-back

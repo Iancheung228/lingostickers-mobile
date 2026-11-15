@@ -1,0 +1,13 @@
+# M3 check 7 + 8: CATCHUP state (25 review cards 5 days overdue). Collection's Today
+# card reads "Welcome back · 5 cards · about 1 min". Layout judged from the shot.
+appId: ${APP_ID}   # set by the caller: the installed dev build
+---
+- runFlow: ../sign-in.yaml
+- extendedWaitUntil:
+    visible: "Welcome back · 5 cards · about 1 min"
+    timeout: 20000
+- assertVisible:
+    id: "today-start"
+- waitForAnimationToEnd:
+    timeout: 1500
+- takeScreenshot: m3-07-catchup-today

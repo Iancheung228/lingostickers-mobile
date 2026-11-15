@@ -1,0 +1,110 @@
+# M4 check 5: Profile readout before and after grading from the Today card.
+# Reminder on (9:00 PM) before grading. Five cards graded "Good" (the Quick 5 session),
+# then Profile is opened again WITHOUT re-toggling: the readout should now say
+# "3 cards · about 1 min" (8 due, 5 graded; a graded card is due again in days).
+# Demo account, staging, no AI calls. Needs the state DUE (8 cards).
+appId: ${APP_ID}   # set by the caller: the installed dev build
+---
+- runFlow: ../sign-in.yaml
+- tapOn: "Profile"
+- extendedWaitUntil:
+    visible: "Reminders"
+    timeout: 20000
+- tapOn:
+    id: "toggle-reminder"
+- tapOn:
+    text: "Allow"
+    optional: true
+- scrollUntilVisible:
+    element:
+      id: "reminders-debug"
+    direction: DOWN
+    timeout: 15000
+- tapOn:
+    id: "reminder-time"
+- extendedWaitUntil:
+    visible: "Remind me at"
+    timeout: 10000
+- repeat:
+    while:
+      notVisible: "9:00 PM"
+    commands:
+      - swipe:
+          start: "50%,75%"
+          end: "50%,40%"
+          duration: 300
+      - waitForAnimationToEnd:
+          timeout: 300
+- tapOn: "9:00 PM"
+- waitForAnimationToEnd:
+    timeout: 1000
+- scrollUntilVisible:
+    element:
+      id: "reminders-debug"
+    direction: DOWN
+    timeout: 15000
+- assertVisible: ".*A quick 5 is ready · about 1 min"
+- takeScreenshot: m4-05a-readout-before
+
+# Grade five cards from the Today card (Quick 5).
+- tapOn:
+    id: "tab-collection"
+- extendedWaitUntil:
+    visible:
+      id: "today-start"
+    timeout: 20000
+- tapOn:
+    id: "today-start"
+- waitForAnimationToEnd:
+    timeout: 1500
+- tapOn: "Tap to reveal"
+- waitForAnimationToEnd:
+    timeout: 800
+- tapOn: "Good — next review in.*"
+- waitForAnimationToEnd:
+    timeout: 1200
+- takeScreenshot: m4-05b-after-one-grade
+- tapOn: "Tap to reveal"
+- waitForAnimationToEnd:
+    timeout: 800
+- tapOn: "Good — next review in.*"
+- waitForAnimationToEnd:
+    timeout: 1200
+- tapOn: "Tap to reveal"
+- waitForAnimationToEnd:
+    timeout: 800
+- tapOn: "Good — next review in.*"
+- waitForAnimationToEnd:
+    timeout: 1200
+- tapOn: "Tap to reveal"
+- waitForAnimationToEnd:
+    timeout: 800
+- tapOn: "Good — next review in.*"
+- waitForAnimationToEnd:
+    timeout: 1200
+- tapOn: "Tap to reveal"
+- waitForAnimationToEnd:
+    timeout: 800
+- tapOn: "Good — next review in.*"
+- waitForAnimationToEnd:
+    timeout: 2000
+- takeScreenshot: m4-05c-after-five-grades
+
+# Session summary ("5 cards reviewed"): close it, then Profile without re-toggling.
+- assertVisible: "5 cards reviewed"
+- tapOn: "Done"
+- waitForAnimationToEnd:
+    timeout: 1500
+- tapOn:
+    id: "tab-profile"
+- waitForAnimationToEnd:
+    timeout: 1500
+- scrollUntilVisible:
+    element:
+      id: "reminders-debug"
+    direction: DOWN
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 800
+- assertVisible: ".*3 cards · about 1 min"
+- takeScreenshot: m4-05d-readout-after

@@ -1,0 +1,30 @@
+# Final check A (#12): Profile reminders readout shows real times, never "timeInterval".
+# Demo account, staging. Expects the state "due" (8 due) set beforehand.
+appId: ${APP_ID}   # set by the caller: the installed dev build
+---
+- runFlow: ../sign-in.yaml
+- extendedWaitUntil:
+    visible: "Collection"
+    timeout: 20000
+- tapOn:
+    id: "tab-profile"
+- extendedWaitUntil:
+    visible: "Reminders"
+    timeout: 20000
+- waitForAnimationToEnd:
+    timeout: 800
+- tapOn:
+    id: "toggle-reminder"
+- tapOn:
+    text: "Allow"
+    optional: true
+- scrollUntilVisible:
+    element:
+      id: "reminders-debug"
+    direction: DOWN
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 800
+- takeScreenshot: 01-readout-times
+- assertNotVisible: ".*timeInterval.*"
+- assertVisible: ".*Tue, 17 Nov 9:00 AM.*"

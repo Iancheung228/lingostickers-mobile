@@ -1,0 +1,29 @@
+# M3 check 6: DUE state. The Calendar pill reads exactly "Review" and starts a
+# Quick 5 (<= 5 cards). Closed without grading.
+appId: ${APP_ID}   # set by the caller: the installed dev build
+---
+- runFlow: ../sign-in.yaml
+- tapOn:
+    id: "tab-calendar"
+- extendedWaitUntil:
+    visible: "Previous month"
+    timeout: 20000
+- waitForAnimationToEnd:
+    timeout: 1500
+- tapOn:
+    id: "calendar-day-2026-11-13"
+- waitForAnimationToEnd:
+    timeout: 1000
+- assertVisible:
+    id: "calendar-review-cta"
+- takeScreenshot: m3-06a-calendar-pill
+- tapOn:
+    id: "calendar-review-cta"
+- extendedWaitUntil:
+    visible: "1 / 5"
+    timeout: 15000
+- takeScreenshot: m3-06b-review-session
+- tapOn: "Close this card"
+- waitForAnimationToEnd:
+    timeout: 1500
+- takeScreenshot: m3-06c-after-close

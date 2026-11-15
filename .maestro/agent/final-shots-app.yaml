@@ -71,6 +71,12 @@ appId: ${APP_ID}
     timeout: 10000
 - tapOn: "pomme, apple.*"
 - extendedWaitUntil:
+    visible:
+      id: "card-flip"
+    timeout: 15000
+- tapOn:
+    id: "card-flip"
+- extendedWaitUntil:
     visible: "Meaning, .*Edit"
     timeout: 15000
 - waitForAnimationToEnd:

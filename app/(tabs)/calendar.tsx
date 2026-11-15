@@ -13,8 +13,7 @@ import { listImagePath, firstCutout } from '@/lib/thumbnails';
 import Thumb from '@/components/calendar/Thumb';
 import DayCell, { cellHeightFor } from '@/components/calendar/DayCell';
 import YearView from '@/components/calendar/YearView';
-import { dueToday, dateKeyOf } from '@/lib/review';
-import { limitNewCards } from '@/lib/studyQueue';
+import { buildTodayPlan, dateKeyOf, QUICK_SESSION_SIZE } from '@/lib/review';
 import { newCardsIntroducedToday, useStudyPrefs } from '@/lib/studyPrefs';
 import StudySessionHost from '@/components/StudySessionHost';
 import { Sticker } from '@/lib/types';
@@ -164,7 +163,7 @@ export default function CalendarScreen() {
 
   // The CTA starts exactly the session Home would: after the new-card limit.
   const due = useMemo(
-    () => limitNewCards(dueToday(stickers), prefs.newCardsPerDay, newCardsIntroducedToday()),
+    () => buildTodayPlan(stickers, { newCardsPerDay: prefs.newCardsPerDay, introducedToday: newCardsIntroducedToday() }).queue,
     [stickers, prefs.newCardsPerDay],
   );
 
@@ -466,13 +465,13 @@ export default function CalendarScreen() {
             {due.length > 0 && (
               <Pressable
                 testID="calendar-review-cta"
-                onPress={() => { haptic.press(); setReviewQueue(due); }}
+                onPress={() => { haptic.press(); setReviewQueue(due.slice(0, QUICK_SESSION_SIZE)); }}
                 style={({ pressed }) => [styles.review, pressed && styles.reviewPressed]}
                 accessibilityRole="button"
-                accessibilityLabel={`Review ${due.length} now`}
+                accessibilityLabel="Review"
               >
                 <RotateCcw size={15} strokeWidth={2} color={colors.inkMid} />
-                <Text style={styles.reviewText} maxFontSizeMultiplier={1.3}>Review {due.length}</Text>
+                <Text style={styles.reviewText} maxFontSizeMultiplier={1.3}>Review</Text>
               </Pressable>
             )}
           </View>

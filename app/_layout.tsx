@@ -21,6 +21,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { StatusBar } from 'expo-status-bar';
 import * as Notifications from 'expo-notifications';
 import { useAuth, AuthProvider } from '@/hooks/useAuth';
+import { syncReminders } from '@/lib/reminder';
 import { ProfileProvider } from '@/hooks/useProfile';
 import { FriendsProvider } from '@/hooks/useFriends';
 import { ChallengesProvider } from '@/hooks/useChallenges';
@@ -101,8 +102,10 @@ function RootLayout() {
   useEffect(() => {
     const clear = () => { Notifications.setBadgeCountAsync(0); };
     clear();
+    // Re-plan review reminders now and every time the app comes back.
+    void syncReminders();
     const sub = AppState.addEventListener('change', (state) => {
-      if (state === 'active') clear();
+      if (state === 'active') { clear(); void syncReminders(); }
     });
     return () => sub.remove();
   }, []);

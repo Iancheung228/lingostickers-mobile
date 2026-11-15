@@ -10,6 +10,8 @@ import {
 import { limitNewCards } from '@/lib/studyQueue';
 import { supabase } from '@/lib/supabase';
 import { haptic } from '@/lib/haptics';
+import { syncReminders } from '@/lib/reminder';
+import { persistGrade, type SessionMode } from '@/lib/practice';
 import StudyCard from '@/components/StudyCard';
 import ReviewSummary from '@/components/ReviewSummary';
 import { useToast } from '@/components/ToastProvider';
@@ -23,6 +25,10 @@ interface StudySessionHostProps {
   /// Unused now that a study session can't delete a card; kept so the screens
   /// that start a session don't change.
   onDeleted?: () => void;
+  /// 'practice' grades nothing into the schedule: no write of any kind.
+  mode?: SessionMode;
+  /// The session ended (finished or closed) having graded this many cards.
+  onFinished?: (graded: number) => void;
 }
 
 interface Stats { graded: number; again: number; unsynced: number }
@@ -59,8 +65,14 @@ const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
  * place for "Again" to be re-queued differently. Same reasoning as
  * skills.md #1: the parts that must agree get one implementation.
  */
-export default function StudySessionHost({ queue, onExit, onUpdate }: StudySessionHostProps) {
+export default function StudySessionHost({ queue, onExit, onUpdate, mode = 'review', onFinished: onFinishedProp }: StudySessionHostProps) {
   const toast = useToast();
+  // A session that graded cards moved due dates: re-plan the reminders.
+  const onFinished = (graded: number) => {
+    // After the session's chained grade writes settle, so the plan reads the new due dates.
+    if (mode === 'review' && graded > 0) void writes.current.then(() => syncReminders());
+    onFinishedProp?.(graded);
+  };
   const [cards, setCards] = useState<Sticker[] | null>(null);
   const [index, setIndex] = useState(0);
   // Cards graded this sitting; one showing again is being re-learned.
@@ -84,7 +96,8 @@ export default function StudySessionHost({ queue, onExit, onUpdate }: StudySessi
     void studyPrefsReady().then(() => {
       if (!alive) return;
       // The new-card limit (A-card 7): reviews are never capped, introductions are.
-      const limited = limitNewCards(queue, getStudyPrefs().newCardsPerDay, newCardsIntroducedToday());
+      // Practice has no new-card slots: it never introduces anything.
+      const limited = mode === 'practice' ? queue : limitNewCards(queue, getStudyPrefs().newCardsPerDay, newCardsIntroducedToday());
       if (limited.length === 0) {
         toast.show({ kind: 'info', message: "That's today's new-card limit. Change it in Profile." });
         onExit();
@@ -139,43 +152,64 @@ export default function StudySessionHost({ queue, onExit, onUpdate }: StudySessi
     if (!cards || !current) return;
     const before = Object.fromEntries(SCHEDULE_COLUMNS.map(k => [k, current[k]])) as Partial<Sticker>;
     const wasNew = (current.review_count ?? 0) === 0;
-    undoRef.current = { id: current.id, cards, index, seen, stats, revisit, final, before, wasNew };
+    // newStats is needed after the guard (the end-of-session count).
+    let graded = current;
 
-    const newStats = {
-      graded: (stats?.graded ?? 0) + 1,
-      again: (stats?.again ?? 0) + (grade === 'again' ? 1 : 0),
-      unsynced: stats?.unsynced ?? 0,
-    };
-    setStats(newStats);
+    // THE practice guard: every write, snapshot and toast lives in this closure.
+    const wrote = persistGrade(mode, () => {
+      undoRef.current = { id: current.id, cards, index, seen, stats, revisit, final, before, wasNew };
 
-    // The graded card carries its new schedule forward, because it may well be
-    // answered again before this session ends — and a second answer read off
-    // the pre-grading card would compute from the wrong rung of the learning
-    // ladder (or think a card that has just lapsed is still a review card, and
-    // hand it a multiplied interval instead of graduating it).
-    setSeen(prev => new Set(prev).add(current.id));
-    const graded = { ...current, ...patch } as Sticker;
-    setFinal(prev => new Map(prev).set(current.id, graded));
-    setRevisit(prev => {
-      const m = new Map(prev);
-      if (grade === 'again') m.set(current.id, graded);
-      else if (grade === 'good' || grade === 'easy') m.delete(current.id);
-      return m;
+      const newStats = {
+        graded: (stats?.graded ?? 0) + 1,
+        again: (stats?.again ?? 0) + (grade === 'again' ? 1 : 0),
+        unsynced: stats?.unsynced ?? 0,
+      };
+      setStats(newStats);
+
+      // The graded card carries its new schedule forward, because it may well be
+      // answered again before this session ends — and a second answer read off
+      // the pre-grading card would compute from the wrong rung of the learning
+      // ladder (or think a card that has just lapsed is still a review card, and
+      // hand it a multiplied interval instead of graduating it).
+      setSeen(prev => new Set(prev).add(current.id));
+      graded = { ...current, ...patch } as Sticker;
+      setFinal(prev => new Map(prev).set(current.id, graded));
+      setRevisit(prev => {
+        const m = new Map(prev);
+        if (grade === 'again') m.set(current.id, graded);
+        else if (grade === 'good' || grade === 'easy') m.delete(current.id);
+        return m;
+      });
+
+      // Optimistic everywhere, then the write; failure rolls the lists back.
+      onUpdate?.(current.id, patch);
+      if (wasNew) recordNewCardIntroduced(current.id);
+      writeSchedule(current.id, patch, () => {
+        onUpdate?.(current.id, before);
+        setStats(s => (s ? { ...s, unsynced: s.unsynced + 1 } : s));
+      });
+
+      toast.show({
+        kind: 'undo',
+        message: `Graded ${GRADE_LABEL[grade]}`,
+        action: { label: 'Undo', onPress: undo },
+      });
+
     });
-
-    // Optimistic everywhere, then the write; failure rolls the lists back.
-    onUpdate?.(current.id, patch);
-    if (wasNew) recordNewCardIntroduced(current.id);
-    writeSchedule(current.id, patch, () => {
-      onUpdate?.(current.id, before);
-      setStats(s => (s ? { ...s, unsynced: s.unsynced + 1 } : s));
-    });
-
-    toast.show({
-      kind: 'undo',
-      message: `Graded ${GRADE_LABEL[grade]}`,
-      action: { label: 'Undo', onPress: undo },
-    });
+    if (!wrote) {
+      // Practice: just move on. Nothing was written, nothing can be undone.
+      setOpenOnBack(false);
+      if (index + 1 < cards.length) {
+        setIndex(i => i + 1);
+        AccessibilityInfo.announceForAccessibility(`Card ${index + 2} of ${cards.length}`);
+        return;
+      }
+      setCards(null);
+      toast.show({ kind: 'info', message: "Practice done. Your schedule didn't change." });
+      onFinished?.(cards.length);
+      onExit();
+      return;
+    }
 
     // Anything the scheduler booked inside the learn-ahead window is still
     // being learned, so it comes round again in this sitting rather than being
@@ -203,6 +237,7 @@ export default function StudySessionHost({ queue, onExit, onUpdate }: StudySessi
     }
     setEarly(false);
     setCards(null);
+    onFinished?.((stats?.graded ?? 0) + 1);
     onExit();
   };
 
@@ -216,6 +251,7 @@ export default function StudySessionHost({ queue, onExit, onUpdate }: StudySessi
     // coming round again for its learning step has been answered; closing on
     // it is a finished session (the approved flow closes exactly there).
     else setEarly(!!cards?.some(c => !seen.has(c.id)));
+    onFinished?.(mode === 'practice' ? 0 : stats?.graded ?? 0);
     onExit();
   };
 
@@ -226,6 +262,7 @@ export default function StudySessionHost({ queue, onExit, onUpdate }: StudySessi
       <StudyCard
         sticker={current}
         mode="review"
+        practice={mode === 'practice'}
         stillLearning={!!current && seen.has(current.id)}
         startFlipped={openOnBack}
         progress={cards ? { index, total: cards.length, fraction: unique ? seen.size / unique : 0 } : undefined}

@@ -38,8 +38,10 @@ const TWO: Grade[] = ['again', 'good'];
 /// Dynamic Type at or past this stacks the row 2 x 2, Again and Good on top.
 const STACK_AT = 1.3;
 
-export default function GradeRow({ sticker, simple, disabled, onGrade }: {
+export default function GradeRow({ sticker, simple, disabled, onGrade, practice }: {
   sticker: Sticker;
+  /// Practice: nothing is scheduled, so no interval is promised.
+  practice?: boolean;
   /// Two buttons, Again and Good, in place of four.
   simple: boolean;
   disabled: boolean;
@@ -57,6 +59,7 @@ export default function GradeRow({ sticker, simple, disabled, onGrade }: {
           tone={TONES[g]}
           sticker={sticker}
           big={simple}
+          practice={!!practice}
           stacked={stacked}
           disabled={disabled}
           onPress={() => onGrade(g)}
@@ -66,8 +69,8 @@ export default function GradeRow({ sticker, simple, disabled, onGrade }: {
   );
 }
 
-function GradeButton({ tone, sticker, big, stacked, disabled, onPress }: {
-  tone: Tone; sticker: Sticker; big: boolean; stacked: boolean; disabled: boolean; onPress: () => void;
+function GradeButton({ tone, sticker, big, practice, stacked, disabled, onPress }: {
+  tone: Tone; sticker: Sticker; big: boolean; practice: boolean; stacked: boolean; disabled: boolean; onPress: () => void;
 }) {
   const { reduced } = useMotion();
   const scale = useSharedValue(1);
@@ -88,7 +91,7 @@ function GradeButton({ tone, sticker, big, stacked, disabled, onPress }: {
         accessibilityRole="button"
         // Spoken as a sentence, because "Easy 3mo" read aloud is two unrelated
         // nouns. The interval is the whole point of the button.
-        accessibilityLabel={`${tone.label} — next review in ${spokenDelay(interval)}`}
+        accessibilityLabel={practice ? tone.label : `${tone.label} — next review in ${spokenDelay(interval)}`}
         accessibilityState={{ disabled }}
         style={({ pressed }) => [
           styles.btn,
@@ -104,9 +107,11 @@ function GradeButton({ tone, sticker, big, stacked, disabled, onPress }: {
           </Text>
           {tone.icon === 'easy' && <ChevronsUp size={16} strokeWidth={2} color={tone.fg} />}
         </View>
-        <Text style={[styles.interval, { color: tone.sub }]} maxFontSizeMultiplier={type.data.maxFontSizeMultiplier}>
-          {interval}
-        </Text>
+        {!practice && (
+          <Text style={[styles.interval, { color: tone.sub }]} maxFontSizeMultiplier={type.data.maxFontSizeMultiplier}>
+            {interval}
+          </Text>
+        )}
       </Pressable>
     </Animated.View>
   );

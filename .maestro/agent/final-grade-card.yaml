@@ -1,0 +1,14 @@
+# Helper for the final checks: reveal the card that is on screen (any prompt wording) and grade Good.
+# Used by final-check-b-session.yaml (runFlow x5). Demo account, staging.
+appId: ${APP_ID}
+---
+- extendedWaitUntil:
+    visible: "Tap to reveal"
+    timeout: 10000
+- tapOn: "Tap to reveal"
+- extendedWaitUntil:
+    visible: "Good — next review in.*"
+    timeout: 10000
+- tapOn: "Good — next review in.*"
+- waitForAnimationToEnd:
+    timeout: 1200

@@ -1,0 +1,33 @@
+# Final check C (#3): finish the last 3 due cards from the Today card, then the Today card
+# must say "All caught up. Next one ..." and must not say "later today" unless a learning
+# card is due within hours. Run after final-check-b-session.yaml (3 due left). Demo account, staging.
+appId: ${APP_ID}   # set by the caller: the installed dev build
+---
+- runFlow: ../sign-in.yaml
+- extendedWaitUntil:
+    visible: "Collection"
+    timeout: 20000
+- extendedWaitUntil:
+    visible:
+      id: "today-start"
+    timeout: 20000
+- tapOn:
+    id: "today-start"
+- extendedWaitUntil:
+    visible: "1 / 3"
+    timeout: 15000
+- runFlow: final-grade-card.yaml
+- runFlow: final-grade-card.yaml
+- runFlow: final-grade-card.yaml
+- waitForAnimationToEnd:
+    timeout: 1500
+- tapOn:
+    text: "Done"
+    optional: true
+- waitForAnimationToEnd:
+    timeout: 1500
+- extendedWaitUntil:
+    visible: "All caught up\\. Next one.*"
+    timeout: 15000
+- assertNotVisible: ".*later today.*"
+- takeScreenshot: 03-caught-up-today

@@ -1,0 +1,21 @@
+# M4 check 5 follow-up: after a session, does a relaunch rebuild the scheduled readout?
+# No sign-in (keeps state). Expects the readout to say "3 cards · about 1 min" after the
+# app re-plans on launch, if the rebuild after the session is what drifted.
+appId: ${APP_ID}
+---
+- launchApp:
+    clearState: false
+- extendedWaitUntil:
+    visible: "Collection"
+    timeout: 30000
+- tapOn:
+    id: "tab-profile"
+- scrollUntilVisible:
+    element:
+      id: "reminders-debug"
+    direction: DOWN
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 1000
+- takeScreenshot: m4-05e-readout-after-relaunch
+- assertVisible: ".*3 cards · about 1 min"

@@ -1,0 +1,29 @@
+# M3 check 4, part A: read the card's Details (interval/due/reviews) BEFORE practice.
+# Demo account, staging. Ends with the Details sheet open; the caller reads the
+# accessibility labels with `maestro hierarchy` and then runs m3-practice.yaml.
+appId: ${APP_ID}   # set by the caller: the installed dev build
+---
+- runFlow: ../sign-in.yaml
+- extendedWaitUntil:
+    visible: "Collection"
+    timeout: 20000
+- tapOn: "orange — orange.*"
+- extendedWaitUntil:
+    visible:
+      id: "card-flip"
+    timeout: 15000
+- tapOn:
+    id: "card-flip"
+- extendedWaitUntil:
+    visible: "Meaning, .*Edit"
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 800
+- tapOn:
+    id: "card-details"
+- extendedWaitUntil:
+    visible: "Interval, .*"
+    timeout: 10000
+- waitForAnimationToEnd:
+    timeout: 800
+- takeScreenshot: m3-04a-details-before

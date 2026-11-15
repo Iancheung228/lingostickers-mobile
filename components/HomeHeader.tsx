@@ -1,9 +1,7 @@
-import { View, Text, StyleSheet, Pressable } from 'react-native';
+import { View, StyleSheet } from 'react-native';
 import Animated, { interpolate, Extrapolation, useAnimatedStyle, type SharedValue } from 'react-native-reanimated';
-import { ChevronRight } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, e1, radii, spacing, type } from '@/constants/theme';
-import { haptic } from '@/lib/haptics';
 import { useMotion } from '@/lib/motion';
 
 /** The rose band at rest is 140pt tall (SPEC "Home band copy"). */
@@ -12,15 +10,12 @@ export const BAND_HEIGHT = 140;
 export function slimBandHeight(insetTop: number) { return insetTop + 52; }
 
 interface HomeHeaderProps {
-  dueCount: number;
-  reviewMinutes: number;
-  onStartReview: () => void;
   /** The list's scroll offset: the band collapses to a slim bar as it grows. */
   scrollY: SharedValue<number>;
 }
 
-// The band shows only "Collection" and, when something is due, "Review N"
-// (hidden at 0, no caught-up line). Two layers make the collapse work with the
+// The band shows only "Collection". Review lives on the Today card below the
+// wall (components/TodayCard.tsx): no count, no pill. Two layers make the collapse work with the
 // wall overlapping the band at rest: `fill` sits BEHIND the list (so the wall
 // card can overlap its bottom 24pt) and slides up as you scroll; `bar` sits
 // ABOVE the list with the title and pill and is always the slim height. At rest
@@ -35,7 +30,7 @@ export function HomeBandFill({ scrollY }: { scrollY: SharedValue<number> }) {
   return <Animated.View pointerEvents="none" style={[styles.fill, style]} />;
 }
 
-export default function HomeHeader({ dueCount, reviewMinutes, onStartReview, scrollY }: HomeHeaderProps) {
+export default function HomeHeader({ scrollY }: HomeHeaderProps) {
   const insets = useSafeAreaInsets();
   const { reduced } = useMotion();
   const slim = slimBandHeight(insets.top);
@@ -51,19 +46,6 @@ export default function HomeHeader({ dueCount, reviewMinutes, onStartReview, scr
         <Animated.Text style={[styles.title, title]} accessibilityRole="header" numberOfLines={1} maxFontSizeMultiplier={1.3}>
           Collection
         </Animated.Text>
-        {dueCount > 0 && (
-          <Pressable
-            testID="home-review-pill"
-            style={({ pressed }) => [styles.duePill, pressed && styles.pillPressed]}
-            onPress={() => { haptic.press(); onStartReview(); }}
-            hitSlop={{ top: 4, bottom: 4 }}
-            accessibilityRole="button"
-            accessibilityLabel={`Start reviewing — ${dueCount} card${dueCount === 1 ? '' : 's'} due, about ${reviewMinutes} minute${reviewMinutes === 1 ? '' : 's'}`}
-          >
-            <Text style={styles.dueText} maxFontSizeMultiplier={1.3}>Review {dueCount}</Text>
-            <View style={styles.arrow}><ChevronRight size={18} color={colors.white} strokeWidth={2.5} /></View>
-          </Pressable>
-        )}
       </View>
     </Animated.View>
   );

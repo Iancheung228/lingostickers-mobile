@@ -70,14 +70,16 @@ export const HARD_MULTIPLIER = 1.2;
 /** Easy multiplies the Good interval by this on top of ease. */
 export const EASY_BONUS = 1.3;
 /**
- * What a lapse leaves of the interval. Anki's default is 0 — a forgotten card
- * goes back to a day, on the argument that an interval you demonstrably could
- * not hold is not evidence of anything worth keeping. The ease penalty below
- * is what carries the card's history forward instead.
+ * What a lapse leaves of the interval: a quarter of it. Anki's default of 0
+ * throws away a month of evidence because of one miss; a quarter keeps most
+ * of the signal while still bringing the card back soon (30d -> 8d). The
+ * ease penalty carries the rest of the card's history forward.
  */
-export const LAPSE_MULTIPLIER = 0;
+export const LAPSE_MULTIPLIER = 0.25;
 /** …but never below this, so a lapse can't schedule a card into the past. */
 export const MIN_LAPSE_INTERVAL_DAYS = 1;
+/** …and never above this, so one lapse on a year-old card isn't a year of silence. */
+export const MAX_LAPSE_INTERVAL_DAYS = 14;
 
 /**
  * How far ahead a running session will pull a card that is on a step.
@@ -257,7 +259,10 @@ export function nextOutcome(sticker: Sticker, grade: Grade): Outcome {
     // back onto is decided here, at lapse time, and parked in interval_days.
     return {
       ease: nextEase(ease, 'again'),
-      intervalDays: Math.max(MIN_LAPSE_INTERVAL_DAYS, Math.round(interval * LAPSE_MULTIPLIER)),
+      intervalDays: Math.min(
+        MAX_LAPSE_INTERVAL_DAYS,
+        Math.max(MIN_LAPSE_INTERVAL_DAYS, Math.round(interval * LAPSE_MULTIPLIER))
+      ),
       learningStep: 0,
       delayMinutes: RELEARNING_STEPS_MIN[0],
       lapsed: true,
@@ -593,7 +598,172 @@ export function heaviestDay(forecast: DayForecast[]): DayForecast | null {
   return heaviest;
 }
 
+/** Seconds a card takes on average; 5 cards is "about 1 min". */
+export const SECONDS_PER_CARD = 12;
+
 /** Rough "this'll take N min" for a queue of a given size. */
 export function reviewMinutes(count: number): number {
-  return Math.max(1, count);
+  return Math.max(1, Math.ceil((count * SECONDS_PER_CARD) / 60));
 }
+
+// ---------------------------------------------------------------------------
+// Backlog: daily review cap and catch-up
+// ---------------------------------------------------------------------------
+
+/** Review-phase cards shown per day. Learning/relearning and new cards are exempt. */
+export const DAILY_REVIEW_CAP = 30;
+/** Catch-up triggers: this many review cards that are this overdue... */
+export const CATCH_UP_OVERDUE_COUNT = 20;
+export const CATCH_UP_OVERDUE_DAYS = 3;
+/** ...or nothing reviewed for this many days. */
+export const CATCH_UP_AWAY_DAYS = 7;
+
+function isReviewPhase(s: Sticker): boolean {
+  return phaseOf(s).phase === 'review';
+}
+
+/** Review-phase cards already answered today, derived from data (cross-device). */
+export function reviewedTodayCount(stickers: Sticker[], now: number = Date.now()): number {
+  const today = startOfDay(now);
+  let n = 0;
+  for (const s of stickers) {
+    if (!s.last_reviewed_at || !isReviewPhase(s)) continue;
+    const at = new Date(s.last_reviewed_at).getTime();
+    if (!Number.isNaN(at) && at >= today) n += 1;
+  }
+  return n;
+}
+
+/**
+ * Caps the review-phase cards in a due queue at `reviewCap - reviewedToday`,
+ * keeping the most overdue relative to their interval, ((now - due) / interval,
+ * so a week late on a 3-day card outranks a week late on a 90-day card).
+ * Learning, relearning and new cards are never dropped; they keep their
+ * positions and the surviving reviews fill the review positions in ratio order.
+ */
+export function capReviews(
+  queue: Sticker[],
+  opts: { reviewCap?: number; reviewedToday?: number; now?: number } = {}
+): Sticker[] {
+  const now = opts.now ?? Date.now();
+  const slots = Math.max(0, (opts.reviewCap ?? DAILY_REVIEW_CAP) - (opts.reviewedToday ?? 0));
+  const ratio = (s: Sticker) => (now - dueAtMs(s)) / Math.max(1, s.interval_days ?? 0);
+  const keep = queue
+    .filter(isReviewPhase)
+    .map((s, i) => ({ s, i, r: ratio(s) }))
+    .sort((x, y) => y.r - x.r || x.i - y.i)
+    .slice(0, slots)
+    .map(x => x.s);
+  let next = 0;
+  const out: Sticker[] = [];
+  for (const s of queue) {
+    if (!isReviewPhase(s)) out.push(s);
+    else if (next < keep.length) out.push(keep[next++]);
+  }
+  return out;
+}
+
+/**
+ * Welcome-back mode, derived (nothing stored): many review cards badly
+ * overdue, or a long gap since the last review. New cards pause while it holds.
+ */
+export function isCatchUp(stickers: Sticker[], now: number = Date.now()): boolean {
+  let overdue = 0;
+  let newest = -Infinity;
+  for (const s of stickers) {
+    if (s.last_reviewed_at) {
+      const at = new Date(s.last_reviewed_at).getTime();
+      if (!Number.isNaN(at) && at > newest) newest = at;
+    }
+    if (isReviewPhase(s) && overdueBy(s, now) >= CATCH_UP_OVERDUE_DAYS) overdue += 1;
+  }
+  if (overdue >= CATCH_UP_OVERDUE_COUNT) return true;
+  return newest > -Infinity && Math.round((startOfDay(now) - startOfDay(newest)) / 86_400_000) >= CATCH_UP_AWAY_DAYS;
+}
+
+// ---------------------------------------------------------------------------
+// Today's queue (Collection "Today" card, Quick 5 sessions)
+// ---------------------------------------------------------------------------
+
+/** Cards in one Quick session. */
+export const QUICK_SESSION_SIZE = 5;
+
+export interface TodayPlan {
+  /** Today's capped queue: what the sessions draw from. */
+  queue: Sticker[];
+  /** Welcome-back mode: new cards are paused. */
+  catchUp: boolean;
+}
+
+/**
+ * Everything due, after the new-card limit (zero in catch-up) and the daily
+ * review cap. The one place every screen asks "what is today's queue".
+ */
+export function buildTodayPlan(
+  stickers: Sticker[],
+  opts: { newCardsPerDay: number; introducedToday: number; now?: number }
+): TodayPlan {
+  const now = opts.now ?? Date.now();
+  const catchUp = isCatchUp(stickers, now);
+  let slots = catchUp ? 0 : Math.max(0, opts.newCardsPerDay - opts.introducedToday);
+  const limited: Sticker[] = [];
+  for (const card of dueToday(stickers, { now })) {
+    if ((card.review_count ?? 0) === 0) {
+      if (slots <= 0) continue;
+      slots -= 1;
+    }
+    limited.push(card);
+  }
+  return { queue: capReviews(limited, { reviewedToday: reviewedTodayCount(stickers, now), now }), catchUp };
+}
+
+/**
+ * "tomorrow", "in 3 days", "later today": when the next card comes due, or null
+ * if none will. Cards already due but not in today's queue (held back by the
+ * review cap, the new-card limit or catch-up) come back tomorrow, so they say
+ * "tomorrow", never "later today".
+ */
+export function nextDueWhen(stickers: Sticker[], now: number = Date.now()): string | null {
+  let soonest: Sticker | null = null;
+  let heldBack = false;
+  for (const s of stickers) {
+    if (dueAtMs(s) <= now) { heldBack = true; continue; }
+    if (!soonest || dueAtMs(s) < dueAtMs(soonest)) soonest = s;
+  }
+  if (heldBack) {
+    // Tomorrow, unless something else comes sooner today (a card on a step).
+    if (soonest && nextDueInDays(soonest, now) <= 0) return 'later today';
+    return 'tomorrow';
+  }
+  if (!soonest) return null;
+  const days = nextDueInDays(soonest, now);
+  if (days <= 0) return 'later today';
+  return days === 1 ? 'tomorrow' : `in ${days} days`;
+}
+
+/**
+ * The cards a reminder planner should count, consistent with the Today card:
+ * today's queue counts from now; cards that are due but held back (cap,
+ * new-card limit, catch-up) only count from tomorrow's midnight; the rest keep
+ * their own due time. So a reminder never says "cards ready" while Today says
+ * "all caught up".
+ */
+export function plannableCards(
+  stickers: Sticker[],
+  opts: { newCardsPerDay: number; introducedToday: number; now?: number }
+): { dueAtMs: number }[] {
+  const now = opts.now ?? Date.now();
+  const plan = buildTodayPlan(stickers, { ...opts, now });
+  const inQueue = new Set(plan.queue);
+  const tomorrow = midnightIn(now, 1);
+  return stickers.map(s => {
+    const due = dueAtMs(s);
+    return { dueAtMs: due <= now && !inQueue.has(s) ? tomorrow : due };
+  });
+}
+
+// Known, accepted tradeoffs (derived-from-data design, nothing stored):
+//  - the daily review cap can leak slightly: cards that lapse or graduate during
+//    the day change phase and so are counted differently by reviewedTodayCount;
+//  - an Undo after a session leaves the reminder plan stale until the next
+//    foreground, which rebuilds it.

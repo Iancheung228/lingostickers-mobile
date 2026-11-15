@@ -1,0 +1,37 @@
+# M3 check 5: Calendar -> a day with stickers -> Day screen -> "Practice this day"
+# opens a practice session (header visible). Closed without finishing.
+# Demo account, staging. Nothing graded.
+appId: ${APP_ID}   # set by the caller: the installed dev build
+---
+- runFlow: ../sign-in.yaml
+- tapOn:
+    id: "tab-calendar"
+- extendedWaitUntil:
+    visible: "Previous month"
+    timeout: 20000
+- waitForAnimationToEnd:
+    timeout: 1500
+- tapOn:
+    id: "calendar-day-2026-11-07"
+- waitForAnimationToEnd:
+    timeout: 1000
+- tapOn:
+    id: "calendar-selected-day"
+- extendedWaitUntil:
+    visible: "Go back"
+    timeout: 10000
+- waitForAnimationToEnd:
+    timeout: 1500
+- takeScreenshot: m3-05a-day-screen
+- tapOn:
+    id: "practice-day"
+- extendedWaitUntil:
+    visible: "Practice · doesn't change your schedule"
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 1500
+- takeScreenshot: m3-05b-day-practice
+- tapOn: "Close this card"
+- waitForAnimationToEnd:
+    timeout: 1500
+- takeScreenshot: m3-05c-after-close

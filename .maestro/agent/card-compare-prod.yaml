@@ -1,0 +1,47 @@
+# Design comparison, PRODUCTION code (tabi-prod-view, Metro :8083): Collection
+# grid, one sticker opened (browse), scrolled, then flipped. Prod has no testIDs
+# on StickerCard and no "Test me" button, so selection is by text. LOOK ONLY: no
+# grade, edit, delete, scan or regenerate. Demo account, staging.
+appId: ${APP_ID}
+---
+- runFlow: ../sign-in.yaml
+- extendedWaitUntil:
+    visible: "FOUND"
+    timeout: 30000
+- tapOn:
+    text: "Collection"
+- extendedWaitUntil:
+    visible: "orange — orange"
+    timeout: 20000
+- waitForAnimationToEnd:
+    timeout: 1500
+- takeScreenshot: 01-collection-grid
+- tapOn:
+    text: "orange — orange"
+- waitForAnimationToEnd:
+    timeout: 2000
+- takeScreenshot: 02-card-opened-top
+- swipe:
+    direction: UP
+    duration: 500
+- waitForAnimationToEnd:
+    timeout: 1000
+- takeScreenshot: 03-card-opened-scrolled
+- swipe:
+    direction: UP
+    duration: 500
+- waitForAnimationToEnd:
+    timeout: 1000
+- takeScreenshot: 04-card-opened-scrolled-more
+- tapOn:
+    text: "What did you call this\\?.*"
+    optional: true
+- waitForAnimationToEnd:
+    timeout: 2000
+- takeScreenshot: 06-study-back
+- swipe:
+    direction: UP
+    duration: 500
+- waitForAnimationToEnd:
+    timeout: 1000
+- takeScreenshot: 07-card-opened-bottom

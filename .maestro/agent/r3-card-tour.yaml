@@ -4,9 +4,11 @@ appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
 ---
 - runFlow: ../sign-in.yaml
 - extendedWaitUntil:
-    visible: "Start reviewing — 1 card due.*"
+    visible:
+      id: "today-start"
     timeout: 20000
-- tapOn: "Start reviewing — 1 card due.*"
+- tapOn:
+    id: "today-start"
 - extendedWaitUntil:
     visible: "Tap to reveal.*"
     timeout: 10000
@@ -49,6 +51,12 @@ appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
     visible: "Collection"
     timeout: 10000
 - tapOn: "pomme, apple.*"
+- extendedWaitUntil:
+    visible:
+      id: "card-flip"
+    timeout: 15000
+- tapOn:
+    id: "card-flip"
 - extendedWaitUntil:
     visible: "Meaning, .*Edit"
     timeout: 15000

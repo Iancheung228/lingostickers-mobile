@@ -6,7 +6,7 @@ import { useFocusEffect } from 'expo-router';
 import Constants from 'expo-constants';
 import {
   Camera, LogOut, Check, Trash2, Shield, ExternalLink, Mail, Plus, Minus, Bell, Clock, Download,
-  Layers, Hand, Volume2, Repeat2, ScanLine,
+  Layers, Hand, Volume2, Repeat2, ScanLine, X,
 } from 'lucide-react-native';
 import RoseBand from '@/components/RoseBand';
 import Row, { RowGroup } from '@/components/ui/Row';
@@ -30,8 +30,8 @@ import { dueAtMs } from '@/lib/review';
 import { useStudyPrefs } from '@/lib/studyPrefs';
 import { exportCards } from '@/lib/exportCards';
 import {
-  DEFAULT_REMINDER, ReminderSettings, disableReminder, ensureReminderPermission, formatReminderTime,
-  isReminderPermitted, loadReminder, scheduleReminder,
+  DEFAULT_REMINDER, MAX_REMINDER_SLOTS, ReminderSettings, describeScheduledReminders, ensureReminderPermission,
+  formatReminderTime, isReminderPermitted, loadReminder, normalizeSlots, setReminder as saveReminder, syncReminders,
 } from '@/lib/reminder';
 import { LANGUAGES } from '@/lib/languages';
 import {
@@ -95,7 +95,13 @@ export default function ProfileScreen() {
   // Reminder
   const [reminder, setReminder] = useState<ReminderSettings>(DEFAULT_REMINDER);
   const [notifDenied, setNotifDenied] = useState(false);
-  const [timeOpen, setTimeOpen] = useState(false);
+  // Which slot the time sheet is editing (null = closed).
+  const [timeOpen, setTimeOpen] = useState<number | null>(null);
+  // Dev only: what is actually scheduled with the OS.
+  const [scheduledDebug, setScheduledDebug] = useState<string[]>([]);
+  const refreshDebug = useCallback(() => {
+    if (__DEV__) void describeScheduledReminders().then(setScheduledDebug).catch(() => {});
+  }, []);
 
   const stickers = useMemo(
     () => (pendingDeleteIds.size ? fetched.filter(s => !pendingDeleteIds.has(s.id)) : fetched),
@@ -129,7 +135,9 @@ export default function ProfileScreen() {
       if (permitted) setNotifDenied(false);
     }
   }, []);
-  useEffect(() => { void syncReminder(); }, [syncReminder]);
+  useEffect(() => { void syncReminder().then(refreshDebug); }, [syncReminder, refreshDebug]);
+  // Coming back to Profile (e.g. after a study session): re-plan and refresh the dev readout.
+  useFocusEffect(useCallback(() => { void syncReminders().then(refreshDebug); }, [refreshDebug]));
   const denied = useRef(notifDenied);
   denied.current = notifDenied;
   useEffect(() => {
@@ -215,38 +223,69 @@ export default function ProfileScreen() {
   };
 
   // ── reminder ──
-  const handleToggleReminder = async (on: boolean) => {
-    haptic.select();
+  // Every change goes through saveReminder: persist, then rebuild the schedule.
+  // Handlers derive the next state from the LATEST one (a ref updated
+  // synchronously), so two quick taps can't overwrite each other.
+  const reminderRef = useRef(reminder);
+  reminderRef.current = reminder;
+  const applyReminder = async (update: (r: ReminderSettings) => ReminderSettings, failCopy: string) => {
+    const prev = reminderRef.current;
+    const next = update(prev);
+    reminderRef.current = next;
+    setReminder(next);
     try {
-      if (!on) {
-        await disableReminder(reminder.hour, reminder.minute);
-        setReminder(r => ({ ...r, enabled: false }));
-        return;
-      }
-      // Permission is asked here, the moment it is wanted, and not before.
-      const permission = await ensureReminderPermission();
-      if (permission === 'denied') {
-        setNotifDenied(true);
-        setReminder(r => ({ ...r, enabled: false }));
-        return;
-      }
-      setNotifDenied(false);
-      await scheduleReminder(reminder.hour, reminder.minute);
-      setReminder(r => ({ ...r, enabled: true }));
-      haptic.success();
+      await saveReminder(next);
+      refreshDebug();
     } catch (e) {
-      toast.show({ kind: 'error', message: friendlyErrorSync(e, "Couldn't set the reminder. Try again.") });
+      reminderRef.current = prev;
+      setReminder(prev);
+      toast.show({ kind: 'error', message: friendlyErrorSync(e, failCopy) });
     }
   };
 
-  const handlePickTime = async (hour: number, minute: number) => {
-    setReminder(r => ({ ...r, hour, minute }));
-    try {
-      if (reminder.enabled) await scheduleReminder(hour, minute);
-      else await disableReminder(hour, minute);
-    } catch (e) {
-      toast.show({ kind: 'error', message: friendlyErrorSync(e, "Couldn't change the reminder time. Try again.") });
+  const handleToggleReminder = async (on: boolean) => {
+    haptic.select();
+    if (!on) { await applyReminder(r => ({ ...r, enabled: false }), "Couldn't turn the reminder off. Try again."); return; }
+    // Permission is asked here, the moment it is wanted, and not before.
+    const permission = await ensureReminderPermission();
+    if (permission === 'denied') {
+      setNotifDenied(true);
+      setReminder(r => ({ ...r, enabled: false }));
+      return;
     }
+    setNotifDenied(false);
+    await applyReminder(r => ({ ...r, enabled: true }), "Couldn't set the reminder. Try again.");
+    haptic.success();
+  };
+
+  const handlePickTime = async (index: number, hour: number, minute: number) => {
+    if (reminderRef.current.slots.some((s, i) => i !== index && s.hour === hour && s.minute === minute)) {
+      toast.show({ kind: 'info', message: `${formatReminderTime(hour, minute)} is already one of your reminder times.` });
+      return;
+    }
+    await applyReminder(
+      r => ({ ...r, slots: normalizeSlots(r.slots.map((s, i) => (i === index ? { hour, minute } : s))) }),
+      "Couldn't change the reminder time. Try again.",
+    );
+  };
+
+  const handleAddTime = async () => {
+    haptic.select();
+    const cur = reminderRef.current;
+    if (cur.slots.length >= MAX_REMINDER_SLOTS) return;
+    // A free half-hour: the first of the usual times not already taken.
+    const taken = new Set(cur.slots.map(s => `${s.hour}:${s.minute}`));
+    const pick = [{ hour: 13, minute: 0 }, { hour: 18, minute: 0 }, { hour: 20, minute: 0 }, { hour: 8, minute: 0 }]
+      .find(t => !taken.has(`${t.hour}:${t.minute}`)) ?? { hour: 12, minute: 30 };
+    const index = cur.slots.length;
+    await applyReminder(r => ({ ...r, slots: normalizeSlots([...r.slots, pick]) }), "Couldn't add a reminder time. Try again.");
+    setTimeOpen(index);
+  };
+
+  const handleRemoveTime = async (index: number) => {
+    haptic.select();
+    if (reminderRef.current.slots.length <= 1) return;
+    await applyReminder(r => ({ ...r, slots: r.slots.filter((_, i) => i !== index) }), "Couldn't remove that time. Try again.");
   };
 
   // ── export ──
@@ -445,20 +484,56 @@ export default function ProfileScreen() {
             right={toggle(reminder.enabled, handleToggleReminder, 'Daily reminder', 'toggle-reminder')}
             divider={reminder.enabled || notifDenied}
           />
-          {reminder.enabled && (
+          {reminder.enabled && reminder.slots.map((slot, i) => {
+            const time = formatReminderTime(slot.hour, slot.minute);
+            const canRemove = reminder.slots.length > 1;
+            return (
+              <Row
+                key={`${slot.hour}:${slot.minute}`}
+                title={i === 0 ? 'Reminder time' : `Reminder time ${i + 1}`}
+                value={time}
+                icon={<Clock {...iconProps} />}
+                onPress={() => setTimeOpen(i)}
+                testID={i === 0 ? 'reminder-time' : `reminder-time-${i + 1}`}
+                accessibilityLabel={`Reminder time ${i + 1} of ${reminder.slots.length}, ${time}. Change`}
+                divider={i < reminder.slots.length - 1 || reminder.slots.length < MAX_REMINDER_SLOTS || notifDenied}
+                right={canRemove ? (
+                  <Pressable
+                    testID={`reminder-remove-${i + 1}`}
+                    onPress={() => { void handleRemoveTime(i); }}
+                    style={styles.removeTime}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Remove the ${time} reminder`}
+                  >
+                    <X size={18} strokeWidth={2} color={colors.inkLight} />
+                  </Pressable>
+                ) : undefined}
+              />
+            );
+          })}
+          {reminder.enabled && reminder.slots.length < MAX_REMINDER_SLOTS && (
             <Row
-              title="Reminder time"
-              value={formatReminderTime(reminder.hour, reminder.minute)}
-              icon={<Clock {...iconProps} />}
-              onPress={() => setTimeOpen(true)}
-              testID="reminder-time"
+              title="Add another time"
+              icon={<Plus {...iconProps} />}
+              onPress={() => { void handleAddTime(); }}
+              testID="reminder-add-time"
+              accessibilityLabel={`Add another reminder time. ${reminder.slots.length} of ${MAX_REMINDER_SLOTS} used`}
+              divider={notifDenied}
             />
+          )}
+          {__DEV__ && reminder.enabled && (
+            <View style={styles.deniedRow} testID="reminders-debug">
+              <Text style={styles.deniedTitle}>Scheduled ({scheduledDebug.length}) · dev only</Text>
+              {scheduledDebug.slice(0, 12).map((line, i) => (
+                <Text key={i} style={styles.deniedBody}>{line}</Text>
+              ))}
+            </View>
           )}
           {notifDenied && (
             <View style={styles.deniedRow} accessibilityRole="alert" testID="notifications-off">
               <Text style={styles.deniedTitle}>Notifications are off</Text>
               <Text style={styles.deniedBody}>
-                Allow notifications for Tabi Stickers in Settings to get a daily reminder.
+                Allow notifications for Tabi Stickers in Settings to get reminders.
               </Text>
               <Button kind="secondary" label="Open Settings" onPress={() => { void Linking.openSettings(); }} style={{ marginTop: spacing.sm }} />
             </View>
@@ -577,11 +652,11 @@ export default function ProfileScreen() {
         </Text>
       </ScrollView>
 
-      {timeOpen && (
+      {timeOpen !== null && reminder.slots[timeOpen] && (
         <TimeSheet
-          current={reminder}
-          onPick={handlePickTime}
-          onClosed={() => setTimeOpen(false)}
+          current={reminder.slots[timeOpen]}
+          onPick={(h, m) => { void handlePickTime(timeOpen, h, m); }}
+          onClosed={() => setTimeOpen(null)}
         />
       )}
     </View>
@@ -631,7 +706,7 @@ function ChoiceRow({ label, subtitle, active, busy, disabled, divider, onPress }
 }
 
 function TimeSheet({ current, onPick, onClosed }: {
-  current: ReminderSettings; onPick: (hour: number, minute: number) => void; onClosed: () => void;
+  current: { hour: number; minute: number }; onPick: (hour: number, minute: number) => void; onClosed: () => void;
 }) {
   const sheet = useRef<BottomSheetHandle>(null);
   return (
@@ -665,6 +740,7 @@ function TimeSheet({ current, onPick, onClosed }: {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.sky },
+  removeTime: { width: MIN_TAP, height: MIN_TAP, marginRight: -spacing.ms, alignItems: 'center', justifyContent: 'center' },
   scrollBody: { paddingHorizontal: GUTTER, paddingTop: spacing.md, paddingBottom: TAB_BAR_CLEARANCE + 34 + spacing.xl },
 
   avatarHit: { width: MIN_TAP + 8, height: MIN_TAP + 8, alignItems: 'center', justifyContent: 'center' },
