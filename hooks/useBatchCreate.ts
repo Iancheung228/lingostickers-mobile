@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { supabase } from '@/lib/supabase';
 import { BatchQueue, nextToReview, batchProgress, type BatchItem } from '@/lib/batchQueue';
+import { loopCapacity, sceneAvoidWords } from '@/lib/batchLimits';
 import {
   BATCH_CONCURRENCY, BATCH_MAX, BATCH_TIMEOUT_MESSAGE, BATCH_TIMEOUT_MS,
   describeBatchError, disposeBatchResult, runBatchScan,
@@ -67,12 +68,8 @@ export function useBatchCreate({ userId, language, onFinished, onSceneFailed }: 
     queueRef.current?.shutdown();
   }, []);
 
-  const start = useCallback((chosen: BatchPhoto[]) => {
-    if (!chosen.length) return;
-    queueRef.current?.shutdown();
-    addedCount.current = 0;
-    busyIds.current.clear();
-    const q = new BatchQueue<BatchPayload, BatchResult>({
+  const makeQueue = useCallback(() => {
+    return new BatchQueue<BatchPayload, BatchResult>({
       concurrency: BATCH_CONCURRENCY,
       timeoutMs: BATCH_TIMEOUT_MS,
       timeoutMessage: BATCH_TIMEOUT_MESSAGE,
@@ -84,11 +81,19 @@ export function useBatchCreate({ userId, language, onFinished, onSceneFailed }: 
       describeError: describeBatchError,
       dispose: disposeBatchResult,
     });
+  }, []);
+
+  const start = useCallback((chosen: BatchPhoto[]) => {
+    if (!chosen.length) return;
+    queueRef.current?.shutdown();
+    addedCount.current = 0;
+    busyIds.current.clear();
+    const q = makeQueue();
     setQueue(q);
     setPhotos(chosen);
     setChoosingIndex(0);
     setReviewOpen(false);
-  }, []);
+  }, [makeQueue]);
 
   // Step 0: the learner picked 2+ photos. Show what happens next before making anything.
   const offer = useCallback((picked: BatchPhoto[]) => {
@@ -139,12 +144,17 @@ export function useBatchCreate({ userId, language, onFinished, onSceneFailed }: 
     setTimeout(() => setReviewOpen(true), 600);
   }, []);
 
-  const confirmSelection = useCallback((extract: ExtractResult) => {
+  // One photo's selection: one ExtractResult, or one per lasso loop. Each is its
+  // own create-sticker request, queued in order.
+  const confirmSelection = useCallback((extracts: ExtractResult | ExtractResult[]) => {
     const q = queueRef.current;
     if (!q || choosingIndex == null) return;
     const photo = photos[choosingIndex];
     if (!photo) return;
-    q.enqueue({ extract, photo });
+    const list = Array.isArray(extracts) ? extracts : [extracts];
+    // Never more cards than the batch can hold, whatever the caller sent.
+    const room = loopCapacity(BATCH_MAX, q.getSnapshot().length, photos.length - choosingIndex - 1);
+    for (const extract of list.slice(0, room)) q.enqueue({ extract, photo, photoId: choosingIndex });
     if (choosingIndex + 1 < photos.length) {
       setChoosingIndex(choosingIndex + 1);
     } else {
@@ -152,6 +162,24 @@ export function useBatchCreate({ userId, language, onFinished, onSceneFailed }: 
       openReviewAfterModal();
     }
   }, [choosingIndex, photos, openReviewAfterModal]);
+
+  // A single photo with 2+ lasso loops, from the ordinary single-photo
+  // extractor: no intro (the learner chose it), straight to review.
+  const startFromLoops = useCallback((photo: BatchPhoto, extracts: ExtractResult[]) => {
+    const list = extracts.slice(0, BATCH_MAX);
+    if (!list.length) return;
+    queueRef.current?.shutdown();
+    addedCount.current = 0;
+    busyIds.current.clear();
+    const q = makeQueue();
+    setQueue(q);
+    queueRef.current = q;
+    setPhotos([photo]);
+    setChoosingIndex(null);
+    setReviewOpen(false);
+    for (const extract of list) q.enqueue({ extract, photo, photoId: 0 });
+    openReviewAfterModal();
+  }, [makeQueue, openReviewAfterModal]);
 
   // Closing the extractor part-way: photos not yet chosen are dropped, the ones
   // already sent keep going, and the learner is taken to review them.
@@ -167,7 +195,9 @@ export function useBatchCreate({ userId, language, onFinished, onSceneFailed }: 
   const currentIndex = current ? items.findIndex((i) => i.id === current.id) : -1;
   // While photos are still being cut the queue is still filling up, so the
   // total is the number picked; afterwards it is what was actually sent.
-  const total = choosingIndex != null ? photos.length : items.length;
+  // With lasso loops one photo can make several cards, so while cutting it is
+  // the cards so far plus one for every photo still to come.
+  const total = choosingIndex != null ? items.length + (photos.length - choosingIndex) : items.length;
   const label = `${currentIndex + 1} of ${total}`;
 
   const skip = useCallback(() => {
@@ -310,11 +340,15 @@ export function useBatchCreate({ userId, language, onFinished, onSceneFailed }: 
     /** The intro screen is up: these photos are waiting for Start. */
     intro: introPhotos ? { count: introPhotos.length } : null,
     offer, begin, cancelIntro,
-    progress: batchProgress(items, total),
+    progress: {
+      ...batchProgress(items, total),
+      ...(choosingIndex != null ? { photoIndex: choosingIndex, photoCount: photos.length } : {}),
+    },
+    startFromLoops,
     max: BATCH_MAX,
     // Choosing phase
     choosing: choosingIndex != null && photos[choosingIndex]
-      ? { photo: photos[choosingIndex], label: `Photo ${choosingIndex + 1} of ${photos.length}`, isLast: choosingIndex + 1 === photos.length }
+      ? { photo: photos[choosingIndex], maxLoops: loopCapacity(BATCH_MAX, items.length, photos.length - choosingIndex - 1), label: `Photo ${choosingIndex + 1} of ${photos.length}`, isLast: choosingIndex + 1 === photos.length }
       : null,
     confirmSelection,
     stopChoosing,
@@ -334,6 +368,13 @@ export function useBatchCreate({ userId, language, onFinished, onSceneFailed }: 
           sceneBase64: current.result?.sceneBase64 ?? null,
           chips: current.result?.chips ?? [],
           isLast: unresolved.length === 1,
+          avoid: sceneAvoidWords(items.map((i) => ({
+            id: i.id,
+            photoId: i.payload.photoId,
+            status: i.status,
+            word: i.result?.draft.word ?? null,
+            chipWords: i.result?.chips.map((c) => c.word) ?? [],
+          })), current.id),
         }
       : null,
     add, skip, retry, setChips, editWord, editSentence,

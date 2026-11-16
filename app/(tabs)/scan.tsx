@@ -1398,6 +1398,15 @@ export default function ScanScreen() {
           }
         }}
         onExtract={handleExtractFromPhoto}
+        // Several lasso loops on one gallery photo: one card per loop, straight
+        // to batch review (no intro: the learner chose it).
+        onExtractMany={importedAsset && !cameraCaptureContext ? (results) => {
+          const asset = importedAsset;
+          setExtractorVisible(false);
+          setImportedAsset(null);
+          batch.startFromLoops(asset, results);
+        } : undefined}
+        maxLoops={BATCH_MAX}
         onCancelProcessing={cancelScan}
         processing={processing}
         stage={stage}
@@ -1419,6 +1428,8 @@ export default function ScanScreen() {
         imageHeight={batch.choosing?.photo.height ?? 0}
         onClose={batch.stopChoosing}
         onExtract={batch.confirmSelection}
+        onExtractMany={batch.confirmSelection}
+        maxLoops={batch.choosing?.maxLoops}
         processing={false}
         batch={batch.choosing ? {
           label: batch.choosing.label,
@@ -1460,6 +1471,7 @@ export default function ScanScreen() {
         retranslatingSentence={batch.retranslatingSentence}
         sceneBase64={shownReview === 'card' ? batch.current?.sceneBase64 ?? null : null}
         sceneSelected={batch.current?.chips ?? []}
+        sceneAvoid={batch.current?.avoid}
         onSceneSelected={batch.setChips}
       />
 

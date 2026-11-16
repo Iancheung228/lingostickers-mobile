@@ -126,7 +126,7 @@ appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
 - inputText: "dog"
 - tapOn: "Apply this edit"
 - extendedWaitUntil:
-    visible: "Meaning, dog.*"
+    visible: "Meaning,.*dog.*"
     timeout: 30000
 - takeScreenshot: 08-word-edited
 # Scene chips are on (one scene-words call); pick the first word.

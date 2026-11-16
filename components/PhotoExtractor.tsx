@@ -20,6 +20,7 @@ import CropBoxOverlay from './CropBoxOverlay';
 import LassoOverlay from './LassoOverlay';
 import { Rect, Point, computeContainRect, boxToImageCrop, boundingBoxOfPoints, polygonFillRatio, padBox } from '@/lib/cropGeometry';
 import { debugLog } from '@/lib/debug';
+import { BATCH_MAX } from '@/lib/batchScan';
 import { useTheme, useThemedStyles, type Theme } from '@/hooks/useTheme';
 
 interface PhotoExtractorProps {
@@ -48,6 +49,13 @@ interface PhotoExtractorProps {
   onErrorAction?: (action: ScanAction) => void;
   /** Batch create: "Photo 2 of 3" replaces the title, and the button says what happens next. */
   batch?: { label: string; actionLabel: string; progress: BatchProgressData };
+  /**
+   * Lasso mode: how many loops may be drawn on this photo (one sticker each).
+   * Default 1: drawing again replaces the loop, as it always has.
+   */
+  maxLoops?: number;
+  /** Called instead of onExtract when 2+ loops were drawn. */
+  onExtractMany?: (results: ExtractResult[]) => Promise<void> | void;
 }
 
 export interface ExtractResult {
@@ -174,7 +182,7 @@ export async function renderWholePhotoExtract(
   };
 }
 
-export default function PhotoExtractor({ imageUri, imageWidth, imageHeight, onClose, onExtract, processing, onCancelProcessing, stage, usingServerCutout, error, onErrorAction, batch }: PhotoExtractorProps) {
+export default function PhotoExtractor({ imageUri, imageWidth, imageHeight, onClose, onExtract, processing, onCancelProcessing, stage, usingServerCutout, error, onErrorAction, batch, maxLoops = 1, onExtractMany }: PhotoExtractorProps) {
   const { colors } = useTheme();
   const styles = useThemedStyles(makeStyles);
   const { reduced } = useMotion();
@@ -182,8 +190,10 @@ export default function PhotoExtractor({ imageUri, imageWidth, imageHeight, onCl
   const [mode, setMode] = useState<ToolMode>('box');
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
   const [cropping, setCropping] = useState(false);
-  const [lassoReady, setLassoReady] = useState(false);
-  const [lassoPoints, setLassoPoints] = useState<Point[]>([]);
+  // Loops drawn so far, in display coordinates. One loop is today's lasso.
+  const [loops, setLoops] = useState<Point[][]>([]);
+  const lassoReady = loops.length > 0;
+  const loopCap = onExtractMany ? Math.max(1, maxLoops) : 1;
   const initializedFor = useRef<string | null>(null);
 
   const box = useSharedValue<Rect>(ZERO_RECT);
@@ -224,8 +234,7 @@ export default function PhotoExtractor({ imageUri, imageWidth, imageHeight, onCl
     // instance. Without this, a stale `lassoReady=true` would let Extract
     // fire immediately using another photo's leftover polygon.
     setMode('box');
-    setLassoPoints([]);
-    setLassoReady(false);
+    setLoops([]);
   }, [imageUri, displayRect]);
 
   const handleLayout = useCallback((e: LayoutChangeEvent) => {
@@ -235,40 +244,42 @@ export default function PhotoExtractor({ imageUri, imageWidth, imageHeight, onCl
 
   const handleModeChange = useCallback((next: ToolMode) => {
     setMode(next);
-    if (next === 'lasso') setLassoReady(false);
-    else setLassoPoints([]);
+    setLoops([]);
   }, []);
 
-  // A completed loop becomes the crop region: pad its bounding box — by an
-  // amount that adapts to how loosely the loop fills its own bbox (tighter
-  // loops get more slack so the object is never clipped, looser/irregular
-  // loops get less since their bbox is already generous) — and store it in
-  // `box`, the same shared value the box tool reads from, so extraction stays
-  // unified.
-  const handleLassoComplete = useCallback((points: Point[]) => {
-    if (displayRect.width <= 0 || displayRect.height <= 0) return;
+  // A completed loop's crop region: its bounding box padded by an amount that
+  // adapts to how loosely the loop fills its own bbox (tighter loops get more
+  // slack so the object is never clipped, looser/irregular loops get less since
+  // their bbox is already generous).
+  const boxForLoop = useCallback((points: Point[]): Rect => {
     const raw = boundingBoxOfPoints(points);
     const fillRatio = polygonFillRatio(points, raw);
     const scale = Math.min(
       LASSO_PADDING_SCALE_RANGE[1],
       Math.max(LASSO_PADDING_SCALE_RANGE[0], fillRatio / LASSO_REFERENCE_FILL_RATIO),
     );
-    box.value = padBox(raw, LASSO_BASE_PADDING_RATIO * scale, displayRect);
-    setLassoPoints(points);
-    setLassoReady(true);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    return padBox(raw, LASSO_BASE_PADDING_RATIO * scale, displayRect);
   }, [displayRect]);
 
-  const handleExtract = useCallback(async () => {
-    if (!imageUri || cropping || processing) return;
-    if (mode === 'lasso' && !lassoReady) return;
+  // Each loop is kept and numbered; with a cap of one the new loop replaces the
+  // old (the original single-lasso behaviour).
+  const handleLassoComplete = useCallback((points: Point[]) => {
     if (displayRect.width <= 0 || displayRect.height <= 0) return;
+    setLoops((prev) => (loopCap === 1 ? [points] : prev.length >= loopCap ? prev : [...prev, points]));
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  }, [displayRect, loopCap]);
 
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    setCropping(true);
-    try {
+  const handleRemoveLoop = useCallback((index: number) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setLoops((prev) => prev.filter((_, i) => i !== index));
+  }, []);
+
+  // Renders one selection (a box, or a lasso loop with its padded box) into
+  // the two crops and the polygons the scan pipeline wants.
+  const renderSelection = useCallback(async (selectionBox: Rect, lassoLoop: Point[] | null): Promise<ExtractResult> => {
+    if (!imageUri) throw new Error('No photo');
+    {
       const prepStarted = Date.now();
-      const selectionBox = box.value;
       const crop = boxToImageCrop(selectionBox, displayRect, imageWidth, imageHeight);
       const context = ImageManipulator.manipulate(imageUri).crop(crop);
       const needsResize = crop.width > MAX_UPLOAD_WIDTH;
@@ -293,10 +304,10 @@ export default function PhotoExtractor({ imageUri, imageWidth, imageHeight, onCl
       // Reproject the lasso loop into the *upload* crop's pixel space, so the
       // server fallback can still use it as a force-include mask exactly as
       // it does today.
-      const usingLasso = mode === 'lasso' && lassoReady && lassoPoints.length >= 3;
+      const usingLasso = !!lassoLoop && lassoLoop.length >= 3;
       const uploadScale = needsResize ? MAX_UPLOAD_WIDTH / crop.width : 1;
       const lassoPolygon = usingLasso
-        ? lassoPoints.map(p => projectInto(p, crop, uploadScale))
+        ? lassoLoop!.map(p => projectInto(p, crop, uploadScale))
         : undefined;
 
       // A second, context-padded render at full resolution — the source the
@@ -319,7 +330,7 @@ export default function PhotoExtractor({ imageUri, imageWidth, imageHeight, onCl
       // which now sit strictly inside the padded frame, so an instance really
       // can score badly for extending beyond them.
       const selectionSource: Point[] = usingLasso
-        ? lassoPoints
+        ? lassoLoop!
         : [
             { x: selectionBox.x, y: selectionBox.y },
             { x: selectionBox.x + selectionBox.width, y: selectionBox.y },
@@ -339,7 +350,7 @@ export default function PhotoExtractor({ imageUri, imageWidth, imageHeight, onCl
         y: (p.y - displayRect.y) * imageScale,
       }));
 
-      await onExtract({
+      return {
         base64: result.base64,
         uri: result.uri,
         lassoPolygon,
@@ -352,15 +363,41 @@ export default function PhotoExtractor({ imageUri, imageWidth, imageHeight, onCl
         fullWidth: imageWidth,
         fullHeight: imageHeight,
         fullSelectionPolygon,
-      });
+      };
+    }
+  }, [imageUri, displayRect, imageWidth, imageHeight]);
+
+  const handleExtract = useCallback(async () => {
+    if (!imageUri || cropping || processing) return;
+    if (mode === 'lasso' && !lassoReady) return;
+    if (displayRect.width <= 0 || displayRect.height <= 0) return;
+
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setCropping(true);
+    try {
+      if (mode === 'lasso' && loops.length >= 2 && onExtractMany) {
+        // One sticker per loop, each with its own padded crop.
+        const results: ExtractResult[] = [];
+        for (const loop of loops) results.push(await renderSelection(boxForLoop(loop), loop));
+        await onExtractMany(results);
+      } else if (mode === 'lasso') {
+        await onExtract(await renderSelection(boxForLoop(loops[0]), loops[0]));
+      } else {
+        await onExtract(await renderSelection(box.value, null));
+      }
     } finally {
       setCropping(false);
     }
-  }, [imageUri, displayRect, imageWidth, imageHeight, onExtract, cropping, processing, mode, lassoReady, lassoPoints]);
+  }, [imageUri, displayRect, onExtract, onExtractMany, cropping, processing, mode, lassoReady, loops, renderSelection, boxForLoop]);
 
   if (!imageUri) return null;
   const busy = cropping || processing;
   const canExtract = mode === 'box' || lassoReady;
+  const loopCount = mode === 'lasso' ? loops.length : 0;
+  const atCap = loopCap > 1 && loopCount >= loopCap;
+  // "Make sticker" / "Make 2 stickers"; a batch's label keeps its suffix.
+  const baseLabel = batch ? batch.actionLabel : 'Make sticker';
+  const makeLabel = loopCount >= 2 ? baseLabel.replace('Make sticker', `Make ${loopCount} stickers`) : baseLabel;
 
   return (
     <Modal visible animationType={reduced ? 'none' : 'slide'} presentationStyle="fullScreen" onRequestClose={busy ? undefined : onClose}>
@@ -393,9 +430,15 @@ export default function PhotoExtractor({ imageUri, imageWidth, imageHeight, onCl
           <Text style={styles.modeHint}>
             {mode === 'box'
               ? 'Drag the corners to box in the object'
-              : lassoReady
-                ? 'Loop locked in. Redraw anytime, or tap Make sticker.'
-                : 'Draw around it, or tap Lasso for tricky shapes.'}
+              : atCap
+                ? `${BATCH_MAX} cards max per batch`
+                : lassoReady && loopCap > 1
+                  ? 'Draw another loop for another sticker, or tap Make sticker.'
+                  : lassoReady
+                    ? 'Loop locked in. Redraw anytime, or tap Make sticker.'
+                    : loopCap > 1
+                      ? 'Draw around each object you want as a sticker.'
+                      : 'Draw around it, or tap Lasso for tricky shapes.'}
           </Text>
           <ToolModeSwitch mode={mode} onChange={handleModeChange} />
         </View>
@@ -413,7 +456,7 @@ export default function PhotoExtractor({ imageUri, imageWidth, imageHeight, onCl
             <CropBoxOverlay box={box} startBox={startBox} displayRect={displayRect} />
           )}
           {displayRect.width > 0 && mode === 'lasso' && (
-            <LassoOverlay bounds={displayRect} onComplete={handleLassoComplete} />
+            <LassoOverlay bounds={displayRect} loops={loops} onComplete={handleLassoComplete} onRemove={handleRemoveLoop} full={atCap} />
           )}
           {processing && !error && (
             <ScanOverlay>
@@ -430,7 +473,7 @@ export default function PhotoExtractor({ imageUri, imageWidth, imageHeight, onCl
         <View style={styles.actions}>
           {teach.visible && <Text style={styles.teach}>You can change the outline any time before you tap Make sticker.</Text>}
           <Button
-            label={batch ? batch.actionLabel : 'Make sticker'}
+            label={makeLabel}
             testID="extract-sticker"
             icon={<Scissors size={20} color={busy || !canExtract ? colors.inkLight : colors.white} strokeWidth={1.75} />}
             disabled={!canExtract || !!error}

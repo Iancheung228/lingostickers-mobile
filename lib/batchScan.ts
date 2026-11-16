@@ -19,7 +19,8 @@ import type { StickerDraft } from '@/lib/types';
 import type { SceneChip } from '@/lib/sceneCards';
 
 export interface BatchPhoto { uri: string; width: number; height: number; assetId?: string }
-export interface BatchPayload { extract: ExtractResult; photo: BatchPhoto }
+/** `photoId`: cards cut from the same photo (several loops) share it. */
+export interface BatchPayload { extract: ExtractResult; photo: BatchPhoto; photoId: number }
 export interface BatchResult {
   draft: StickerDraft;
   croppedUri: string;

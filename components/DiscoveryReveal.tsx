@@ -44,10 +44,12 @@ interface DiscoveryRevealProps {
   /// prompts. Null hides them.
   sceneBase64: string | null;
   sceneSelected: SceneChip[];
+  /// Words the scene chips must not offer (batch: sibling cards from one photo).
+  sceneAvoid?: string[];
   onSceneSelected: (chips: SceneChip[]) => void;
 }
 
-export default function DiscoveryReveal({ draft, onAdd, saveError, onDiscard, onRetryExtraction, batch, onEditWord, onEditSentence, saving, retranslating, retranslatingSentence, sceneBase64, sceneSelected, onSceneSelected }: DiscoveryRevealProps) {
+export default function DiscoveryReveal({ draft, onAdd, saveError, onDiscard, onRetryExtraction, batch, onEditWord, onEditSentence, saving, retranslating, retranslatingSentence, sceneBase64, sceneSelected, sceneAvoid, onSceneSelected }: DiscoveryRevealProps) {
   const { colors, type } = useTheme();
   const styles = useThemedStyles(makeStyles);
   const { reduced } = useMotion();
@@ -220,6 +222,7 @@ export default function DiscoveryReveal({ draft, onAdd, saveError, onDiscard, on
             sceneBase64={sceneBase64}
             language={draft.language}
             mainWord={draft.word}
+            avoid={sceneAvoid}
             selected={sceneSelected}
             onChangeSelected={onSceneSelected}
             disabled={saving}

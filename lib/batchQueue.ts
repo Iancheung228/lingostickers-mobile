@@ -216,6 +216,9 @@ export interface BatchProgress {
   cut: number;
   /** Cards added or skipped. */
   reviewed: number;
+  /** Cut phase only: which photo the learner is on (0-based) and how many were picked. */
+  photoIndex?: number;
+  photoCount?: number;
 }
 
 /**

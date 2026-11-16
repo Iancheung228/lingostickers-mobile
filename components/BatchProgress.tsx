@@ -28,7 +28,9 @@ export default function BatchProgress({ progress, phase }: Props) {
   const styles = useThemedStyles(makeStyles);
   const { total, cut, reviewed } = progress;
   const label = phase === 'cut'
-    ? `Cutting photo ${Math.min(cut + 1, total)} of ${total}`
+    ? (progress.photoCount
+      ? `Cutting photo ${(progress.photoIndex ?? 0) + 1} of ${progress.photoCount}`
+      : `Cutting photo ${Math.min(cut + 1, total)} of ${total}`)
     : `Reviewing card ${Math.min(reviewed + 1, total)} of ${total}`;
   return (
     <View style={styles.strip} accessible accessibilityRole="progressbar" accessibilityLabel={label} testID="batch-progress">
