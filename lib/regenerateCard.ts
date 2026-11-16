@@ -3,8 +3,11 @@ import { UserFacingError } from '@/lib/friendlyError';
 import type { StickerDraft } from '@/lib/types';
 import { applyCorrection, correctionBody, type Correction } from '@/lib/wordFix';
 
-/** The cutout is the one uploaded file we can re-ask about; see create-sticker. */
-export const canCorrect = (draft: Pick<StickerDraft, 'imagePath'>) => /\.png$/.test(draft.imagePath);
+/**
+ * The sticker image already uploaded to the learner's folder: the cutout (.png)
+ * or the server's fallback original (.jpg). create-sticker re-asks about it.
+ */
+export const canCorrect = (draft: Pick<StickerDraft, 'imagePath'>) => /\.(png|jpg)$/.test(draft.imagePath);
 
 /**
  * "That's not what it is": re-runs create-sticker's vocabulary step on the

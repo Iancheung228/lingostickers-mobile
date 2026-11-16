@@ -91,7 +91,11 @@ Deno.serve(async (req) => {
     // live under this user's own storage folder, which is the same boundary
     // the bucket's RLS policy enforces. Without this check a client could
     // point its sticker row at another user's file.
-    const precutImagePath = validatePrecutPath(rawPrecutImagePath, userId);
+    // A correction may also name the server's own JPEG fallback (background
+    // removal failed and the original was stored): same owner folder, same
+    // check, and nothing is re-uploaded either way.
+    const asksCorrection = [rawHint, rawChosenWord].some(v => typeof v === 'string' && v.trim().length > 0);
+    const precutImagePath = validatePrecutPath(rawPrecutImagePath, userId, asksCorrection);
     if (rawPrecutImagePath && !precutImagePath) {
       return new Response(
         JSON.stringify({ error: 'Invalid image path' }),
@@ -289,13 +293,13 @@ Deno.serve(async (req) => {
 // under `{userId}/`, contain no traversal segment, and be a PNG — which is the
 // only thing the on-device path ever produces.
 // ---------------------------------------------------------------------------
-function validatePrecutPath(raw: unknown, userId: string): string | null {
+function validatePrecutPath(raw: unknown, userId: string, allowJpg = false): string | null {
   if (typeof raw !== 'string' || raw.length === 0 || raw.length > 200) return null;
   const prefix = `${userId}/`;
   if (!raw.startsWith(prefix)) return null;
   const remainder = raw.slice(prefix.length);
   if (remainder.includes('/') || remainder.includes('..')) return null;
-  if (!remainder.endsWith('.png')) return null;
+  if (!remainder.endsWith('.png') && !(allowJpg && remainder.endsWith('.jpg'))) return null;
   return raw;
 }
 

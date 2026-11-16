@@ -1,0 +1,88 @@
+# Meaning edit on a FALLBACK card (cutout failed, original photo kept): tapping
+# the English meaning and typing a new one must update the word via
+# translate-word (commit ac775c7), not show "Can't change this one any more."
+#
+# Scan steps copied from wrong-word-fix.yaml. Costs at most TWO AI calls per run:
+# 1 create-sticker (scan) + 1 translate-word (the meaning edit). Discards the draft.
+# Budget: node scripts/qa-budget.mjs
+appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
+---
+- runFlow: ../sign-in.yaml
+
+- tapOn:
+    text: "Scan a new sticker"
+- extendedWaitUntil:
+    visible: ".*(One quick thing|Agree and start scanning|Import a photo from your library).*"
+    timeout: 15000
+- runFlow:
+    when:
+      visible: "Agree and start scanning"
+    commands:
+      - tapOn: "Agree and start scanning"
+- extendedWaitUntil:
+    visible: "Import a photo from your library"
+    timeout: 15000
+
+- tapOn:
+    text: "Import a photo from your library"
+- tapOn:
+    text: "Allow Full Access|Allow Access to All Photos|OK"
+    optional: true
+- extendedWaitUntil:
+    visible:
+      id: "photo-thumb-idle"
+    timeout: 15000
+# Index 1 is the teapot (same photo as wrong-word-fix.yaml).
+- tapOn:
+    index: 1
+    id: "photo-thumb-idle"
+- tapOn:
+    id: "photo-picker-confirm"
+- extendedWaitUntil:
+    visible: "Make sticker"
+    timeout: 30000
+- tapOn: "Make sticker"
+
+# ---- Reveal on a fallback card ---------------------------------------------
+- extendedWaitUntil:
+    visible:
+      id: "reveal-add"
+    timeout: 90000
+# Confirm this really is the fallback: the banner is shown and the
+# "Not a …?" control is hidden (it needs a real cutout).
+- assertVisible: "We couldn't cleanly cut out your photo.*"
+- assertNotVisible:
+    id: "reveal-wrong-word"
+- assertVisible: "Meaning, .*\\. Edit"
+- takeScreenshot: 01-fallback-reveal-before
+
+# ---- Edit the meaning ------------------------------------------------------
+- tapOn: "Meaning, .*\\. Edit"
+# The edit bar is a Modal with the input autofocused and prefilled with the meaning.
+- extendedWaitUntil:
+    visible: "Apply this edit"
+    timeout: 10000
+- waitForAnimationToEnd:
+    timeout: 800
+- eraseText: 40
+- inputText: "apple"
+- waitForAnimationToEnd:
+    timeout: 300
+- takeScreenshot: 02-typed-apple
+- tapOn: "Apply this edit"
+
+# ---- Outcome: the English reads "apple", and no refusal toast --------------
+- extendedWaitUntil:
+    visible: "Meaning, .*apple.*Edit"
+    timeout: 60000
+- assertNotVisible: "Can't change this one any more.*"
+- assertNotVisible: "Couldn't update the meaning.*"
+- waitForAnimationToEnd:
+    timeout: 1500
+- takeScreenshot: 03-after-meaning-edit
+- assertVisible: "Meaning, .*apple.*Edit"
+- assertNotVisible: "Can't change this one any more.*"
+
+# Discard the draft: nothing saved to the collection.
+- tapOn:
+    id: "reveal-discard"
