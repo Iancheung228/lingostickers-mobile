@@ -82,7 +82,7 @@ const makeStyles = ({ colors, e1 }: Theme) => StyleSheet.create({
     top: TRACK_PADDING,
     left: TRACK_PADDING,
     bottom: TRACK_PADDING,
-    backgroundColor: colors.card,
+    backgroundColor: colors.raised,
     borderRadius: 20,
     ...e1,
   },

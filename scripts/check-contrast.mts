@@ -4,6 +4,7 @@
 // (light mode must look unchanged), so its sub-threshold pairs are reported as
 // LEGACY and never fail the run.
 import { lightColors, darkColors, type Palette } from '../constants/palettes.ts';
+import { tabColors } from '../constants/tabBar.ts';
 
 type RGBA = [number, number, number, number];
 function lin(c: number) { c /= 255; return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; }
@@ -40,9 +41,9 @@ const pairs: Pair[] = [
   ['inkLight', 'sky', T, 'captions on page'],
   ['inkLight', 'card', T, 'captions on card'],
   ['inkLight', 'cardAlt', T, 'captions on sand'],
-  ['inkFaint', 'sky', T, 'placeholder on page'],
-  ['inkFaint', 'card', T, 'placeholder on input'],
-  ['inkFaint', 'cardAlt', T, 'placeholder on sand'],
+  ['inkFaint', 'sky', UI, 'disabled/decoration on page (not for text; 3:1)'],
+  ['inkFaint', 'card', UI, 'disabled/decoration on card (3:1)'],
+  ['inkFaint', 'cardAlt', UI, 'disabled/decoration on sand (3:1)'],
   ['maroon', 'skyDeep', T, 'text on the rose band'],
   ['maroon', 'blush', T, 'text on the rose pill'],
   ['white', 'terra', T, 'CTA label'],
@@ -66,19 +67,54 @@ const pairs: Pair[] = [
   ['blushDeepInk', 'card', T, 'tab glyph on the focus disc'],
   ['inkMid', 'glass', T, 'body on translucent panel'],
   ['inkDark', 'glass', T, 'heading on translucent panel'],
-  ['inkDark', 'roseWash', T, 'heading on rose wash'],
-  ['inkMid', 'roseWash', T, 'body on rose wash'],
+  ['inkDark', 'cream', T, 'heading on a bottom sheet'],
+  ['inkMid', 'cream', T, 'body on a bottom sheet'],
+  ['inkLight', 'cream', T, 'caption on a bottom sheet'],
+  ['terraInk', 'cream', T, 'accent text on a bottom sheet'],
+  ['inkDark', 'raised', T, 'selected segment label'],
+  ['inkLight', 'sand', T, 'unselected segment label on its track'],
+  ['inkMid', 'wellWhite', T, 'text on the grid-cell well'],
+  ['blush', 'charcoal', T, 'toast action on toast'],
+  ['terraLight', 'charcoal', T, 'toast secondary action on toast'],
+  ['errorOnDark', 'charcoal', T, 'toast error icon on toast'],
+  ['inkDark', 'terraLight', T, 'secondary button label on its fill'],
+  ['inkLight', 'terraLight', T, 'disabled button label'],
+  ['errorInk', 'errorLight', T, 'destructive button label'],
+  ['gold', 'goldTint', T, 'Hard label on its tint'],
+  ['errorInk', 'againTint', T, 'Again label on its tint'],
+  ['successInk', 'successLight', T, 'Easy label on its tint'],
+  ['white', 'success', T, 'Good label on its fill'],
+  ['inkQuiet', 'sky', T, 'quiet secondary text on page'],
+  ['inkQuiet', 'card', T, 'quiet secondary text on card'],
+  ['inkLight', 'terraTintPressed', T, 'caption on pressed secondary'],
 ];
+
+// Tab bar: the pill's ink on the pill (labels are 11pt text, so 4.5).
+function tabPairs(name: 'LIGHT' | 'DARK', p: Palette) {
+  const tc = tabColors(p, name === 'DARK');
+  return [
+    ['tab label (inactive) on pill', tc.inkOff, tc.pill, T],
+    ['tab label (active) on pill', tc.inkOn, tc.pill, T],
+    ['due badge text on badge', tc.badge.text, tc.badge.bg, T],
+  ] as const;
+}
 
 let darkFail = 0;
 for (const [name, p] of [['LIGHT', lightColors], ['DARK', darkColors]] as const) {
   console.log(`\n${name}`);
   for (const [fg, bg, min, note] of pairs) {
+    if (!p[fg] || !p[bg]) { console.log('UNKNOWN TOKEN', fg, bg); continue; }
     const r = ratio(p[fg], p[bg], p.sky);
     const ok = r >= min;
     if (!ok && name === 'DARK') darkFail++;
     const tag = ok ? 'ok' : name === 'LIGHT' ? 'LEGACY' : 'FAIL';
     console.log(`${tag.padEnd(7)}${r.toFixed(2).padStart(6)}  ${String(fg).padEnd(13)} on ${String(bg).padEnd(12)} ${note}`);
+  }
+  for (const [note, fg, bg, min] of tabPairs(name, p)) {
+    const r = ratio(fg, bg, p.sky);
+    const ok = r >= min;
+    if (!ok && name === 'DARK') darkFail++;
+    console.log(`${(ok ? 'ok' : name === 'LIGHT' ? 'LEGACY' : 'FAIL').padEnd(7)}${r.toFixed(2).padStart(6)}  ${note}`);
   }
 }
 console.log(`\ndark failures: ${darkFail}`);

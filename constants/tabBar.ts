@@ -52,7 +52,7 @@ export function tabColors(colors: Palette, isDark: boolean) {
         badge: { bg: '#FBF3EA', text: '#3A1519', ring: colors.blush },
         shadowPill: { color: '#000000', opacity: 0.5, dy: 6, radius: 7 },
         shadowDisc: { color: '#000000', opacity: 0.5, dy: 3, radius: 4 },
-        fade: { opacity: 0.92, color: colors.cream },
+        fade: { opacity: 0.92, color: colors.sky },
       }
     : {
         pill: colors.blush,
@@ -67,7 +67,7 @@ export function tabColors(colors: Palette, isDark: boolean) {
         badge: { bg: '#FBF3EA', text: '#3A1519', ring: colors.blush },
         shadowPill: { color: '#8A3A44', opacity: 0.2, dy: 6, radius: 7 },
         shadowDisc: { color: '#662B31', opacity: 0.25, dy: 3, radius: 4 },
-        fade: { opacity: 0.92, color: colors.cream },
+        fade: { opacity: 0.92, color: colors.sky },
       };
 }
 

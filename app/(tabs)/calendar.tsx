@@ -522,7 +522,7 @@ const makeStyles = ({ colors, type, stickerShadow }: Theme) => StyleSheet.create
   // On the band: white pill on a translucent track, maroon text (the band's ink).
   segment: { flexDirection: 'row', padding: 2, borderRadius: radii.full, backgroundColor: colors.bandTrack },
   segmentItem: { minWidth: 60, height: 30, paddingHorizontal: 12, borderRadius: radii.full, alignItems: 'center', justifyContent: 'center' },
-  segmentItemOn: { backgroundColor: colors.card },
+  segmentItemOn: { backgroundColor: colors.raised },
   segmentText: { fontSize: 14, lineHeight: 18, fontFamily: fonts.display, color: colors.maroon },
   segmentTextOn: { color: colors.charcoal },
 

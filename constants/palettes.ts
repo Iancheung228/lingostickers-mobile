@@ -26,6 +26,7 @@ export const lightColors = {
   // UI surfaces
   card:       '#FFFFFF', // white — cards, inputs
   cardAlt:    '#F6EEDD', // warm sand tint — thumbnails, alt cards
+  raised:     '#FFFFFF', // the selected thumb of a segmented control (lighter than its track in both themes)
   overlay:    'rgba(250, 244, 234, 0.88)', // semi-transparent cream for list screens
 
   // Brand / interactive
@@ -127,6 +128,7 @@ export const darkColors: Palette = {
 
   card:       '#2A2123',
   cardAlt:    '#382C2F',
+  raised:     '#54434A',
   overlay:    'rgba(29, 22, 23, 0.88)',
 
   terra:      '#A8545A',
@@ -143,7 +145,7 @@ export const darkColors: Palette = {
   inkDark:    '#F3D6D6',
   inkMid:     '#E8DDD7',
   inkLight:   '#C9B3B4',
-  inkFaint:   '#6F5C5E',
+  inkFaint:   '#8A7578',
   rule:       '#3A2E31',
   bandTrack:  'rgba(0, 0, 0, 0.25)',
   inkQuiet:   '#B5AAA4',
@@ -158,7 +160,7 @@ export const darkColors: Palette = {
   maroon:     '#F6DDDD',
   sand:       '#382C2F',
   wellWhite:  '#33292C',
-  cream:      '#1D1617',
+  cream:      '#241C1E',
   creamDeep:  '#150F10',
 
   moonGold:   '#E8C48A',
@@ -189,7 +191,7 @@ export const darkColors: Palette = {
   trackOff:   '#4A3C3F',
   trackOffRing: '#A89293',
   divider:    '#352A2D',
-  scrim:      'rgba(0, 0, 0, 0.6)',
+  scrim:      'rgba(0, 0, 0, 0.5)',
   glass:      'rgba(42, 33, 35, 0.92)',
   glassSolid: 'rgba(42, 33, 35, 0.92)',
   shadow:     '#000000',

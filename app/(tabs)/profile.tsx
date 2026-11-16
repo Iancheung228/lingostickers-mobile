@@ -482,34 +482,6 @@ export default function ProfileScreen() {
           Simple grading shows only Again and Good. Swiping left on a card&apos;s answer is Again, right is Good.
         </Text>
 
-        {/* ── Appearance ── */}
-        <Text style={styles.sectionTitle}>Appearance</Text>
-        <RowGroup>
-          <View style={styles.segmentWrap}>
-            <View style={styles.segment} accessibilityRole="radiogroup" testID="theme-segment">
-              {THEME_CHOICES.map(({ value, label }) => {
-                const active = themePref === value;
-                return (
-                  <Pressable
-                    key={value}
-                    onPress={() => { haptic.select(); setThemePref(value); }}
-                    style={[styles.segmentItem, active && styles.segmentItemOn]}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Appearance: ${label}`}
-                    accessibilityState={{ selected: active }}
-                    testID={`theme-${value}`}
-                  >
-                    <Text style={[styles.segmentText, active && styles.segmentTextOn]} numberOfLines={1} maxFontSizeMultiplier={1.3}>
-                      {label}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-            <Text style={styles.segmentCaption}>System follows your phone&apos;s Light or Dark setting.</Text>
-          </View>
-        </RowGroup>
-
         {/* ── Reminders ── */}
         <Text style={styles.sectionTitle}>Reminders</Text>
         <RowGroup>
@@ -586,6 +558,34 @@ export default function ProfileScreen() {
             onPress={handleExport}
             testID="export-cards"
           />
+        </RowGroup>
+
+        {/* ── Theme ── */}
+        <Text style={styles.sectionTitle}>Theme</Text>
+        <RowGroup>
+          <View style={styles.segmentWrap}>
+            <View style={styles.segment} accessibilityRole="radiogroup" testID="theme-segment">
+              {THEME_CHOICES.map(({ value, label }) => {
+                const active = themePref === value;
+                return (
+                  <Pressable
+                    key={value}
+                    onPress={() => { haptic.select(); setThemePref(value); }}
+                    style={[styles.segmentItem, active && styles.segmentItemOn]}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Theme: ${label}`}
+                    accessibilityState={{ selected: active }}
+                    testID={`theme-${value}`}
+                  >
+                    <Text style={[styles.segmentText, active && styles.segmentTextOn]} numberOfLines={1} maxFontSizeMultiplier={1.3}>
+                      {label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+            <Text style={styles.segmentCaption}>System follows your phone&apos;s Light or Dark setting.</Text>
+          </View>
         </RowGroup>
 
         {/* ── Appearance ── */}
@@ -805,7 +805,7 @@ const makeStyles = ({ colors, e1, type }: Theme) => StyleSheet.create({
   segmentWrap: { padding: spacing.md, paddingBottom: spacing.ms },
   segment: { flexDirection: 'row', backgroundColor: colors.sand, borderRadius: radii.full, padding: 3, height: 44 },
   segmentItem: { flex: 1, alignItems: 'center', justifyContent: 'center', borderRadius: radii.full },
-  segmentItemOn: { backgroundColor: colors.card, ...e1 },
+  segmentItemOn: { backgroundColor: colors.raised, ...e1 },
   segmentText: { fontSize: 15, color: colors.inkLight },
   segmentTextOn: { color: colors.inkDark },
   segmentCaption: { ...type.small, marginTop: spacing.sm },

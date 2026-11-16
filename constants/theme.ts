@@ -121,7 +121,7 @@ export const makeElevation = (colors: Palette, scheme: Scheme) => {
 /** The Home sticker wall field (SPEC "Sticker wall"): radial cream, or a photo under these washes. */
 export const makeWall = (scheme: Scheme) => scheme === 'dark'
   ? {
-      fieldStops: ['#241B1D', '#1D1617', '#161011'] as const,
+      fieldStops: ['#36292D', '#2D2326', '#251C1F'] as const,
       creamWash: 'rgba(29, 22, 23, 0.45)',
       roseScrim: 'rgba(0, 0, 0, 0.30)',
       contact: 'rgba(0, 0, 0, 0.35)',

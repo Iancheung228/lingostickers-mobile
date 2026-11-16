@@ -28,6 +28,6 @@ appId: com.iancheung228.lingostickers.dev
     text: "Not Now"
     optional: true
 - extendedWaitUntil:
-    visible: "FOUND"
+    visible: "Your words.*"
     timeout: 40000
 - takeScreenshot: ${PREFIX}-02-home

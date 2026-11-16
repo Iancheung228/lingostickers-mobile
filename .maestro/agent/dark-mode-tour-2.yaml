@@ -1,0 +1,75 @@
+# Dark-mode tour, part 2: empty states, test/review session (practice, no writes),
+# Time sheet and a toast. Zero AI calls. Same env as dark-mode-tour.yaml.
+appId: com.iancheung228.lingostickers.dev
+---
+- runFlow: dm-signin.yaml
+- tapOn:
+    id: "tab-profile"
+- scrollUntilVisible:
+    element:
+      id: "theme-${THEME_PICK}"
+    timeout: 10000
+    optional: true
+- tapOn:
+    id: "theme-${THEME_PICK}"
+    optional: true
+- waitForAnimationToEnd:
+    timeout: 1500
+
+# Empty state: Collection filtered to "due" (the demo account has nothing due)
+- tapOn:
+    id: "tab-collection"
+- waitForAnimationToEnd:
+    timeout: 2500
+- tapOn:
+    id: "home-filter"
+- waitForAnimationToEnd:
+    timeout: 1500
+- tapOn:
+    id: "home-filter-due"
+- tapOn:
+    id: "home-filter-done"
+- waitForAnimationToEnd:
+    timeout: 1500
+- takeScreenshot: ${PREFIX}-70-collection-empty-filter
+- tapOn:
+    id: "home-filter"
+- tapOn:
+    id: "home-filter-reset"
+- tapOn:
+    id: "home-filter-done"
+
+# Test me: a review of one card (practice, nothing scheduled when opened from the card)
+- tapOn:
+    id: "sticker-cell-.*"
+    index: 0
+- waitForAnimationToEnd:
+    timeout: 2500
+- tapOn:
+    id: "card-flip"
+- waitForAnimationToEnd:
+    timeout: 1500
+- tapOn:
+    id: "card-test-me"
+- waitForAnimationToEnd:
+    timeout: 3000
+- takeScreenshot: ${PREFIX}-71-review-front
+- tapOn:
+    id: "card-front"
+    optional: true
+- waitForAnimationToEnd:
+    timeout: 2000
+- takeScreenshot: ${PREFIX}-72-review-back
+- scroll
+- takeScreenshot: ${PREFIX}-73-review-grade-row
+
+# New board sheet (from the empty Boards tab)
+- tapOn:
+    id: "tab-wall"
+- waitForAnimationToEnd:
+    timeout: 2500
+- tapOn:
+    text: "New board"
+- waitForAnimationToEnd:
+    timeout: 2000
+- takeScreenshot: ${PREFIX}-80-new-board-sheet
