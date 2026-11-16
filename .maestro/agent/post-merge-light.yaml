@@ -1,0 +1,44 @@
+# Post-merge check, light theme: no sign-in (keeps the current QA session), so
+# the app must boot to Collection with no error screen. Calendar opens with a
+# six-frame burst (stickers arrive one at a time), then Profile shows the Theme
+# section with System / Light / Dark. Zero AI calls, no writes.
+appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
+---
+- launchApp
+- extendedWaitUntil:
+    visible: "Collection"
+    timeout: 30000
+- assertNotVisible: ".*(Something went wrong|Unexpected error|Unable to render).*"
+- takeScreenshot: pm-light-01-collection
+
+# Calendar: burst right after the tap, before the arrival cascade settles.
+- tapOn:
+    id: "tab-calendar"
+    waitToSettleTimeoutMs: 0
+- takeScreenshot: pm-light-02-calendar-f1
+- takeScreenshot: pm-light-02-calendar-f2
+- takeScreenshot: pm-light-02-calendar-f3
+- takeScreenshot: pm-light-02-calendar-f4
+- takeScreenshot: pm-light-02-calendar-f5
+- takeScreenshot: pm-light-02-calendar-f6
+- extendedWaitUntil:
+    visible: "Previous month"
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 3000
+- takeScreenshot: pm-light-03-calendar-settled
+
+# Profile: the Theme section, with its three choices.
+- tapOn:
+    id: "tab-profile"
+- scrollUntilVisible:
+    element:
+      id: "theme-segment"
+    timeout: 15000
+- assertVisible:
+    id: "theme-system"
+- assertVisible:
+    id: "theme-light"
+- assertVisible:
+    id: "theme-dark"
+- takeScreenshot: pm-light-04-profile-theme

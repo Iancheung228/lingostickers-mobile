@@ -1,0 +1,24 @@
+# Post-merge check, reset: keeps the session (no clearState), sets Theme back to
+# System (reads as light on this build), then leaves the app on Collection.
+# Zero AI calls, no writes.
+appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
+---
+- launchApp
+- tapOn:
+    id: "tab-profile"
+- scrollUntilVisible:
+    element:
+      id: "theme-system"
+    timeout: 15000
+- tapOn:
+    id: "theme-system"
+- waitForAnimationToEnd:
+    timeout: 1500
+- assertVisible:
+    id: "theme-segment"
+- tapOn:
+    id: "tab-collection"
+- extendedWaitUntil:
+    visible: "Collection"
+    timeout: 15000
+- takeScreenshot: pm-reset-01-collection-system

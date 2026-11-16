@@ -1,0 +1,35 @@
+# Post-merge check, dark repaint: keeps the current session (no clearState, no
+# sign-in), picks Theme: Dark on Profile, then checks Collection, Calendar and
+# Profile repaint at once. Zero AI calls, no writes.
+appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
+---
+- launchApp
+- extendedWaitUntil:
+    visible: "Collection"
+    timeout: 30000
+- tapOn:
+    id: "tab-profile"
+- scrollUntilVisible:
+    element:
+      id: "theme-dark"
+    timeout: 15000
+- tapOn:
+    id: "theme-dark"
+- waitForAnimationToEnd:
+    timeout: 1500
+- takeScreenshot: pm-dark-01-profile-theme-dark
+- tapOn:
+    id: "tab-collection"
+- waitForAnimationToEnd:
+    timeout: 2000
+- takeScreenshot: pm-dark-02-collection
+- tapOn:
+    id: "tab-calendar"
+- waitForAnimationToEnd:
+    timeout: 3000
+- takeScreenshot: pm-dark-03-calendar
+- tapOn:
+    id: "tab-profile"
+- waitForAnimationToEnd:
+    timeout: 1500
+- takeScreenshot: pm-dark-04-profile-again
