@@ -265,7 +265,19 @@ export default function CalendarScreen() {
   const selectDay = useCallback((key: string) => { haptic.select(); setSelectedKey(key); }, []);
 
   const renderMonthPage = (rows: MonthCell[][], pageKey: string, live: boolean) => {
-    const firstCol = rows[0].findIndex(Boolean);
+    // Stickers arrive one at a time in date order. They all mount together, once
+    // every signed URL is in (or the grace runs out), so a late URL can't jump
+    // the queue, and each image loads while its sticker waits for its turn.
+    const order = new Map<string, number>();
+    let monthReady = true;
+    for (const row of rows) for (const cell of row) {
+      if (!cell) continue;
+      const first = firstCutout(stickersByDate.get(cell.key) ?? []);
+      if (!first) continue;
+      order.set(cell.key, order.size);
+      if (!dayIconUrls.get(listImagePath(first) ?? '')) monthReady = false;
+    }
+    monthReady ||= urlGrace;
     return (
       <View style={{ width: pageWidth }} key={pageKey}>
         {rows.map((row, rowIdx) => (
@@ -292,8 +304,8 @@ export default function CalendarScreen() {
                   isFuture={cell.key > todayKey}
                   isSelected={cell.key === selectedKey}
                   live={live}
-                  imageReady={url !== null || urlGrace}
-                  flipDelayMs={calendarFlipDelay(rowIdx, i, firstCol)}
+                  imageReady={monthReady}
+                  flipDelayMs={calendarFlipDelay(order.get(cell.key) ?? 0, order.size)}
                   reduced={reduced}
                   onSelect={selectDay}
                 />

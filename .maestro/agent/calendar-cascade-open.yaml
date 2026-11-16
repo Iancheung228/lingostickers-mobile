@@ -1,0 +1,21 @@
+# Calendar tab OPEN cascade: relaunch (session kept, no clearState) so the app
+# starts on Collection, then open the Calendar tab. The tap does not wait out the
+# arrival cascade, so the frames a parallel `simctl io screenshot` loop takes
+# right after it show the stickers arriving one by one. LOOK ONLY. No AI calls.
+# Credentials: caller passes the calendar-demo account with -e (never qa.env).
+appId: ${APP_ID}   # set by the caller: the installed dev build
+---
+- launchApp
+- extendedWaitUntil:
+    visible: "Collection"
+    timeout: 30000
+- tapOn:
+    id: "tab-calendar"
+    waitToSettleTimeoutMs: 0
+- takeScreenshot: cco-maestro-after-tap
+- extendedWaitUntil:
+    visible: "Previous month"
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 4000
+- takeScreenshot: cco-settled

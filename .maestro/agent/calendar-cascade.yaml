@@ -1,0 +1,54 @@
+# Calendar month-grid arrival cascade: stickers arrive one at a time in date
+# order (260 ms apart), each ~1.1 s. A burst of frames right after the tab opens
+# (and after a month change) must show the count of visible stickers growing.
+# LOOK ONLY: no scan, grade or edit. No AI calls.
+# Credentials: caller passes the calendar-demo account with -e (never qa.env).
+appId: ${APP_ID}   # set by the caller: the installed dev build
+---
+- runFlow: ../sign-in.yaml
+
+# 1. Open the Calendar tab and burst-capture the arrival.
+- tapOn:
+    id: "tab-calendar"
+    waitToSettleTimeoutMs: 0   # do not wait out the arrival cascade before the burst
+- takeScreenshot: cc-1-open-f01
+- takeScreenshot: cc-1-open-f02
+- takeScreenshot: cc-1-open-f03
+- takeScreenshot: cc-1-open-f04
+- takeScreenshot: cc-1-open-f05
+- takeScreenshot: cc-1-open-f06
+- takeScreenshot: cc-1-open-f07
+- takeScreenshot: cc-1-open-f08
+- takeScreenshot: cc-1-open-f09
+- takeScreenshot: cc-1-open-f10
+- extendedWaitUntil:
+    visible: "Previous month"
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 3000
+- takeScreenshot: cc-1-open-settled
+
+# 2. Previous month: burst again.
+- tapOn:
+    id: "calendar-prev-month"
+    waitToSettleTimeoutMs: 0
+- takeScreenshot: cc-2-prev-f01
+- takeScreenshot: cc-2-prev-f02
+- takeScreenshot: cc-2-prev-f03
+- takeScreenshot: cc-2-prev-f04
+- takeScreenshot: cc-2-prev-f05
+- takeScreenshot: cc-2-prev-f06
+- takeScreenshot: cc-2-prev-f07
+- takeScreenshot: cc-2-prev-f08
+- takeScreenshot: cc-2-prev-f09
+- takeScreenshot: cc-2-prev-f10
+- waitForAnimationToEnd:
+    timeout: 3000
+- takeScreenshot: cc-2-prev-settled
+
+# 3. Settled: a tap on a day with stickers still selects it.
+- tapOn:
+    text: ".*, [1-9][0-9]* stickers?.*"
+- waitForAnimationToEnd:
+    timeout: 800
+- takeScreenshot: cc-3-selected

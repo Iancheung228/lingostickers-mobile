@@ -41,7 +41,7 @@ type Props = {
   live: boolean;
   /** Hold the sticker back until its signed URL is in, so it flips in with its image. */
   imageReady: boolean;
-  /** Where this cell sits in the diagonal flip-in wave (calendarFlipDelay). */
+  /** When this cell's sticker arrives in the month's one-at-a-time run (calendarFlipDelay). */
   flipDelayMs: number;
   reduced: boolean;
   onSelect: (key: string) => void;

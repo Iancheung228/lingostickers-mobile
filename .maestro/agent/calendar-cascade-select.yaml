@@ -1,0 +1,24 @@
+# Calendar after the cascade has settled: tapping a day with a find selects it.
+# Relaunch keeps the session (no clearState). LOOK ONLY. No AI calls.
+# Credentials: caller passes the calendar-demo account with -e (never qa.env).
+appId: ${APP_ID}   # set by the caller: the installed dev build
+---
+- launchApp
+- extendedWaitUntil:
+    visible: "Collection"
+    timeout: 30000
+- tapOn:
+    id: "tab-calendar"
+- extendedWaitUntil:
+    visible: "Previous month"
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 4000
+- tapOn:
+    id: "calendar-day-2026-11-08"
+- waitForAnimationToEnd:
+    timeout: 800
+- assertVisible:
+    id: "calendar-selected-day"
+- assertVisible: "November 8.*"
+- takeScreenshot: cs-select-nov8

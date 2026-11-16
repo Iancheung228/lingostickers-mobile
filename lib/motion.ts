@@ -14,14 +14,15 @@ export const crossfadeMs = 150;
  * Calendar sticker arrival (owner Nov 14: "a champion has arrived", then
  * "slower and calmer"): each sticker grows in from 70%, turns a full 360 deg
  * about Y while rising a few pt, and settles with a soft squash (anchored at
- * its base) that eases back without wobbling. The month fills as a diagonal
- * wave from the top-left: each cell waits `col` column steps plus `row` row
- * steps (a row waits 4 columns). One sticker takes ~1.1 s; a 5-row month
- * settles in ~2.9 s. The grid is usable throughout. Reduce Motion: a 120 ms
- * fade, nothing else.
+ * its base) that eases back without wobbling. The month's stickers arrive one
+ * at a time in date order (owner Nov 15: the diagonal wave "still looks like
+ * it's all loading at the same time"): each waits `step` ms after the last,
+ * and a busy month compresses the step so the whole run stays within
+ * `maxSpread`. One sticker takes ~1.1 s. The grid is usable throughout.
+ * Reduce Motion: a 120 ms fade, nothing else.
  */
 export const calendarFlip = {
-  col: 80, row: 320, perspective: 600,
+  step: 260, maxSpread: 5000, perspective: 600,
   fadeMs: 220, riseMs: 380, airMs: 820, fromScale: 0.7,
   hop: 7, squashMs: 110, squashX: 1.05, squashY: 0.95,
 } as const;
@@ -33,9 +34,9 @@ export const calendarArriveEase = {
 };
 /** Landing: critically damped, so the squash eases back once with no wobble. */
 export const calendarLandSpring = { damping: 20, stiffness: 180, mass: 0.8 } as const;
-/** Wave delay for a month cell; the 1st of the month starts at once. */
-export const calendarFlipDelay = (row: number, col: number, firstCol: number) =>
-  Math.max(0, row * calendarFlip.row + (col - firstCol) * calendarFlip.col);
+/** Delay for the `index`-th of `count` stickers in a month; the first starts at once. */
+export const calendarFlipDelay = (index: number, count: number) =>
+  index * (count > 1 ? Math.min(calendarFlip.step, calendarFlip.maxSpread / (count - 1)) : 0);
 // Reanimated's Easing (a worklet), not React Native's: withTiming on the UI thread rejects the latter.
 export const ease = Easing.out(Easing.cubic);
 export const spring = { damping: 18, stiffness: 220 } as const;
