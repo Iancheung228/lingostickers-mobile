@@ -59,7 +59,7 @@
     "ios": "expo run:ios",
     "web": "expo start --web",
     "lint": "node scripts/check-hex.mjs && expo lint",
-    "test": "node --experimental-strip-types --test scripts/test-sentence-logic.mts scripts/test-llm.mts scripts/test-any-word.mts scripts/test-review.mts scripts/test-study-logic.mts scripts/test-batch-queue.mts scripts/test-background-library.mts scripts/test-wrong-word.mts",
+    "test": "node --experimental-strip-types --test scripts/test-sentence-logic.mts scripts/test-llm.mts scripts/test-any-word.mts scripts/test-review.mts scripts/test-study-logic.mts scripts/test-batch-queue.mts scripts/test-background-library.mts scripts/test-wrong-word.mts scripts/test-photo-picker.mts",
     "test:llm": "node --experimental-strip-types --test scripts/test-llm.mts",
     "test:live": "node --experimental-strip-types --test scripts/test-gemini-live.mts",
     "typecheck": "tsc --noEmit",

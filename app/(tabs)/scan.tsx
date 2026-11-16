@@ -4,7 +4,7 @@ import {
   LayoutChangeEvent,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import * as ImagePicker from 'expo-image-picker';
@@ -50,6 +50,10 @@ import { useBatchCreate } from '@/hooks/useBatchCreate';
 import BatchCardStatus from '@/components/BatchCardStatus';
 import BatchIntro from '@/components/BatchIntro';
 import { BATCH_MAX } from '@/lib/batchScan';
+import { usePhotoLibrary } from '@/hooks/usePhotoLibrary';
+import RecentPhotosStrip from '@/components/RecentPhotosStrip';
+import PhotoPickerModal from '@/components/PhotoPickerModal';
+import { markAssetsUsed } from '@/lib/usedAssetsStore';
 import { useTheme, useThemedStyles, type Theme } from '@/hooks/useTheme';
 
 // The photo a scan is working from, and — for live captures only — the moment
@@ -135,6 +139,9 @@ export default function ScanScreen() {
   // (not cleared until the resulting draft is finally Added or Discarded)
   // so "Retry Extraction" can reopen the box/lasso on the same source photo.
   const [importedAsset, setImportedAsset] = useState<CaptureAsset | null>(null);
+  const library = usePhotoLibrary();
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [resolvingPhotos, setResolvingPhotos] = useState(false);
   // Set only when importedAsset came from the live shutter (not the
   // gallery) — carries the "now"/GPS captured at the moment of the shutter
   // press, plus the true full, uncropped sensor frame for the memory photo
@@ -867,6 +874,44 @@ export default function ScanScreen() {
     return () => clearTimeout(t);
   }, [wantedReview, shownReview]);
 
+  // 1 photo -> the single flow; 2+ -> the batch intro. Same for the system
+  // picker and for ours.
+  const acceptPhotos = useCallback((photos: CaptureAsset[]) => {
+    if (photos.length > 1) {
+      setScanError(null);
+      releaseCarried();
+      flushPendingDiscard();
+      batch.offer(photos.slice(0, BATCH_MAX));
+      return;
+    }
+    const asset = photos[0];
+    if (asset) {
+      metadataPromiseRef.current = null;
+      setScanError(null);
+      releaseCarried();
+      flushPendingDiscard();
+      setCameraCaptureContext(null);
+      setImportedAsset({ uri: asset.uri, width: asset.width, height: asset.height, assetId: asset.assetId });
+      setExtractorVisible(true);
+    }
+  }, [batch, releaseCarried, flushPendingDiscard]);
+
+  const launchSystemPicker = useCallback(async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      quality: 1,
+      // Up to BATCH_MAX photos at once. Picking exactly one is the same as
+      // before; picking more shows the batch intro first.
+      allowsMultipleSelection: true,
+      selectionLimit: BATCH_MAX,
+      orderedSelection: true,
+    });
+    if (result.canceled) return;
+    acceptPhotos(result.assets.slice(0, BATCH_MAX).map((a) => ({
+      uri: a.uri, width: a.width, height: a.height, assetId: a.assetId ?? undefined,
+    })));
+  }, [acceptPhotos]);
+
   const handleImportPhoto = useCallback(async () => {
     if (processing || batch.active) return;
     if (!gate('Scanning needs a connection.')) return;
@@ -880,35 +925,51 @@ export default function ScanScreen() {
       );
       return;
     }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      quality: 1,
-      // Up to BATCH_MAX photos at once. Picking exactly one is the same as
-      // before; picking more shows the batch intro first.
-      allowsMultipleSelection: true,
-      selectionLimit: BATCH_MAX,
-      orderedSelection: true,
-    });
-    if (!result.canceled && result.assets.length > 1) {
-      setScanError(null);
-      releaseCarried();
-      flushPendingDiscard();
-      batch.offer(result.assets.slice(0, BATCH_MAX).map((a) => ({
-        uri: a.uri, width: a.width, height: a.height, assetId: a.assetId ?? undefined,
-      })));
-      return;
+    // Our own picker when the library is readable (full or limited access);
+    // otherwise (or via "All Photos") the system picker below, as before.
+    if ((await library.refresh()) !== 'denied') { setPickerOpen(true); return; }
+    await launchSystemPicker();
+  }, [processing, batch, library, launchSystemPicker]);
+
+  // See all on the recent strip: same picker, no permission prompt (the strip
+  // only shows when the library is already readable).
+  const openPicker = useCallback(async () => {
+    if (processing || batch.active) return;
+    haptic.tap();
+    if ((await library.refresh()) === 'denied') return;
+    setPickerOpen(true);
+  }, [processing, batch.active, library]);
+
+  // Strip confirm / picker confirm: resolve the picked assets to local files in
+  // the same {uri,width,height,assetId} shape the system picker gives, then hand
+  // off. From the picker sheet, wait out its dismiss animation first (iOS drops
+  // a modal presented while another is animating; same wait as BatchIntro).
+  const confirmLibrarySelection = useCallback(async () => {
+    if (resolvingPhotos || !library.selected.length) return;
+    if (!gate('Scanning needs a connection.')) return;
+    setResolvingPhotos(true);
+    try {
+      const photos = await library.resolveSelected();
+      if (!photos.length) {
+        toast.show({ kind: 'error', message: "Couldn't open those photos. Try again.", aboveTabBar: true });
+        return;
+      }
+      const fromSheet = pickerOpen;
+      setPickerOpen(false);
+      library.clear();
+      if (fromSheet) await new Promise((r) => setTimeout(r, 450));
+      acceptPhotos(photos);
+    } finally {
+      setResolvingPhotos(false);
     }
-    const asset = !result.canceled ? result.assets[0] : null;
-    if (asset) {
-      metadataPromiseRef.current = null;
-      setScanError(null);
-      releaseCarried();
-      flushPendingDiscard();
-      setCameraCaptureContext(null);
-      setImportedAsset({ uri: asset.uri, width: asset.width, height: asset.height, assetId: asset.assetId ?? undefined });
-      setExtractorVisible(true);
-    }
-  }, [processing, batch, releaseCarried, flushPendingDiscard]);
+  }, [resolvingPhotos, library, gate, toast, pickerOpen, acceptPhotos]);
+
+  const pickerToSystem = useCallback(() => {
+    setPickerOpen(false);
+    setTimeout(() => { void launchSystemPicker(); }, 450);
+  }, [launchSystemPicker]);
+
+  useFocusEffect(useCallback(() => { void library.refresh(); }, [library.refresh]));
 
 
   // Confirmation shown on the camera after the reveal sheet closes.
@@ -977,6 +1038,8 @@ export default function ScanScreen() {
       return;
     }
     haptic.success();
+    // Per-device "already a sticker" list behind the picker's New filter.
+    void markAssetsUsed([importedAsset?.assetId]);
     setDraft(null);
     setSceneChips([]);
     setSceneBase64(null);
@@ -1327,6 +1390,19 @@ export default function ScanScreen() {
             style={styles.batchResume}
           />
         )}
+        {library.access !== 'denied' && (
+          <RecentPhotosStrip
+            recent={library.recent}
+            used={library.used}
+            selected={library.selected}
+            capped={library.capped}
+            busy={busyShutter || !online || resolvingPhotos}
+            onToggle={library.toggle}
+            onClear={library.clear}
+            onConfirm={confirmLibrarySelection}
+            onSeeAll={openPicker}
+          />
+        )}
         <View style={styles.captureRow}>
           <TouchableOpacity
             style={styles.sideBtn}
@@ -1377,6 +1453,20 @@ export default function ScanScreen() {
           </TouchableOpacity>
         </View>
       </View>
+
+      <PhotoPickerModal
+        visible={pickerOpen}
+        access={library.access}
+        used={library.used}
+        selected={library.selected}
+        capped={library.capped}
+        busy={resolvingPhotos}
+        onToggle={library.toggle}
+        onConfirm={confirmLibrarySelection}
+        onClose={() => setPickerOpen(false)}
+        onSystemPicker={pickerToSystem}
+        onRefresh={() => { void library.refresh(); }}
+      />
 
       <PhotoExtractor
         imageUri={extractorVisible ? (importedAsset?.uri ?? null) : null}

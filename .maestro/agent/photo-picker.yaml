@@ -1,0 +1,72 @@
+# In-app photo picker: recent strip -> multi-select -> confirm label -> batch
+# intro (cancelled, so ZERO AI calls); then the full picker: chips, Shuffle +
+# Reshuffle, All Photos exists. Not yet run on a Simulator (written in a cloud
+# session). Needs Photos permission already granted to the dev build and 3+ photos:
+#   xcrun simctl addmedia <udid> scripts/fixtures/.cache/{bicycle,cat_mug,breakfast}.jpg
+# If the strip never shows, tap Gallery once first to grant access, then relaunch.
+appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
+---
+- runFlow: ../sign-in.yaml
+
+- tapOn:
+    text: "Scan a new sticker"
+- extendedWaitUntil:
+    visible: ".*(One quick thing|Agree and start scanning|Import a photo from your library).*"
+    timeout: 15000
+- runFlow:
+    when:
+      visible: "Agree and start scanning"
+    commands:
+      - tapOn: "Agree and start scanning"
+- extendedWaitUntil:
+    visible: "Import a photo from your library"
+    timeout: 15000
+
+# Strip is there; select two photos; the confirm names the count.
+- extendedWaitUntil:
+    visible:
+      id: "recent-strip"
+    timeout: 10000
+- takeScreenshot: photo-picker-strip
+- tapOn:
+    index: 0
+    id: "photo-thumb-idle"
+- tapOn:
+    index: 0
+    id: "photo-thumb-idle"
+- assertVisible: "Make 2 stickers"
+- takeScreenshot: photo-picker-two-selected
+- tapOn:
+    id: "recent-confirm"
+- extendedWaitUntil:
+    visible:
+      id: "batch-intro"
+    timeout: 15000
+- tapOn:
+    id: "batch-intro-cancel"
+
+# Full picker via See all.
+- tapOn:
+    id: "recent-see-all"
+- extendedWaitUntil:
+    visible:
+      id: "photo-picker"
+    timeout: 10000
+- assertVisible: "New"
+- assertVisible: "Albums"
+- assertVisible: "All Photos"
+- takeScreenshot: photo-picker-new
+- tapOn:
+    id: "picker-chip-shuffle"
+- extendedWaitUntil:
+    visible:
+      id: "picker-reshuffle"
+    timeout: 10000
+- takeScreenshot: photo-picker-shuffle
+- tapOn:
+    id: "picker-reshuffle"
+- tapOn:
+    id: "picker-chip-albums"
+- takeScreenshot: photo-picker-albums
+- tapOn:
+    id: "photo-picker-cancel"
