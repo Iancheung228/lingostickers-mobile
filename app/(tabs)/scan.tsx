@@ -14,7 +14,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { ImagePlus, Zap, ZapOff, Keyboard as KeyboardIcon } from 'lucide-react-native';
 import { useAuth } from '@/hooks/useAuth';
-import { colors, e1, e2, radii, spacing, type, fonts } from '@/constants/theme';
+import { radii, spacing, fonts } from '@/constants/theme';
 import { TAB_BAR_CLEARANCE } from '@/constants/tabBar';
 import { useProfile } from '@/hooks/useProfile';
 import { supabase } from '@/lib/supabase';
@@ -47,6 +47,7 @@ import { SceneChip, addSceneCards, newSceneId } from '@/lib/sceneCards';
 import { useBatchCreate } from '@/hooks/useBatchCreate';
 import BatchCardStatus from '@/components/BatchCardStatus';
 import { BATCH_MAX } from '@/lib/batchScan';
+import { useTheme, useThemedStyles, type Theme } from '@/hooks/useTheme';
 
 // The photo a scan is working from, and — for live captures only — the moment
 // and raw sensor frame the shutter caught. Named so the direct-capture path can
@@ -55,6 +56,8 @@ type CaptureAsset = { uri: string; width: number; height: number; assetId?: stri
 type CameraCapture = { discoveredAt: string; rawUri: string; rawWidth: number; rawHeight: number };
 
 export default function ScanScreen() {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const { user } = useAuth();
   const { accepted: aiConsented, accept: acceptAiConsent } = useAiConsent(user?.id);
   const { profile } = useProfile();
@@ -1489,7 +1492,7 @@ const ASPECT_RATIO = 3 / 4;
 const SCAN_TIMEOUT_MS = 45_000;
 const RETICLE_SIZE = 72;
 
-const styles = StyleSheet.create({
+const makeStyles = ({ colors, type, e2, e1 }: Theme) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.sky },
 
   // The title sits in the top safe area, above the frame's own margin, so the

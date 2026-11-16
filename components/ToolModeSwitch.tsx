@@ -3,7 +3,8 @@ import { useMotion } from '@/lib/motion';
 import { View, Text, TouchableOpacity, StyleSheet, LayoutChangeEvent } from 'react-native';
 import Animated, { useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import { colors, e1, fonts } from '@/constants/theme';
+import { fonts } from '@/constants/theme';
+import { useThemedStyles, type Theme } from '@/hooks/useTheme';
 
 export type ToolMode = 'box' | 'lasso';
 
@@ -22,6 +23,7 @@ const OPTIONS: { key: ToolMode; label: string; spoken: string }[] = [
 const TRACK_PADDING = 4;
 
 export default function ToolModeSwitch({ mode, onChange }: ToolModeSwitchProps) {
+  const styles = useThemedStyles(makeStyles);
   const [trackWidth, setTrackWidth] = useState(0);
   const segmentWidth = trackWidth > 0 ? (trackWidth - TRACK_PADDING * 2) / OPTIONS.length : 0;
   const activeIndex = OPTIONS.findIndex((option) => option.key === mode);
@@ -68,7 +70,7 @@ export default function ToolModeSwitch({ mode, onChange }: ToolModeSwitchProps) 
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ colors, e1 }: Theme) => StyleSheet.create({
   track: {
     flexDirection: 'row',
     backgroundColor: colors.sand,
@@ -80,7 +82,7 @@ const styles = StyleSheet.create({
     top: TRACK_PADDING,
     left: TRACK_PADDING,
     bottom: TRACK_PADDING,
-    backgroundColor: colors.white,
+    backgroundColor: colors.raised,
     borderRadius: 20,
     ...e1,
   },

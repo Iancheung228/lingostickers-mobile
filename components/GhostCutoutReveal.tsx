@@ -6,7 +6,8 @@ import Animated, {
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { supabase } from '@/lib/supabase';
-import { colors, fonts } from '@/constants/theme';
+import { fonts } from '@/constants/theme';
+import { useThemedStyles, type Theme } from '@/hooks/useTheme';
 
 interface GhostCutoutRevealProps {
   // The rectangular crop that was sent off for extraction — shown first so
@@ -33,6 +34,7 @@ const URL_DEADLINE_MS = 6000;
 // a ghost stepping out of its shell, while the finished cutout crossfades in
 // underneath — then hands off to DiscoveryReveal.
 export default function GhostCutoutReveal({ croppedUri, imagePath, onComplete }: GhostCutoutRevealProps) {
+  const styles = useThemedStyles(makeStyles);
   const [cutoutUrl, setCutoutUrl] = useState<string | null>(null);
   const { reduced } = useMotion();
   const progress = useSharedValue(0);
@@ -108,7 +110,7 @@ export default function GhostCutoutReveal({ croppedUri, imagePath, onComplete }:
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ colors }: Theme) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.sky, alignItems: 'center', justifyContent: 'center' },
   stage: { width: 280, height: 280, alignItems: 'center', justifyContent: 'center' },
   image: { width: '100%', height: '100%' },

@@ -1,7 +1,9 @@
 import { ActivityIndicator, Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
-import { colors, fonts, radii, spacing, MIN_TAP, PRESS_SCALE } from '@/constants/theme';
+import { fonts, radii, spacing, MIN_TAP, PRESS_SCALE } from '@/constants/theme';
 import { dur, useMotion } from '@/lib/motion';
+import { useTheme, useThemedStyles, type Theme } from '@/hooks/useTheme';
+import type { Palette } from '@/constants/palettes';
 
 export type ButtonKind = 'primary' | 'secondary' | 'tertiary' | 'destructive';
 
@@ -21,20 +23,22 @@ interface ButtonProps {
 // C-look 4 "Buttons": height 52, radius full, Newsreader 17; tertiary is 44 tall.
 // Press = scale .98 over 80 ms plus the colour step; disabled never lowers text
 // opacity. A loading button keeps its width and ignores taps (double-tap guard).
-const SCHEME: Record<ButtonKind, { bg: string; pressed: string; fg: string; dbg: string; dfg: string }> = {
+const schemeFor = (colors: Palette): Record<ButtonKind, { bg: string; pressed: string; fg: string; dbg: string; dfg: string }> => ({
   primary:     { bg: colors.terra,    pressed: colors.terraDark,        fg: colors.white,    dbg: colors.terraLight, dfg: colors.inkLight },
   secondary:   { bg: colors.terraLight, pressed: colors.terraTintPressed, fg: colors.inkDark, dbg: colors.terraLight, dfg: colors.inkLight },
   tertiary:    { bg: colors.transparent, pressed: colors.terraLight,    fg: colors.inkDark,  dbg: colors.transparent, dfg: colors.inkLight },
-  destructive: { bg: colors.errorLight, pressed: colors.errorPressed,   fg: colors.error,    dbg: colors.errorLight, dfg: colors.inkLight },
-};
+  destructive: { bg: colors.errorLight, pressed: colors.errorPressed,   fg: colors.errorInk,    dbg: colors.errorLight, dfg: colors.inkLight },
+});
 
 export default function Button({
   label, onPress, kind = 'primary', disabled, loading, icon, style, testID, accessibilityLabel, accessibilityHint,
 }: ButtonProps) {
+  const styles = useThemedStyles(makeStyles);
+  const { colors } = useTheme();
   const { reduced } = useMotion();
   const scale = useSharedValue(1);
   const anim = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
-  const s = SCHEME[kind];
+  const s = schemeFor(colors)[kind];
   const off = disabled || loading;
 
   return (
@@ -73,7 +77,7 @@ export default function Button({
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (_t: Theme) => StyleSheet.create({
   base: {
     minHeight: 52,
     borderRadius: radii.full,

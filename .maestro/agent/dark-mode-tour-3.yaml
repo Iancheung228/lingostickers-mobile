@@ -1,0 +1,40 @@
+# Dark-mode tour, part 3: the native Log Out alert (follows the app's scheme via
+# Appearance.setColorScheme) and the signed-out screens in the chosen theme. The
+# theme is chosen while signed in, so this also proves the preference survives a
+# sign-out without a restart. Zero AI calls.
+appId: com.iancheung228.lingostickers.dev
+---
+- runFlow: dm-signin.yaml
+- tapOn:
+    id: "tab-profile"
+- scrollUntilVisible:
+    element:
+      id: "theme-${THEME_PICK}"
+    timeout: 10000
+    optional: true
+- tapOn:
+    id: "theme-${THEME_PICK}"
+    optional: true
+- scrollUntilVisible:
+    element:
+      text: "Log Out"
+    timeout: 20000
+- tapOn:
+    text: "Log Out"
+- waitForAnimationToEnd:
+    timeout: 1500
+- takeScreenshot: ${PREFIX}-90-logout-alert
+- tapOn:
+    text: "Log Out"
+    index: 1
+    optional: true
+- extendedWaitUntil:
+    visible: "WELCOME BACK"
+    timeout: 20000
+- waitForAnimationToEnd:
+    timeout: 1500
+- takeScreenshot: ${PREFIX}-91-sign-in-signed-out
+- tapOn: "Sign Up"
+- waitForAnimationToEnd:
+    timeout: 2000
+- takeScreenshot: ${PREFIX}-92-sign-up

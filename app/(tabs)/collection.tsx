@@ -30,8 +30,9 @@ import TodayCard, { TODAY_CARD_HEIGHT } from '@/components/TodayCard';
 import { haptic } from '@/lib/haptics';
 import { useMotion } from '@/lib/motion';
 import { HOME_WALL_HEIGHT, HOME_WALL_OVERLAP } from '@/lib/homeWall';
-import { colors, fonts, radii, type } from '@/constants/theme';
+import { fonts, radii } from '@/constants/theme';
 import { TAB_BAR_CLEARANCE } from '@/constants/tabBar';
+import { useTheme, useThemedStyles, type Theme } from '@/hooks/useTheme';
 
 // Geometry (SPEC "Home layout"): the wall overlaps the 140pt band by 24, the
 // toolbar sits 12 under the wall and sticks under the slim band, the grid
@@ -46,6 +47,8 @@ const GAP = 12;
 const SEARCH_DEBOUNCE_MS = 150;
 
 export default function CollectionScreen() {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const { user } = useAuth();
   const toast = useToast();
   const { profile, setHomeBackground, setHomeWallArranged } = useProfile();
@@ -357,7 +360,7 @@ export default function CollectionScreen() {
             />
           </View>
         )}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.terra} progressViewOffset={slim} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.terraInk} progressViewOffset={slim} />}
       />
 
       {!brandNew && !loading && (
@@ -380,7 +383,7 @@ export default function CollectionScreen() {
       <OfflineBanner top={slim} />
       {refreshing && (
         <View style={[styles.refreshing, { top: slim + 8 }]} pointerEvents="none">
-          <ActivityIndicator color={colors.terra} />
+          <ActivityIndicator color={colors.terraInk} />
         </View>
       )}
 
@@ -434,6 +437,7 @@ export default function CollectionScreen() {
 function EmptyState({ title, subtitle, actionLabel, onAction }: {
   title: string; subtitle: string; actionLabel?: string; onAction?: () => void;
 }) {
+  const styles = useThemedStyles(makeStyles);
   return (
     <View style={styles.empty}>
       <Text style={styles.emptyTitle} maxFontSizeMultiplier={1.5}>{title}</Text>
@@ -452,7 +456,7 @@ function EmptyState({ title, subtitle, actionLabel, onAction }: {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ colors, type }: Theme) => StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.sky },
   toolbar: {
     position: 'absolute', left: 0, right: 0, top: 0, zIndex: 10,
@@ -461,7 +465,7 @@ const styles = StyleSheet.create({
   // wedges show the page rather than scrolled stickers. One soft shadow, no hairline.
   toolbarFill: {
     position: 'absolute', left: 0, right: 0, top: -24, bottom: 0, backgroundColor: colors.sky,
-    shadowColor: colors.inkDark, shadowOpacity: 0.08, shadowRadius: 6, shadowOffset: { width: 0, height: 3 },
+    shadowColor: colors.shadow, shadowOpacity: 0.08, shadowRadius: 6, shadowOffset: { width: 0, height: 3 },
   },
   row: { gap: GAP, paddingHorizontal: GUTTER, marginBottom: GAP },
   cellWrap: { flex: 1 },

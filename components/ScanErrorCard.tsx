@@ -1,10 +1,11 @@
 import { useEffect, useRef } from 'react';
 import { AccessibilityInfo, findNodeHandle, StyleSheet, Text, View } from 'react-native';
 import { AlertCircle } from 'lucide-react-native';
-import { colors, e2, radii, spacing, type } from '@/constants/theme';
+import { radii, spacing } from '@/constants/theme';
 import { haptic } from '@/lib/haptics';
 import { SCAN_ERRORS, type ScanAction, type ScanErrorKind } from '@/lib/scanError';
 import Button from '@/components/ui/Button';
+import { useTheme, useThemedStyles, type Theme } from '@/hooks/useTheme';
 
 // A failed scan, inline over the photo that was taken (B-core 2). The input is
 // kept, the first button is the recovery that most likely works, and nothing
@@ -16,6 +17,8 @@ export default function ScanErrorCard({
   kind: ScanErrorKind;
   onAction: (action: ScanAction) => void;
 }) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const copy = SCAN_ERRORS[kind];
   const first = useRef<View>(null);
 
@@ -32,7 +35,7 @@ export default function ScanErrorCard({
   return (
     <View style={styles.card} accessibilityRole="alert" testID={`scan-error-${kind}`}>
       <View style={styles.head}>
-        <AlertCircle size={20} strokeWidth={1.75} color={colors.error} style={styles.icon} />
+        <AlertCircle size={20} strokeWidth={1.75} color={colors.errorInk} style={styles.icon} />
         <Text style={styles.title} maxFontSizeMultiplier={1.5} testID="scan-error-title">{copy.title}</Text>
       </View>
       <View style={styles.actions}>
@@ -51,7 +54,7 @@ export default function ScanErrorCard({
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ colors, e2, type }: Theme) => StyleSheet.create({
   card: { backgroundColor: colors.card, borderRadius: radii.lg, padding: spacing.md, gap: spacing.md, alignSelf: 'stretch', ...e2 },
   head: { flexDirection: 'row', gap: spacing.sm, alignItems: 'flex-start' },
   icon: { marginTop: 2 },

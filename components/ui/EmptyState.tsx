@@ -1,8 +1,9 @@
 import type { ReactNode } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Camera } from 'lucide-react-native';
-import { colors, fonts, spacing } from '@/constants/theme';
+import { fonts, spacing } from '@/constants/theme';
 import Button from './Button';
+import { useTheme, useThemedStyles, type Theme } from '@/hooks/useTheme';
 
 interface EmptyStateProps {
   title: string;
@@ -17,6 +18,8 @@ interface EmptyStateProps {
 // C-look 4 "Empty states": a 56pt sand disc with one glyph, title h2 22, body 16
 // inkLight at most ~36ch, one primary button. No illustrations.
 export default function EmptyState({ title, body, icon, actionLabel, onAction, testID }: EmptyStateProps) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   return (
     <View style={styles.wrap} testID={testID}>
       <View style={styles.disc} accessible={false}>
@@ -29,7 +32,7 @@ export default function EmptyState({ title, body, icon, actionLabel, onAction, t
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ colors }: Theme) => StyleSheet.create({
   wrap: { alignItems: 'center', paddingHorizontal: spacing.lg, paddingVertical: spacing.xl, gap: spacing.sm },
   disc: { width: 56, height: 56, borderRadius: 28, backgroundColor: colors.sand, alignItems: 'center', justifyContent: 'center', marginBottom: spacing.sm },
   title: { fontFamily: fonts.display, fontSize: 22, lineHeight: 28, color: colors.inkDark, textAlign: 'center' },

@@ -1,7 +1,8 @@
 import { View, Text, StyleSheet, Pressable } from 'react-native';
-import { colors, e1, radii, spacing, type, MIN_TAP } from '@/constants/theme';
+import { radii, spacing, MIN_TAP } from '@/constants/theme';
 import { haptic } from '@/lib/haptics';
 import { QUICK_SESSION_SIZE, reviewMinutes } from '@/lib/review';
+import { useThemedStyles, type Theme } from '@/hooks/useTheme';
 
 export const TODAY_CARD_HEIGHT = 72;
 
@@ -22,6 +23,7 @@ interface TodayCardProps {
  * how much is owed. Counts are capped at the size of one Quick session.
  */
 export default function TodayCard({ queueCount, catchUp, afterSession, nextWhen, onStart }: TodayCardProps) {
+  const styles = useThemedStyles(makeStyles);
   const n = Math.min(queueCount, QUICK_SESSION_SIZE);
   const cards = `${n} card${n === 1 ? '' : 's'}`;
   const mins = reviewMinutes(n);
@@ -65,7 +67,7 @@ export default function TodayCard({ queueCount, catchUp, afterSession, nextWhen,
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ colors, e1, type }: Theme) => StyleSheet.create({
   card: {
     height: TODAY_CARD_HEIGHT, flexDirection: 'row', alignItems: 'center', gap: spacing.md,
     backgroundColor: colors.card, borderRadius: radii.md, paddingHorizontal: spacing.md, ...e1,

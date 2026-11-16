@@ -1,7 +1,8 @@
 import type { ReactNode } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
-import { colors, radii, MIN_TAP } from '@/constants/theme';
+import { radii, MIN_TAP } from '@/constants/theme';
 import { haptic } from '@/lib/haptics';
+import { useTheme, useThemedStyles, type Theme } from '@/hooks/useTheme';
 
 export const ICON_BUTTON_SIZE = MIN_TAP; // 44
 
@@ -22,6 +23,8 @@ interface IconButtonProps {
 // `ctl` border (3:1 on cream), no shadow, on every screen. The camera's primary
 // side buttons are the only ones allowed to be larger.
 export default function IconButton({ label, onPress, children, testID, selected, dot, loading, disabled, style }: IconButtonProps) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   return (
     <Pressable
       testID={testID}
@@ -38,7 +41,7 @@ export default function IconButton({ label, onPress, children, testID, selected,
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ colors }: Theme) => StyleSheet.create({
   btn: {
     width: ICON_BUTTON_SIZE, height: ICON_BUTTON_SIZE, borderRadius: radii.full,
     borderWidth: 1, borderColor: colors.ctl, backgroundColor: colors.card,

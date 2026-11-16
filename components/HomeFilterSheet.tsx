@@ -3,8 +3,9 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Check } from 'lucide-react-native';
 import BottomSheet, { type BottomSheetHandle } from '@/components/BottomSheet';
 import Button from '@/components/ui/Button';
-import { colors, fonts, spacing, MIN_TAP } from '@/constants/theme';
+import { fonts, spacing, MIN_TAP } from '@/constants/theme';
 import { haptic } from '@/lib/haptics';
+import { useTheme, useThemedStyles, type Theme } from '@/hooks/useTheme';
 
 export type SortMode = 'newest' | 'oldest' | 'due' | 'az';
 export const DEFAULT_SORT: SortMode = 'newest';
@@ -32,6 +33,8 @@ interface Props {
 export default function HomeFilterSheet({
   sort, favoritesOnly, dueOnly, onSort, onFavoritesOnly, onDueOnly, onReset, onClosed,
 }: Props) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const sheet = useRef<BottomSheetHandle>(null);
   const isDefault = sort === DEFAULT_SORT && !favoritesOnly && !dueOnly;
   return (
@@ -53,7 +56,7 @@ export default function HomeFilterSheet({
             onPress={() => { haptic.select(); onSort(mode); }}
           >
             <Text style={[styles.optionText, sort === mode && styles.optionOn]}>{SORT_LABELS[mode]}</Text>
-            {sort === mode && <Check size={18} strokeWidth={2} color={colors.terra} />}
+            {sort === mode && <Check size={18} strokeWidth={2} color={colors.terraInk} />}
           </Pressable>
         ))}
 
@@ -67,7 +70,7 @@ export default function HomeFilterSheet({
           onPress={() => { haptic.select(); onFavoritesOnly(!favoritesOnly); }}
         >
           <Text style={[styles.optionText, favoritesOnly && styles.optionOn]}>Favourites only</Text>
-          {favoritesOnly && <Check size={18} strokeWidth={2} color={colors.terra} />}
+          {favoritesOnly && <Check size={18} strokeWidth={2} color={colors.terraInk} />}
         </Pressable>
         <Pressable
           testID="home-filter-due"
@@ -78,7 +81,7 @@ export default function HomeFilterSheet({
           onPress={() => { haptic.select(); onDueOnly(!dueOnly); }}
         >
           <Text style={[styles.optionText, dueOnly && styles.optionOn]}>Due only</Text>
-          {dueOnly && <Check size={18} strokeWidth={2} color={colors.terra} />}
+          {dueOnly && <Check size={18} strokeWidth={2} color={colors.terraInk} />}
         </Pressable>
 
         <View style={styles.actions}>
@@ -90,7 +93,7 @@ export default function HomeFilterSheet({
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ colors }: Theme) => StyleSheet.create({
   title: { fontSize: 22, lineHeight: 28, fontFamily: fonts.display, color: colors.inkDark, paddingHorizontal: 20, marginBottom: spacing.sm },
   body: { paddingHorizontal: 20, paddingBottom: spacing.md },
   section: { fontSize: 14, lineHeight: 20, fontFamily: fonts.text, color: colors.inkLight, marginBottom: 4, marginLeft: 4 },

@@ -7,7 +7,8 @@ import { ToastLayer } from '@/components/ToastProvider';
 import { haptic } from '@/lib/haptics';
 import { useMotion } from '@/lib/motion';
 import type { Sticker } from '@/lib/types';
-import { colors, e2, fonts, headwordStyle, radii, spacing, type, MIN_TAP } from '@/constants/theme';
+import { fonts, radii, spacing, MIN_TAP } from '@/constants/theme';
+import { useTheme, useThemedStyles, type Theme } from '@/hooks/useTheme';
 
 interface ReviewSummaryProps {
   /// Null while no session has finished — the modal is driven entirely by
@@ -28,6 +29,8 @@ interface ReviewSummaryProps {
 // full of accuracy percentages turns "I did my reviews" into something to
 // feel bad about.
 export default function ReviewSummary({ stats, early, nextDue, revisit, onDone, onUpdate }: ReviewSummaryProps) {
+  const { colors, type, headwordStyle } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const { reduced } = useMotion();
   const pop = useRef(new Animated.Value(0)).current;
   const [opened, setOpened] = useState<Sticker | null>(null);
@@ -130,7 +133,7 @@ export default function ReviewSummary({ stats, early, nextDue, revisit, onDone, 
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ colors, e2, type }: Theme) => StyleSheet.create({
   overlay: {
     flex: 1,
     backgroundColor: colors.scrim,
@@ -157,7 +160,7 @@ const styles = StyleSheet.create({
   title: { ...type.h2 },
   subtitle: { ...type.small, marginTop: 2 },
   next: { ...type.body, color: colors.inkMid, marginTop: spacing.sm },
-  warn: { ...type.small, color: colors.error, marginTop: spacing.xs },
+  warn: { ...type.small, color: colors.errorInk, marginTop: spacing.xs },
 
   revisit: { alignSelf: 'stretch', marginTop: spacing.md },
   revisitHead: { ...type.small, fontFamily: fonts.display, marginBottom: spacing.xs },

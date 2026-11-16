@@ -6,13 +6,15 @@ import AuthShell, { AuthLink } from '@/components/AuthShell';
 import Field from '@/components/ui/Field';
 import Button from '@/components/ui/Button';
 import InlineError from '@/components/ui/InlineError';
-import { colors, fonts, radii, spacing } from '@/constants/theme';
+import { fonts, radii, spacing } from '@/constants/theme';
 import { authActionMessage, isEmail } from '@/lib/authErrors';
 import { isNetworkError } from '@/lib/friendlyError';
 import { debugWarn } from '@/lib/debug';
 import { haptic } from '@/lib/haptics';
+import { useThemedStyles, type Theme } from '@/hooks/useTheme';
 
 export default function ForgotPasswordScreen() {
+  const styles = useThemedStyles(makeStyles);
   const { resetPasswordForEmail, verifyRecoveryOtp } = useAuth();
   const router = useRouter();
   const [email, setEmail] = useState('');
@@ -139,10 +141,10 @@ export default function ForgotPasswordScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ colors }: Theme) => StyleSheet.create({
   block: { marginBottom: spacing.ms },
   sentNote: { backgroundColor: colors.successLight, borderRadius: radii.md, padding: spacing.ms, marginBottom: spacing.ms },
-  sentText: { fontFamily: fonts.text, fontSize: 14, lineHeight: 20, color: colors.success },
+  sentText: { fontFamily: fonts.text, fontSize: 14, lineHeight: 20, color: colors.successInk },
   recovery: { alignItems: 'center', marginTop: spacing.sm },
   foot: { alignItems: 'center', marginTop: spacing.sm },
 });

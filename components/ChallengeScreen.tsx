@@ -12,8 +12,9 @@ import { useChallenges } from '@/hooks/useChallenges';
 import { useFriends } from '@/hooks/useFriends';
 import { useAuth } from '@/hooks/useAuth';
 import ReportSheet from '@/components/ReportSheet';
-import { colors, spacing, fonts, wordFontFor, sentenceFontFor } from '@/constants/theme';
+import { spacing, fonts, wordFontFor, sentenceFontFor } from '@/constants/theme';
 import { languageLabel } from '@/lib/languages';
+import { useTheme, useThemedStyles, type Theme } from '@/hooks/useTheme';
 
 
 interface ChallengeScreenProps {
@@ -28,6 +29,8 @@ function blankWord(sentence: string, word: string): string {
 }
 
 export default function ChallengeScreen({ challenge, onClose, onWin }: ChallengeScreenProps) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const [answer, setAnswer] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [attemptsUsed, setAttemptsUsed] = useState(0);
@@ -198,7 +201,7 @@ export default function ChallengeScreen({ challenge, onClose, onWin }: Challenge
             </View>
           ) : (
             <View style={styles.stickerPlaceholder}>
-              <ActivityIndicator color={colors.terra} />
+              <ActivityIndicator color={colors.terraInk} />
             </View>
           )}
         </View>
@@ -277,7 +280,7 @@ export default function ChallengeScreen({ challenge, onClose, onWin }: Challenge
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ colors }: Theme) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.sky },
   flex: { flex: 1 },
   scrollBody: { flexGrow: 1 },
@@ -309,7 +312,7 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     backgroundColor: colors.card,
   },
-  imageRetryText: { fontSize: 13, fontFamily: fonts.display, color: colors.terra },
+  imageRetryText: { fontSize: 13, fontFamily: fonts.display, color: colors.terraInk },
   definitionBox: {
     flexDirection: 'row',
     alignItems: 'flex-start',

@@ -9,7 +9,9 @@ import Button from '@/components/ui/Button';
 import { markOnboardingDone } from '@/lib/onboarding';
 import { haptic } from '@/lib/haptics';
 import { useMotion } from '@/lib/motion';
-import { colors, e1, fonts, radii, spacing, type, wordFontFor, GUTTER } from '@/constants/theme';
+import { fonts, radii, spacing, wordFontFor, GUTTER } from '@/constants/theme';
+import { useTheme, useThemedStyles, type Theme } from '@/hooks/useTheme';
+import type { Palette } from '@/constants/palettes';
 
 // First run: three short screens (photo, sticker and word, review), then Scan.
 // Calm on purpose: a sand disc and one sentence each, no metaphor, no confetti.
@@ -33,6 +35,7 @@ const PAGES = [
 // A hand-drawn apple, the same fruit screen 2 uses. `cutout` draws it as the
 // app does a finished sticker: a white outline and a contact shadow under it.
 function Apple({ size, cutout }: { size: number; cutout?: boolean }) {
+  const { colors } = useTheme();
   const body = (
     <G>
       <Path d="M50 28 C38 20 18 26 18 50 C18 72 34 86 50 82 C66 86 82 72 82 50 C82 26 62 20 50 28 Z" />
@@ -41,7 +44,7 @@ function Apple({ size, cutout }: { size: number; cutout?: boolean }) {
   );
   return (
     <Svg width={size} height={size} viewBox="0 0 100 100">
-      {cutout && <Ellipse cx="50" cy="90" rx="26" ry="4.5" fill={colors.maroon} fillOpacity={0.2} />}
+      {cutout && <Ellipse cx="50" cy="90" rx="26" ry="4.5" fill={colors.shadowDeep} fillOpacity={0.2} />}
       {cutout && (
         <G fill={colors.white} stroke={colors.white} strokeWidth={9} strokeLinejoin="round">{body}</G>
       )}
@@ -56,6 +59,9 @@ function Apple({ size, cutout }: { size: number; cutout?: boolean }) {
 }
 
 function Visual({ page }: { page: number }) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(makeStyles);
+  const MINI_GRADES = miniGradesFor(colors);
   if (page === 0) {
     // The moment a photo becomes a sticker: the photo, an arrow, the cutout.
     return (
@@ -99,14 +105,15 @@ function Visual({ page }: { page: number }) {
   );
 }
 
-const MINI_GRADES = [
-  { label: 'Again', sub: '1m', bg: colors.againTint, fg: colors.error, flex: 1.4 },
+const miniGradesFor = (colors: Palette) => [
+  { label: 'Again', sub: '1m', bg: colors.againTint, fg: colors.errorInk, flex: 1.4 },
   { label: 'Hard', sub: '6m', bg: colors.goldTint, fg: colors.gold, flex: 1 },
   { label: 'Good', sub: '10m', bg: colors.success, fg: colors.white, flex: 1.4 },
-  { label: 'Easy', sub: '4d', bg: colors.successLight, fg: colors.success, flex: 1 },
+  { label: 'Easy', sub: '4d', bg: colors.successLight, fg: colors.successInk, flex: 1 },
 ];
 
 export default function OnboardingScreen() {
+  const styles = useThemedStyles(makeStyles);
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
@@ -161,7 +168,7 @@ export default function OnboardingScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ colors, e1, type }: Theme) => StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.sky, paddingHorizontal: GUTTER },
   top: { alignItems: 'flex-end', minHeight: 44 },
   page: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.md },

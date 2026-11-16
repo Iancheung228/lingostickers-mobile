@@ -17,9 +17,10 @@ import Button from '@/components/ui/Button';
 import InlineError from '@/components/ui/InlineError';
 import { Language } from '@/lib/types';
 import { haptic } from '@/lib/haptics';
-import { colors, fonts, radii, spacing, wordFontFor, MIN_TAP } from '@/constants/theme';
+import { fonts, radii, spacing, wordFontFor, MIN_TAP } from '@/constants/theme';
 // The one question this form asks that isn't a credential.
 import { LANGUAGES as LANGUAGE_CHOICES } from '@/lib/languages';
+import { useTheme, useThemedStyles, type Theme } from '@/hooks/useTheme';
 
 // No terms page is published yet (tabistickers.com/terms.html is a 404), so the line
 // links only the privacy policy. Set this to the URL once the page exists and the
@@ -28,6 +29,8 @@ const TERMS_URL: string | null = null;
 const PRIVACY_URL = 'https://tabistickers.com/privacy.html';
 
 export default function SignUpScreen() {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const { signUp } = useAuth();
   const router = useRouter();
   const [username, setUsername] = useState('');
@@ -130,7 +133,7 @@ export default function SignUpScreen() {
           {avatarUri ? (
             <Image source={{ uri: avatarUri }} contentFit="cover" style={styles.avatarImage} />
           ) : (
-            <Camera size={24} strokeWidth={1.75} color={colors.terra} />
+            <Camera size={24} strokeWidth={1.75} color={colors.terraInk} />
           )}
         </Pressable>
         <Text style={styles.avatarHint} maxFontSizeMultiplier={2}>
@@ -227,7 +230,7 @@ export default function SignUpScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ colors }: Theme) => StyleSheet.create({
   block: { marginBottom: spacing.ms },
   avatarBlock: { alignItems: 'center', gap: 6, marginBottom: spacing.md },
   avatarButton: {
@@ -247,6 +250,6 @@ const styles = StyleSheet.create({
   langLabel: { fontFamily: fonts.text, fontSize: 14, lineHeight: 18, color: colors.inkLight },
   langTextActive: { color: colors.white },
   terms: { fontFamily: fonts.text, fontSize: 14, lineHeight: 20, color: colors.inkLight, textAlign: 'center', marginBottom: spacing.md },
-  termsLink: { fontFamily: fonts.display, color: colors.terra, textDecorationLine: 'underline' },
+  termsLink: { fontFamily: fonts.display, color: colors.terraInk, textDecorationLine: 'underline' },
   foot: { alignItems: 'center', marginTop: spacing.sm },
 });

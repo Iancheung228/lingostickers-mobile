@@ -2,7 +2,8 @@ import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Check, X, Play, MoreHorizontal } from 'lucide-react-native';
 import Avatar from '@/components/Avatar';
 import { timeAgo } from '@/lib/relativeTime';
-import { colors, radii, spacing, shadows, fonts } from '@/constants/theme';
+import { radii, spacing, fonts } from '@/constants/theme';
+import { useTheme, useThemedStyles, type Theme } from '@/hooks/useTheme';
 
 // ---------------------------------------------------------------------------
 // One row for everything that is waiting on the user.
@@ -31,6 +32,8 @@ interface FriendRequestRowProps {
 }
 
 export function FriendRequestRow({ username, avatarPath, onAccept, onDecline, onFlag }: FriendRequestRowProps) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const name = username ?? 'Someone';
   return (
     <View style={styles.row}>
@@ -83,6 +86,8 @@ interface ChallengeRowProps {
 }
 
 export function ChallengeRow({ senderName, senderAvatarPath, sentAt, inProgress, onPress }: ChallengeRowProps) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const name = senderName ?? 'A friend';
   return (
     <TouchableOpacity
@@ -111,7 +116,7 @@ export function ChallengeRow({ senderName, senderAvatarPath, sentAt, inProgress,
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ colors, shadows }: Theme) => StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',

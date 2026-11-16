@@ -4,7 +4,7 @@ import {
   Modal, View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator,
   KeyboardAvoidingView, Platform, ScrollView, Image, Keyboard,
 } from 'react-native';
-import { colors, fonts, radii, spacing, type, e1 } from '@/constants/theme';
+import { fonts, radii, spacing } from '@/constants/theme';
 import { Language } from '@/lib/types';
 import { supabase } from '@/lib/supabase';
 import { friendlyError } from '@/lib/friendlyError';
@@ -13,6 +13,7 @@ import { speak } from '@/lib/speech';
 import { CardBack, type CardContent } from '@/components/CardView';
 import Button from '@/components/ui/Button';
 import InlineError from '@/components/ui/InlineError';
+import { useTheme, useThemedStyles, type Theme } from '@/hooks/useTheme';
 
 /** A cutout the scan already made and uploaded, carried into a typed card. */
 export interface CarriedCutout { imagePath: string; thumbPath: string | null }
@@ -38,6 +39,8 @@ export default function TypeWordSheet({
   onClose: () => void;
   onAdded: (id?: string) => void;
 }) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const { reduced } = useMotion();
   const [text, setText] = useState('');
   const [status, setStatus] = useState<'idle' | 'loading' | 'saving'>('idle');
@@ -148,7 +151,7 @@ export default function TypeWordSheet({
             <View style={styles.cutoutWell}>
               {cutoutUrl
                 ? <Image source={{ uri: cutoutUrl }} style={styles.cutout} resizeMode="contain" />
-                : <ActivityIndicator color={colors.terra} />}
+                : <ActivityIndicator color={colors.terraInk} />}
               <Text style={styles.cutoutNote}>Your sticker is saved. Type its word to finish the card.</Text>
             </View>
           )}
@@ -174,7 +177,7 @@ export default function TypeWordSheet({
           />
           {status === 'loading' && (
             <View style={styles.row} accessibilityLiveRegion="polite">
-              <ActivityIndicator size="small" color={colors.terra} />
+              <ActivityIndicator size="small" color={colors.terraInk} />
               <Text style={styles.note}>Writing your card…</Text>
             </View>
           )}
@@ -199,7 +202,7 @@ export default function TypeWordSheet({
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ colors, type, e1 }: Theme) => StyleSheet.create({
   wrap: { flex: 1, backgroundColor: colors.cream, padding: spacing.md, paddingTop: spacing.md, gap: spacing.md },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', minHeight: 44 },
   title: { ...type.h2 },
@@ -211,7 +214,7 @@ const styles = StyleSheet.create({
   input: {
     borderWidth: 1, borderColor: colors.ctl, borderRadius: radii.md, minHeight: 48,
     paddingHorizontal: spacing.md, fontSize: 18, fontFamily: fonts.text,
-    color: colors.inkDark, backgroundColor: colors.white,
+    color: colors.inkDark, backgroundColor: colors.card,
   },
   row: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   card: { backgroundColor: colors.card, borderRadius: radii.lg, padding: spacing.lg, ...e1 },

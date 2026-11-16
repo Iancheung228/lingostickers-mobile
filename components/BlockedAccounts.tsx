@@ -7,7 +7,8 @@ import { X } from 'lucide-react-native';
 import Avatar from '@/components/Avatar';
 import { useFriends } from '@/hooks/useFriends';
 import type { BlockedUser } from '@/lib/types';
-import { colors, radii, spacing, shadows, fonts, typography } from '@/constants/theme';
+import { radii, spacing, fonts } from '@/constants/theme';
+import { useTheme, useThemedStyles, type Theme } from '@/hooks/useTheme';
 
 // ---------------------------------------------------------------------------
 // The list of people you have blocked, and the only way to undo it.
@@ -23,6 +24,8 @@ interface BlockedAccountsProps {
 }
 
 export default function BlockedAccounts({ visible, onClose }: BlockedAccountsProps) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const { blocked, unblockUser } = useFriends();
   const [working, setWorking] = useState<string | null>(null);
 
@@ -101,7 +104,7 @@ export default function BlockedAccounts({ visible, onClose }: BlockedAccountsPro
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ colors, shadows, typography }: Theme) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.sky },
   header: {
     flexDirection: 'row',

@@ -2,7 +2,8 @@ import { View, Text, StyleSheet } from 'react-native';
 import { Image } from 'expo-image';
 import Avatar from '@/components/Avatar';
 import { timeAgo } from '@/lib/relativeTime';
-import { colors, radii, spacing, shadows, fonts, wordFontFor } from '@/constants/theme';
+import { radii, spacing, fonts, wordFontFor } from '@/constants/theme';
+import { useThemedStyles, type Theme } from '@/hooks/useTheme';
 
 // ---------------------------------------------------------------------------
 // A challenge you sent that a friend solved.
@@ -38,6 +39,7 @@ interface SolvedRowProps {
 export default function SolvedRow({
   word, language, translation, solverName, solverAvatarPath, completedAt, imageUrl,
 }: SolvedRowProps) {
+  const styles = useThemedStyles(makeStyles);
   return (
     <View style={styles.row}>
       <View style={styles.thumb}>
@@ -72,7 +74,7 @@ export default function SolvedRow({
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ colors, shadows }: Theme) => StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',

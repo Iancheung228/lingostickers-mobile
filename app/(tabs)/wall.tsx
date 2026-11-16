@@ -13,12 +13,14 @@ import NewBoardSheet from '@/components/NewBoardSheet';
 import RoseBand from '@/components/RoseBand';
 import EmptyState from '@/components/ui/EmptyState';
 import { usePendingDeletes } from '@/components/PendingDeleteProvider';
-import { colors } from '@/constants/theme';
 import { TAB_BAR_CLEARANCE } from '@/constants/tabBar';
+import { useTheme, useThemedStyles, type Theme } from '@/hooks/useTheme';
 
 // Boards: a two-up grid of board tiles (C-look 4). Tapping a tile opens that
 // board's canvas in place, with a back arrow; the tab bar stays.
 export default function WallScreen() {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const { user } = useAuth();
   const { profile, refetch: refetchProfile } = useProfile();
   const {
@@ -121,7 +123,7 @@ export default function WallScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ colors }: Theme) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.sky },
   empty: { flex: 1, justifyContent: 'center', paddingBottom: TAB_BAR_CLEARANCE },
 });

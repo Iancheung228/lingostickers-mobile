@@ -5,7 +5,7 @@ import { X, Info, Check } from 'lucide-react-native';
 import { StickerDraft } from '@/lib/types';
 import { supabase } from '@/lib/supabase';
 import { speak, stopSpeaking } from '@/lib/speech';
-import { colors, spacing, shadows, fonts, type, radii, stickerShadow } from '@/constants/theme';
+import { spacing, fonts, radii } from '@/constants/theme';
 import BottomSheet, { type BottomSheetHandle } from '@/components/BottomSheet';
 import Button from '@/components/ui/Button';
 import InlineError from '@/components/ui/InlineError';
@@ -15,6 +15,7 @@ import { CardBack, contentFromDraft } from '@/components/CardView';
 import { useCoachMark } from '@/lib/coachMarks';
 import SceneWords from '@/components/SceneWords';
 import { SceneChip } from '@/lib/sceneCards';
+import { useTheme, useThemedStyles, type Theme } from '@/hooks/useTheme';
 
 interface DiscoveryRevealProps {
   draft: StickerDraft | null;
@@ -45,6 +46,8 @@ interface DiscoveryRevealProps {
 }
 
 export default function DiscoveryReveal({ draft, onAdd, saveError, onDiscard, onRetryExtraction, batch, onEditWord, onEditSentence, saving, retranslating, retranslatingSentence, sceneBase64, sceneSelected, onSceneSelected }: DiscoveryRevealProps) {
+  const { colors, type } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const { reduced } = useMotion();
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const sheetRef = useRef<BottomSheetHandle>(null);
@@ -175,7 +178,7 @@ export default function DiscoveryReveal({ draft, onAdd, saveError, onDiscard, on
           {imageUrl ? (
             <Image source={{ uri: imageUrl }} style={styles.image} resizeMode="contain" />
           ) : (
-            <ActivityIndicator style={styles.image} color={colors.terra} />
+            <ActivityIndicator style={styles.image} color={colors.terraInk} />
           )}
         </View>
 
@@ -316,7 +319,7 @@ export default function DiscoveryReveal({ draft, onAdd, saveError, onDiscard, on
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ colors, type, stickerShadow, shadows }: Theme) => StyleSheet.create({
   bodyScroll: { flexShrink: 1 },
   body: { paddingBottom: spacing.md },
   bgIssueBanner: {

@@ -6,11 +6,14 @@ import AuthShell, { AuthLink } from '@/components/AuthShell';
 import PasswordField from '@/components/PasswordField';
 import Button from '@/components/ui/Button';
 import InlineError from '@/components/ui/InlineError';
-import { colors, fonts, radii, spacing } from '@/constants/theme';
+import { fonts, radii, spacing } from '@/constants/theme';
 import { authActionMessage } from '@/lib/authErrors';
 import { haptic } from '@/lib/haptics';
+import { useTheme, useThemedStyles, type Theme } from '@/hooks/useTheme';
 
 export default function ResetPasswordScreen() {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const { updatePassword, session, clearPasswordRecovery, signOut } = useAuth();
   // Set by the root layout when the emailed link couldn't be used. Only its
   // presence matters: the copy is ours, never the server's.
@@ -67,7 +70,7 @@ export default function ResetPasswordScreen() {
   if (!session) {
     return (
       <AuthShell title="New Password" tagline="Verifying your link…" intro={false}>
-        <View style={styles.wait}><ActivityIndicator size="large" color={colors.terra} /></View>
+        <View style={styles.wait}><ActivityIndicator size="large" color={colors.terraInk} /></View>
         <View style={styles.foot}>
           <AuthLink prefix="Back to" accent="Sign In" onPress={handleCancel} />
         </View>
@@ -124,10 +127,10 @@ export default function ResetPasswordScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ colors }: Theme) => StyleSheet.create({
   block: { marginBottom: spacing.ms },
   wait: { alignItems: 'center', paddingVertical: spacing.lg },
   done: { backgroundColor: colors.successLight, borderRadius: radii.md, padding: spacing.ms },
-  doneText: { fontFamily: fonts.text, fontSize: 14, lineHeight: 20, color: colors.success },
+  doneText: { fontFamily: fonts.text, fontSize: 14, lineHeight: 20, color: colors.successInk },
   foot: { alignItems: 'center', marginTop: spacing.sm },
 });

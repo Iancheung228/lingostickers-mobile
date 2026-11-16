@@ -1,6 +1,7 @@
 import { forwardRef, useState, type ReactNode } from 'react';
 import { StyleSheet, Text, TextInput, View, type TextInputProps } from 'react-native';
-import { colors, fonts, radii, spacing } from '@/constants/theme';
+import { fonts, radii, spacing } from '@/constants/theme';
+import { useTheme, useThemedStyles, type Theme } from '@/hooks/useTheme';
 
 export interface FieldProps extends Omit<TextInputProps, 'style'> {
   /** Inline error under the field: pass friendlyError()-style copy, never error.message. */
@@ -21,6 +22,8 @@ export interface FieldProps extends Omit<TextInputProps, 'style'> {
 const Field = forwardRef<TextInput, FieldProps>(function Field(
   { error, hint, right, hintTone = 'muted', onFocus, onBlur, placeholder, accessibilityLabel, ...props }, ref,
 ) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const [focused, setFocused] = useState(false);
   const border = error ? colors.error : focused ? colors.terra : colors.ctl;
   const width = focused || error ? 2 : 1;
@@ -56,7 +59,7 @@ const Field = forwardRef<TextInput, FieldProps>(function Field(
 
 export default Field;
 
-const styles = StyleSheet.create({
+const makeStyles = ({ colors }: Theme) => StyleSheet.create({
   wrap: { marginBottom: spacing.ms },
   box: {
     minHeight: 52, flexDirection: 'row', alignItems: 'center',
@@ -67,7 +70,7 @@ const styles = StyleSheet.create({
     paddingVertical: 0,
   },
   inputWithRight: { paddingRight: spacing.xs },
-  error: { fontFamily: fonts.text, fontSize: 14, lineHeight: 20, color: colors.error, marginTop: 6, marginLeft: 4 },
+  error: { fontFamily: fonts.text, fontSize: 14, lineHeight: 20, color: colors.errorInk, marginTop: 6, marginLeft: 4 },
   hint: { fontFamily: fonts.text, fontSize: 14, lineHeight: 20, color: colors.inkLight, marginTop: 6, marginLeft: 4 },
-  hintOk: { color: colors.success },
+  hintOk: { color: colors.successInk },
 });

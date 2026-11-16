@@ -21,9 +21,10 @@ import { ChallengeWithSender, FriendWithProfile, PersonSummary } from '@/lib/typ
 import {
   buildInboxItems, buildSections, subtitleFor, isFirstRun, type Row,
 } from '@/lib/friendsSections';
-import { colors, shadows, radii, spacing, fonts } from '@/constants/theme';
+import { radii, spacing, fonts } from '@/constants/theme';
 import { TAB_BAR_CLEARANCE } from '@/constants/tabBar';
 import { enablePushNotifications } from '@/lib/notifications';
+import { useTheme, useThemedStyles, type Theme } from '@/hooks/useTheme';
 
 // ---------------------------------------------------------------------------
 // Friends.
@@ -40,6 +41,8 @@ import { enablePushNotifications } from '@/lib/notifications';
 // ---------------------------------------------------------------------------
 
 export default function FriendsScreen() {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const { user } = useAuth();
   const {
     friends, loading: friendsLoading, respondToRequest,
@@ -207,7 +210,7 @@ export default function FriendsScreen() {
       </View>
 
       {loading && !refreshing ? (
-        <ActivityIndicator style={styles.loader} color={colors.terra} size="large" />
+        <ActivityIndicator style={styles.loader} color={colors.terraInk} size="large" />
       ) : hasNobody ? (
         <FriendsEmpty onAdd={() => setSearchVisible(true)} />
       ) : (
@@ -216,7 +219,7 @@ export default function FriendsScreen() {
           keyExtractor={item => item.key}
           stickySectionHeadersEnabled={false}
           refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={() => refresh()} tintColor={colors.terra} />
+            <RefreshControl refreshing={refreshing} onRefresh={() => refresh()} tintColor={colors.terraInk} />
           }
           ListHeaderComponent={
             acceptedFriends.length > 0 ? (
@@ -284,7 +287,7 @@ export default function FriendsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ colors, shadows }: Theme) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.sky, paddingBottom: TAB_BAR_CLEARANCE },
   header: {
     flexDirection: 'row',

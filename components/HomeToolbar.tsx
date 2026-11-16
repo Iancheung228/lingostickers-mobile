@@ -1,8 +1,9 @@
 import { useEffect, useRef } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Search, SlidersHorizontal, X } from 'lucide-react-native';
-import { colors, fonts, radii, MIN_TAP } from '@/constants/theme';
+import { fonts, radii, MIN_TAP } from '@/constants/theme';
 import IconButton from '@/components/ui/IconButton';
+import { useTheme, useThemedStyles, type Theme } from '@/hooks/useTheme';
 
 export const TOOLBAR_HEIGHT = 52;
 
@@ -24,6 +25,8 @@ interface Props {
 export default function HomeToolbar({
   count, searchOpen, query, filtersActive, onOpenSearch, onCloseSearch, onChangeQuery, onOpenFilter,
 }: Props) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const input = useRef<TextInput>(null);
   useEffect(() => { if (searchOpen) input.current?.focus(); }, [searchOpen]);
 
@@ -79,7 +82,7 @@ export default function HomeToolbar({
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ colors }: Theme) => StyleSheet.create({
   row: { height: TOOLBAR_HEIGHT, flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 20 },
   titleWrap: { flex: 1, flexDirection: 'row', alignItems: 'baseline', gap: 6 },
   title: { fontSize: 17, lineHeight: 22, fontFamily: fonts.display, color: colors.inkDark },

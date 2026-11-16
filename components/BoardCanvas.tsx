@@ -12,7 +12,8 @@ import { useSignedUrls } from '@/hooks/useSignedUrls';
 import { getTileSize } from '@/lib/boardLayout';
 import WallBackground from '@/components/WallBackground';
 import CutoutSticker from '@/components/CutoutSticker';
-import { colors, wordFontFor } from '@/constants/theme';
+import { wordFontFor } from '@/constants/theme';
+import { useTheme, useThemedStyles, type Theme } from '@/hooks/useTheme';
 
 const LONG_PRESS_MS = 400;
 // Stickers are drawn at least this far from the canvas edge so none clip.
@@ -51,6 +52,8 @@ export default function BoardCanvas({
   items, displayStyle, borderStyle, canvasSize, onSelectSticker, onMove, onRemove,
   backgroundPath, backgroundDim, backgroundVersion, onDragStart, onDragEnd,
 }: BoardCanvasProps) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   // Shared across every tile so whichever one is currently being held can
   // reveal the trash zone and report hovering over it — a single drag at a
   // time is the only case that matters here.
@@ -70,7 +73,7 @@ export default function BoardCanvas({
   const trashStyle = useAnimatedStyle(() => ({
     opacity: dragActive.value,
     transform: [{ scale: 0.8 + dragActive.value * 0.2 + hoverTrash.value * 0.15 }],
-    backgroundColor: hoverTrash.value ? colors.error : colors.inkDark,
+    backgroundColor: hoverTrash.value ? colors.error : colors.terraDark,
   }));
 
   return (
@@ -103,7 +106,7 @@ export default function BoardCanvas({
             { left: trashBounds.left, top: trashBounds.top, width: trashBounds.size, height: trashBounds.size, borderRadius: trashBounds.size / 2 },
           ]}
         >
-          <Trash2 size={24} color={colors.card} />
+          <Trash2 size={24} color={colors.white} />
         </Animated.View>
       )}
     </View>
@@ -132,6 +135,7 @@ function CanvasTile({
   hoverTrash: SharedValue<number>;
   trashBounds: TrashBounds;
 }) {
+  const styles = useThemedStyles(makeStyles);
   const { reduced } = useMotion();
   const { width: tileWidth, height: tileHeight } = useMemo(() => getTileSize(item.sticker_id), [item.sticker_id]);
   // Drawn at least EDGE_INSET from the canvas edge. This clamps at render only:
@@ -269,7 +273,7 @@ function CanvasTile({
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ colors }: Theme) => StyleSheet.create({
   canvas: {
     borderRadius: 24,
     overflow: 'hidden',
@@ -280,7 +284,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: colors.inkDark,
+    shadowColor: colors.shadow,
     shadowOpacity: 0.25,
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 3 },
@@ -291,7 +295,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.card,
     borderRadius: 12,
     padding: 6,
-    shadowColor: colors.inkDark,
+    shadowColor: colors.shadow,
     shadowOpacity: 0.18,
     shadowRadius: 5,
     shadowOffset: { width: 0, height: 3 },
@@ -314,11 +318,11 @@ const styles = StyleSheet.create({
     bottom: -6,
     alignSelf: 'center',
     maxWidth: '92%',
-    backgroundColor: 'rgba(255, 253, 244, 0.92)',
+    backgroundColor: colors.glass,
     borderRadius: 8,
     paddingHorizontal: 7,
     paddingVertical: 2,
-    shadowColor: colors.inkDark,
+    shadowColor: colors.shadow,
     shadowOpacity: 0.25,
     shadowRadius: 3,
     shadowOffset: { width: 0, height: 1 },

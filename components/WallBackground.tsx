@@ -5,7 +5,7 @@ import Svg, { Defs, RadialGradient, Stop, Rect } from 'react-native-svg';
 import { WallBackgroundDim } from '@/lib/types';
 import { supabase } from '@/lib/supabase';
 import CorkBackground from '@/components/CorkBackground';
-import { colors } from '@/constants/theme';
+import { useTheme } from '@/hooks/useTheme';
 
 // Flat scrim opacity per dim level — keeps stickers/text legible over an
 // arbitrary user photo regardless of how bright or busy it is. 'none' skips
@@ -48,6 +48,7 @@ interface WallBackdropProps {
 // the rendering-side version of skills.md #1: if more than one component has
 // to *agree* on something, it gets one definition, not two.
 export function WallBackdrop({ url, dim = 'medium', cacheKey }: WallBackdropProps) {
+  const { colors } = useTheme();
   if (!url) return <CorkBackground />;
 
   const dimOpacity = typeof dim === 'number' ? dim / 100 : DIM_OPACITY[dim];
@@ -62,12 +63,12 @@ export function WallBackdrop({ url, dim = 'medium', cacheKey }: WallBackdropProp
       />
       {dimOpacity > 0 && (
         <>
-          <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.inkDark, opacity: dimOpacity }]} />
+          <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.shadow, opacity: dimOpacity }]} />
           <Svg width="100%" height="100%" style={StyleSheet.absoluteFill}>
             <Defs>
               <RadialGradient id="vignette" cx="50%" cy="50%" r="75%">
-                <Stop offset="0.6" stopColor={colors.inkDark} stopOpacity="0" />
-                <Stop offset="1" stopColor={colors.inkDark} stopOpacity="0.28" />
+                <Stop offset="0.6" stopColor={colors.shadow} stopOpacity="0" />
+                <Stop offset="1" stopColor={colors.shadow} stopOpacity="0.28" />
               </RadialGradient>
             </Defs>
             <Rect x="0" y="0" width="100%" height="100%" fill="url(#vignette)" />

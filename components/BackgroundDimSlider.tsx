@@ -4,7 +4,8 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { Contrast } from 'lucide-react-native';
-import { colors, radii, shadows, fonts } from '@/constants/theme';
+import { radii, fonts } from '@/constants/theme';
+import { useTheme, useThemedStyles, type Theme } from '@/hooks/useTheme';
 
 interface BackgroundDimSliderProps {
   // Last-committed percent (0-maxPct) — re-synced from outside whenever it
@@ -26,6 +27,8 @@ const PILL_HEIGHT = 26;
 const HAPTIC_STEP_PCT = 5;
 
 export default function BackgroundDimSlider({ value, maxPct, onPreviewChange, onCommit }: BackgroundDimSliderProps) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const clampedValue = Math.min(maxPct, Math.max(0, value));
   const pct = useSharedValue(clampedValue);
   const lastHapticStep = useSharedValue(Math.round(clampedValue / HAPTIC_STEP_PCT));
@@ -114,14 +117,14 @@ export default function BackgroundDimSlider({ value, maxPct, onPreviewChange, on
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ shadows, colors }: Theme) => StyleSheet.create({
   pill: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
     height: PILL_HEIGHT,
     borderRadius: radii.full,
-    backgroundColor: 'rgba(255,255,255,0.85)',
+    backgroundColor: colors.glassSolid,
     paddingHorizontal: 8,
     ...shadows.card,
   },

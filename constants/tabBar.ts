@@ -5,7 +5,7 @@
 // the pill) and every tab screen (which pads its own content so the last item
 // isn't hidden behind it): an absolutely-positioned bar reserves no layout
 // space of its own.
-import { colors } from '@/constants/theme';
+import type { Palette } from '@/constants/palettes';
 
 export const TAB = {
   height: 64,
@@ -28,20 +28,48 @@ export const TAB = {
   iconTop: 11.5,
   labelTop: 40,
   labelSize: 11,
-  pill: colors.blush,
-  pillEdge: '#D58A8E',
-  disc: colors.blushDeep,
-  discStroke: colors.terraDark,
-  discActive: '#FBF3EA',
-  discPressed: '#8D4549',
-  discRing: 'rgba(251, 243, 234, 0.6)',
-  inkOff: '#5A2429',
-  inkOn: '#3A1519',
-  badge: { bg: '#FBF3EA', text: '#3A1519', ring: colors.blush, left: 12, top: 4.5 },
-  shadowPill: { color: '#8A3A44', opacity: 0.2, dy: 6, radius: 7 },
-  shadowDisc: { color: '#662B31', opacity: 0.25, dy: 3, radius: 4 },
-  fade: { height: 28, opacity: 0.92, color: colors.cream },
+  badge: { left: 12, top: 4.5 },
+  fade: { height: 28 },
 } as const;
+
+/**
+ * The pill's colours, per scheme. Light is exactly the Nov 2026 values. Dark
+ * keeps the rose pill but deepens it so it reads as an object on a dark page,
+ * flips its ink to pale rose, and leaves the Scan disc and its glyph unchanged.
+ */
+export function tabColors(colors: Palette, isDark: boolean) {
+  return isDark
+    ? {
+        pill: colors.blush,
+        pillEdge: '#955058',
+        disc: colors.blushDeep,
+        discStroke: colors.terraDark,
+        discActive: '#FBF3EA',
+        discPressed: '#8D4549',
+        discRing: 'rgba(251, 243, 234, 0.6)',
+        inkOff: '#E9C6C8',
+        inkOn: '#FFFFFF',
+        badge: { bg: '#FBF3EA', text: '#3A1519', ring: colors.blush },
+        shadowPill: { color: '#000000', opacity: 0.5, dy: 6, radius: 7 },
+        shadowDisc: { color: '#000000', opacity: 0.5, dy: 3, radius: 4 },
+        fade: { opacity: 0.92, color: colors.sky },
+      }
+    : {
+        pill: colors.blush,
+        pillEdge: '#D58A8E',
+        disc: colors.blushDeep,
+        discStroke: colors.terraDark,
+        discActive: '#FBF3EA',
+        discPressed: '#8D4549',
+        discRing: 'rgba(251, 243, 234, 0.6)',
+        inkOff: '#5A2429',
+        inkOn: '#3A1519',
+        badge: { bg: '#FBF3EA', text: '#3A1519', ring: colors.blush },
+        shadowPill: { color: '#8A3A44', opacity: 0.2, dy: 6, radius: 7 },
+        shadowDisc: { color: '#662B31', opacity: 0.25, dy: 3, radius: 4 },
+        fade: { opacity: 0.92, color: colors.sky },
+      };
+}
 
 /** Pill width for a screen width. */
 export function tabBarWidth(screenWidth: number): number {

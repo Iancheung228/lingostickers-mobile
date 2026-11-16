@@ -4,7 +4,8 @@ import { CutoutBorderStyle, Sticker } from '@/lib/types';
 import CutoutSticker from '@/components/CutoutSticker';
 import { listImagePath } from '@/lib/thumbnails';
 import StickerImageFallback from '@/components/StickerImageFallback';
-import { colors, radii, wordFontFor } from '@/constants/theme';
+import { radii, wordFontFor } from '@/constants/theme';
+import { useTheme, useThemedStyles, type Theme } from '@/hooks/useTheme';
 
 // One cutout on the home wall, with its contact shadow (no tape). Shared by the panel on the
 // home feed and by the editor sheet so the two can't drift apart in how a
@@ -27,6 +28,8 @@ export default function HomeWallTile({
   // meant to read as a picture rather than a labelled list.
   showWord?: boolean;
 }) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   return (
     <>
       {/* Attached contact shadow (SPEC): an ellipse at 82% of the height. */}
@@ -34,9 +37,9 @@ export default function HomeWallTile({
         <Svg width="100%" height="100%">
           <Defs>
             <RadialGradient id="contact" cx="50%" cy="50%" rx="50%" ry="50%">
-              <Stop offset="0" stopColor={colors.maroon} stopOpacity="0.30" />
-              <Stop offset="0.6" stopColor={colors.maroon} stopOpacity="0.16" />
-              <Stop offset="1" stopColor={colors.maroon} stopOpacity="0" />
+              <Stop offset="0" stopColor={colors.shadowDeep} stopOpacity="0.30" />
+              <Stop offset="0.6" stopColor={colors.shadowDeep} stopOpacity="0.16" />
+              <Stop offset="1" stopColor={colors.shadowDeep} stopOpacity="0" />
             </RadialGradient>
           </Defs>
           <Ellipse cx="50%" cy="50%" rx="50%" ry="50%" fill="url(#contact)" />
@@ -62,7 +65,7 @@ export default function HomeWallTile({
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ colors }: Theme) => StyleSheet.create({
   loader: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   // 9pt ellipse at 82% of the height, softened by a radial fade (RN has no blur).
   contact: { position: 'absolute', left: '14%', right: '14%', top: '79%', height: 15 },
@@ -71,7 +74,7 @@ const styles = StyleSheet.create({
     bottom: -5,
     alignSelf: 'center',
     maxWidth: '96%',
-    backgroundColor: 'rgba(255, 253, 244, 0.92)',
+    backgroundColor: colors.glass,
     borderRadius: radii.xs,
     paddingHorizontal: 5,
     paddingVertical: 1,

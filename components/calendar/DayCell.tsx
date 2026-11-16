@@ -5,8 +5,9 @@ import { Plus } from 'lucide-react-native';
 import Thumb from './Thumb';
 import FlipSticker from './FlipSticker';
 import { Sticker } from '@/lib/types';
-import { colors, fonts, stickerShadow } from '@/constants/theme';
+import { fonts } from '@/constants/theme';
 import { haptic } from '@/lib/haptics';
+import { useTheme, useThemedStyles, type Theme } from '@/hooks/useTheme';
 
 // Quiet grid (owner, Nov 14: "too much colour, too messy"; spacing from the
 // reference footage). No boxes and no dots in the grid: a small neutral date,
@@ -51,6 +52,8 @@ function DayCell({
   dayKey, day, date, stk, cellH, findCount, firstFind, url, reviewed,
   isToday, isFuture, isSelected, live, imageReady, flipDelayMs, reduced, onSelect,
 }: Props) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const dateLabel = useMemo(() => A11Y_DAY_FORMAT.format(date), [date]);
   const parts = [dateLabel];
   if (isToday) parts.push('today');
@@ -102,7 +105,7 @@ function DayCell({
             accessibilityRole="button"
             accessibilityLabel="Add today's sticker"
           >
-            <Plus size={Math.round(stk * 0.45)} strokeWidth={2} color={colors.terra} />
+            <Plus size={Math.round(stk * 0.45)} strokeWidth={2} color={colors.terraInk} />
           </Pressable>
         </View>
       )}
@@ -112,7 +115,7 @@ function DayCell({
 
 export default memo(DayCell);
 
-const styles = StyleSheet.create({
+const makeStyles = ({ colors, stickerShadow }: Theme) => StyleSheet.create({
   cell: { flex: 1 },
   fill: { flex: 1, alignItems: 'center', gap: NUM_GAP, paddingTop: NUM_TOP },
   numWrap: { minWidth: NUM_D, height: NUM_D, paddingHorizontal: 4, borderRadius: NUM_D / 2, alignItems: 'center', justifyContent: 'center' },

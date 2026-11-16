@@ -1,6 +1,7 @@
 import { Modal, View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, SafeAreaView } from 'react-native';
 import { X, RotateCcw } from 'lucide-react-native';
-import { colors, fonts } from '@/constants/theme';
+import { fonts } from '@/constants/theme';
+import { useTheme, useThemedStyles, type Theme } from '@/hooks/useTheme';
 
 // Batch create's review step, for a card that is not ready to show: still being
 // made, or failed. A finished card goes through DiscoveryReveal instead. The
@@ -16,6 +17,8 @@ interface Props {
 }
 
 export default function BatchCardStatus({ label, state, error, onRetry, onSkip, onDismiss }: Props) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   return (
     <Modal visible animationType="slide" presentationStyle="fullScreen" onRequestClose={onDismiss}>
       <SafeAreaView style={styles.container}>
@@ -59,7 +62,7 @@ export default function BatchCardStatus({ label, state, error, onRetry, onSkip, 
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ colors }: Theme) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.sky },
   header: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
@@ -79,5 +82,5 @@ const styles = StyleSheet.create({
   },
   primaryText: { color: colors.white, fontSize: 16, fontFamily: fonts.display },
   skip: { paddingVertical: 12, paddingHorizontal: 20 },
-  skipText: { color: colors.inkFaint, fontSize: 14, fontFamily: fonts.display },
+  skipText: { color: colors.inkLight, fontSize: 14, fontFamily: fonts.display },
 });

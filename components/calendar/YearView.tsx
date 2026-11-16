@@ -6,8 +6,9 @@ import StickerImageFallback from '@/components/StickerImageFallback';
 import { listImagePath, firstCutout } from '@/lib/thumbnails';
 import { dateKeyOf } from '@/lib/review';
 import { Sticker } from '@/lib/types';
-import { colors, fonts } from '@/constants/theme';
+import { fonts } from '@/constants/theme';
 import { dur, ease, useMotion } from '@/lib/motion';
+import { useThemedStyles, type Theme } from '@/hooks/useTheme';
 
 export type YearViewProps = {
   year: number;
@@ -57,6 +58,7 @@ type MiniMonthProps = {
 const MiniMonth = memo(function MiniMonth({
   year, month, finds, count, todayDay, isCurrent, selected, tileW, cell, urlGrace, onPick,
 }: MiniMonthProps) {
+  const styles = useThemedStyles(makeStyles);
   const first = new Date(year, month, 1);
   const lead = first.getDay();
   const daysIn = new Date(year, month + 1, 0).getDate();
@@ -145,6 +147,7 @@ const MiniMonth = memo(function MiniMonth({
 export default function YearView({
   year, stickersByDate, iconUrls, todayKey, urlGrace = false, shownMonth, width, onPickMonth,
 }: YearViewProps) {
+  const styles = useThemedStyles(makeStyles);
   const motion = useMotion();
   const opacity = useSharedValue(0);
   useEffect(() => {
@@ -228,7 +231,7 @@ export default function YearView({
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ colors }: Theme) => StyleSheet.create({
   row: { flexDirection: 'row', justifyContent: 'space-between' },
   mini: { borderRadius: 10, paddingHorizontal: TILE_PAD, paddingVertical: TILE_PAD },
   // Neutral tiles: the year view keeps the month grid's quiet palette.
@@ -242,11 +245,11 @@ const styles = StyleSheet.create({
     fontFamily: fonts.display,
     color: colors.charcoal,
   },
-  labelCurrent: { color: colors.terra },
+  labelCurrent: { color: colors.terraInk },
   weekRow: { flexDirection: 'row' },
   cellCenter: { alignItems: 'center', justifyContent: 'center' },
   num: { fontSize: 7.5, lineHeight: 10, fontFamily: fonts.mono, color: colors.inkQuiet },
-  numToday: { color: colors.card },
+  numToday: { color: colors.white },
   todayDisc: { borderRadius: 999, backgroundColor: colors.terra },
   todayRing: { borderRadius: 999, borderWidth: 1, borderColor: colors.terra },
   pending: { borderRadius: 3, backgroundColor: colors.cardAlt },

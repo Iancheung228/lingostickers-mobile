@@ -8,7 +8,8 @@ import { useChallenges } from '@/hooks/useChallenges';
 import StickerPickerModal from '@/components/StickerPickerModal';
 import ReportSheet from '@/components/ReportSheet';
 import Avatar from '@/components/Avatar';
-import { colors, fonts } from '@/constants/theme';
+import { fonts } from '@/constants/theme';
+import { useTheme, useThemedStyles, type Theme } from '@/hooks/useTheme';
 
 interface FriendProfileProps {
   friend: FriendWithProfile | null;
@@ -18,6 +19,8 @@ interface FriendProfileProps {
 }
 
 export default function FriendProfile({ friend, currentUserId, onClose, onRemoved }: FriendProfileProps) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const { removeFriend, blockUser } = useFriends();
   const { sendChallenge } = useChallenges();
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -126,7 +129,7 @@ export default function FriendProfile({ friend, currentUserId, onClose, onRemove
 
           <View style={styles.statBox}>
             {exchangeCount === null ? (
-              <ActivityIndicator color={colors.terra} />
+              <ActivityIndicator color={colors.terraInk} />
             ) : (
               <>
                 <Text style={styles.statCount}>{exchangeCount}</Text>
@@ -158,7 +161,7 @@ export default function FriendProfile({ friend, currentUserId, onClose, onRemove
             accessibilityRole="button"
             accessibilityLabel={`Remove ${friend.friend.username ?? 'this friend'} from your friends`}
           >
-            <UserX size={16} color={colors.error} />
+            <UserX size={16} color={colors.errorInk} />
             <Text style={styles.removeButtonText}>Remove Friend</Text>
           </TouchableOpacity>
 
@@ -207,7 +210,7 @@ export default function FriendProfile({ friend, currentUserId, onClose, onRemove
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ colors }: Theme) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.sky },
   header: {
     flexDirection: 'row',
@@ -246,7 +249,7 @@ const styles = StyleSheet.create({
   challengeButton: { backgroundColor: colors.terra },
   challengeButtonText: { color: colors.white, fontSize: 15, fontFamily: fonts.display,},
   removeButton: { backgroundColor: colors.errorLight },
-  removeButtonText: { color: colors.error, fontSize: 15, fontFamily: fonts.display,},
+  removeButtonText: { color: colors.errorInk, fontSize: 15, fontFamily: fonts.display,},
   safetyRow: { flexDirection: 'row', gap: 24, marginTop: 4 },
   safetyButton: {
     flexDirection: 'row',

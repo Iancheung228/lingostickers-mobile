@@ -3,9 +3,10 @@ import { Modal, View, Text, TextInput, FlatList, TouchableOpacity, StyleSheet, S
 import { X, UserPlus, Check } from 'lucide-react-native';
 import { useFriends } from '@/hooks/useFriends';
 import Avatar from '@/components/Avatar';
-import { colors, fonts } from '@/constants/theme';
+import { fonts } from '@/constants/theme';
 import { useAuth } from '@/hooks/useAuth';
 import { enablePushNotifications } from '@/lib/notifications';
+import { useTheme, useThemedStyles, type Theme } from '@/hooks/useTheme';
 
 interface FriendSearchProps {
   visible: boolean;
@@ -13,6 +14,8 @@ interface FriendSearchProps {
 }
 
 export default function FriendSearch({ visible, onClose }: FriendSearchProps) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const { user } = useAuth();
   const { searchResults, searching, searchUsers, sendFriendRequest, removeFriend, friends } = useFriends();
   const [query, setQuery] = useState('');
@@ -66,7 +69,7 @@ export default function FriendSearch({ visible, onClose }: FriendSearchProps) {
             autoCorrect={false}
             autoFocus
           />
-          {searching && <ActivityIndicator color={colors.terra} style={styles.spinner} />}
+          {searching && <ActivityIndicator color={colors.terraInk} style={styles.spinner} />}
         </View>
 
         {/* Search results */}
@@ -159,7 +162,7 @@ export default function FriendSearch({ visible, onClose }: FriendSearchProps) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ colors }: Theme) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.sky },
   header: {
     flexDirection: 'row',
@@ -204,7 +207,7 @@ const styles = StyleSheet.create({
   },
   addButtonSent: { backgroundColor: colors.inkFaint },
   addText: { color: colors.white, fontSize: 13, fontFamily: fonts.display },
-  pendingBadge: { fontSize: 12, fontFamily: fonts.display, color: colors.terra, borderWidth: 1, borderColor: colors.terra, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3, },
+  pendingBadge: { fontSize: 12, fontFamily: fonts.display, color: colors.terraInk, borderWidth: 1, borderColor: colors.terra, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3, },
   cancelButton: {
     borderRadius: 8,
     borderWidth: 1,

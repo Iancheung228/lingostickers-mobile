@@ -1,8 +1,9 @@
 import { forwardRef, useState } from 'react';
 import { Pressable, StyleSheet, TextInput } from 'react-native';
 import { Eye, EyeOff } from 'lucide-react-native';
-import { colors, MIN_TAP } from '@/constants/theme';
+import { MIN_TAP } from '@/constants/theme';
 import Field, { type FieldProps } from '@/components/ui/Field';
+import { useTheme, useThemedStyles, type Theme } from '@/hooks/useTheme';
 
 /**
  * A password box you can look inside (typing blind on a phone keyboard and being
@@ -13,6 +14,8 @@ import Field, { type FieldProps } from '@/components/ui/Field';
  */
 const PasswordField = forwardRef<TextInput, Omit<FieldProps, 'secureTextEntry' | 'right'>>(
   function PasswordField(props, ref) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(makeStyles);
     const [visible, setVisible] = useState(false);
     return (
       <Field
@@ -39,6 +42,6 @@ const PasswordField = forwardRef<TextInput, Omit<FieldProps, 'secureTextEntry' |
 
 export default PasswordField;
 
-const styles = StyleSheet.create({
+const makeStyles = (_t: Theme) => StyleSheet.create({
   toggle: { width: MIN_TAP, height: MIN_TAP, alignItems: 'center', justifyContent: 'center', marginRight: -6 },
 });

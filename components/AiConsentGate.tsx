@@ -1,10 +1,11 @@
 import { Linking, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { TAB_BAR_CLEARANCE } from '@/constants/tabBar';
-import { colors, e2, fonts, radii, spacing, type } from '@/constants/theme';
+import { fonts, radii, spacing } from '@/constants/theme';
 import Button from '@/components/ui/Button';
 import { haptic } from '@/lib/haptics';
 import { AI_PROCESSORS } from '@/lib/aiConsent';
+import { useThemedStyles, type Theme } from '@/hooks/useTheme';
 
 // ---------------------------------------------------------------------------
 // The disclosure App Store Guideline 5.1.2(i) requires, shown once before the
@@ -44,6 +45,7 @@ export function AiConsentGate({
   agree_testID?: string;
   privacy_testID?: string;
 }) {
+  const styles = useThemedStyles(makeStyles);
   const insets = useSafeAreaInsets();
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
@@ -102,7 +104,7 @@ export function AiConsentGate({
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ colors, e2, type }: Theme) => StyleSheet.create({
   scrim: { ...StyleSheet.absoluteFillObject, backgroundColor: colors.scrim },
   sheet: {
     position: 'absolute',

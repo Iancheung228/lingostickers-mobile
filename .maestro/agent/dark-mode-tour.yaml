@@ -1,0 +1,119 @@
+# Dark-mode tour: signs in, picks the appearance, then screenshots every screen.
+# Zero AI calls and no data writes (practice mode only), so it is safe on a staging
+# demo account. Run it once per scheme and compare the PREFIX-NN-* screenshots:
+#   maestro --device <udid> test -e MAESTRO_EMAIL=.. -e MAESTRO_PASSWORD=.. \
+#     -e METRO_PORT=8084 -e PREFIX=dark -e THEME_PICK=dark .maestro/agent/dark-mode-tour.yaml
+# On a build without the Appearance setting (the pre-dark-mode baseline), the
+# theme tap is optional and the tour simply captures the light screens.
+appId: com.iancheung228.lingostickers.dev
+---
+- runFlow: dm-signin.yaml
+- tapOn:
+    id: "tab-profile"
+- scrollUntilVisible:
+    element:
+      id: "theme-${THEME_PICK}"
+    timeout: 10000
+    optional: true
+- tapOn:
+    id: "theme-${THEME_PICK}"
+    optional: true
+- waitForAnimationToEnd:
+    timeout: 1500
+- takeScreenshot: ${PREFIX}-10-profile-top
+- scroll
+- takeScreenshot: ${PREFIX}-11-profile-mid
+- scroll
+- takeScreenshot: ${PREFIX}-12-profile-bottom
+
+# Collection
+- tapOn:
+    id: "tab-collection"
+- waitForAnimationToEnd:
+    timeout: 3000
+- takeScreenshot: ${PREFIX}-20-collection
+- tapOn:
+    id: "home-filter"
+- waitForAnimationToEnd:
+    timeout: 1500
+- takeScreenshot: ${PREFIX}-21-filter-sheet
+- tapOn:
+    id: "home-filter-done"
+- tapOn:
+    id: "home-search"
+- waitForAnimationToEnd:
+    timeout: 1500
+- takeScreenshot: ${PREFIX}-22-search
+- tapOn:
+    id: "collection-search-cancel"
+- tapOn:
+    id: "sticker-cell-.*"
+    index: 0
+- waitForAnimationToEnd:
+    timeout: 3000
+- takeScreenshot: ${PREFIX}-30-card-front
+- tapOn:
+    id: "card-flip"
+- waitForAnimationToEnd:
+    timeout: 2000
+- takeScreenshot: ${PREFIX}-31-card-back
+- tapOn:
+    id: "card-details"
+- waitForAnimationToEnd:
+    timeout: 2500
+- takeScreenshot: ${PREFIX}-32-card-details
+# dismiss the Details sheet by its scrim, then leave the card
+- tapOn:
+    point: "50%,8%"
+- waitForAnimationToEnd:
+    timeout: 1500
+- tapOn:
+    id: "card-close"
+- waitForAnimationToEnd:
+    timeout: 1500
+
+# Calendar
+- tapOn:
+    id: "tab-calendar"
+- waitForAnimationToEnd:
+    timeout: 3000
+- takeScreenshot: ${PREFIX}-40-calendar-month
+- tapOn:
+    id: "calendar-mode-year"
+- waitForAnimationToEnd:
+    timeout: 2500
+- takeScreenshot: ${PREFIX}-41-calendar-year
+- tapOn:
+    id: "calendar-mode-month"
+- waitForAnimationToEnd:
+    timeout: 2500
+- takeScreenshot: ${PREFIX}-42-calendar-month-again
+
+# Boards
+- tapOn:
+    id: "tab-wall"
+- waitForAnimationToEnd:
+    timeout: 3000
+- takeScreenshot: ${PREFIX}-50-boards
+- tapOn:
+    id: "new-board-tile"
+    optional: true
+- waitForAnimationToEnd:
+    timeout: 1500
+- takeScreenshot: ${PREFIX}-51-new-board-sheet
+- tapOn:
+    text: "Cancel"
+    optional: true
+
+# Scan (camera UI; the simulator has no camera, so this is the permission / consent / idle chrome)
+- tapOn:
+    id: "tab-scan"
+- waitForAnimationToEnd:
+    timeout: 3000
+- takeScreenshot: ${PREFIX}-60-scan
+- tapOn:
+    id: "scan-type-word"
+    optional: true
+- waitForAnimationToEnd:
+    timeout: 1500
+- takeScreenshot: ${PREFIX}-61-type-word-sheet

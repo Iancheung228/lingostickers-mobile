@@ -6,7 +6,8 @@ import InlineError from '@/components/ui/InlineError';
 import { friendlyErrorSync } from '@/lib/friendlyError';
 import { haptic } from '@/lib/haptics';
 import BottomSheet, { BottomSheetHandle } from '@/components/BottomSheet';
-import { colors, radii, spacing, fonts } from '@/constants/theme';
+import { radii, spacing, fonts } from '@/constants/theme';
+import { useTheme, useThemedStyles, type Theme } from '@/hooks/useTheme';
 
 interface NewBoardSheetProps {
   visible: boolean;
@@ -16,6 +17,8 @@ interface NewBoardSheetProps {
 
 // Naming a board is a sheet now, not the carousel's trailing page. 
 export default function NewBoardSheet({ visible, onCancel, onCreate }: NewBoardSheetProps) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const [name, setName] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -103,7 +106,7 @@ export default function NewBoardSheet({ visible, onCancel, onCreate }: NewBoardS
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ colors }: Theme) => StyleSheet.create({
   title: { fontSize: 20, fontFamily: fonts.display, color: colors.inkDark },
   subtitle: { fontSize: 13, fontFamily: fonts.text, color: colors.inkLight, lineHeight: 19, marginTop: 2 },
   input: { marginTop: spacing.md, marginBottom: spacing.sm, padding: spacing.md, borderRadius: radii.md, backgroundColor: colors.sky, borderWidth: 1, borderColor: colors.ctl, fontSize: 16, fontFamily: fonts.text, color: colors.inkMid, },

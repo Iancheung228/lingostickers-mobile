@@ -8,9 +8,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { usePathname } from 'expo-router';
 import { TAB, tabBarBottom } from '@/constants/tabBar';
 import { AlertCircle, CheckCircle2, Info, Undo2 } from 'lucide-react-native';
-import { colors, e2, fonts, radii, spacing, MIN_TAP } from '@/constants/theme';
+import { fonts, radii, spacing, MIN_TAP } from '@/constants/theme';
 import { dur, useMotion } from '@/lib/motion';
 import { haptic } from '@/lib/haptics';
+import { useTheme, useThemedStyles, type Theme } from '@/hooks/useTheme';
 
 // App-wide toast (B-app 7, C-look 4). One provider in app/_layout.tsx (lesson 1),
 // `useToast().show({ kind, message, action })`. The legacy per-screen
@@ -182,6 +183,8 @@ export function ToastProvider({ children }: { children: ReactNode }) {
  * the session summary). `bottomOffset` lifts it clear of a control row.
  */
 export function ToastLayer({ root, bottomOffset = 0, bottom: fixedBottom }: { root?: boolean; bottomOffset?: number; bottom?: number }) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const insets = useSafeAreaInsets();
   const pathname = usePathname();
   const v = useContext(ToastViewContext);
@@ -206,7 +209,7 @@ export function ToastLayer({ root, bottomOffset = 0, bottom: fixedBottom }: { ro
         accessibilityLiveRegion="polite"
         accessibilityRole="alert"
       >
-        <Icon size={20} strokeWidth={1.75} color={current.kind === 'error' ? colors.errorOnDark : colors.white} />
+        <Icon size={20} strokeWidth={1.75} color={current.kind === 'error' ? colors.errorOnDark : colors.card} />
         <Text style={styles.message} numberOfLines={3} maxFontSizeMultiplier={1.5} testID="toast-message">{current.message}</Text>
         {current.action && (
           <Pressable
@@ -233,7 +236,7 @@ export function useToast(): ToastApi {
   return ctx;
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ colors, e2 }: Theme) => StyleSheet.create({
   wrap: { position: 'absolute', left: spacing.md, right: spacing.md, alignItems: 'center' },
   toast: {
     flexDirection: 'row',
@@ -249,7 +252,7 @@ const styles = StyleSheet.create({
     ...e2,
   },
   multi: { borderRadius: radii.lg },
-  message: { flexShrink: 1, fontFamily: fonts.text, fontSize: 16, lineHeight: 22, color: colors.white },
+  message: { flexShrink: 1, fontFamily: fonts.text, fontSize: 16, lineHeight: 22, color: colors.card },
   actionHit: { minHeight: MIN_TAP, minWidth: MIN_TAP, justifyContent: 'center', alignItems: 'center', paddingHorizontal: spacing.xs },
   action: { fontFamily: fonts.display, fontSize: 16, color: colors.blush },
 });

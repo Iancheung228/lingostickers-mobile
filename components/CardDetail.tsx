@@ -21,7 +21,8 @@ import { speak, speakAsync, stopSpeaking } from '@/lib/speech';
 import { supabase } from '@/lib/supabase';
 import IconButton from '@/components/ui/IconButton';
 import type { Sticker } from '@/lib/types';
-import { colors, e1, fonts, headwordStyle, radii, sentenceFontFor, spacing, stickerShadow, type, MIN_TAP } from '@/constants/theme';
+import { fonts, radii, sentenceFontFor, spacing, MIN_TAP } from '@/constants/theme';
+import { useTheme, useThemedStyles, type Theme } from '@/hooks/useTheme';
 
 // The card (Nov 14 card spec): ONE white card on the cream sheet that flips
 // about Y. It opens on the FRONT, the keepsake (date, sticker, word, note);
@@ -81,6 +82,8 @@ interface CardDetailProps {
 export default function CardDetail({
   sticker, imageUrl, onClose, onEdit, onTest, onUpdate, onDeleted, onRemoveFromBoard, embedded, noScheduleWrites, onAtTop,
 }: CardDetailProps) {
+  const { colors, type, headwordStyle } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const insets = useSafeAreaInsets();
   const toast = useToast();
   const { deleteWithUndo } = usePendingDeletes();
@@ -264,7 +267,7 @@ export default function CardDetail({
           <IconButton onPress={toggleFavorite} label={sticker.is_favorite ? 'Remove from favourites' : 'Add to favourites'} selected={sticker.is_favorite}>
             <Heart
               size={22} strokeWidth={1.75}
-              color={sticker.is_favorite ? colors.terra : colors.inkDark}
+              color={sticker.is_favorite ? colors.terraInk : colors.inkDark}
               fill={sticker.is_favorite ? colors.terra : 'none'}
             />
           </IconButton>
@@ -402,7 +405,7 @@ export default function CardDetail({
                       accessibilityLabel={`Hold to record yourself saying ${sticker.word}`}
                       accessibilityState={{ disabled: voice.uploading, busy: voice.recording }}
                     >
-                      <Mic size={20} strokeWidth={1.75} color={voice.recording ? colors.white : colors.terra} />
+                      <Mic size={20} strokeWidth={1.75} color={voice.recording ? colors.white : colors.terraInk} />
                     </Pressable>
                   </View>
                   <Text style={styles.hint} maxFontSizeMultiplier={type.small.maxFontSizeMultiplier}>
@@ -518,6 +521,8 @@ export default function CardDetail({
 function Row({ label, editLabel, onEdit, children }: {
   label: string; editLabel?: string; onEdit?: () => void; children: React.ReactNode;
 }) {
+  const { type, colors } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   return (
     <View style={styles.row}>
       <View style={styles.rowHead}>
@@ -540,6 +545,8 @@ function Row({ label, editLabel, onEdit, children }: {
 }
 
 function SpeakButton({ word, language, filled }: { word: string; language: Sticker['language']; filled?: boolean }) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   return (
     <Pressable
       onPress={() => speak(word, language)}
@@ -555,6 +562,8 @@ function SpeakButton({ word, language, filled }: { word: string; language: Stick
 function DetailsSheet({ sticker, voice, onClosed }: {
   sticker: Sticker; voice: ReturnType<typeof useVoiceTake>; onClosed: () => void;
 }) {
+  const { type } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const sheet = useRef<BottomSheetHandle>(null);
   return (
     <BottomSheet
@@ -576,6 +585,8 @@ function DetailsSheet({ sticker, voice, onClosed }: {
 
 // ── Progress (A-card 6): everything the scheduler already stores ──
 function ProgressBlock({ sticker }: { sticker: Sticker }) {
+  const { type } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const reviews = sticker.review_count ?? 0;
   if (reviews === 0) {
     return (
@@ -607,6 +618,8 @@ function ProgressBlock({ sticker }: { sticker: Sticker }) {
 
 // ── Hold to record + Compare (A-card 5, B-core 5) ──
 function CompareBlock({ sticker, voice }: { sticker: Sticker; voice: ReturnType<typeof useVoiceTake> }) {
+  const { colors, type } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const { pressIn, pressOut } = useHoldToRecord(voice, false);
   // 0 idle, 1 native voice, 2 gap, 3 your take.
   const [stage, setStage] = useState<0 | 1 | 2 | 3>(0);
@@ -666,7 +679,7 @@ function CompareBlock({ sticker, voice }: { sticker: Sticker; voice: ReturnType<
           accessibilityLabel={`Hold to record yourself saying ${sticker.word}`}
           accessibilityState={{ disabled: voice.uploading, busy: voice.recording }}
         >
-          <Mic size={22} strokeWidth={1.75} color={voice.recording ? colors.white : colors.terra} />
+          <Mic size={22} strokeWidth={1.75} color={voice.recording ? colors.white : colors.terraInk} />
         </Pressable>
 
         {voice.hasTake && !voice.recording && (
@@ -706,7 +719,7 @@ function CompareBlock({ sticker, voice }: { sticker: Sticker; voice: ReturnType<
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ colors, e1, type, stickerShadow }: Theme) => StyleSheet.create({
   page: { flex: 1, backgroundColor: colors.sky, paddingHorizontal: 20 },
   fill: { width: '100%', height: '100%' },
   flexSpace: { flex: 1 },
@@ -781,7 +794,7 @@ const styles = StyleSheet.create({
     borderWidth: 1.5, borderColor: colors.terra, alignItems: 'center', justifyContent: 'center',
   },
   pillPrimary: { backgroundColor: colors.card },
-  pillText: { ...type.button, fontSize: 15, lineHeight: 20, color: colors.terra },
+  pillText: { ...type.button, fontSize: 15, lineHeight: 20, color: colors.terraInk },
 
   // footer under the card
   footer: { paddingTop: spacing.ms },
@@ -798,14 +811,14 @@ const styles = StyleSheet.create({
   sheetBody: { paddingHorizontal: 20, paddingBottom: 24 },
   section: { ...type.small, fontFamily: fonts.display, marginTop: spacing.md, marginBottom: spacing.sm },
 
-  progressCard: { backgroundColor: colors.white, borderRadius: radii.md, padding: 16, ...e1 },
+  progressCard: { backgroundColor: colors.card, borderRadius: radii.md, padding: 16, ...e1 },
   progressGrid: { flexDirection: 'row', flexWrap: 'wrap', rowGap: 12 },
   progressCell: { width: '33.333%' },
   progressValue: { ...type.data, fontSize: 16, lineHeight: 22, color: colors.inkDark },
   progressLabel: { ...type.micro },
   notReviewed: { ...type.body, color: colors.inkLight },
 
-  compareCard: { backgroundColor: colors.white, borderRadius: radii.md, padding: 16, gap: spacing.ms, ...e1 },
+  compareCard: { backgroundColor: colors.card, borderRadius: radii.md, padding: 16, gap: spacing.ms, ...e1 },
   compareRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.ms },
   playTake: {
     width: MIN_TAP, height: MIN_TAP, borderRadius: radii.full, backgroundColor: colors.sand,

@@ -25,7 +25,8 @@ import CutoutSticker from '@/components/CutoutSticker';
 import HomeWallTile from '@/components/HomeWallTile';
 import StickerImageFallback from '@/components/StickerImageFallback';
 import { listImagePath } from '@/lib/thumbnails';
-import { colors, radii, fonts, spacing, shadows, wordFontFor } from '@/constants/theme';
+import { radii, fonts, spacing, wordFontFor } from '@/constants/theme';
+import { useTheme, useThemedStyles, type Theme } from '@/hooks/useTheme';
 
 const HOME_BACKGROUND_MAX_SIDE = 1600;
 const TRASH_SIZE = 52;
@@ -59,6 +60,8 @@ export default function HomeWallEditor({
   onAdd, onRemove, onMove, onTidy,
   backgroundPath, backgroundDim, backgroundVersion, onChangeBackground, onBackgroundUploaded,
 }: HomeWallEditorProps) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const { reduced } = useMotion();
   const toast = useToast();
   const { width: screenWidth } = useWindowDimensions();
@@ -90,7 +93,7 @@ export default function HomeWallEditor({
   const trashStyle = useAnimatedStyle(() => ({
     opacity: dragActive.value,
     transform: [{ scale: 0.8 + dragActive.value * 0.2 + hoverTrash.value * 0.15 }],
-    backgroundColor: hoverTrash.value ? colors.error : colors.inkDark,
+    backgroundColor: hoverTrash.value ? colors.error : colors.terraDark,
   }));
 
   const handleToggle = async (sticker: Sticker) => {
@@ -245,7 +248,7 @@ export default function HomeWallEditor({
                   },
                 ]}
               >
-                <Trash2 size={20} color={colors.card} />
+                <Trash2 size={20} color={colors.white} />
               </Animated.View>
             </View>
           </View>
@@ -364,6 +367,7 @@ function DraggableTile({
   hoverTrash: SharedValue<number>;
   trashBounds: { left: number; top: number; size: number };
 }) {
+  const styles = useThemedStyles(makeStyles);
   const { reduced } = useMotion();
   const side = homeTileFraction(item.sticker_id) * canvas.width;
   const { maxX: maxFx, maxY: maxFy } = maxPlacement(homeTileFraction(item.sticker_id), canvas.aspect);
@@ -456,7 +460,7 @@ function DraggableTile({
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ colors, shadows }: Theme) => StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.sky },
   container: { flex: 1 },
   header: {
@@ -470,7 +474,7 @@ const styles = StyleSheet.create({
   headerText: { flex: 1 },
   title: { fontSize: 20, fontFamily: fonts.display, color: colors.inkDark },
   subtitle: { fontSize: 11, fontFamily: fonts.display, color: colors.inkLight, marginTop: 3 },
-  subtitleFull: { color: colors.terra },
+  subtitleFull: { color: colors.terraInk },
   doneBtn: {
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
@@ -497,7 +501,7 @@ const styles = StyleSheet.create({
   canvasEmptyText: { fontSize: 13, fontFamily: fonts.display, color: colors.inkDark, textAlign: 'center', opacity: 0.85 },
   tile: {
     position: 'absolute',
-    shadowColor: colors.inkDark,
+    shadowColor: colors.shadow,
     shadowOffset: { width: 0, height: 2 },
     // Android ignores PNG alpha when shaping a shadow, so elevation is off
     // here the same way it is on the board canvas's cutout tiles.
@@ -508,7 +512,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 30,
-    shadowColor: colors.inkDark,
+    shadowColor: colors.shadow,
     shadowOpacity: 0.25,
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 3 },

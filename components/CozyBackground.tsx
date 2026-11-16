@@ -1,6 +1,6 @@
 import { StyleSheet, View, useWindowDimensions } from 'react-native';
 import BackgroundScene from './illustrations/BackgroundScene';
-import { colors } from '@/constants/theme';
+import { useTheme, useThemedStyles, type Theme } from '@/hooks/useTheme';
 
 interface CozyBackgroundProps {
   children: React.ReactNode;
@@ -10,6 +10,8 @@ interface CozyBackgroundProps {
 }
 
 export default function CozyBackground({ children, variant = 'full' }: CozyBackgroundProps) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const { height } = useWindowDimensions();
 
   if (variant === 'full') {
@@ -41,7 +43,7 @@ export default function CozyBackground({ children, variant = 'full' }: CozyBackg
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (_t: Theme) => StyleSheet.create({
   root: {
     flex: 1,
   },

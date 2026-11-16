@@ -6,7 +6,8 @@ import StickerImageFallback from '@/components/StickerImageFallback';
 import { listImagePath } from '@/lib/thumbnails';
 import { speak } from '@/lib/speech';
 import { useTrimmedVoicePlayback } from '@/hooks/useTrimmedVoicePlayback';
-import { colors, shadows, radii, spacing, fonts, wordFontFor } from '@/constants/theme';
+import { radii, spacing, fonts, wordFontFor } from '@/constants/theme';
+import { useTheme, useThemedStyles, type Theme } from '@/hooks/useTheme';
 
 interface StickerCardProps {
   sticker: Sticker;
@@ -20,6 +21,8 @@ interface StickerCardProps {
 }
 
 export default function StickerCard({ sticker, onPress, onToggleFavorite, selected, imageUrl, voiceUrl }: StickerCardProps) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const { play: playVoice } = useTrimmedVoicePlayback(
     voiceUrl, sticker.voice_note_start_ms, sticker.voice_note_end_ms
   );
@@ -46,7 +49,7 @@ export default function StickerCard({ sticker, onPress, onToggleFavorite, select
           accessibilityRole="button"
           accessibilityLabel={`Play your recording of ${sticker.word}`}
         >
-          <Play size={11} color={colors.sageDark} fill={colors.sageDark} />
+          <Play size={11} color={colors.sageInk} fill={colors.sageDark} />
         </TouchableOpacity>
       )}
 
@@ -69,7 +72,7 @@ export default function StickerCard({ sticker, onPress, onToggleFavorite, select
         >
           <Heart
             size={15}
-            color={sticker.is_favorite ? colors.error : colors.inkFaint}
+            color={sticker.is_favorite ? colors.errorInk : colors.inkFaint}
             fill={sticker.is_favorite ? colors.error : 'transparent'}
           />
         </TouchableOpacity>
@@ -95,7 +98,7 @@ export default function StickerCard({ sticker, onPress, onToggleFavorite, select
         <Text style={styles.translation} numberOfLines={1}>{sticker.translation}</Text>
         {!!sticker.location_label && (
           <View style={styles.locationRow}>
-            <MapPin size={10} color={colors.error} />
+            <MapPin size={10} color={colors.errorInk} />
             <Text style={styles.locationText} numberOfLines={1}>{sticker.location_label}</Text>
           </View>
         )}
@@ -104,7 +107,7 @@ export default function StickerCard({ sticker, onPress, onToggleFavorite, select
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ colors, shadows }: Theme) => StyleSheet.create({
   card: {
     backgroundColor: colors.card,
     borderRadius: radii.lg,

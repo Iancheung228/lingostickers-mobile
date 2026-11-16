@@ -7,7 +7,8 @@ import { supabase } from '@/lib/supabase';
 import { useSignedUrls } from '@/hooks/useSignedUrls';
 import { listImagePath } from '@/lib/thumbnails';
 import StickerCard from '@/components/StickerCard';
-import { colors, spacing, fonts } from '@/constants/theme';
+import { spacing, fonts } from '@/constants/theme';
+import { useTheme, useThemedStyles, type Theme } from '@/hooks/useTheme';
 
 interface StickerPickerModalProps {
   visible: boolean;
@@ -29,6 +30,8 @@ interface StickerPickerModalProps {
 export default function StickerPickerModal({
   visible, currentUserId, onSelect, onClose, title = 'Pick a Sticker', selectedIds, selectionNoun,
 }: StickerPickerModalProps) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const { reduced } = useMotion();
   const [stickers, setStickers] = useState<Sticker[]>([]);
   const [loading, setLoading] = useState(true);
@@ -78,7 +81,7 @@ export default function StickerPickerModal({
         </View>
 
         {loading ? (
-          <ActivityIndicator style={{ marginTop: 48 }} color={colors.terra} size="large" />
+          <ActivityIndicator style={{ marginTop: 48 }} color={colors.terraInk} size="large" />
         ) : stickers.length === 0 ? (
           <Text style={styles.empty}>Nothing in your collection yet — scan something first!</Text>
         ) : (
@@ -106,7 +109,7 @@ export default function StickerPickerModal({
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ colors }: Theme) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.sky },
   header: {
     flexDirection: 'row',

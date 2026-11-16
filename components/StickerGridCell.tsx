@@ -6,7 +6,8 @@ import StickerImageFallback from '@/components/StickerImageFallback';
 import { listImagePath } from '@/lib/thumbnails';
 import { isDue } from '@/lib/review';
 import type { Sticker } from '@/lib/types';
-import { colors, e1, fonts, radii, stickerShadow, wordFontFor, MIN_TAP } from '@/constants/theme';
+import { fonts, radii, wordFontFor, MIN_TAP } from '@/constants/theme';
+import { useTheme, useThemedStyles, type Theme } from '@/hooks/useTheme';
 
 interface Props {
   sticker: Sticker;
@@ -23,6 +24,8 @@ export const WELL_HEIGHT = 108;
 // area. One accessibility element per card ("pomme, apple, due today"); the
 // favourite is an accessibility action, not a second focus stop.
 function StickerGridCell({ sticker, imageUrl, onPress, onToggleFavorite }: Props) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const due = isDue(sticker);
   const fav = !!sticker.is_favorite;
   return (
@@ -55,7 +58,7 @@ function StickerGridCell({ sticker, imageUrl, onPress, onToggleFavorite }: Props
           accessible={false}
           importantForAccessibility="no"
         >
-          <Heart size={20} strokeWidth={1.75} color={colors.terra} fill={fav ? colors.terra : 'transparent'} />
+          <Heart size={20} strokeWidth={1.75} color={colors.terraInk} fill={fav ? colors.terra : 'transparent'} />
         </Pressable>
       </View>
       <View style={styles.text}>
@@ -73,7 +76,7 @@ function StickerGridCell({ sticker, imageUrl, onPress, onToggleFavorite }: Props
 
 export default memo(StickerGridCell);
 
-const styles = StyleSheet.create({
+const makeStyles = ({ colors, e1, stickerShadow }: Theme) => StyleSheet.create({
   cell: { flex: 1, backgroundColor: colors.card, borderRadius: radii.md, ...e1 },
   pressed: { opacity: 0.92 },
   well: {
@@ -88,5 +91,5 @@ const styles = StyleSheet.create({
   meaningRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 6, minHeight: 20 },
   meaning: { flex: 1, fontSize: 14, lineHeight: 20, fontFamily: fonts.text, color: colors.inkLight },
   dueTag: { backgroundColor: colors.againTint, borderRadius: radii.full, paddingHorizontal: 8, paddingVertical: 2 },
-  dueText: { fontSize: 12, lineHeight: 16, fontFamily: fonts.display, color: colors.error },
+  dueText: { fontSize: 12, lineHeight: 16, fontFamily: fonts.display, color: colors.errorInk },
 });
