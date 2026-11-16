@@ -44,7 +44,7 @@ function Apple({ size, cutout }: { size: number; cutout?: boolean }) {
   );
   return (
     <Svg width={size} height={size} viewBox="0 0 100 100">
-      {cutout && <Ellipse cx="50" cy="90" rx="26" ry="4.5" fill={colors.maroon} fillOpacity={0.2} />}
+      {cutout && <Ellipse cx="50" cy="90" rx="26" ry="4.5" fill={colors.shadowDeep} fillOpacity={0.2} />}
       {cutout && (
         <G fill={colors.white} stroke={colors.white} strokeWidth={9} strokeLinejoin="round">{body}</G>
       )}

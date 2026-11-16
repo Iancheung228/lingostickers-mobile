@@ -156,14 +156,14 @@ const makeStyles = ({ type, colors, e1 }: Theme) => StyleSheet.create({
   prompts: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   prompt: {
     minHeight: 36, justifyContent: 'center', paddingHorizontal: spacing.md,
-    borderRadius: radii.full, borderWidth: 1, borderColor: colors.ctl, backgroundColor: colors.white,
+    borderRadius: radii.full, borderWidth: 1, borderColor: colors.ctl, backgroundColor: colors.card,
   },
   promptActive: { borderColor: colors.terra, backgroundColor: colors.terra },
   promptText: { fontSize: 15, fontFamily: fonts.text, color: colors.inkMid },
   promptTextActive: { color: colors.white, fontFamily: fonts.display },
   statusRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   statusText: { ...type.small, flexShrink: 1 },
-  list: { backgroundColor: colors.white, borderRadius: radii.md, overflow: 'hidden', ...e1 },
+  list: { backgroundColor: colors.card, borderRadius: radii.md, overflow: 'hidden', ...e1 },
   chipRow: {
     flexDirection: 'row', alignItems: 'center', gap: spacing.ms,
     minHeight: 52, paddingHorizontal: spacing.md, paddingVertical: spacing.sm,

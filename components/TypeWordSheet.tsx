@@ -214,7 +214,7 @@ const makeStyles = ({ colors, type, e1 }: Theme) => StyleSheet.create({
   input: {
     borderWidth: 1, borderColor: colors.ctl, borderRadius: radii.md, minHeight: 48,
     paddingHorizontal: spacing.md, fontSize: 18, fontFamily: fonts.text,
-    color: colors.inkDark, backgroundColor: colors.white,
+    color: colors.inkDark, backgroundColor: colors.card,
   },
   row: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   card: { backgroundColor: colors.card, borderRadius: radii.lg, padding: spacing.lg, ...e1 },

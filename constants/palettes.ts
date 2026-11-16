@@ -110,8 +110,6 @@ export const lightColors = {
   shadowWarm: '#9D4D51',
   shadowBtn:  '#833F46',
   shadowDeep: '#662B31',
-  photoMask:  'rgba(51, 41, 42, 0.55)', // crop mask / scan chrome over the camera
-  photoMaskDeep: 'rgba(51, 41, 42, 0.72)',
   grabber:    '#E3D3C8',
   errorOnDark: '#F2A5A8', // error icon on the charcoal toast (7.2)
   borderLight:'#F4EBE2',
@@ -198,8 +196,6 @@ export const darkColors: Palette = {
   shadowWarm: '#000000',
   shadowBtn:  '#000000',
   shadowDeep: '#000000',
-  photoMask:  'rgba(0, 0, 0, 0.6)',
-  photoMaskDeep: 'rgba(0, 0, 0, 0.75)',
   grabber:    '#5A4A4E',
   errorOnDark: '#A8434A',
   borderLight:'#352A2D',

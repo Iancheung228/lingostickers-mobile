@@ -209,7 +209,7 @@ export function ToastLayer({ root, bottomOffset = 0, bottom: fixedBottom }: { ro
         accessibilityLiveRegion="polite"
         accessibilityRole="alert"
       >
-        <Icon size={20} strokeWidth={1.75} color={current.kind === 'error' ? colors.errorOnDark : colors.white} />
+        <Icon size={20} strokeWidth={1.75} color={current.kind === 'error' ? colors.errorOnDark : colors.card} />
         <Text style={styles.message} numberOfLines={3} maxFontSizeMultiplier={1.5} testID="toast-message">{current.message}</Text>
         {current.action && (
           <Pressable
@@ -252,7 +252,7 @@ const makeStyles = ({ colors, e2 }: Theme) => StyleSheet.create({
     ...e2,
   },
   multi: { borderRadius: radii.lg },
-  message: { flexShrink: 1, fontFamily: fonts.text, fontSize: 16, lineHeight: 22, color: colors.white },
+  message: { flexShrink: 1, fontFamily: fonts.text, fontSize: 16, lineHeight: 22, color: colors.card },
   actionHit: { minHeight: MIN_TAP, minWidth: MIN_TAP, justifyContent: 'center', alignItems: 'center', paddingHorizontal: spacing.xs },
   action: { fontFamily: fonts.display, fontSize: 16, color: colors.blush },
 });

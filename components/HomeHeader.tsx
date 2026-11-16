@@ -69,7 +69,7 @@ const makeStyles = ({ colors, type, e1 }: Theme) => StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, minHeight: 44 },
   title: { flex: 1, fontFamily: type.title.fontFamily, color: colors.maroon },
   duePill: {
-    flexDirection: 'row', alignItems: 'center', height: 40, backgroundColor: colors.white,
+    flexDirection: 'row', alignItems: 'center', height: 40, backgroundColor: colors.card,
     borderRadius: radii.full, paddingLeft: spacing.md, paddingRight: 4, gap: spacing.sm, ...e1,
   },
   pillPressed: { backgroundColor: colors.terraLight },

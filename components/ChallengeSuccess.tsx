@@ -204,7 +204,7 @@ const makeStyles = ({ colors }: Theme) => StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  backFace: { backgroundColor: colors.inkDark },
+  backFace: { backgroundColor: colors.terraDark },
   stickerImage: { width: '100%', height: '100%' },
   memoryImage: { width: '100%', height: '100%' },
   stickerPlaceholder: { width: '100%', height: '100%', backgroundColor: colors.borderLight, borderRadius: 20 },

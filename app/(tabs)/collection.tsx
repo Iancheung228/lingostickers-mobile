@@ -465,7 +465,7 @@ const makeStyles = ({ colors, type }: Theme) => StyleSheet.create({
   // wedges show the page rather than scrolled stickers. One soft shadow, no hairline.
   toolbarFill: {
     position: 'absolute', left: 0, right: 0, top: -24, bottom: 0, backgroundColor: colors.sky,
-    shadowColor: colors.inkDark, shadowOpacity: 0.08, shadowRadius: 6, shadowOffset: { width: 0, height: 3 },
+    shadowColor: colors.shadow, shadowOpacity: 0.08, shadowRadius: 6, shadowOffset: { width: 0, height: 3 },
   },
   row: { gap: GAP, paddingHorizontal: GUTTER, marginBottom: GAP },
   cellWrap: { flex: 1 },

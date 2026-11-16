@@ -811,14 +811,14 @@ const makeStyles = ({ colors, e1, type, stickerShadow }: Theme) => StyleSheet.cr
   sheetBody: { paddingHorizontal: 20, paddingBottom: 24 },
   section: { ...type.small, fontFamily: fonts.display, marginTop: spacing.md, marginBottom: spacing.sm },
 
-  progressCard: { backgroundColor: colors.white, borderRadius: radii.md, padding: 16, ...e1 },
+  progressCard: { backgroundColor: colors.card, borderRadius: radii.md, padding: 16, ...e1 },
   progressGrid: { flexDirection: 'row', flexWrap: 'wrap', rowGap: 12 },
   progressCell: { width: '33.333%' },
   progressValue: { ...type.data, fontSize: 16, lineHeight: 22, color: colors.inkDark },
   progressLabel: { ...type.micro },
   notReviewed: { ...type.body, color: colors.inkLight },
 
-  compareCard: { backgroundColor: colors.white, borderRadius: radii.md, padding: 16, gap: spacing.ms, ...e1 },
+  compareCard: { backgroundColor: colors.card, borderRadius: radii.md, padding: 16, gap: spacing.ms, ...e1 },
   compareRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.ms },
   playTake: {
     width: MIN_TAP, height: MIN_TAP, borderRadius: radii.full, backgroundColor: colors.sand,

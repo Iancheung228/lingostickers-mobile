@@ -35,7 +35,7 @@ import {
 } from '@/lib/reminder';
 import { LANGUAGES } from '@/lib/languages';
 import { fonts, radii, spacing, wordFontFor, GUTTER, MIN_TAP } from '@/constants/theme';
-import { useTheme, useThemedStyles, type Theme } from '@/hooks/useTheme';
+import { useTheme, useThemedStyles, type Theme, type ThemePreference } from '@/hooks/useTheme';
 
 // Published at the apex domain and linked from App Store Connect too. In
 // the app because the Profile screen is where a person — and a reviewer —
@@ -71,8 +71,14 @@ const REMINDER_TIMES: { hour: number; minute: number }[] = Array.from({ length: 
 const stepUp = (v: number) => Math.min(100, v < 10 ? v + 1 : v + 5);
 const stepDown = (v: number) => Math.max(1, v <= 10 ? v - 1 : v - 5);
 
+const THEME_CHOICES: { value: ThemePreference; label: string }[] = [
+  { value: 'system', label: 'System' },
+  { value: 'light', label: 'Light' },
+  { value: 'dark', label: 'Dark' },
+];
+
 export default function ProfileScreen() {
-  const { colors } = useTheme();
+  const { colors, preference: themePref, setPreference: setThemePref } = useTheme();
   const styles = useThemedStyles(makeStyles);
   const { user, signOut, deleteAccount } = useAuth();
   const toast = useToast();
@@ -475,6 +481,34 @@ export default function ProfileScreen() {
         <Text style={styles.footnote}>
           Simple grading shows only Again and Good. Swiping left on a card&apos;s answer is Again, right is Good.
         </Text>
+
+        {/* ── Appearance ── */}
+        <Text style={styles.sectionTitle}>Appearance</Text>
+        <RowGroup>
+          <View style={styles.segmentWrap}>
+            <View style={styles.segment} accessibilityRole="radiogroup" testID="theme-segment">
+              {THEME_CHOICES.map(({ value, label }) => {
+                const active = themePref === value;
+                return (
+                  <Pressable
+                    key={value}
+                    onPress={() => { haptic.select(); setThemePref(value); }}
+                    style={[styles.segmentItem, active && styles.segmentItemOn]}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Appearance: ${label}`}
+                    accessibilityState={{ selected: active }}
+                    testID={`theme-${value}`}
+                  >
+                    <Text style={[styles.segmentText, active && styles.segmentTextOn]} numberOfLines={1} maxFontSizeMultiplier={1.3}>
+                      {label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+            <Text style={styles.segmentCaption}>System follows your phone&apos;s Light or Dark setting.</Text>
+          </View>
+        </RowGroup>
 
         {/* ── Reminders ── */}
         <Text style={styles.sectionTitle}>Reminders</Text>

@@ -119,7 +119,7 @@ const makeStyles = ({ colors }: Theme) => StyleSheet.create({
     backgroundColor: colors.card,
     borderWidth: 3,
     borderColor: colors.terra,
-    shadowColor: colors.inkDark,
+    shadowColor: colors.shadow,
     shadowOpacity: 0.18,
     shadowRadius: 4,
     shadowOffset: { width: 0, height: 2 },

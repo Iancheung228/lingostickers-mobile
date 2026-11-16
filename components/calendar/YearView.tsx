@@ -249,7 +249,7 @@ const makeStyles = ({ colors }: Theme) => StyleSheet.create({
   weekRow: { flexDirection: 'row' },
   cellCenter: { alignItems: 'center', justifyContent: 'center' },
   num: { fontSize: 7.5, lineHeight: 10, fontFamily: fonts.mono, color: colors.inkQuiet },
-  numToday: { color: colors.card },
+  numToday: { color: colors.white },
   todayDisc: { borderRadius: 999, backgroundColor: colors.terra },
   todayRing: { borderRadius: 999, borderWidth: 1, borderColor: colors.terra },
   pending: { borderRadius: 3, backgroundColor: colors.cardAlt },

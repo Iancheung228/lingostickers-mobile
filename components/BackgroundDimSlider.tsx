@@ -124,7 +124,7 @@ const makeStyles = ({ shadows, colors }: Theme) => StyleSheet.create({
     gap: 6,
     height: PILL_HEIGHT,
     borderRadius: radii.full,
-    backgroundColor: 'rgba(255,255,255,0.85)',
+    backgroundColor: colors.glassSolid,
     paddingHorizontal: 8,
     ...shadows.card,
   },

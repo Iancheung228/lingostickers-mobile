@@ -195,7 +195,7 @@ export default function LassoOverlay({ bounds, onComplete }: LassoOverlayProps) 
             { left: badgeCenter.x - BADGE_SIZE / 2, top: badgeCenter.y - BADGE_SIZE / 2 },
           ]}
         >
-          <Check size={16} color={colors.card} strokeWidth={3} />
+          <Check size={16} color={colors.white} strokeWidth={3} />
         </Animated.View>
       )}
     </View>
@@ -211,7 +211,7 @@ const makeStyles = ({ colors, shadows }: Theme) => StyleSheet.create({
     justifyContent: 'center',
     // A soft halo so the blades stay legible over a dark or busy photo without
     // needing a solid chip behind them, which would hide the line being cut.
-    shadowColor: colors.card,
+    shadowColor: colors.white,
     shadowOpacity: 0.9,
     shadowRadius: 3,
     shadowOffset: { width: 0, height: 0 },

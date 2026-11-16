@@ -93,7 +93,7 @@ export default function HomeWallEditor({
   const trashStyle = useAnimatedStyle(() => ({
     opacity: dragActive.value,
     transform: [{ scale: 0.8 + dragActive.value * 0.2 + hoverTrash.value * 0.15 }],
-    backgroundColor: hoverTrash.value ? colors.error : colors.inkDark,
+    backgroundColor: hoverTrash.value ? colors.error : colors.terraDark,
   }));
 
   const handleToggle = async (sticker: Sticker) => {
@@ -248,7 +248,7 @@ export default function HomeWallEditor({
                   },
                 ]}
               >
-                <Trash2 size={20} color={colors.card} />
+                <Trash2 size={20} color={colors.white} />
               </Animated.View>
             </View>
           </View>
@@ -501,7 +501,7 @@ const makeStyles = ({ colors, shadows }: Theme) => StyleSheet.create({
   canvasEmptyText: { fontSize: 13, fontFamily: fonts.display, color: colors.inkDark, textAlign: 'center', opacity: 0.85 },
   tile: {
     position: 'absolute',
-    shadowColor: colors.inkDark,
+    shadowColor: colors.shadow,
     shadowOffset: { width: 0, height: 2 },
     // Android ignores PNG alpha when shaping a shadow, so elevation is off
     // here the same way it is on the board canvas's cutout tiles.
@@ -512,7 +512,7 @@ const makeStyles = ({ colors, shadows }: Theme) => StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 30,
-    shadowColor: colors.inkDark,
+    shadowColor: colors.shadow,
     shadowOpacity: 0.25,
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 3 },

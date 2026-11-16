@@ -279,7 +279,7 @@ const makeStyles = ({ wall, colors }: Theme) => StyleSheet.create({
     height: HOME_WALL_HEIGHT,
     borderRadius: HOME_WALL_RADIUS,
     backgroundColor: wall.fieldStops[1],
-    shadowColor: colors.maroon,
+    shadowColor: colors.shadowDeep,
     shadowOpacity: 0.16,
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 8 },

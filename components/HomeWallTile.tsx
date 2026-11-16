@@ -37,9 +37,9 @@ export default function HomeWallTile({
         <Svg width="100%" height="100%">
           <Defs>
             <RadialGradient id="contact" cx="50%" cy="50%" rx="50%" ry="50%">
-              <Stop offset="0" stopColor={colors.maroon} stopOpacity="0.30" />
-              <Stop offset="0.6" stopColor={colors.maroon} stopOpacity="0.16" />
-              <Stop offset="1" stopColor={colors.maroon} stopOpacity="0" />
+              <Stop offset="0" stopColor={colors.shadowDeep} stopOpacity="0.30" />
+              <Stop offset="0.6" stopColor={colors.shadowDeep} stopOpacity="0.16" />
+              <Stop offset="1" stopColor={colors.shadowDeep} stopOpacity="0" />
             </RadialGradient>
           </Defs>
           <Ellipse cx="50%" cy="50%" rx="50%" ry="50%" fill="url(#contact)" />
@@ -74,7 +74,7 @@ const makeStyles = ({ colors }: Theme) => StyleSheet.create({
     bottom: -5,
     alignSelf: 'center',
     maxWidth: '96%',
-    backgroundColor: 'rgba(255, 253, 244, 0.92)',
+    backgroundColor: colors.glass,
     borderRadius: radii.xs,
     paddingHorizontal: 5,
     paddingVertical: 1,

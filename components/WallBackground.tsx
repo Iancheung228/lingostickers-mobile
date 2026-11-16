@@ -63,12 +63,12 @@ export function WallBackdrop({ url, dim = 'medium', cacheKey }: WallBackdropProp
       />
       {dimOpacity > 0 && (
         <>
-          <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.inkDark, opacity: dimOpacity }]} />
+          <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.shadow, opacity: dimOpacity }]} />
           <Svg width="100%" height="100%" style={StyleSheet.absoluteFill}>
             <Defs>
               <RadialGradient id="vignette" cx="50%" cy="50%" r="75%">
-                <Stop offset="0.6" stopColor={colors.inkDark} stopOpacity="0" />
-                <Stop offset="1" stopColor={colors.inkDark} stopOpacity="0.28" />
+                <Stop offset="0.6" stopColor={colors.shadow} stopOpacity="0" />
+                <Stop offset="1" stopColor={colors.shadow} stopOpacity="0.28" />
               </RadialGradient>
             </Defs>
             <Rect x="0" y="0" width="100%" height="100%" fill="url(#vignette)" />

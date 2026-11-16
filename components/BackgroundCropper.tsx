@@ -297,7 +297,7 @@ const makeStyles = ({ colors, shadows }: Theme) => StyleSheet.create({
   frame: {
     borderRadius: radii.xl,
     overflow: 'hidden',
-    backgroundColor: colors.inkDark,
+    backgroundColor: colors.shadow,
     ...shadows.card,
   },
   gridOverlay: { ...StyleSheet.absoluteFillObject },

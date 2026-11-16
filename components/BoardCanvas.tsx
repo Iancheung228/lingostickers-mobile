@@ -73,7 +73,7 @@ export default function BoardCanvas({
   const trashStyle = useAnimatedStyle(() => ({
     opacity: dragActive.value,
     transform: [{ scale: 0.8 + dragActive.value * 0.2 + hoverTrash.value * 0.15 }],
-    backgroundColor: hoverTrash.value ? colors.error : colors.inkDark,
+    backgroundColor: hoverTrash.value ? colors.error : colors.terraDark,
   }));
 
   return (
@@ -106,7 +106,7 @@ export default function BoardCanvas({
             { left: trashBounds.left, top: trashBounds.top, width: trashBounds.size, height: trashBounds.size, borderRadius: trashBounds.size / 2 },
           ]}
         >
-          <Trash2 size={24} color={colors.card} />
+          <Trash2 size={24} color={colors.white} />
         </Animated.View>
       )}
     </View>
@@ -284,7 +284,7 @@ const makeStyles = ({ colors }: Theme) => StyleSheet.create({
     position: 'absolute',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: colors.inkDark,
+    shadowColor: colors.shadow,
     shadowOpacity: 0.25,
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 3 },
@@ -295,7 +295,7 @@ const makeStyles = ({ colors }: Theme) => StyleSheet.create({
     backgroundColor: colors.card,
     borderRadius: 12,
     padding: 6,
-    shadowColor: colors.inkDark,
+    shadowColor: colors.shadow,
     shadowOpacity: 0.18,
     shadowRadius: 5,
     shadowOffset: { width: 0, height: 3 },
@@ -318,11 +318,11 @@ const makeStyles = ({ colors }: Theme) => StyleSheet.create({
     bottom: -6,
     alignSelf: 'center',
     maxWidth: '92%',
-    backgroundColor: 'rgba(255, 253, 244, 0.92)',
+    backgroundColor: colors.glass,
     borderRadius: 8,
     paddingHorizontal: 7,
     paddingVertical: 2,
-    shadowColor: colors.inkDark,
+    shadowColor: colors.shadow,
     shadowOpacity: 0.25,
     shadowRadius: 3,
     shadowOffset: { width: 0, height: 1 },

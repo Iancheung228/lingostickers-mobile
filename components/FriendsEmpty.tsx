@@ -36,7 +36,7 @@ export default function FriendsEmpty({ onAdd }: FriendsEmptyProps) {
         activeOpacity={0.85}
         accessibilityRole="button"
       >
-        <UserPlus size={17} color={colors.card} />
+        <UserPlus size={17} color={colors.white} />
         <Text style={styles.ctaText}>Find a friend</Text>
       </TouchableOpacity>
     </View>
@@ -68,5 +68,5 @@ const makeStyles = ({ typography, colors, shadows }: Theme) => StyleSheet.create
     marginTop: spacing.xs,
     ...shadows.card,
   },
-  ctaText: { fontSize: 15, fontFamily: fonts.display, color: colors.card },
+  ctaText: { fontSize: 15, fontFamily: fonts.display, color: colors.white },
 });
