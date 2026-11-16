@@ -209,3 +209,23 @@ export class BatchQueue<P, R> {
 export function nextToReview<P, R>(items: readonly BatchItem<P, R>[]): BatchItem<P, R> | null {
   return items.find((i) => !isResolved(i.status)) ?? null;
 }
+
+export interface BatchProgress {
+  total: number;
+  /** Photos whose object has been chosen (sent to the queue). */
+  cut: number;
+  /** Cards added or skipped. */
+  reviewed: number;
+}
+
+/**
+ * Numbers for the progress strip. `total` is the photos the learner picked, not
+ * the items queued so far: during the cut phase the queue is still filling up.
+ */
+export function batchProgress<P, R>(items: readonly BatchItem<P, R>[], total: number): BatchProgress {
+  return {
+    total,
+    cut: Math.min(items.length, total),
+    reviewed: items.filter((i) => isResolved(i.status)).length,
+  };
+}

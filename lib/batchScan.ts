@@ -16,10 +16,18 @@ import { getImportedPhotoMetadata } from '@/lib/photoMetadata';
 import { debugLog, debugWarn } from '@/lib/debug';
 import type { ExtractResult } from '@/components/PhotoExtractor';
 import type { StickerDraft } from '@/lib/types';
+import type { SceneChip } from '@/lib/sceneCards';
 
 export interface BatchPhoto { uri: string; width: number; height: number; assetId?: string }
 export interface BatchPayload { extract: ExtractResult; photo: BatchPhoto }
-export interface BatchResult { draft: StickerDraft; croppedUri: string }
+export interface BatchResult {
+  draft: StickerDraft;
+  croppedUri: string;
+  /** The small scene photo (640px) the "More words from this photo" chips ask about. Dies with the item. */
+  sceneBase64: string | null;
+  /** Extra words the learner has picked from this photo; made into cards on Add. */
+  chips: SceneChip[];
+}
 
 export const BATCH_MAX = 5;
 export const BATCH_CONCURRENCY = 2;
@@ -196,5 +204,5 @@ export async function runBatchScan(
     longitude,
     locationLabel,
   };
-  return { draft, croppedUri: extract.uri };
+  return { draft, croppedUri: extract.uri, sceneBase64: contextBase64, chips: [] };
 }

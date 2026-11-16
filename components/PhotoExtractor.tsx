@@ -12,6 +12,8 @@ import ToolModeSwitch, { ToolMode } from './ToolModeSwitch';
 import ScanProgress, { ScanOverlay, ScanStage } from './ScanProgress';
 import ScanErrorCard from './ScanErrorCard';
 import Button from '@/components/ui/Button';
+import BatchProgress from '@/components/BatchProgress';
+import type { BatchProgress as BatchProgressData } from '@/lib/batchQueue';
 import { useCoachMark } from '@/lib/coachMarks';
 import type { ScanAction, ScanErrorKind } from '@/lib/scanError';
 import CropBoxOverlay from './CropBoxOverlay';
@@ -45,7 +47,7 @@ interface PhotoExtractorProps {
   error?: ScanErrorKind | null;
   onErrorAction?: (action: ScanAction) => void;
   /** Batch create: "Photo 2 of 3" replaces the title, and the button says what happens next. */
-  batch?: { label: string; actionLabel: string };
+  batch?: { label: string; actionLabel: string; progress: BatchProgressData };
 }
 
 export interface ExtractResult {
@@ -364,7 +366,10 @@ export default function PhotoExtractor({ imageUri, imageWidth, imageHeight, onCl
     <Modal visible animationType={reduced ? 'none' : 'slide'} presentationStyle="fullScreen" onRequestClose={busy ? undefined : onClose}>
       <SafeAreaView style={styles.container}>
         <View style={styles.header}>
-          <Text style={styles.headerTitle} accessibilityRole="header" accessibilityLabel={batch ? undefined : 'Crop your sticker'} testID="extractor-title">{batch ? batch.label : 'Pick the object'}</Text>
+          <View style={styles.headerTitleCol}>
+            <Text style={styles.headerTitle} accessibilityRole="header" accessibilityLabel={batch ? undefined : 'Crop your sticker'} testID="extractor-title">{batch ? batch.label : 'Pick the object'}</Text>
+            {batch && <View style={styles.progressWrap}><BatchProgress progress={batch.progress} phase="cut" /></View>}
+          </View>
           <TouchableOpacity
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -449,6 +454,8 @@ const makeStyles = ({ colors, type, e1 }: Theme) => StyleSheet.create({
     paddingVertical: 8,
   },
   headerTitle: { ...type.h2 },
+  headerTitleCol: { flexShrink: 1, alignItems: 'flex-start' },
+  progressWrap: { marginTop: 4 },
   closeButton: {
     width: 44,
     height: 44,

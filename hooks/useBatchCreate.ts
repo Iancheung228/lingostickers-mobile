@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { supabase } from '@/lib/supabase';
-import { BatchQueue, nextToReview, type BatchItem } from '@/lib/batchQueue';
+import { BatchQueue, nextToReview, batchProgress, type BatchItem } from '@/lib/batchQueue';
 import {
   BATCH_CONCURRENCY, BATCH_MAX, BATCH_TIMEOUT_MESSAGE, BATCH_TIMEOUT_MS,
   describeBatchError, disposeBatchResult, runBatchScan,
   type BatchPayload, type BatchPhoto, type BatchResult,
 } from '@/lib/batchScan';
 import type { ExtractResult } from '@/components/PhotoExtractor';
+import { addSceneCards, newSceneId, type SceneChip } from '@/lib/sceneCards';
 import type { StickerDraft } from '@/lib/types';
 
 type Item = BatchItem<BatchPayload, BatchResult>;
@@ -16,6 +17,8 @@ interface Options {
   language: string;
   /** The whole batch is resolved; `added` is how many cards were saved. */
   onFinished: (added: number) => void;
+  /** Extra words from a card's scene failed to save (the card itself was). */
+  onSceneFailed: (failed: number, total: number) => void;
 }
 
 // Batch create: pick up to BATCH_MAX photos, choose the object in each one
@@ -26,12 +29,17 @@ interface Options {
 //   choosing  — the extractor is showing photo N of M
 //   making    — (overlaps choosing) queue runs create-sticker, 2 at a time
 //   reviewing — a sheet per card; closing it leaves the rest queued
-export function useBatchCreate({ userId, language, onFinished }: Options) {
-  const latest = useRef({ userId, language, onFinished });
-  latest.current = { userId, language, onFinished };
+export function useBatchCreate({ userId, language, onFinished, onSceneFailed }: Options) {
+  const latest = useRef({ userId, language, onFinished, onSceneFailed });
+  latest.current = { userId, language, onFinished, onSceneFailed };
 
   const [queue, setQueue] = useState<BatchQueue<BatchPayload, BatchResult> | null>(null);
   const [photos, setPhotos] = useState<BatchPhoto[]>([]);
+  // 2+ photos picked, intro screen showing, nothing made yet.
+  const [introPhotos, setIntroPhotos] = useState<BatchPhoto[] | null>(null);
+  const starting = useRef(false);
+  const [launching, setLaunching] = useState(false);
+  const launchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [choosingIndex, setChoosingIndex] = useState<number | null>(null);
   const [reviewOpen, setReviewOpen] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -54,10 +62,12 @@ export function useBatchCreate({ userId, language, onFinished }: Options) {
 
   // Leaving the screen stops the requests still in flight (a result that lands
   // later would have nowhere to go). Finished cards are left alone.
-  useEffect(() => () => { queueRef.current?.shutdown(); }, []);
+  useEffect(() => () => {
+    if (launchTimer.current) clearTimeout(launchTimer.current);
+    queueRef.current?.shutdown();
+  }, []);
 
-  const start = useCallback((picked: BatchPhoto[]) => {
-    const chosen = picked.slice(0, BATCH_MAX);
+  const start = useCallback((chosen: BatchPhoto[]) => {
     if (!chosen.length) return;
     queueRef.current?.shutdown();
     addedCount.current = 0;
@@ -79,6 +89,35 @@ export function useBatchCreate({ userId, language, onFinished }: Options) {
     setChoosingIndex(0);
     setReviewOpen(false);
   }, []);
+
+  // Step 0: the learner picked 2+ photos. Show what happens next before making anything.
+  const offer = useCallback((picked: BatchPhoto[]) => {
+    const chosen = picked.slice(0, BATCH_MAX);
+    if (chosen.length < 2) return;
+    starting.current = false;
+    setIntroPhotos(chosen);
+  }, []);
+
+  // Cancelling here throws nothing away: no card exists yet.
+  const cancelIntro = useCallback(() => {
+    if (starting.current) return;
+    setIntroPhotos(null);
+  }, []);
+
+  const begin = useCallback(() => {
+    if (starting.current || !introPhotos) return;
+    starting.current = true;
+    setLaunching(true);
+    const chosen = introPhotos;
+    setIntroPhotos(null);
+    // The intro is a modal sliding away; iOS drops a modal presented while
+    // another is still animating, and the extractor is one. Wait it out.
+    launchTimer.current = setTimeout(() => {
+      starting.current = false;
+      setLaunching(false);
+      start(chosen);
+    }, 600);
+  }, [introPhotos, start]);
 
   const unresolved = items.filter((i) => i.status !== 'added' && i.status !== 'skipped');
 
@@ -126,7 +165,9 @@ export function useBatchCreate({ userId, language, onFinished }: Options) {
 
   const current: Item | null = nextToReview(items);
   const currentIndex = current ? items.findIndex((i) => i.id === current.id) : -1;
-  const total = items.length;
+  // While photos are still being cut the queue is still filling up, so the
+  // total is the number picked; afterwards it is what was actually sent.
+  const total = choosingIndex != null ? photos.length : items.length;
   const label = `${currentIndex + 1} of ${total}`;
 
   const skip = useCallback(() => {
@@ -152,11 +193,16 @@ export function useBatchCreate({ userId, language, onFinished }: Options) {
     busyIds.current.add(c.id);
     setSaving(true);
     const draft = c.result.draft;
+    // Same as handleAdd in scan.tsx: the extra words share a scene_id with the
+    // scanned card and are written in the background after it is saved.
+    const sceneBase64 = c.result.sceneBase64;
+    const extras = sceneBase64 ? c.result.chips : [];
+    const sceneId = extras.length ? newSceneId() : null;
     try {
       // origin_author_id is deliberately not sent — see handleAdd in scan.tsx.
       const { error } = await supabase.from('stickers').insert({
         user_id: uid,
-        scene_id: null,
+        scene_id: sceneId,
         language: draft.language,
         word: draft.word,
         translation: draft.translation,
@@ -178,8 +224,18 @@ export function useBatchCreate({ userId, language, onFinished }: Options) {
         location_label: draft.locationLabel,
       });
       if (error) return { error: error.message as string };
-      if (q.markAdded(c.id)) addedCount.current += 1;
+      // Counted like announceAdded does for a single card: the scanned word plus
+      // the extras the learner chose, whether or not the extras later succeed.
+      if (q.markAdded(c.id)) addedCount.current += 1 + extras.length;
       finishIfDone(q, false);
+      if (extras.length && sceneId && sceneBase64) {
+        addSceneCards({
+          userId: uid, language: draft.language, sceneBase64, sceneId,
+          chips: extras, discoveredAt: draft.discoveredAt,
+        }).then(({ failed }) => {
+          if (failed) latest.current.onSceneFailed(failed, extras.length);
+        }).catch(() => latest.current.onSceneFailed(extras.length, extras.length));
+      }
       return { error: null };
     } finally {
       busyIds.current.delete(c.id);
@@ -190,6 +246,12 @@ export function useBatchCreate({ userId, language, onFinished }: Options) {
   // Corrections to a finished card's word / sentence, same calls as the single
   // path. They write into the queue item, so a correction survives closing and
   // reopening the review.
+  const setChips = useCallback((chips: SceneChip[]) => {
+    const c = queueRef.current ? nextToReview(queueRef.current.getSnapshot()) : null;
+    if (!c || c.status !== 'done') return;
+    queueRef.current?.updateResult(c.id, (r) => ({ ...r, chips }));
+  }, []);
+
   const editWord = useCallback(async (newWord: string) => {
     const c = queueRef.current ? nextToReview(queueRef.current.getSnapshot()) : null;
     if (!c || c.status !== 'done') return;
@@ -244,9 +306,12 @@ export function useBatchCreate({ userId, language, onFinished }: Options) {
 
   return {
     /** A batch exists and has unfinished cards (or photos still to choose). */
-    active: !!queue && (choosingIndex != null || unresolved.length > 0),
+    active: launching || !!introPhotos || (!!queue && (choosingIndex != null || unresolved.length > 0)),
+    /** The intro screen is up: these photos are waiting for Start. */
+    intro: introPhotos ? { count: introPhotos.length } : null,
+    offer, begin, cancelIntro,
+    progress: batchProgress(items, total),
     max: BATCH_MAX,
-    start,
     // Choosing phase
     choosing: choosingIndex != null && photos[choosingIndex]
       ? { photo: photos[choosingIndex], label: `Photo ${choosingIndex + 1} of ${photos.length}`, isLast: choosingIndex + 1 === photos.length }
@@ -266,9 +331,12 @@ export function useBatchCreate({ userId, language, onFinished }: Options) {
             : current.status === 'failed' ? 'failed' : 'pending') as 'ready' | 'failed' | 'pending',
           draft: (current.result?.draft ?? null) as StickerDraft | null,
           error: current.error,
+          sceneBase64: current.result?.sceneBase64 ?? null,
+          chips: current.result?.chips ?? [],
+          isLast: unresolved.length === 1,
         }
       : null,
-    add, skip, retry, editWord, editSentence,
+    add, skip, retry, setChips, editWord, editSentence,
     saving, retranslating, retranslatingSentence,
   };
 }

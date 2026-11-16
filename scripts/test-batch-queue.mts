@@ -1,7 +1,7 @@
 // node --experimental-strip-types --test scripts/test-batch-queue.mts
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { BatchQueue, nextToReview } from '../lib/batchQueue.ts';
+import { BatchQueue, nextToReview, batchProgress } from '../lib/batchQueue.ts';
 
 type Job = { name: string };
 function setup(concurrency = 2) {
@@ -93,4 +93,25 @@ test('shutdown aborts in-flight work and keeps finished results', async () => {
   gates.get('a')!.resolve(); await tick();
   q.shutdown(); await tick();
   assert.equal(status(q), 'done,failed');
+});
+
+test('progress counts photos cut and cards reviewed against the picked total', async () => {
+  const { q, gates } = setup();
+  assert.deepEqual(batchProgress(q.getSnapshot(), 3), { total: 3, cut: 0, reviewed: 0 });
+  const a = q.enqueue({ name: 'a' }); q.enqueue({ name: 'b' }); await tick();
+  assert.deepEqual(batchProgress(q.getSnapshot(), 3), { total: 3, cut: 2, reviewed: 0 });
+  gates.get('a')!.resolve(); await tick();
+  q.markAdded(a);
+  q.skip(q.getSnapshot()[1].id);
+  assert.deepEqual(batchProgress(q.getSnapshot(), 3), { total: 3, cut: 2, reviewed: 2 });
+});
+
+test('a result can carry edits until it is added, and is added only once', async () => {
+  const { q, gates } = setup();
+  const a = q.enqueue({ name: 'a' }); await tick();
+  gates.get('a')!.resolve(); await tick();
+  q.updateResult(a, (r) => `${r}+chips`);
+  assert.equal(q.getSnapshot()[0].result, 'draft-a+chips');
+  assert.equal(q.markAdded(a), true);
+  assert.equal(q.markAdded(a), false); // a second Add tap must not count twice
 });

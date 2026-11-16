@@ -46,6 +46,7 @@ import { AiConsentGate } from '@/components/AiConsentGate';
 import { SceneChip, addSceneCards, newSceneId } from '@/lib/sceneCards';
 import { useBatchCreate } from '@/hooks/useBatchCreate';
 import BatchCardStatus from '@/components/BatchCardStatus';
+import BatchIntro from '@/components/BatchIntro';
 import { BATCH_MAX } from '@/lib/batchScan';
 import { useTheme, useThemedStyles, type Theme } from '@/hooks/useTheme';
 
@@ -813,6 +814,14 @@ export default function ScanScreen() {
     userId: user?.id,
     language,
     onFinished: (count) => batchFinishedRef.current(count),
+    // Same wording as handleAdd's extras: the scanned word was saved either way.
+    onSceneFailed: (failed, total) => toast.show({
+      kind: 'error',
+      message: failed === total
+        ? "Couldn't add the extra words. Your scanned word was saved."
+        : `Couldn't add ${failed} of the extra words. Your scanned word was saved.`,
+      aboveTabBar: true,
+    }),
   });
 
   // Which review sheet is on screen: the card (DiscoveryReveal) or the "still
@@ -854,7 +863,7 @@ export default function ScanScreen() {
       mediaTypes: ['images'],
       quality: 1,
       // Up to BATCH_MAX photos at once. Picking exactly one is the same as
-      // before; picking more starts a batch.
+      // before; picking more shows the batch intro first.
       allowsMultipleSelection: true,
       selectionLimit: BATCH_MAX,
       orderedSelection: true,
@@ -863,7 +872,7 @@ export default function ScanScreen() {
       setScanError(null);
       releaseCarried();
       flushPendingDiscard();
-      batch.start(result.assets.slice(0, BATCH_MAX).map((a) => ({
+      batch.offer(result.assets.slice(0, BATCH_MAX).map((a) => ({
         uri: a.uri, width: a.width, height: a.height, assetId: a.assetId ?? undefined,
       })));
       return;
@@ -1296,7 +1305,7 @@ export default function ScanScreen() {
       </View>
 
       <View style={styles.controls}>
-        {batch.active && !batch.reviewOpen && !batch.choosing && (
+        {batch.pendingCount > 0 && !batch.reviewOpen && !batch.choosing && (
           <Button
             kind="secondary"
             testID="batch-resume"
@@ -1319,6 +1328,7 @@ export default function ScanScreen() {
               <ImagePlus size={24} strokeWidth={1.75} color={colors.inkDark} />
             </View>
             <Text style={styles.sideBtnLabel} maxFontSizeMultiplier={1.3}>Gallery</Text>
+            <Text style={styles.sideBtnHint} maxFontSizeMultiplier={1.3}>Select up to {BATCH_MAX}</Text>
           </TouchableOpacity>
 
           <Animated.View style={shutterStyle}>
@@ -1387,6 +1397,10 @@ export default function ScanScreen() {
       {/* Batch create: the extractor for each picked photo in turn, then the
           review sheets. Their own instances, so the single-photo ones above are
           untouched. Choosing hands the photo to the queue and moves on at once. */}
+      {batch.intro && (
+        <BatchIntro count={batch.intro.count} onStart={batch.begin} onCancel={batch.cancelIntro} />
+      )}
+
       <PhotoExtractor
         imageUri={batch.choosing?.photo.uri ?? null}
         imageWidth={batch.choosing?.photo.width ?? 0}
@@ -1397,12 +1411,14 @@ export default function ScanScreen() {
         batch={batch.choosing ? {
           label: batch.choosing.label,
           actionLabel: batch.choosing.isLast ? 'Make sticker · finish' : 'Make sticker · next photo',
+          progress: batch.progress,
         } : undefined}
       />
 
       {shownReview === 'status' && batch.current && batch.current.state !== 'ready' && (
         <BatchCardStatus
           label={batch.current.label}
+          progress={batch.progress}
           state={batch.current.state === 'failed' ? 'failed' : 'pending'}
           error={batch.current.error}
           onRetry={batch.retry}
@@ -1413,7 +1429,7 @@ export default function ScanScreen() {
 
       <DiscoveryReveal
         draft={shownReview === 'card' && batch.current?.state === 'ready' ? batch.current.draft : null}
-        batch={batch.current ? { label: batch.current.label, onSkip: batch.skip, onDismiss: batch.closeReview } : undefined}
+        batch={batch.current ? { label: batch.current.label, progress: batch.progress, isLast: batch.current.isLast, onSkip: batch.skip, onDismiss: batch.closeReview } : undefined}
         onAdd={async () => {
           const res = await batch.add();
           if (res?.error) {
@@ -1430,9 +1446,9 @@ export default function ScanScreen() {
         saving={batch.saving}
         retranslating={batch.retranslating}
         retranslatingSentence={batch.retranslatingSentence}
-        sceneBase64={null}
-        sceneSelected={[]}
-        onSceneSelected={() => {}}
+        sceneBase64={shownReview === 'card' ? batch.current?.sceneBase64 ?? null : null}
+        sceneSelected={batch.current?.chips ?? []}
+        onSceneSelected={batch.setChips}
       />
 
       {revealCrop && draft && (
@@ -1567,6 +1583,7 @@ const makeStyles = ({ colors, type, e2, e1 }: Theme) => StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
     ...e1,
   },
+  sideBtnHint: { fontSize: 11, lineHeight: 14, fontFamily: fonts.text, color: colors.inkLight, textAlign: 'center', marginTop: -4 },
   sideBtnLabel: { fontSize: 14, lineHeight: 18, fontFamily: fonts.display, color: colors.inkDark, textAlign: 'center' },
   dim: { opacity: 0.45 },
 
