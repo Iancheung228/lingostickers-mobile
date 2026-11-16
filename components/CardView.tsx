@@ -224,10 +224,13 @@ interface CardBackProps {
   moreOpen?: boolean;
   /// Reveal only: fade a field while its translation is being rewritten.
   fading?: { word?: boolean; sentence?: boolean };
+  /// Reveal only: a control drawn right under the headword and its meaning
+  /// (the "Not a dog?" button), above the sentence.
+  underHeadword?: React.ReactNode;
 }
 
 function CardBackImpl({
-  card, variant, thumbUrl, thumbPath, onSpeak, onEdit, editable, onOpenMemory, moreOpen, fading,
+  card, variant, thumbUrl, thumbPath, onSpeak, onEdit, editable, onOpenMemory, moreOpen, fading, underHeadword,
 }: CardBackProps) {
   const { headwordStyle, type, colors } = useTheme();
   const styles = useThemedStyles(makeStyles);
@@ -304,6 +307,8 @@ function CardBackImpl({
           {!!card.part_of_speech && <PosChip text={card.part_of_speech} />}
         </View>
       </Editable>
+
+      {underHeadword}
 
       {!!card.sentence && (
         <>

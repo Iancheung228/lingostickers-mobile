@@ -16,6 +16,7 @@ import { getImportedPhotoMetadata } from '@/lib/photoMetadata';
 import { debugLog, debugWarn } from '@/lib/debug';
 import type { ExtractResult } from '@/components/PhotoExtractor';
 import type { StickerDraft } from '@/lib/types';
+import { parseAlternatives } from '@/lib/wordFix';
 import type { SceneChip } from '@/lib/sceneCards';
 
 export interface BatchPhoto { uri: string; width: number; height: number; assetId?: string }
@@ -192,6 +193,7 @@ export async function runBatchScan(
     grammarKey: data.grammarKey ?? null,
     partOfSpeech: data.partOfSpeech ?? null,
     category: data.category ?? 'Other',
+    alternatives: parseAlternatives(data.alternatives, String(data.word ?? '')),
     imagePath: String(data.imagePath ?? ''),
     // Only trusted when the server kept the device's cutout (as in scan.tsx).
     thumbPath: precutThumbPath && precutImagePath && data.imagePath === precutImagePath ? precutThumbPath : null,

@@ -1,0 +1,108 @@
+# Wrong-word fix on the reveal sheet: "Not a dog?" under the headword opens a
+# sheet with alternative words (chips) and a "What is it?" field. Both
+# regenerate the WHOLE card (word, reading, meaning, sentence) for the same
+# cutout — no re-cut, no new upload.
+#
+# Flow: scan -> reveal shows the control -> open the sheet -> type a hint
+# ("toy town") -> card regenerates and the sheet closes -> reopen: the old word
+# is now an alternative chip -> tap it -> card regenerates again -> discard.
+#
+# Costs THREE AI calls on the staging project: 1 create-sticker (scan) +
+# 2 create-sticker corrections (a hint, then a tapped chip). Do not add more.
+# Budget: node scripts/qa-budget.mjs
+#
+# Needs create-sticker with `hint` / `alternatives` deployed to STAGING first
+# (scripts/deploy.sh staging create-sticker). Against an older backend the
+# control still shows but a correction just regenerates the same card.
+# NOT RUN by the cloud agent that wrote it: it has no Simulator.
+appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
+---
+- runFlow: ../sign-in.yaml
+
+- tapOn:
+    text: "Scan a new sticker"
+- extendedWaitUntil:
+    visible: ".*(One quick thing|Agree and start scanning|Import a photo from your library).*"
+    timeout: 15000
+- runFlow:
+    when:
+      visible: "Agree and start scanning"
+    commands:
+      - tapOn: "Agree and start scanning"
+- extendedWaitUntil:
+    visible: "Import a photo from your library"
+    timeout: 15000
+
+- tapOn:
+    text: "Import a photo from your library"
+- tapOn:
+    text: "Allow Full Access|Allow Access to All Photos|OK"
+    optional: true
+- tapOn:
+    text: "Photo, March 30, 2018.*"
+- extendedWaitUntil:
+    visible: "Make sticker"
+    timeout: 30000
+- tapOn: "Make sticker"
+
+# ---- Reveal: the control is drawn under the headword -----------------------
+- extendedWaitUntil:
+    visible:
+      id: "reveal-add"
+    timeout: 90000
+- extendedWaitUntil:
+    visible:
+      id: "reveal-wrong-word"
+    timeout: 10000
+# "Not a {meaning}?", or "Wrong word?" when the meaning would not read well.
+- assertVisible: ".*(Not an? .+\\?|Wrong word\\?).*"
+- takeScreenshot: 01-reveal-with-control
+
+# ---- Open the sheet --------------------------------------------------------
+- tapOn:
+    id: "reveal-wrong-word"
+- extendedWaitUntil:
+    visible: "What is it\\?"
+    timeout: 10000
+- assertVisible:
+    id: "wrong-word-input"
+- assertVisible: "Make this card"
+# Chips appear when the scan returned alternatives; the sheet works without.
+- takeScreenshot: 02-sheet-open
+
+# ---- Path 1: say what it is ------------------------------------------------
+- tapOn:
+    id: "wrong-word-input"
+- inputText: "toy town"
+- takeScreenshot: 03-hint-typed
+- tapOn:
+    id: "wrong-word-submit"
+# Pending state, then the sheet closes on a regenerated card.
+- extendedWaitUntil:
+    notVisible: "What is it\\?"
+    timeout: 60000
+- takeScreenshot: 04-after-hint
+- assertVisible:
+    id: "reveal-add"
+
+# ---- Path 2: tap an alternative -------------------------------------------
+# The headword we just replaced is offered back, so a chip always exists.
+- tapOn:
+    id: "reveal-wrong-word"
+- extendedWaitUntil:
+    visible:
+      id: "wrong-word-alt-0"
+    timeout: 10000
+- takeScreenshot: 05-alternatives
+- tapOn:
+    id: "wrong-word-alt-0"
+- extendedWaitUntil:
+    notVisible: "What is it\\?"
+    timeout: 60000
+- takeScreenshot: 06-after-alternative
+- assertVisible:
+    id: "reveal-add"
+
+# Leave nothing behind on the staging account.
+- tapOn:
+    id: "reveal-discard"

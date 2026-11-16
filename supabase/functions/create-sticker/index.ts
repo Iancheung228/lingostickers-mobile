@@ -6,7 +6,7 @@ import { createClient, type SupabaseClient } from 'https://esm.sh/@supabase/supa
 // server-side cutout. `?no-dts` drops the wrong types instead.
 import UPNG from 'https://esm.sh/upng-js@2.1.0?no-dts';
 import * as jpeg from 'https://esm.sh/jpeg-js@0.4.4';
-import { identifyFromPhoto, resolveLanguage } from '../_shared/vocab.ts';
+import { cleanHint, identifyFromPhoto, resolveLanguage } from '../_shared/vocab.ts';
 import { loadLearnerContext } from '../_shared/learner.ts';
 import { pickDominantColor } from '../_shared/imageColor.ts';
 import { requireUserId, consumeQuota, serviceClient, errorResponse } from '../_shared/rateLimit.ts';
@@ -48,6 +48,11 @@ Deno.serve(async (req) => {
       lassoPolygon: rawLassoPolygon,
       precutImagePath: rawPrecutImagePath,
       contextImage,
+      // Optional, and sent only by builds that have the "Not a …?" control.
+      // Older builds never send them, so the first-scan path is unchanged.
+      hint: rawHint,
+      chosenWord: rawChosenWord,
+      chosenTranslation: rawChosenTranslation,
     } = await req.json();
 
     // Bounded before the quota claim and before any decode: an unbounded
@@ -94,6 +99,29 @@ Deno.serve(async (req) => {
       );
     }
 
+    // A correction: the learner said what the cut-out is, or tapped one of the
+    // alternatives we offered. It re-asks the vocabulary question about the
+    // cut-out that is ALREADY uploaded, so it needs the device's path (no
+    // re-cut, nothing new stored) — a hint without one is a client bug.
+    const hint = cleanHint(rawHint);
+    const chosenWord = cleanHint(rawChosenWord);
+    const chosenTranslation = cleanHint(rawChosenTranslation);
+    const chosen = chosenWord && chosenTranslation ? { word: chosenWord, translation: chosenTranslation } : null;
+    const correcting = !!(hint || chosen);
+    const typed = (v: unknown) => typeof v === 'string' && v.trim().length > 0;
+    if ((typed(rawHint) && !hint) || (typed(rawChosenWord) && !chosen)) {
+      return new Response(
+        JSON.stringify({ error: 'Keep it under 60 characters.' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+    if (correcting && !precutImagePath) {
+      return new Response(
+        JSON.stringify({ error: 'Missing image path' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     const supabase = serviceClient();
 
     const lang = resolveLanguage(language);
@@ -132,7 +160,7 @@ Deno.serve(async (req) => {
     const vocabStarted = Date.now();
     const [vocabResult, bgResult, memoryPhoto] = await Promise.all([
       learnerPromise
-        .then(learner => identifyFromPhoto(base64Data, lang, memoryBase64Data, learner))
+        .then(learner => identifyFromPhoto(base64Data, lang, memoryBase64Data, learner, {}, { hint, chosen }))
         .finally(() => console.log(`vocab: ${Date.now() - vocabStarted}ms`)),
       precutImagePath
         ? Promise.resolve({ data: null, status: 'device cutout (skipped)' })
@@ -164,6 +192,8 @@ Deno.serve(async (req) => {
           grammarKey: vocabResult.grammar_key ?? null,
           partOfSpeech: normalizePartOfSpeech(vocabResult.part_of_speech),
           category: vocabResult.category,
+          // New in the wrong-word fix; older builds ignore unknown fields.
+          alternatives: vocabResult.alternatives ?? [],
           imagePath: precutImagePath,
           memoryPhotoPath,
           memoryPhotoColor,
@@ -231,6 +261,7 @@ Deno.serve(async (req) => {
         grammarKey: vocabResult.grammar_key ?? null,
         partOfSpeech: normalizePartOfSpeech(vocabResult.part_of_speech),
         category: vocabResult.category,
+        alternatives: vocabResult.alternatives ?? [],
         imagePath,
         memoryPhotoPath,
         memoryPhotoColor,

@@ -19,6 +19,8 @@ import { TAB_BAR_CLEARANCE } from '@/constants/tabBar';
 import { useProfile } from '@/hooks/useProfile';
 import { supabase } from '@/lib/supabase';
 import { StickerDraft } from '@/lib/types';
+import { canCorrect, regenerateCard } from '@/lib/regenerateCard';
+import { parseAlternatives, type Correction } from '@/lib/wordFix';
 import { Point } from '@/lib/cropGeometry';
 import { captureLocation, CapturedLocation } from '@/lib/location';
 import { getImportedPhotoMetadata } from '@/lib/photoMetadata';
@@ -114,6 +116,10 @@ export default function ScanScreen() {
   const [sceneChips, setSceneChips] = useState<SceneChip[]>([]);
   const [saving, setSaving] = useState(false);
   const [retranslating, setRetranslating] = useState(false);
+  // The close-up the vision model saw for the current draft, kept so a wrong
+  // word can be re-asked about the same cutout without a re-scan. Keyed by the
+  // draft's imagePath: a draft that isn't this one's must never reuse it.
+  const cropRef = useRef<{ imagePath: string; base64: string } | null>(null);
   const [retranslatingSentence, setRetranslatingSentence] = useState(false);
   const [zoom, setZoom] = useState(0);
   const [torchOn, setTorchOn] = useState(false);
@@ -401,6 +407,7 @@ export default function ScanScreen() {
     lastVocabMsRef.current = typeof vocabMs === 'number' ? vocabMs : null;
     debugLog('[scan] edge fn debug:', data._debug_bgStatus, `vocab ${lastVocabMsRef.current}ms`);
 
+    cropRef.current = { imagePath: String(data.imagePath ?? ''), base64 };
     setDraft({
       language: data.language === 'ja' || data.language === 'yue' ? data.language : 'fr',
       word: String(data.word ?? ''),
@@ -416,6 +423,8 @@ export default function ScanScreen() {
       grammarKey: data.grammarKey ?? null,
       partOfSpeech: data.partOfSpeech ?? null,
       category: data.category ?? 'Other',
+      // Absent from an older backend; parseAlternatives then gives [].
+      alternatives: parseAlternatives(data.alternatives, String(data.word ?? '')),
       imagePath: String(data.imagePath ?? ''),
       // Only trusted when the server kept the device's cutout; a server-made
       // cutout has a different name and no thumbnail.
@@ -1055,32 +1064,24 @@ export default function ScanScreen() {
     setExtractorVisible(true);
   }, [draft, importedAsset]);
 
-  // User wasn't happy with the detected English word — re-derive the
-  // word/reading/category for their corrected word via the LLM, keeping
-  // the same image and language. Throws so DiscoveryReveal can revert its
-  // local edit state on failure.
-  const handleEditWord = useCallback(async (newWord: string) => {
+  // The learner says the word is wrong: a typed meaning, a tapped alternative,
+  // or "What is it?" text. All three re-ask create-sticker about the cutout
+  // that is already uploaded (so the model sees the image, unlike the old bare
+  // translate-word call) and replace the whole card, sentence included — a new
+  // headword over the old sentence is the bug this exists to fix. Throws so
+  // DiscoveryReveal / WrongWordSheet can show it (lesson 3).
+  const handleCorrect = useCallback(async (correction: Correction) => {
+    if (!draft) return;
     setRetranslating(true);
     try {
-      const { data, error } = await supabase.functions.invoke('translate-word', {
-        body: { englishWord: newWord, language },
-      });
-
-      // Thrown as-is: DiscoveryReveal runs it through friendlyError (lesson 3).
-      if (error) throw error;
-      if (data.error) throw new Error(data.error);
-
-      setDraft((prev) => prev ? {
-        ...prev,
-        word: String(data.word ?? prev.word),
-        translation: String(data.translation ?? newWord),
-        reading: String(data.reading ?? prev.reading),
-        category: data.category ?? prev.category,
-      } : prev);
+      const crop = cropRef.current?.imagePath === draft.imagePath ? cropRef.current.base64 : null;
+      const next = await regenerateCard({ draft, cropBase64: crop, contextBase64: sceneBase64, correction });
+      // Only if it is still the same card (a discard or retry may have raced it).
+      setDraft((prev) => (prev && prev.imagePath === draft.imagePath ? next : prev));
     } finally {
       setRetranslating(false);
     }
-  }, [language]);
+  }, [draft, sceneBase64]);
 
   // User edited the English sentence describing the scene — translate it
   // into the target language via the LLM, keeping their English as-is.
@@ -1464,7 +1465,8 @@ export default function ScanScreen() {
         }}
         onDiscard={batch.skip}
         onRetryExtraction={() => {}}
-        onEditWord={batch.editWord}
+        onCorrect={batch.correct}
+        canCorrect={!!batch.current?.draft && batch.current.canCorrect}
         onEditSentence={batch.editSentence}
         saving={batch.saving}
         retranslating={batch.retranslating}
@@ -1489,7 +1491,8 @@ export default function ScanScreen() {
         saveError={saveError}
         onDiscard={handleDiscard}
         onRetryExtraction={handleRetryExtraction}
-        onEditWord={handleEditWord}
+        onCorrect={handleCorrect}
+        canCorrect={!!draft && canCorrect(draft) && cropRef.current?.imagePath === draft.imagePath}
         onEditSentence={handleEditSentence}
         saving={saving}
         retranslating={retranslating}

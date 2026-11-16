@@ -243,6 +243,12 @@ export type SubmitAnswerResult =
   | { outcome: 'hint'; first_letter: string; attempts_used: number }
   | { outcome: 'already_completed' };
 
+/** Another name the model thought a cut-out could have ("Not a dog?" chips). */
+export interface WordAlternative {
+  word: string;
+  translation: string;
+}
+
 export interface StickerDraft {
   language: Language;
   word: string;
@@ -255,6 +261,9 @@ export interface StickerDraft {
   grammarKey: string | null;
   partOfSpeech: string | null;
   category: Category;
+  // Other words the cut-out could be, from the same scan call. Absent on
+  // drafts from an older backend.
+  alternatives?: WordAlternative[];
   imagePath: string;
   // Set only when the device made the cutout and its thumbnail uploaded.
   thumbPath: string | null;

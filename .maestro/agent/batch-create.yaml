@@ -4,7 +4,7 @@
 # review (edit the word, a scene chip, "Add & next") -> card 3 "Add & finish" ->
 # one toast. Then the single-photo path: no intro, no strip.
 #
-# Costs about SIX AI calls: 3 create-sticker, 1 translate-word (edit), 1
+# Costs about SIX AI calls: 3 create-sticker, 1 create-sticker (the word edit now re-asks about the cutout), 1
 # scene-words, 1 create-card (the chip). The single-photo leg spends none.
 # Do not add more. Budget: node scripts/qa-budget.mjs
 #
@@ -121,7 +121,7 @@ appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
 - assertVisible: "Card 2 of 3"
 - assertVisible: "Reviewing card 2 of 3"
 - takeScreenshot: 07-review-card-2-after-skip
-# Edit the word (one translate-word call).
+# Edit the word (one create-sticker call that regenerates the whole card).
 - tapOn: "Meaning,.*Edit"
 - inputText: "dog"
 - tapOn: "Apply this edit"
