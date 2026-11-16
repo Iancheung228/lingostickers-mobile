@@ -1,0 +1,129 @@
+# Batch create: Gallery with 2 photos selected -> choose the object in each ->
+# cards make themselves in the background -> review queue (Add one, Skip one)
+# -> one toast. Then the single-photo path: one photo still opens the plain
+# "Pick the object" extractor.
+#
+# Costs TWO AI calls (one per photo in the batch). The single-photo leg closes
+# the extractor without extracting, so it costs none. Do not add more.
+#
+# Needs 2+ photos in the Simulator library:
+#   xcrun simctl addmedia booted scripts/fixtures/.cache/bicycle.jpg scripts/fixtures/.cache/mug_desk.jpg
+# The system photo picker is out-of-process; taps on its tiles use the newest
+# photos at the bottom of the grid. Adjust the two `point:` taps if the
+# Simulator's library layout differs.
+appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
+---
+- runFlow: ../sign-in.yaml
+
+- tapOn:
+    text: "Scan a new sticker"
+- extendedWaitUntil:
+    visible: ".*(One quick thing|Agree and start scanning|Import a photo from your library).*"
+    timeout: 15000
+- runFlow:
+    when:
+      visible: "Agree and start scanning"
+    commands:
+      - tapOn: "Agree and start scanning"
+- extendedWaitUntil:
+    visible: "Import a photo from your library"
+    timeout: 15000
+
+# ---- Batch: open the picker and select two photos -------------------------
+- tapOn: "Import a photo from your library"
+# First run only: the Photos permission prompt.
+- runFlow:
+    when:
+      visible: ".*(Allow Full Access|Allow Access to All Photos).*"
+    commands:
+      - tapOn: ".*(Allow Full Access|Allow Access to All Photos).*"
+- extendedWaitUntil:
+    visible: ".*(Photos|Recents|Cancel).*"
+    timeout: 15000
+- takeScreenshot: 01-picker
+# The first tap is lost if it lands while the picker is still animating in.
+- extendedWaitUntil:
+    visible: "Select up to 5 photos."
+    timeout: 15000
+- waitForAnimationToEnd
+# Newest photos sit at the bottom of the grid; select the last two tiles.
+- tapOn:
+    point: "17%,69%"
+- tapOn:
+    point: "50%,69%"
+- takeScreenshot: 02-picker-two-selected
+# The blue check confirms the multi-select (top right of the system picker).
+- tapOn:
+    point: "91%,15%"
+- extendedWaitUntil:
+    visible:
+      id: "extractor-title"
+    timeout: 20000
+- assertVisible: "Photo 1 of 2"
+- assertVisible: "Make sticker · next photo"
+- takeScreenshot: 03-choose-photo-1
+
+# Choosing photo 1 sends it off and moves straight on to photo 2.
+- tapOn:
+    id: "extract-sticker"
+- extendedWaitUntil:
+    visible: "Photo 2 of 2"
+    timeout: 30000
+- assertVisible: "Make sticker · finish"
+- takeScreenshot: 04-choose-photo-2
+- tapOn:
+    id: "extract-sticker"
+
+# ---- Review: card 1 (Add) -------------------------------------------------
+# Either the card is ready, or the "still making" sheet shows until it is.
+- extendedWaitUntil:
+    visible:
+      id: "reveal-add"
+    timeout: 120000
+- assertVisible: "Card 1 of 2"
+- takeScreenshot: 05-review-card-1
+- tapOn:
+    id: "reveal-add"
+
+# ---- Review: card 2 (Skip) ------------------------------------------------
+- extendedWaitUntil:
+    visible: "Card 2 of 2"
+    timeout: 120000
+- takeScreenshot: 06-review-card-2
+- tapOn:
+    id: "reveal-discard"
+
+# One toast for the whole batch: only the added card counts.
+- extendedWaitUntil:
+    visible: "Added 1 card"
+    timeout: 15000
+- assertNotVisible:
+    id: "reveal-add"
+- takeScreenshot: 07-toast-1-card-added
+
+# ---- Single photo path is unchanged ---------------------------------------
+- tapOn:
+    id: "toast-action"
+    optional: true
+- tapOn:
+    text: "Scan a new sticker"
+- extendedWaitUntil:
+    visible: "Import a photo from your library"
+    timeout: 15000
+- tapOn: "Import a photo from your library"
+- extendedWaitUntil:
+    visible: ".*(Photos|Recents|Cancel).*"
+    timeout: 15000
+- tapOn:
+    point: "83%,69%"
+# The blue check confirms the multi-select (top right of the system picker).
+- tapOn:
+    point: "91%,15%"
+- extendedWaitUntil:
+    visible: "Pick the object"
+    timeout: 20000
+- assertNotVisible: "Photo 1 of"
+- takeScreenshot: 08-single-photo-extractor
+# Close without extracting (no AI call spent).
+- tapOn: "Close without extracting a sticker"
+- assertVisible: "Import a photo from your library"

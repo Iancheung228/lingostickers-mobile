@@ -44,6 +44,9 @@ import { alertPermissionDenied } from '@/lib/permissions';
 import { useAiConsent } from '@/lib/aiConsent';
 import { AiConsentGate } from '@/components/AiConsentGate';
 import { SceneChip, addSceneCards, newSceneId } from '@/lib/sceneCards';
+import { useBatchCreate } from '@/hooks/useBatchCreate';
+import BatchCardStatus from '@/components/BatchCardStatus';
+import { BATCH_MAX } from '@/lib/batchScan';
 
 // The photo a scan is working from, and — for live captures only — the moment
 // and raw sensor frame the shutter caught. Named so the direct-capture path can
@@ -799,8 +802,40 @@ export default function ScanScreen() {
     setTorchOn((prev) => !prev);
   }, []);
 
+  // Batch create (Gallery with 2-5 photos selected). The single-photo path below
+  // does not touch it. See hooks/useBatchCreate.ts. `onFinished` goes through a
+  // ref because announceAdded is declared further down.
+  const batchFinishedRef = useRef<(count: number) => void>(() => {});
+  const batch = useBatchCreate({
+    userId: user?.id,
+    language,
+    onFinished: (count) => batchFinishedRef.current(count),
+  });
+
+  // Which review sheet is on screen: the card (DiscoveryReveal) or the "still
+  // making / failed" one. Both are native modals, and iOS drops one presented
+  // while the other is still animating away, so a switch between them goes
+  // through "nothing" for a beat instead of swapping at once.
+  const wantedReview: 'card' | 'status' | null = !batch.reviewOpen || !batch.current
+    ? null
+    : batch.current.state === 'ready' ? 'card' : 'status';
+  const [shownReview, setShownReview] = useState<'card' | 'status' | null>(null);
+  const reviewClearedAt = useRef(0);
+  useEffect(() => {
+    if (wantedReview === shownReview) return;
+    if (shownReview !== null) {
+      reviewClearedAt.current = Date.now();
+      setShownReview(null);
+      return;
+    }
+    const wait = Math.max(0, 700 - (Date.now() - reviewClearedAt.current));
+    if (wait === 0) { setShownReview(wantedReview); return; }
+    const t = setTimeout(() => setShownReview(wantedReview), wait);
+    return () => clearTimeout(t);
+  }, [wantedReview, shownReview]);
+
   const handleImportPhoto = useCallback(async () => {
-    if (processing) return;
+    if (processing || batch.active) return;
     if (!gate('Scanning needs a connection.')) return;
     haptic.tap();
     const { granted, canAskAgain } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -815,7 +850,21 @@ export default function ScanScreen() {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
       quality: 1,
+      // Up to BATCH_MAX photos at once. Picking exactly one is the same as
+      // before; picking more starts a batch.
+      allowsMultipleSelection: true,
+      selectionLimit: BATCH_MAX,
+      orderedSelection: true,
     });
+    if (!result.canceled && result.assets.length > 1) {
+      setScanError(null);
+      releaseCarried();
+      flushPendingDiscard();
+      batch.start(result.assets.slice(0, BATCH_MAX).map((a) => ({
+        uri: a.uri, width: a.width, height: a.height, assetId: a.assetId ?? undefined,
+      })));
+      return;
+    }
     const asset = !result.canceled ? result.assets[0] : null;
     if (asset) {
       metadataPromiseRef.current = null;
@@ -826,7 +875,7 @@ export default function ScanScreen() {
       setImportedAsset({ uri: asset.uri, width: asset.width, height: asset.height, assetId: asset.assetId ?? undefined });
       setExtractorVisible(true);
     }
-  }, [processing, releaseCarried, flushPendingDiscard]);
+  }, [processing, batch, releaseCarried, flushPendingDiscard]);
 
 
   // Confirmation shown on the camera after the reveal sheet closes.
@@ -850,6 +899,8 @@ export default function ScanScreen() {
       aboveTabBar: true,
     });
   }, [toast, router]);
+
+  batchFinishedRef.current = (count) => announceAdded(count);
 
   const handleAdd = async () => {
     if (!draft || !user || saving) return;
@@ -1158,7 +1209,7 @@ export default function ScanScreen() {
   }
 
   const scanning = processing && !extractorVisible;
-  const busyShutter = processing || capturing || !!scanError;
+  const busyShutter = processing || capturing || !!scanError || batch.active;
   const showFrozen = !!frozenUri && !extractorVisible;
 
   return (
@@ -1242,6 +1293,15 @@ export default function ScanScreen() {
       </View>
 
       <View style={styles.controls}>
+        {batch.active && !batch.reviewOpen && !batch.choosing && (
+          <Button
+            kind="secondary"
+            testID="batch-resume"
+            label={`Review ${batch.pendingCount} ${batch.pendingCount === 1 ? 'card' : 'cards'}`}
+            onPress={batch.openReview}
+            style={styles.batchResume}
+          />
+        )}
         <View style={styles.captureRow}>
           <TouchableOpacity
             style={styles.sideBtn}
@@ -1278,10 +1338,10 @@ export default function ScanScreen() {
             testID="scan-type-word"
             style={styles.sideBtn}
             onPress={openTypeWord}
-            disabled={processing || capturing}
+            disabled={processing || capturing || batch.active}
             accessibilityRole="button"
             accessibilityLabel="Type a word"
-            accessibilityState={{ disabled: processing || capturing || !online }}
+            accessibilityState={{ disabled: processing || capturing || batch.active || !online }}
             activeOpacity={0.7}
           >
             <View style={[styles.sideBtnCircle, (processing || capturing || !online) && styles.dim]}>
@@ -1319,6 +1379,57 @@ export default function ScanScreen() {
         usingServerCutout={usingServerCutout}
         error={scanError}
         onErrorAction={handleScanErrorAction}
+      />
+
+      {/* Batch create: the extractor for each picked photo in turn, then the
+          review sheets. Their own instances, so the single-photo ones above are
+          untouched. Choosing hands the photo to the queue and moves on at once. */}
+      <PhotoExtractor
+        imageUri={batch.choosing?.photo.uri ?? null}
+        imageWidth={batch.choosing?.photo.width ?? 0}
+        imageHeight={batch.choosing?.photo.height ?? 0}
+        onClose={batch.stopChoosing}
+        onExtract={batch.confirmSelection}
+        processing={false}
+        batch={batch.choosing ? {
+          label: batch.choosing.label,
+          actionLabel: batch.choosing.isLast ? 'Make sticker · finish' : 'Make sticker · next photo',
+        } : undefined}
+      />
+
+      {shownReview === 'status' && batch.current && batch.current.state !== 'ready' && (
+        <BatchCardStatus
+          label={batch.current.label}
+          state={batch.current.state === 'failed' ? 'failed' : 'pending'}
+          error={batch.current.error}
+          onRetry={batch.retry}
+          onSkip={batch.skip}
+          onDismiss={batch.closeReview}
+        />
+      )}
+
+      <DiscoveryReveal
+        draft={shownReview === 'card' && batch.current?.state === 'ready' ? batch.current.draft : null}
+        batch={batch.current ? { label: batch.current.label, onSkip: batch.skip, onDismiss: batch.closeReview } : undefined}
+        onAdd={async () => {
+          const res = await batch.add();
+          if (res?.error) {
+            haptic.error();
+            toast.show({ kind: 'error', message: "Couldn't save. Try again.", aboveTabBar: true });
+          } else if (res) {
+            haptic.success();
+          }
+        }}
+        onDiscard={batch.skip}
+        onRetryExtraction={() => {}}
+        onEditWord={batch.editWord}
+        onEditSentence={batch.editSentence}
+        saving={batch.saving}
+        retranslating={batch.retranslating}
+        retranslatingSentence={batch.retranslatingSentence}
+        sceneBase64={null}
+        sceneSelected={[]}
+        onSceneSelected={() => {}}
       />
 
       {revealCrop && draft && (
@@ -1443,6 +1554,7 @@ const styles = StyleSheet.create({
   },
   hintText: { color: colors.white, fontSize: 14, lineHeight: 20, fontFamily: fonts.text },
 
+  batchResume: { marginBottom: spacing.sm },
   controls: { alignItems: 'center', paddingTop: spacing.md, paddingBottom: spacing.sm },
   captureRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'center', gap: spacing.md },
   sideBtn: { alignItems: 'center', gap: 6, width: 96, paddingTop: 10 },

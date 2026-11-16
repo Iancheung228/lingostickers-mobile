@@ -44,6 +44,8 @@ interface PhotoExtractorProps {
   /// selection stay put underneath.
   error?: ScanErrorKind | null;
   onErrorAction?: (action: ScanAction) => void;
+  /** Batch create: "Photo 2 of 3" replaces the title, and the button says what happens next. */
+  batch?: { label: string; actionLabel: string };
 }
 
 export interface ExtractResult {
@@ -170,7 +172,7 @@ export async function renderWholePhotoExtract(
   };
 }
 
-export default function PhotoExtractor({ imageUri, imageWidth, imageHeight, onClose, onExtract, processing, onCancelProcessing, stage, usingServerCutout, error, onErrorAction }: PhotoExtractorProps) {
+export default function PhotoExtractor({ imageUri, imageWidth, imageHeight, onClose, onExtract, processing, onCancelProcessing, stage, usingServerCutout, error, onErrorAction, batch }: PhotoExtractorProps) {
   const { reduced } = useMotion();
   const teach = useCoachMark('pick-object', !!imageUri);
   const [mode, setMode] = useState<ToolMode>('box');
@@ -360,7 +362,7 @@ export default function PhotoExtractor({ imageUri, imageWidth, imageHeight, onCl
     <Modal visible animationType={reduced ? 'none' : 'slide'} presentationStyle="fullScreen" onRequestClose={busy ? undefined : onClose}>
       <SafeAreaView style={styles.container}>
         <View style={styles.header}>
-          <Text style={styles.headerTitle} accessibilityRole="header" accessibilityLabel="Crop your sticker">Pick the object</Text>
+          <Text style={styles.headerTitle} accessibilityRole="header" accessibilityLabel={batch ? undefined : 'Crop your sticker'} testID="extractor-title">{batch ? batch.label : 'Pick the object'}</Text>
           <TouchableOpacity
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -421,7 +423,7 @@ export default function PhotoExtractor({ imageUri, imageWidth, imageHeight, onCl
         <View style={styles.actions}>
           {teach.visible && <Text style={styles.teach}>You can change the outline any time before you tap Make sticker.</Text>}
           <Button
-            label="Make sticker"
+            label={batch ? batch.actionLabel : 'Make sticker'}
             testID="extract-sticker"
             icon={<Scissors size={20} color={busy || !canExtract ? colors.inkLight : colors.white} strokeWidth={1.75} />}
             disabled={!canExtract || !!error}
