@@ -10,6 +10,7 @@ import {
 import type { ExtractResult } from '@/components/PhotoExtractor';
 import { addSceneCards, newSceneId, type SceneChip } from '@/lib/sceneCards';
 import type { StickerDraft } from '@/lib/types';
+import { markAssetsUsed } from '@/lib/usedAssetsStore';
 
 type Item = BatchItem<BatchPayload, BatchResult>;
 
@@ -257,6 +258,7 @@ export function useBatchCreate({ userId, language, onFinished, onSceneFailed }: 
       // Counted like announceAdded does for a single card: the scanned word plus
       // the extras the learner chose, whether or not the extras later succeed.
       if (q.markAdded(c.id)) addedCount.current += 1 + extras.length;
+      void markAssetsUsed([c.payload.photo.assetId]);
       finishIfDone(q, false);
       if (extras.length && sceneId && sceneBase64) {
         addSceneCards({
