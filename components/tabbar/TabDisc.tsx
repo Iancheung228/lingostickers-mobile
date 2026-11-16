@@ -3,7 +3,8 @@ import { StyleSheet } from 'react-native';
 import Animated, {
   interpolateColor, useAnimatedStyle, useSharedValue, withSpring, withTiming,
 } from 'react-native-reanimated';
-import { TAB } from '@/constants/tabBar';
+import { TAB, tabColors } from '@/constants/tabBar';
+import { useTheme } from '@/hooks/useTheme';
 import { dur } from '@/lib/motion';
 import { CameraGlyph } from './TabIcon';
 
@@ -17,6 +18,8 @@ const RING = 1.5;
  * Drawn only; the parent Pressable owns the touch and passes `pressed`.
  */
 export default function TabDisc({ active, pressed, reduced }: { active: boolean; pressed: boolean; reduced: boolean }) {
+  const { colors, isDark } = useTheme();
+  const tc = tabColors(colors, isDark);
   const act = useSharedValue(active ? 1 : 0);
   const down = useSharedValue(0);
   const scale = useSharedValue(1);
@@ -34,27 +37,27 @@ export default function TabDisc({ active, pressed, reduced }: { active: boolean;
   const outer = useAnimatedStyle(() => ({
     transform: [{ scale: scale.value }],
     opacity: reduced && down.value ? 0.85 : 1,
-    shadowOffset: { width: 0, height: down.value ? 1 : TAB.shadowDisc.dy },
+    shadowOffset: { width: 0, height: down.value ? 1 : tc.shadowDisc.dy },
   }));
   const ring = useAnimatedStyle(() => ({
-    borderColor: down.value || act.value > 0.5 ? 'transparent' : TAB.discRing,
+    borderColor: down.value || act.value > 0.5 ? 'transparent' : tc.discRing,
   }));
   const face = useAnimatedStyle(() => ({
     backgroundColor: down.value && act.value < 0.5
-      ? TAB.discPressed
-      : interpolateColor(act.value, [0, 1], [TAB.disc, TAB.discActive]),
-    borderColor: interpolateColor(act.value, [0, 1], [TAB.discStroke, TAB.disc]),
+      ? tc.discPressed
+      : interpolateColor(act.value, [0, 1], [tc.disc, tc.discActive]),
+    borderColor: interpolateColor(act.value, [0, 1], [tc.discStroke, tc.disc]),
     borderWidth: act.value > 0.5 ? 2 : 1,
   }));
   const white = useAnimatedStyle(() => ({ opacity: 1 - act.value }));
   const terra = useAnimatedStyle(() => ({ opacity: act.value }));
 
   return (
-    <Animated.View style={[styles.outer, outer]} pointerEvents="none">
+    <Animated.View style={[styles.outer, { shadowColor: tc.shadowDisc.color, shadowOpacity: tc.shadowDisc.opacity, shadowRadius: tc.shadowDisc.radius }, outer]} pointerEvents="none">
       <Animated.View style={[styles.ring, ring]}>
         <Animated.View style={[styles.face, face]}>
-          <Animated.View style={[styles.glyph, white]}><CameraGlyph color="#FFFFFF" /></Animated.View>
-          <Animated.View style={[styles.glyph, terra]}><CameraGlyph color={TAB.disc} /></Animated.View>
+          <Animated.View style={[styles.glyph, white]}><CameraGlyph color={colors.white} /></Animated.View>
+          <Animated.View style={[styles.glyph, terra]}><CameraGlyph color={tc.disc} /></Animated.View>
         </Animated.View>
       </Animated.View>
     </Animated.View>
@@ -67,9 +70,6 @@ const styles = StyleSheet.create({
     width: S + RING * 2,
     height: S + RING * 2,
     borderRadius: S,
-    shadowColor: TAB.shadowDisc.color,
-    shadowOpacity: TAB.shadowDisc.opacity,
-    shadowRadius: TAB.shadowDisc.radius,
   },
   ring: { flex: 1, borderRadius: S, borderWidth: RING, alignItems: 'center', justifyContent: 'center' },
   face: { width: S, height: S, borderRadius: S / 2, alignItems: 'center', justifyContent: 'center' },

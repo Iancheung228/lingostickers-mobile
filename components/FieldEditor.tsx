@@ -5,7 +5,8 @@ import {
 } from 'react-native';
 import { Check } from 'lucide-react-native';
 import BottomSheet, { BottomSheetHandle } from '@/components/BottomSheet';
-import { colors, radii, spacing, fonts } from '@/constants/theme';
+import { radii, spacing, fonts } from '@/constants/theme';
+import { useTheme, useThemedStyles, type Theme } from '@/hooks/useTheme';
 
 export interface EditableInput {
   key: string;
@@ -121,6 +122,8 @@ const draftFor = (spec: EditorSpec, key: string): Draft => ({
 // space and the flip for touches, and the card's fixed height can't grow to
 // fit a longer sentence. A sheet sidesteps all three.
 export default function FieldEditor({ spec, saving, error, onCancel, onSave }: FieldEditorProps) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   // The sheet outlives the prop that opened it by exactly one exit animation.
   // A successful save clears `spec` from above; without a mirror to render
   // from, the sheet would blink out of existence on the save path while
@@ -445,14 +448,14 @@ export default function FieldEditor({ spec, saving, error, onCancel, onSave }: F
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ colors }: Theme) => StyleSheet.create({
   title: { fontSize: 20, fontFamily: fonts.display, color: colors.inkDark },
   subtitle: { fontSize: 13, fontFamily: fonts.text, color: colors.inkLight, lineHeight: 19, marginTop: 2 },
 
   inputBlock: { marginTop: spacing.md, gap: spacing.xs },
   inputLabel: { fontSize: 14, lineHeight: 20, fontFamily: fonts.display, color: colors.inkLight },
   errorBlock: { marginTop: spacing.md, padding: spacing.ms, borderRadius: radii.md, backgroundColor: colors.errorLight },
-  errorText: { fontSize: 14, lineHeight: 20, fontFamily: fonts.text, color: colors.error },
+  errorText: { fontSize: 14, lineHeight: 20, fontFamily: fonts.text, color: colors.errorInk },
   input: {
     padding: spacing.md,
     borderRadius: radii.md,
@@ -488,7 +491,7 @@ const styles = StyleSheet.create({
   followSpinner: { width: 22, height: 22 },
   followWord: { fontSize: 22, fontFamily: fonts.display, color: colors.inkDark, marginTop: 2 },
   scrollContent: { paddingBottom: spacing.md },
-  followRetry: { fontSize: 13, fontFamily: fonts.display, color: colors.terra, marginTop: spacing.xs },
+  followRetry: { fontSize: 13, fontFamily: fonts.display, color: colors.terraInk, marginTop: spacing.xs },
   followDetail: { fontSize: 13, fontFamily: fonts.mono, color: colors.inkMid, marginBottom: 2 },
 
   actions: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.md },

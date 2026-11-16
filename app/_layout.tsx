@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
-import { AppState, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { AppState, StyleSheet, Text, TouchableOpacity, View, useColorScheme } from 'react-native';
 import { Stack, useRouter, useSegments, type ErrorBoundaryProps } from 'expo-router';
 import * as Linking from 'expo-linking';
 import * as SplashScreen from 'expo-splash-screen';
@@ -34,7 +34,9 @@ import { onOnboardingDone, shouldShowOnboarding } from '@/lib/onboarding';
 import { useConnectivityProbe } from '@/hooks/useConnectivityProbe';
 import { PendingDeleteProvider } from '@/components/PendingDeleteProvider';
 import { SOCIAL_ENABLED } from '@/lib/features';
-import { colors, fonts as themeFonts, radii, spacing, typography } from '@/constants/theme';
+import { fonts as themeFonts, radii, spacing } from '@/constants/theme';
+import { ThemeProvider, useTheme, type Theme } from '@/hooks/useTheme';
+import { makeTheme } from '@/constants/theme';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -43,6 +45,10 @@ SplashScreen.preventAutoHideAsync();
 // home screen with nothing said. Exported from the root layout so it covers
 // every route beneath it.
 export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
+  // Expo Router renders this INSTEAD of the root layout, so the ThemeProvider
+  // below is not mounted: read the OS scheme directly and build the theme here.
+  const os = useColorScheme();
+  const crashStyles = useMemo(() => makeCrashStyles(makeTheme(os === 'dark' ? 'dark' : 'light')), [os]);
   return (
     <View style={crashStyles.container}>
       <Text style={crashStyles.title}>Something went wrong</Text>
@@ -59,6 +65,7 @@ export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
 }
 
 function RootLayout() {
+  const { colors, isDark, ready: themeReady } = useTheme();
   const { session, loading, isPasswordRecovery } = useAuth();
   useConnectivityProbe();
   // First-run onboarding: which user it was decided for, and the verdict. null
@@ -221,15 +228,16 @@ function RootLayout() {
     }
   }, [lastNotificationResponse, session?.user?.id]);
 
-  if (!fontsSettled) return null;
+  // Hold the splash until the saved appearance is read, so a Dark user never sees a light frame.
+  if (!fontsSettled || !themeReady) return null;
 
   return (
     <>
-      {/* app.json pins userInterfaceStyle to light, and every ground in the
-          palette — cream, white, the rose band — is light. Saying so
-          explicitly beats inheriting whatever the platform defaults to. */}
-      <StatusBar style="dark" />
-      <Stack screenOptions={{ headerShown: false }}>
+      {/* The glyphs must contrast with the page: light text on the dark ground,
+          dark text on the cream one. The explicit style beats auto, which in
+          a build pinned to userInterfaceStyle=light would follow the OS. */}
+      <StatusBar style={isDark ? 'light' : 'dark'} />
+      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.sky } }}>
         <Stack.Screen name="index" />
         <Stack.Screen name="(auth)" />
         <Stack.Screen name="(tabs)" />
@@ -240,7 +248,7 @@ function RootLayout() {
   );
 }
 
-const crashStyles = StyleSheet.create({
+const makeCrashStyles = ({ colors, typography }: Theme) => StyleSheet.create({
   container: {
     flex: 1,
     alignItems: 'center',
@@ -271,6 +279,7 @@ const crashStyles = StyleSheet.create({
 export default function Root() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
+      <ThemeProvider>
       <AuthProvider>
         <ProfileProvider>
           <FriendsProvider>
@@ -284,6 +293,7 @@ export default function Root() {
           </FriendsProvider>
         </ProfileProvider>
       </AuthProvider>
+      </ThemeProvider>
     </GestureHandlerRootView>
   );
 }

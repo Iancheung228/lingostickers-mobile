@@ -34,9 +34,8 @@ import {
   formatReminderTime, isReminderPermitted, loadReminder, normalizeSlots, setReminder as saveReminder, syncReminders,
 } from '@/lib/reminder';
 import { LANGUAGES } from '@/lib/languages';
-import {
-  colors, e1, fonts, radii, spacing, type, wordFontFor, GUTTER, MIN_TAP,
-} from '@/constants/theme';
+import { fonts, radii, spacing, wordFontFor, GUTTER, MIN_TAP } from '@/constants/theme';
+import { useTheme, useThemedStyles, type Theme } from '@/hooks/useTheme';
 
 // Published at the apex domain and linked from App Store Connect too. In
 // the app because the Profile screen is where a person — and a reviewer —
@@ -73,6 +72,8 @@ const stepUp = (v: number) => Math.min(100, v < 10 ? v + 1 : v + 5);
 const stepDown = (v: number) => Math.max(1, v <= 10 ? v - 1 : v - 5);
 
 export default function ProfileScreen() {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const { user, signOut, deleteAccount } = useAuth();
   const toast = useToast();
   const {
@@ -435,7 +436,7 @@ export default function ProfileScreen() {
                     testID={`language-${code}`}
                   >
                     {updatingLanguage === code
-                      ? <ActivityIndicator color={colors.terra} />
+                      ? <ActivityIndicator color={colors.terraInk} />
                       : (
                         <Text
                           style={[styles.segmentText, { fontFamily: wordFontFor(code) }, active && styles.segmentTextOn]}
@@ -547,7 +548,7 @@ export default function ProfileScreen() {
             title="Export my cards"
             value={exporting ? undefined : 'CSV'}
             icon={<Download {...iconProps} />}
-            right={exporting ? <ActivityIndicator color={colors.terra} /> : undefined}
+            right={exporting ? <ActivityIndicator color={colors.terraInk} /> : undefined}
             onPress={handleExport}
             testID="export-cards"
           />
@@ -629,7 +630,7 @@ export default function ProfileScreen() {
         <RowGroup>
           <Row
             title="Log Out"
-            icon={<LogOut size={20} strokeWidth={1.75} color={colors.error} />}
+            icon={<LogOut size={20} strokeWidth={1.75} color={colors.errorInk} />}
             destructive
             onPress={deletingAccount ? undefined : handleLogout}
             right={<View />}
@@ -638,8 +639,8 @@ export default function ProfileScreen() {
           <Row
             title={deletingAccount ? 'Deleting Account…' : 'Delete Account'}
             icon={deletingAccount
-              ? <ActivityIndicator size="small" color={colors.error} />
-              : <Trash2 size={20} strokeWidth={1.75} color={colors.error} />}
+              ? <ActivityIndicator size="small" color={colors.errorInk} />
+              : <Trash2 size={20} strokeWidth={1.75} color={colors.errorInk} />}
             destructive
             onPress={deletingAccount ? undefined : handleDeleteAccount}
             right={<View />}
@@ -664,6 +665,7 @@ export default function ProfileScreen() {
 }
 
 function Stat({ value, label }: { value: string; label: string }) {
+  const styles = useThemedStyles(makeStyles);
   return (
     <View style={styles.stat} accessible accessibilityLabel={`${label}: ${value}`}>
       <Text style={styles.statValue} maxFontSizeMultiplier={1.3}>{value}</Text>
@@ -673,12 +675,15 @@ function Stat({ value, label }: { value: string; label: string }) {
 }
 
 function Divider() {
+  const styles = useThemedStyles(makeStyles);
   return <View style={styles.divider} />;
 }
 
 function ChoiceRow({ label, subtitle, active, busy, disabled, divider, onPress }: {
   label: string; subtitle: string; active: boolean; busy: boolean; disabled: boolean; divider: boolean; onPress: () => void;
 }) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   return (
     <View>
       <Pressable
@@ -695,7 +700,7 @@ function ChoiceRow({ label, subtitle, active, busy, disabled, divider, onPress }
           <Text style={styles.choiceSubtitle} maxFontSizeMultiplier={2}>{subtitle}</Text>
         </View>
         {busy ? (
-          <ActivityIndicator color={colors.terra} />
+          <ActivityIndicator color={colors.terraInk} />
         ) : active ? (
           <View style={styles.activeBadge}><Check size={14} strokeWidth={2.5} color={colors.white} /></View>
         ) : null}
@@ -708,6 +713,8 @@ function ChoiceRow({ label, subtitle, active, busy, disabled, divider, onPress }
 function TimeSheet({ current, onPick, onClosed }: {
   current: { hour: number; minute: number }; onPick: (hour: number, minute: number) => void; onClosed: () => void;
 }) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const sheet = useRef<BottomSheetHandle>(null);
   return (
     <BottomSheet
@@ -729,7 +736,7 @@ function TimeSheet({ current, onPick, onClosed }: {
               style={({ pressed }) => [styles.timeRow, pressed && { backgroundColor: colors.sand }]}
             >
               <Text style={[styles.timeText, active && { color: colors.inkDark }]}>{formatReminderTime(hour, minute)}</Text>
-              {active && <Check size={18} strokeWidth={2.25} color={colors.terra} />}
+              {active && <Check size={18} strokeWidth={2.25} color={colors.terraInk} />}
             </Pressable>
           );
         })}
@@ -738,7 +745,7 @@ function TimeSheet({ current, onPick, onClosed }: {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ colors, e1, type }: Theme) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.sky },
   removeTime: { width: MIN_TAP, height: MIN_TAP, marginRight: -spacing.ms, alignItems: 'center', justifyContent: 'center' },
   scrollBody: { paddingHorizontal: GUTTER, paddingTop: spacing.md, paddingBottom: TAB_BAR_CLEARANCE + 34 + spacing.xl },
@@ -778,7 +785,7 @@ const styles = StyleSheet.create({
   stepValue: { ...type.data, fontSize: 15, minWidth: 28, textAlign: 'center', color: colors.inkDark },
 
   deniedRow: { padding: spacing.md, backgroundColor: colors.errorLight },
-  deniedTitle: { fontFamily: fonts.display, fontSize: 16, lineHeight: 22, color: colors.error },
+  deniedTitle: { fontFamily: fonts.display, fontSize: 16, lineHeight: 22, color: colors.errorInk },
   deniedBody: { ...type.small, color: colors.inkMid, marginTop: 2 },
 
   choice: { minHeight: 64, flexDirection: 'row', alignItems: 'center', gap: spacing.ms, paddingHorizontal: spacing.md, paddingVertical: spacing.sm },

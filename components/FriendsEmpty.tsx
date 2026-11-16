@@ -1,6 +1,7 @@
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { UserPlus } from 'lucide-react-native';
-import { colors, radii, spacing, typography, shadows, fonts } from '@/constants/theme';
+import { radii, spacing, fonts } from '@/constants/theme';
+import { useTheme, useThemedStyles, type Theme } from '@/hooks/useTheme';
 
 // ---------------------------------------------------------------------------
 // First run: you have no friends yet.
@@ -20,6 +21,8 @@ interface FriendsEmptyProps {
 }
 
 export default function FriendsEmpty({ onAdd }: FriendsEmptyProps) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   return (
     <View style={styles.wrap}>
       <Text style={styles.title}>Learn alongside someone</Text>
@@ -40,7 +43,7 @@ export default function FriendsEmpty({ onAdd }: FriendsEmptyProps) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ typography, colors, shadows }: Theme) => StyleSheet.create({
   wrap: {
     alignItems: 'center',
     paddingTop: spacing.xl,

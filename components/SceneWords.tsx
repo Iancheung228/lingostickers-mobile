@@ -4,9 +4,10 @@ import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from 'rea
 import InlineError from '@/components/ui/InlineError';
 import { haptic } from '@/lib/haptics';
 import { Check } from 'lucide-react-native';
-import { colors, radii, spacing, fonts, wordFontFor, type, e1 } from '@/constants/theme';
+import { radii, spacing, fonts, wordFontFor } from '@/constants/theme';
 import { Language } from '@/lib/types';
 import { SCENE_PROMPTS, ScenePromptId, SceneChip, fetchSceneWords } from '@/lib/sceneCards';
+import { useTheme, useThemedStyles, type Theme } from '@/hooks/useTheme';
 
 /**
  * "More from this photo": ask the scan's photo another question and pick
@@ -31,6 +32,8 @@ export default function SceneWords({
   /// bottom of a scroll view under a fixed footer, so the parent scrolls to it.
   onAnswered?: () => void;
 }) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const [active, setActive] = useState<ScenePromptId | null>(null);
   const [status, setStatus] = useState<'idle' | 'loading' | 'done' | 'failed'>('idle');
   const [message, setMessage] = useState('');
@@ -99,7 +102,7 @@ export default function SceneWords({
 
       {status === 'loading' && (
         <View style={styles.statusRow} accessibilityLiveRegion="polite">
-          <ActivityIndicator size="small" color={colors.terra} />
+          <ActivityIndicator size="small" color={colors.terraInk} />
           <Text style={styles.statusText}>
             {waited > 15000 ? 'Taking a while. You can add the card now.'
               : waited > 5000 ? 'Still looking…'
@@ -147,7 +150,7 @@ export default function SceneWords({
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ type, colors, e1 }: Theme) => StyleSheet.create({
   wrap: { alignSelf: 'stretch', marginTop: spacing.md, gap: spacing.ms },
   heading: { ...type.h2, fontSize: 18, lineHeight: 24 },
   prompts: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },

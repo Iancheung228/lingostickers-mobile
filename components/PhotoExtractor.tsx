@@ -17,8 +17,8 @@ import type { ScanAction, ScanErrorKind } from '@/lib/scanError';
 import CropBoxOverlay from './CropBoxOverlay';
 import LassoOverlay from './LassoOverlay';
 import { Rect, Point, computeContainRect, boxToImageCrop, boundingBoxOfPoints, polygonFillRatio, padBox } from '@/lib/cropGeometry';
-import { colors, e1, type } from '@/constants/theme';
 import { debugLog } from '@/lib/debug';
+import { useTheme, useThemedStyles, type Theme } from '@/hooks/useTheme';
 
 interface PhotoExtractorProps {
   imageUri: string | null;
@@ -171,6 +171,8 @@ export async function renderWholePhotoExtract(
 }
 
 export default function PhotoExtractor({ imageUri, imageWidth, imageHeight, onClose, onExtract, processing, onCancelProcessing, stage, usingServerCutout, error, onErrorAction }: PhotoExtractorProps) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const { reduced } = useMotion();
   const teach = useCoachMark('pick-object', !!imageUri);
   const [mode, setMode] = useState<ToolMode>('box');
@@ -435,7 +437,7 @@ export default function PhotoExtractor({ imageUri, imageWidth, imageHeight, onCl
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ colors, type, e1 }: Theme) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.sky },
   header: {
     flexDirection: 'row',

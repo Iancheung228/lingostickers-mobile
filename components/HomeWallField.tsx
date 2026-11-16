@@ -3,12 +3,13 @@ import { StyleSheet, View } from 'react-native';
 import { Image } from 'expo-image';
 import Svg, { Defs, LinearGradient, RadialGradient, Rect, Stop } from 'react-native-svg';
 import { supabase } from '@/lib/supabase';
-import { wall } from '@/constants/theme';
+import { useTheme } from '@/hooks/useTheme';
 
 // The surface of the Home wall (SPEC "Sticker wall"): a radial cream field, or
 // the user's own photo under a cream top wash and a rose bottom scrim. Shared by
 // the panel and the arrange editor so what you arrange is what you see.
 export default function HomeWallField({ path, version = 0 }: { path?: string | null; version?: number }) {
+  const { wall } = useTheme();
   const [url, setUrl] = useState<string | null>(null);
 
   useEffect(() => {

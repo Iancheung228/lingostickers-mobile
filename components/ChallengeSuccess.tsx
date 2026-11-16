@@ -8,8 +8,9 @@ import { MessageCircle, PartyPopper, RotateCw } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { ChallengeWithSender, Sticker } from '@/lib/types';
 import { supabase } from '@/lib/supabase';
-import { colors, fonts, wordFontFor, sentenceFontFor } from '@/constants/theme';
+import { fonts, wordFontFor, sentenceFontFor } from '@/constants/theme';
 import { languageLabel } from '@/lib/languages';
+import { useTheme, useThemedStyles, type Theme } from '@/hooks/useTheme';
 
 interface ChallengeSuccessProps {
   challenge: ChallengeWithSender | null;
@@ -18,6 +19,8 @@ interface ChallengeSuccessProps {
 }
 
 export default function ChallengeSuccess({ challenge, wonStickerId, onClose }: ChallengeSuccessProps) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const [sticker, setSticker] = useState<Sticker | null>(null);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [memoryImageUrl, setMemoryImageUrl] = useState<string | null>(null);
@@ -174,7 +177,7 @@ export default function ChallengeSuccess({ challenge, wonStickerId, onClose }: C
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ colors }: Theme) => StyleSheet.create({
   overlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.6)',

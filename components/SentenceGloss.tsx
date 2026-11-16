@@ -3,7 +3,8 @@ import { StyleProp, StyleSheet, Text, View, ViewStyle } from 'react-native';
 import { Lightbulb } from 'lucide-react-native';
 
 import { glossFor } from '@/lib/gloss';
-import { colors, fonts, sentenceFontFor, spacing, type } from '@/constants/theme';
+import { fonts, sentenceFontFor, spacing } from '@/constants/theme';
+import { useTheme, useThemedStyles, type Theme } from '@/hooks/useTheme';
 
 /**
  * The interlinear breakdown under a sentence: each chunk of the target
@@ -35,6 +36,8 @@ export function SentenceGloss({ raw, sentence, language, style }: {
   language: string;
   style?: StyleProp<ViewStyle>;
 }) {
+  const { type } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const chunks = glossFor(raw, sentence);
   if (!chunks) return null;
 
@@ -73,6 +76,8 @@ export function SentenceGloss({ raw, sentence, language, style }: {
  * once, for a few seconds, and was never seen again.
  */
 export function SentenceInsight({ text, style }: { text: string | null | undefined; style?: StyleProp<ViewStyle> }) {
+  const { colors, type } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const trimmed = text?.trim();
   if (!trimmed) return null;
   return (
@@ -83,7 +88,7 @@ export function SentenceInsight({ text, style }: { text: string | null | undefin
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ colors, type }: Theme) => StyleSheet.create({
   gloss: {
     marginTop: spacing.ms,
     paddingTop: spacing.sm,

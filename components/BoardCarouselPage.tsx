@@ -29,7 +29,8 @@ import { useToast } from '@/components/ToastProvider';
 import { friendlyErrorSync } from '@/lib/friendlyError';
 import { dueToday } from '@/lib/review';
 import StickerPickerModal from '@/components/StickerPickerModal';
-import { colors, shadows, radii, spacing, fonts } from '@/constants/theme';
+import { radii, spacing, fonts } from '@/constants/theme';
+import { useTheme, useThemedStyles, type Theme } from '@/hooks/useTheme';
 
 // Long side capped so a full-res photo library import doesn't balloon
 // storage/bandwidth — matches the old global wall-background cap.
@@ -82,6 +83,8 @@ export default function BoardCarouselPage({
   onDragStateChange, onContentChanged,
   autoOpenPicker, onAutoOpenHandled,
 }: BoardCarouselPageProps) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const {
     items, loading, addSticker, removeSticker, updatePosition, autoArrange, refetch: refetchItems,
   } = useBoardStickers(board.id);
@@ -429,7 +432,7 @@ export default function BoardCarouselPage({
         onLayout={(e) => setCanvasSize({ width: e.nativeEvent.layout.width, height: e.nativeEvent.layout.height })}
       >
         {loading ? (
-          <ActivityIndicator style={styles.loader} color={colors.terra} size="large" />
+          <ActivityIndicator style={styles.loader} color={colors.terraInk} size="large" />
         ) : (
           <BoardCanvas
             items={items}
@@ -564,7 +567,7 @@ async function shrinkForStorage(source: { uri: string; width: number; height: nu
   return { uri: saved.uri, width: rendered.width, height: rendered.height };
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ colors, shadows }: Theme) => StyleSheet.create({
   page: { flex: 1 },
   bandActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   addBtn: {

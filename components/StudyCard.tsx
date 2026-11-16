@@ -25,7 +25,8 @@ import { speak, stopSpeaking } from '@/lib/speech';
 import { useStudyPrefs } from '@/lib/studyPrefs';
 import { supabase } from '@/lib/supabase';
 import type { Sticker } from '@/lib/types';
-import { colors, e1, radii, spacing, type, MIN_TAP } from '@/constants/theme';
+import { radii, spacing, MIN_TAP } from '@/constants/theme';
+import { useTheme, useThemedStyles, type Theme } from '@/hooks/useTheme';
 
 export { splitAroundWord } from '@/components/CardView';
 export type { EditTarget } from '@/lib/cardEdit';
@@ -104,6 +105,7 @@ export default function StudyCard({
   sticker, mode = 'browse', onClose, onGraded, progress, stillLearning, startFlipped, onUndoGrade,
   onDeleted, onUpdate, onRemoveFromBoard, embedded, onTest, practice,
 }: StudyCardProps) {
+  const styles = useThemedStyles(makeStyles);
   const toast = useToast();
   const { reduced } = useMotion();
   const [testing, setTesting] = useState(false);
@@ -393,6 +395,8 @@ function StudyFace({
   onFlippedChange?: (flipped: boolean) => void;
   onOpenDetail: () => void;
 }) {
+  const { colors, type } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const { reduced } = useMotion();
@@ -700,10 +704,10 @@ function StudyFace({
 
             {/* Swipe feedback grows from the edge it is heading for. */}
             <Reanimated.View pointerEvents="none" style={[styles.wash, styles.washLeft, washLeft]}>
-              <RotateCcw size={28} strokeWidth={2} color={colors.error} />
+              <RotateCcw size={28} strokeWidth={2} color={colors.errorInk} />
             </Reanimated.View>
             <Reanimated.View pointerEvents="none" style={[styles.wash, styles.washRight, washRight]}>
-              <Check size={28} strokeWidth={2.25} color={colors.success} />
+              <Check size={28} strokeWidth={2.25} color={colors.successInk} />
             </Reanimated.View>
 
             {/* Outside the card's accessibility element, so it stays its own
@@ -734,7 +738,7 @@ function StudyFace({
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ colors, type, e1 }: Theme) => StyleSheet.create({
   root: { flex: 1 },
   // Dimmed, not opaque: the point of pulling the card down is to see that there
   // is a screen behind it to go back to.

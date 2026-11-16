@@ -1,7 +1,9 @@
 import { View, Text, StyleSheet } from 'react-native';
 import { Image } from 'expo-image';
 import { avatarUrl } from '@/lib/avatars';
-import { colors, radii, fonts } from '@/constants/theme';
+import { radii, fonts } from '@/constants/theme';
+import { useTheme, useThemedStyles, type Theme } from '@/hooks/useTheme';
+import type { Palette } from '@/constants/palettes';
 
 // ---------------------------------------------------------------------------
 // One avatar, used everywhere a person appears.
@@ -17,7 +19,7 @@ import { colors, radii, fonts } from '@/constants/theme';
 // those people stay visually distinguishable in a list where every avatar is
 // otherwise an identical circle with a letter in it.
 // ---------------------------------------------------------------------------
-const TINTS = [
+const tintsFor = (colors: Palette) => [
   colors.terra,
   colors.sage,
   colors.skyDeep,
@@ -33,7 +35,8 @@ function initialOf(name: string | null | undefined): string {
 
 /// Stable per-name, so the same friend keeps the same colour between renders
 /// and between screens.
-function tintFor(name: string | null | undefined): string {
+function tintFor(colors: Palette, name: string | null | undefined): string {
+  const TINTS = tintsFor(colors);
   const key = (name ?? '').trim().toLowerCase();
   let hash = 0;
   for (let i = 0; i < key.length; i++) hash = (hash * 31 + key.charCodeAt(i)) >>> 0;
@@ -53,6 +56,8 @@ interface AvatarProps {
 }
 
 export default function Avatar({ name, avatarPath, size = 36, highlighted }: AvatarProps) {
+  const styles = useThemedStyles(makeStyles);
+  const { colors } = useTheme();
   const uri = avatarUrl(avatarPath);
 
   return (
@@ -63,7 +68,7 @@ export default function Avatar({ name, avatarPath, size = 36, highlighted }: Ava
           width: size,
           height: size,
           borderRadius: radii.full,
-          backgroundColor: tintFor(name),
+          backgroundColor: tintFor(colors, name),
         },
         highlighted && styles.highlighted,
       ]}
@@ -86,7 +91,7 @@ export default function Avatar({ name, avatarPath, size = 36, highlighted }: Ava
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ colors }: Theme) => StyleSheet.create({
   base: { alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
   highlighted: { borderWidth: 2, borderColor: colors.sageDark },
   initial: { fontFamily: fonts.display, color: colors.inkDark },

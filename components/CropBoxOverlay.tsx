@@ -3,7 +3,7 @@ import { StyleSheet } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { SharedValue, useAnimatedStyle } from 'react-native-reanimated';
 import { Rect, Corner, clampBox, resizeBoxFromCorner } from '@/lib/cropGeometry';
-import { colors } from '@/constants/theme';
+import { useThemedStyles, type Theme } from '@/hooks/useTheme';
 
 interface CropBoxOverlayProps {
   box: SharedValue<Rect>;
@@ -15,6 +15,7 @@ const HANDLE_SIZE = 28;
 const MIN_BOX_SIZE = 60;
 
 export default function CropBoxOverlay({ box, startBox, displayRect }: CropBoxOverlayProps) {
+  const styles = useThemedStyles(makeStyles);
   const movePan = useMemo(() => Gesture.Pan()
     .onStart(() => {
       startBox.value = box.value;
@@ -101,7 +102,7 @@ export default function CropBoxOverlay({ box, startBox, displayRect }: CropBoxOv
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ colors }: Theme) => StyleSheet.create({
   mask: { position: 'absolute', backgroundColor: 'rgba(26,26,46,0.55)' },
   box: {
     position: 'absolute',

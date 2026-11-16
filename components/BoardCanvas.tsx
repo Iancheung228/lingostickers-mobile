@@ -12,7 +12,8 @@ import { useSignedUrls } from '@/hooks/useSignedUrls';
 import { getTileSize } from '@/lib/boardLayout';
 import WallBackground from '@/components/WallBackground';
 import CutoutSticker from '@/components/CutoutSticker';
-import { colors, wordFontFor } from '@/constants/theme';
+import { wordFontFor } from '@/constants/theme';
+import { useTheme, useThemedStyles, type Theme } from '@/hooks/useTheme';
 
 const LONG_PRESS_MS = 400;
 // Stickers are drawn at least this far from the canvas edge so none clip.
@@ -51,6 +52,8 @@ export default function BoardCanvas({
   items, displayStyle, borderStyle, canvasSize, onSelectSticker, onMove, onRemove,
   backgroundPath, backgroundDim, backgroundVersion, onDragStart, onDragEnd,
 }: BoardCanvasProps) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   // Shared across every tile so whichever one is currently being held can
   // reveal the trash zone and report hovering over it — a single drag at a
   // time is the only case that matters here.
@@ -132,6 +135,7 @@ function CanvasTile({
   hoverTrash: SharedValue<number>;
   trashBounds: TrashBounds;
 }) {
+  const styles = useThemedStyles(makeStyles);
   const { reduced } = useMotion();
   const { width: tileWidth, height: tileHeight } = useMemo(() => getTileSize(item.sticker_id), [item.sticker_id]);
   // Drawn at least EDGE_INSET from the canvas edge. This clamps at render only:
@@ -269,7 +273,7 @@ function CanvasTile({
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ colors }: Theme) => StyleSheet.create({
   canvas: {
     borderRadius: 24,
     overflow: 'hidden',

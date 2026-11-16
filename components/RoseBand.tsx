@@ -1,9 +1,10 @@
 import type { ReactNode } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { colors, radii, spacing, type } from '@/constants/theme';
+import { radii, spacing } from '@/constants/theme';
 import OfflineBanner from '@/components/OfflineBanner';
 import { BAND_HEIGHT } from '@/components/HomeHeader';
+import { useThemedStyles, type Theme } from '@/hooks/useTheme';
 
 // The rose band (C-look 3): title in the type scale, at most one subtitle line
 // and one right-hand control, all in maroon (the contrast fix: inkDark washes
@@ -27,6 +28,7 @@ interface RoseBandProps {
 }
 
 export default function RoseBand({ title, subtitle, right, leading, fitContent, bottomPad = spacing.md, children }: RoseBandProps) {
+  const styles = useThemedStyles(makeStyles);
   const insets = useSafeAreaInsets();
   return (
     <View style={[styles.band, { paddingTop: insets.top + spacing.sm }, fitContent ? { paddingBottom: bottomPad } : { height: BAND_HEIGHT }]}>
@@ -46,7 +48,7 @@ export default function RoseBand({ title, subtitle, right, leading, fitContent, 
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ colors, type }: Theme) => StyleSheet.create({
   band: {
     backgroundColor: colors.blush,
     borderBottomLeftRadius: BAND_RADIUS,

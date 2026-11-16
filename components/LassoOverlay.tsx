@@ -9,7 +9,7 @@ import Animated, {
 import Svg, { Path } from 'react-native-svg';
 import { Check, Scissors } from 'lucide-react-native';
 import { Point, Rect, clampPointToRect } from '@/lib/cropGeometry';
-import { colors, shadows } from '@/constants/theme';
+import { useTheme, useThemedStyles, type Theme } from '@/hooks/useTheme';
 
 interface LassoOverlayProps {
   // The image's own display rect (container-local coords) — points are
@@ -66,6 +66,8 @@ function centroidOf(points: Point[]): Point {
 }
 
 export default function LassoOverlay({ bounds, onComplete }: LassoOverlayProps) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const { reduced } = useMotion();
   const [points, setPoints] = useState<Point[]>([]);
   const [settled, setSettled] = useState(false);
@@ -200,7 +202,7 @@ export default function LassoOverlay({ bounds, onComplete }: LassoOverlayProps) 
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ colors, shadows }: Theme) => StyleSheet.create({
   scissors: {
     position: 'absolute',
     width: SCISSORS_SIZE,

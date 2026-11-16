@@ -8,7 +8,8 @@ import { useSignedUrls } from '@/hooks/useSignedUrls';
 import { seededRandom } from '@/lib/seededRandom';
 import { haptic } from '@/lib/haptics';
 import { WallBackdrop } from '@/components/WallBackground';
-import { colors, e1, GUTTER, radii, type } from '@/constants/theme';
+import { GUTTER, radii } from '@/constants/theme';
+import { useTheme, useThemedStyles, type Theme } from '@/hooks/useTheme';
 
 // The Boards tab's grid (C-look 4 "Board tile"): two-up white tiles, a 140pt
 // preview well that is the board itself in miniature (the user's own cover
@@ -37,6 +38,7 @@ interface Props {
 }
 
 export default function BoardTiles({ boards, previews, onOpen, onCreate, bottomPad }: Props) {
+  const styles = useThemedStyles(makeStyles);
   const { width } = useWindowDimensions();
   const tileW = (width - GUTTER * 2 - GAP) / 2;
   const items: Item[] = useMemo(() => [...boards, { id: CREATE_ID }], [boards]);
@@ -67,6 +69,8 @@ export default function BoardTiles({ boards, previews, onOpen, onCreate, bottomP
 function Tile({ board, preview, urls, width, onPress }: {
   board: Board; preview: BoardPreview | undefined; urls: Map<string, string>; width: number; onPress: () => void;
 }) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const backgroundUrl = board.background_path ? urls.get(board.background_path) ?? null : null;
   const paths = preview?.paths ?? [];
   const count = preview?.count ?? 0;
@@ -120,6 +124,8 @@ function Tile({ board, preview, urls, width, onPress }: {
 }
 
 function CreateTile({ onPress }: { onPress: () => void }) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   return (
     <Pressable
       onPress={onPress}
@@ -138,7 +144,7 @@ function CreateTile({ onPress }: { onPress: () => void }) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ colors, e1, type }: Theme) => StyleSheet.create({
   row: { gap: GAP },
   tile: { backgroundColor: colors.card, borderRadius: 20, overflow: 'hidden', ...e1 },
   pressed: { opacity: 0.92 },

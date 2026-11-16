@@ -2,7 +2,8 @@ import type { ReactNode } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AuthIntro from '@/components/AuthIntro';
-import { colors, fonts, radii, spacing, type } from '@/constants/theme';
+import { fonts, radii, spacing } from '@/constants/theme';
+import { useThemedStyles, type Theme } from '@/hooks/useTheme';
 
 interface AuthShellProps {
   /** The one allowed mono overline ("WELCOME BACK"). */
@@ -21,6 +22,7 @@ interface AuthShellProps {
 // and tappable to dismiss the keyboard. No card around the fields: they are white
 // with their own `ctl` border, directly on the page.
 export default function AuthShell({ overline, title, tagline, children, intro = true }: AuthShellProps) {
+  const styles = useThemedStyles(makeStyles);
   const insets = useSafeAreaInsets();
   const body = (
     <View style={styles.root}>
@@ -43,7 +45,7 @@ export default function AuthShell({ overline, title, tagline, children, intro = 
   return intro ? <AuthIntro>{body}</AuthIntro> : body;
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ colors, type }: Theme) => StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.sky },
   flex: { flex: 1 },
   band: {
@@ -62,6 +64,7 @@ const styles = StyleSheet.create({
 
 /** "Already have an account?  Sign In": a tertiary 44pt link with an accented tail. */
 export function AuthLink({ prefix, accent, onPress, testID }: { prefix: string; accent: string; onPress: () => void; testID?: string }) {
+  const linkStyles = useThemedStyles(makeLinkStyles);
   return (
     <Pressable
       onPress={onPress}
@@ -77,8 +80,8 @@ export function AuthLink({ prefix, accent, onPress, testID }: { prefix: string; 
   );
 }
 
-const linkStyles = StyleSheet.create({
+const makeLinkStyles = ({ colors }: Theme) => StyleSheet.create({
   link: { minHeight: 44, alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.md },
   text: { fontFamily: fonts.text, fontSize: 16, lineHeight: 22, color: colors.inkLight },
-  accent: { fontFamily: fonts.display, color: colors.terra },
+  accent: { fontFamily: fonts.display, color: colors.terraInk },
 });

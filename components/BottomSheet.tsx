@@ -8,7 +8,8 @@ import { GestureHandlerRootView, Gesture, GestureDetector } from 'react-native-g
 import Animated, {
   useSharedValue, useAnimatedStyle, withSpring, withTiming, runOnJS,
 } from 'react-native-reanimated';
-import { colors, radii, spacing, e2 } from '@/constants/theme';
+import { radii, spacing } from '@/constants/theme';
+import { useThemedStyles, type Theme } from '@/hooks/useTheme';
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
@@ -54,6 +55,7 @@ interface BottomSheetProps {
 const BottomSheet = forwardRef<BottomSheetHandle, BottomSheetProps>(function BottomSheet(
   { onRequestClose, onClosed, header, children, maxHeight }, ref,
 ) {
+  const styles = useThemedStyles(makeStyles);
   const { reduced } = useMotion();
   const y = useSharedValue(0);
   // Measured, not assumed: the exit has to clear the sheet's real height or
@@ -158,7 +160,7 @@ const BottomSheet = forwardRef<BottomSheetHandle, BottomSheetProps>(function Bot
 
 export default BottomSheet;
 
-const styles = StyleSheet.create({
+const makeStyles = ({ colors, e2 }: Theme) => StyleSheet.create({
   root: { flex: 1 },
   scrim: { backgroundColor: colors.scrim },
   avoider: { flex: 1, justifyContent: 'flex-end' },

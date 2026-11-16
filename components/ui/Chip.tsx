@@ -1,6 +1,7 @@
 import { Pressable, StyleSheet, Text } from 'react-native';
-import { colors, fonts, radii, spacing } from '@/constants/theme';
+import { fonts, radii, spacing } from '@/constants/theme';
 import { haptic } from '@/lib/haptics';
+import { useThemedStyles, type Theme } from '@/hooks/useTheme';
 
 interface ChipProps {
   label: string;
@@ -13,6 +14,7 @@ interface ChipProps {
 // terra fill with white text. 4pt vertical slop (hitSlop is vertical only, so a
 // row of chips with gap >= 8 never overlaps, lesson 9). Fires the `select` haptic.
 export default function Chip({ label, selected, onPress, testID }: ChipProps) {
+  const styles = useThemedStyles(makeStyles);
   return (
     <Pressable
       testID={testID}
@@ -32,7 +34,7 @@ export default function Chip({ label, selected, onPress, testID }: ChipProps) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ colors }: Theme) => StyleSheet.create({
   chip: {
     minHeight: 36,
     paddingHorizontal: spacing.md,

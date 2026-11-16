@@ -2,7 +2,8 @@ import { ComponentType, useRef } from 'react';
 import {
   Modal, View, Text, StyleSheet, TouchableOpacity, Pressable, Platform, useWindowDimensions,
 } from 'react-native';
-import { colors, radii, spacing, shadows, fonts } from '@/constants/theme';
+import { radii, spacing, fonts } from '@/constants/theme';
+import { useTheme, useThemedStyles, type Theme } from '@/hooks/useTheme';
 
 type IconComponent = ComponentType<{ size?: number; color?: string; strokeWidth?: number }>;
 
@@ -46,6 +47,8 @@ const CARD_PADDING = spacing.xs * 2;
 // used to need its own top-level control, which is why board rename had
 // nowhere to live and autoArrange shipped with no way to call it.
 export default function BoardMenu({ visible, anchor, items, onClose }: BoardMenuProps) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   // Running an item's action while this Modal is still dismissing leaves a
   // second Modal (rename sheet, image picker) fighting the first for the
@@ -119,7 +122,7 @@ export default function BoardMenu({ visible, anchor, items, onClose }: BoardMenu
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ colors, shadows }: Theme) => StyleSheet.create({
   backdrop: { flex: 1, backgroundColor: 'rgba(43, 42, 40, 0.18)' },
   card: {
     position: 'absolute',

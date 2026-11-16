@@ -1,12 +1,13 @@
 import { StyleSheet } from 'react-native';
 import Svg, { Defs, RadialGradient, Rect, Stop } from 'react-native-svg';
-import { wall } from '@/constants/theme';
+import { useTheme } from '@/hooks/useTheme';
 
 // The default board surface when the user hasn't chosen a photo: the same
 // cream radial field as the Home wall (SPEC "Sticker wall"), no grain and no
 // physical-board texture. (The file keeps its old name so importers needn't
 // change; it no longer draws cork.)
 export default function CorkBackground() {
+  const { wall } = useTheme();
   const [a, b, c] = wall.fieldStops;
   return (
     <Svg width="100%" height="100%" style={StyleSheet.absoluteFill}>

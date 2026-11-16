@@ -5,7 +5,7 @@ import Svg, { Defs, RadialGradient, Stop, Rect } from 'react-native-svg';
 import { WallBackgroundDim } from '@/lib/types';
 import { supabase } from '@/lib/supabase';
 import CorkBackground from '@/components/CorkBackground';
-import { colors } from '@/constants/theme';
+import { useTheme } from '@/hooks/useTheme';
 
 // Flat scrim opacity per dim level — keeps stickers/text legible over an
 // arbitrary user photo regardless of how bright or busy it is. 'none' skips
@@ -48,6 +48,7 @@ interface WallBackdropProps {
 // the rendering-side version of skills.md #1: if more than one component has
 // to *agree* on something, it gets one definition, not two.
 export function WallBackdrop({ url, dim = 'medium', cacheKey }: WallBackdropProps) {
+  const { colors } = useTheme();
   if (!url) return <CorkBackground />;
 
   const dimOpacity = typeof dim === 'number' ? dim / 100 : DIM_OPACITY[dim];

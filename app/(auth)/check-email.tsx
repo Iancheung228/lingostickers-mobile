@@ -5,12 +5,14 @@ import { useAuth } from '@/hooks/useAuth';
 import AuthShell, { AuthLink } from '@/components/AuthShell';
 import Button from '@/components/ui/Button';
 import InlineError from '@/components/ui/InlineError';
-import { colors, fonts, radii, spacing } from '@/constants/theme';
+import { fonts, radii, spacing } from '@/constants/theme';
 import { authActionMessage } from '@/lib/authErrors';
+import { useThemedStyles, type Theme } from '@/hooks/useTheme';
 
 const RESEND_COOLDOWN_SECONDS = 30;
 
 export default function CheckEmailScreen() {
+  const styles = useThemedStyles(makeStyles);
   const { email } = useLocalSearchParams<{ email: string }>();
   const { resendSignupEmail } = useAuth();
   const [loading, setLoading] = useState(false);
@@ -84,10 +86,10 @@ export default function CheckEmailScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ colors }: Theme) => StyleSheet.create({
   block: { marginBottom: spacing.ms },
   ok: { backgroundColor: colors.successLight, borderRadius: radii.md, padding: spacing.ms },
-  okText: { fontFamily: fonts.text, fontSize: 14, lineHeight: 20, color: colors.success },
+  okText: { fontFamily: fonts.text, fontSize: 14, lineHeight: 20, color: colors.successInk },
   hint: { fontFamily: fonts.text, fontSize: 16, lineHeight: 24, color: colors.inkMid, textAlign: 'center', marginBottom: spacing.md },
   foot: { alignItems: 'center', marginTop: spacing.sm },
 });

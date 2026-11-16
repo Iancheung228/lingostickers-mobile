@@ -17,12 +17,13 @@ import { buildTodayPlan, dateKeyOf, QUICK_SESSION_SIZE } from '@/lib/review';
 import { newCardsIntroducedToday, useStudyPrefs } from '@/lib/studyPrefs';
 import StudySessionHost from '@/components/StudySessionHost';
 import { Sticker } from '@/lib/types';
-import { colors, fonts, radii, type, stickerShadow, MIN_TAP } from '@/constants/theme';
+import { fonts, radii, MIN_TAP } from '@/constants/theme';
 import RoseBand, { BAND_RADIUS } from '@/components/RoseBand';
 import InlineError from '@/components/ui/InlineError';
 import { TAB_BAR_CLEARANCE } from '@/constants/tabBar';
 import { haptic } from '@/lib/haptics';
 import { calendarFlipDelay, dur, ease, spring, useMotion } from '@/lib/motion';
+import { useTheme, useThemedStyles, type Theme } from '@/hooks/useTheme';
 
 // Sunday-start week (the rest of the app doesn't otherwise commit to one).
 const WEEKDAY_LABELS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
@@ -62,6 +63,8 @@ function buildMonthRows(monthDate: Date): MonthCell[][] {
 }
 
 export default function CalendarScreen() {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const { user } = useAuth();
   const [fetchedStickers, setStickers] = useState<Sticker[]>([]);
   // A card being deleted (undo window, or already gone) must not come back with
@@ -490,7 +493,7 @@ export default function CalendarScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ colors, type, stickerShadow }: Theme) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.sky },
   scroll: { flex: 1, marginTop: -BAND_RADIUS },
   loadError: { marginHorizontal: GUTTER, marginBottom: 8 },
@@ -501,7 +504,7 @@ const styles = StyleSheet.create({
   title: { flex: 1, fontSize: 26, lineHeight: 32, fontFamily: fonts.display, color: colors.charcoal, letterSpacing: -0.3 },
   titleYear: { color: colors.inkQuiet },
   todayLink: { height: MIN_TAP, paddingHorizontal: 10, justifyContent: 'center' },
-  todayLinkText: { fontSize: 15, lineHeight: 20, fontFamily: fonts.display, color: colors.terra },
+  todayLinkText: { fontSize: 15, lineHeight: 20, fontFamily: fonts.display, color: colors.terraInk },
   chevron: { width: 40, height: MIN_TAP, alignItems: 'center', justifyContent: 'center' },
 
   weekdayRow: { flexDirection: 'row', height: 22, alignItems: 'center' },

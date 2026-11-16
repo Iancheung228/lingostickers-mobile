@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, AccessibilityInfo } from 'react-native';
-import { colors, shadows, radii, spacing, fonts } from '@/constants/theme';
+import { radii, spacing, fonts } from '@/constants/theme';
+import { useThemedStyles, type Theme } from '@/hooks/useTheme';
 
 interface ToastProps {
   message: string;
@@ -14,6 +15,7 @@ interface ToastProps {
 // Transient confirmation pill. Announces itself to VoiceOver on show and
 // dismisses itself after `duration`.
 export default function Toast({ message, actionLabel, onAction, onDismiss, duration = 4000, bottom = spacing.lg }: ToastProps) {
+  const styles = useThemedStyles(makeStyles);
   useEffect(() => {
     AccessibilityInfo.announceForAccessibility(message);
     const t = setTimeout(onDismiss, duration);
@@ -39,7 +41,7 @@ export default function Toast({ message, actionLabel, onAction, onDismiss, durat
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ colors, shadows }: Theme) => StyleSheet.create({
   wrap: { position: 'absolute', left: spacing.lg, right: spacing.lg, alignItems: 'center' },
   toast: {
     flexDirection: 'row',

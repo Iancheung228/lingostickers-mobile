@@ -7,7 +7,8 @@ import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import { CropRect } from '@/lib/types';
 import { ToastLayer, useToast } from '@/components/ToastProvider';
 import { friendlyErrorSync } from '@/lib/friendlyError';
-import { colors, radii, spacing, fonts, shadows } from '@/constants/theme';
+import { radii, spacing, fonts } from '@/constants/theme';
+import { useTheme, useThemedStyles, type Theme } from '@/hooks/useTheme';
 
 export interface PickedAsset {
   uri: string;
@@ -65,6 +66,8 @@ function clampTranslate(value: number, displayedSize: number, frameSize: number)
 export default function BackgroundCropper({
   asset, frameWidth, frameHeight, maxOutputSide, initialCrop, onCancel, onConfirm,
 }: BackgroundCropperProps) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const toast = useToast();
   const [working, setWorking] = useState<PickedAsset | null>(asset);
   const [rotating, setRotating] = useState(false);
@@ -271,7 +274,7 @@ export default function BackgroundCropper({
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ colors, shadows }: Theme) => StyleSheet.create({
   overlay: { flex: 1, backgroundColor: 'rgba(20,24,32,0.94)', justifyContent: 'space-between' },
   header: {
     flexDirection: 'row',

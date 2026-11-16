@@ -4,7 +4,8 @@ import { CutoutBorderStyle, Sticker } from '@/lib/types';
 import CutoutSticker from '@/components/CutoutSticker';
 import { listImagePath } from '@/lib/thumbnails';
 import StickerImageFallback from '@/components/StickerImageFallback';
-import { colors, radii, wordFontFor } from '@/constants/theme';
+import { radii, wordFontFor } from '@/constants/theme';
+import { useTheme, useThemedStyles, type Theme } from '@/hooks/useTheme';
 
 // One cutout on the home wall, with its contact shadow (no tape). Shared by the panel on the
 // home feed and by the editor sheet so the two can't drift apart in how a
@@ -27,6 +28,8 @@ export default function HomeWallTile({
   // meant to read as a picture rather than a labelled list.
   showWord?: boolean;
 }) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   return (
     <>
       {/* Attached contact shadow (SPEC): an ellipse at 82% of the height. */}
@@ -62,7 +65,7 @@ export default function HomeWallTile({
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ colors }: Theme) => StyleSheet.create({
   loader: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   // 9pt ellipse at 82% of the height, softened by a radial fade (RN has no blur).
   contact: { position: 'absolute', left: '14%', right: '14%', top: '79%', height: 15 },

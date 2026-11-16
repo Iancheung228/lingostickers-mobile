@@ -2,10 +2,11 @@ import { useEffect, useRef, useState } from 'react';
 import { View, Text, ActivityIndicator, StyleSheet } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 import { Check } from 'lucide-react-native';
-import { colors, e2, fonts, radii, spacing, type } from '@/constants/theme';
+import { fonts, radii, spacing } from '@/constants/theme';
 import { haptic } from '@/lib/haptics';
 import { useMotion } from '@/lib/motion';
 import Button from '@/components/ui/Button';
+import { useTheme, useThemedStyles, type Theme } from '@/hooks/useTheme';
 
 // ---------------------------------------------------------------------------
 // What the app is doing while the user waits (B-core 2).
@@ -38,6 +39,8 @@ interface ScanProgressProps {
 }
 
 function Marker({ done, active, index }: { done: boolean; active: boolean; index: number }) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const { reduced } = useMotion();
   const scale = useSharedValue(done ? 1 : 1);
   const wasDone = useRef(done);
@@ -54,7 +57,7 @@ function Marker({ done, active, index }: { done: boolean; active: boolean; index
       {done ? (
         <Check size={13} color={colors.white} strokeWidth={3} />
       ) : active ? (
-        <ActivityIndicator size="small" color={colors.terra} />
+        <ActivityIndicator size="small" color={colors.terraInk} />
       ) : (
         <Text style={styles.markerIdle}>{index + 1}</Text>
       )}
@@ -63,6 +66,7 @@ function Marker({ done, active, index }: { done: boolean; active: boolean; index
 }
 
 export default function ScanProgress({ stage, usingServerCutout, onCancel }: ScanProgressProps) {
+  const styles = useThemedStyles(makeStyles);
   const activeIndex = STAGES.findIndex(s => s.id === stage);
   const startedAt = useRef(Date.now());
   const [elapsed, setElapsed] = useState(0);
@@ -136,6 +140,7 @@ export default function ScanProgress({ stage, usingServerCutout, onCancel }: Sca
 
 /** Dims whatever is behind it (the frozen photo) and floats the card over it. */
 export function ScanOverlay({ children }: { children: React.ReactNode }) {
+  const styles = useThemedStyles(makeStyles);
   return (
     <View style={styles.overlay} pointerEvents="box-none">
       <View style={styles.scrim} pointerEvents="none" />
@@ -144,7 +149,7 @@ export function ScanOverlay({ children }: { children: React.ReactNode }) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ colors, e2, type }: Theme) => StyleSheet.create({
   card: {
     gap: spacing.ms,
     padding: spacing.md,

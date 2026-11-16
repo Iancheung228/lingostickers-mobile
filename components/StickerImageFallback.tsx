@@ -1,6 +1,7 @@
 import { ActivityIndicator, StyleSheet, Text } from 'react-native';
 import type { Sticker } from '@/lib/types';
-import { colors, wordFontFor } from '@/constants/theme';
+import { wordFontFor } from '@/constants/theme';
+import { useTheme, useThemedStyles, type Theme } from '@/hooks/useTheme';
 
 // What a sticker's picture slot shows while there is no picture to draw.
 //
@@ -18,10 +19,12 @@ export default function StickerImageFallback({
   /** Font size of the glyph shown for a card with no picture. */
   size?: number;
 }) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   // Every call site centres its picture slot, so neither branch needs layout
   // of its own.
   if (sticker.image_path) {
-    return <ActivityIndicator color={colors.terra} />;
+    return <ActivityIndicator color={colors.terraInk} />;
   }
   // Array.from splits by code point, so a kana or a surrogate-pair character
   // is kept whole rather than cut in half.
@@ -49,6 +52,6 @@ function headword(word: string, language: Sticker['language']): string {
   return rest || trimmed;
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ colors }: Theme) => StyleSheet.create({
   glyph: { color: colors.inkFaint, textAlign: 'center' },
 });

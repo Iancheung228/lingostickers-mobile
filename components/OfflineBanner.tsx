@@ -1,9 +1,10 @@
 import { useEffect, useRef } from 'react';
 import { Animated, StyleSheet, Text } from 'react-native';
 import { WifiOff } from 'lucide-react-native';
-import { colors, fonts, radii, spacing } from '@/constants/theme';
+import { fonts, radii, spacing } from '@/constants/theme';
 import { dur, useMotion } from '@/lib/motion';
 import { useOnline } from '@/lib/connectivity';
+import { useTheme, useThemedStyles, type Theme } from '@/hooks/useTheme';
 
 export const OFFLINE_BANNER_HEIGHT = 32;
 
@@ -13,6 +14,8 @@ export const OFFLINE_BANNER_HEIGHT = 32;
  * No promise to sync later: nothing is queued.
  */
 export default function OfflineBanner({ top, inline }: { top?: number; inline?: boolean }) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const online = useOnline();
   const { reduced, ms, fade } = useMotion();
   const progress = useRef(new Animated.Value(online ? 0 : 1)).current;
@@ -46,7 +49,7 @@ export default function OfflineBanner({ top, inline }: { top?: number; inline?: 
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ colors }: Theme) => StyleSheet.create({
   strip: {
     minHeight: OFFLINE_BANNER_HEIGHT, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
     gap: spacing.sm, paddingHorizontal: spacing.md, backgroundColor: colors.errorLight, borderRadius: radii.full,

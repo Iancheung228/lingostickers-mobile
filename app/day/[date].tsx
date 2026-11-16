@@ -18,12 +18,15 @@ import { useToast } from '@/components/ToastProvider';
 import { haptic } from '@/lib/haptics';
 import StudyCard from '@/components/StudyCard';
 import StudySessionHost from '@/components/StudySessionHost';
-import { colors, e1, fonts, radii, stickerShadow, wordFontFor, MIN_TAP, type } from '@/constants/theme';
+import { fonts, radii, wordFontFor, MIN_TAP } from '@/constants/theme';
+import { useTheme, useThemedStyles, type Theme } from '@/hooks/useTheme';
 
 // Short enough for the band's one-line 30pt title.
 const DATE_FORMAT = new Intl.DateTimeFormat('en-US', { weekday: 'short', month: 'long', day: 'numeric' });
 
 export default function DayScreen() {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const { date } = useLocalSearchParams<{ date: string }>();
   const { user } = useAuth();
   const [fetchedStickers, setStickers] = useState<Sticker[]>([]);
@@ -117,7 +120,7 @@ export default function DayScreen() {
       />
 
       {loading ? (
-        <ActivityIndicator style={styles.loader} color={colors.terra} size="large" />
+        <ActivityIndicator style={styles.loader} color={colors.terraInk} size="large" />
       ) : loadError ? (
         <View style={styles.errorWrap}>
           <Text style={styles.errorTitle}>Couldn&apos;t load this day</Text>
@@ -146,7 +149,7 @@ export default function DayScreen() {
           }
           keyExtractor={s => s.id}
           contentContainerStyle={[styles.list, { paddingBottom: insets.bottom + 32 }]}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchStickers(); }} tintColor={colors.terra} />}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchStickers(); }} tintColor={colors.terraInk} />}
           // Reachable by deleting the last sticker of a day from the card that
           // opens out of this very list.
           ListEmptyComponent={
@@ -182,7 +185,7 @@ export default function DayScreen() {
                     )}
                   </View>
                   <Pressable onPress={() => handleToggleFavorite(item.id)} style={styles.heart} accessible={false} importantForAccessibility="no">
-                    <Heart size={20} strokeWidth={1.75} color={colors.terra} fill={fav ? colors.terra : 'transparent'} />
+                    <Heart size={20} strokeWidth={1.75} color={colors.terraInk} fill={fav ? colors.terra : 'transparent'} />
                   </Pressable>
                 </View>
                 <View style={styles.text}>
@@ -224,7 +227,7 @@ export default function DayScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ colors, type, e1, stickerShadow }: Theme) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.sky },
   count: { ...type.small, marginBottom: 0 },
   headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
@@ -232,7 +235,7 @@ const styles = StyleSheet.create({
     minHeight: MIN_TAP, paddingHorizontal: 16, borderRadius: radii.full, borderWidth: 1.5, borderColor: colors.terra,
     alignItems: 'center', justifyContent: 'center',
   },
-  practiceText: { ...type.button, fontSize: 14, color: colors.terra },
+  practiceText: { ...type.button, fontSize: 14, color: colors.terraInk },
   loader: { flex: 1 },
   emptyWrap: { alignItems: 'center', paddingHorizontal: 32, paddingTop: 48, gap: 12 },
   errorWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32, gap: 12 },

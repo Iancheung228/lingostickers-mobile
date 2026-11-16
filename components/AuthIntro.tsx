@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { Animated, StyleSheet, Text, View } from 'react-native';
-import { colors, fonts } from '@/constants/theme';
+import { fonts } from '@/constants/theme';
 import { useMotion } from '@/lib/motion';
+import { useThemedStyles, type Theme } from '@/hooks/useTheme';
 
 interface AuthIntroProps {
   children: React.ReactNode;
@@ -14,6 +15,7 @@ const INTRO_HOLD_MS = 450;
 const FADE_MS = 380;
 
 export default function AuthIntro({ children }: AuthIntroProps) {
+  const styles = useThemedStyles(makeStyles);
   const { reduced, fade } = useMotion();
   // Under Reduce Motion there is no brand moment to wait through: show the form.
   const [introVisible, setIntroVisible] = useState(!reduced);
@@ -46,7 +48,7 @@ export default function AuthIntro({ children }: AuthIntroProps) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ colors }: Theme) => StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.sky },
   fill: { flex: 1 },
   intro: {

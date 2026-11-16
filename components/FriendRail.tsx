@@ -2,7 +2,8 @@ import { ScrollView, View, Text, TouchableOpacity, StyleSheet } from 'react-nati
 import { UserPlus } from 'lucide-react-native';
 import Avatar from '@/components/Avatar';
 import { FriendWithProfile } from '@/lib/types';
-import { colors, radii, spacing, fonts } from '@/constants/theme';
+import { radii, spacing, fonts } from '@/constants/theme';
+import { useTheme, useThemedStyles, type Theme } from '@/hooks/useTheme';
 
 // ---------------------------------------------------------------------------
 // The friends directory, as one line.
@@ -27,6 +28,8 @@ interface FriendRailProps {
 const ITEM_WIDTH = 60;
 
 export default function FriendRail({ friends, awaitingIds, onSelect, onAdd }: FriendRailProps) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   return (
     <ScrollView
       horizontal
@@ -72,7 +75,7 @@ export default function FriendRail({ friends, awaitingIds, onSelect, onAdd }: Fr
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ colors }: Theme) => StyleSheet.create({
   content: {
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.xs,

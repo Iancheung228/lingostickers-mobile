@@ -15,7 +15,8 @@ import HomeWallTile from '@/components/HomeWallTile';
 import { listImagePath } from '@/lib/thumbnails';
 import HomeWallEditor from '@/components/HomeWallEditor';
 import { haptic } from '@/lib/haptics';
-import { colors, fonts, radii, wall } from '@/constants/theme';
+import { fonts, radii } from '@/constants/theme';
+import { useTheme, useThemedStyles, type Theme } from '@/hooks/useTheme';
 
 interface MiniStickerWallProps {
   stickers: Sticker[]; // newest-first, as fetched by the caller
@@ -58,6 +59,8 @@ export default function MiniStickerWall({
   stickers, userId, backgroundPath, backgroundDim, onChangeBackground,
   arranged, onArranged, onPressSticker, borderStyle,
 }: MiniStickerWallProps) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const { width: screenWidth } = useWindowDimensions();
   const canvas = useMemo(() => homeCanvasSize(screenWidth), [screenWidth]);
   const [editorOpen, setEditorOpen] = useState(false);
@@ -270,7 +273,7 @@ export default function MiniStickerWall({
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ wall, colors }: Theme) => StyleSheet.create({
   shadow: {
     marginHorizontal: HOME_WALL_INSET,
     height: HOME_WALL_HEIGHT,

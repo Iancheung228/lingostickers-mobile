@@ -7,7 +7,8 @@ import { Check, X } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { REPORT_REASONS, submitReport } from '@/lib/moderation';
 import type { ReportReason } from '@/lib/types';
-import { colors, radii, spacing, shadows, fonts, typography } from '@/constants/theme';
+import { radii, spacing, fonts } from '@/constants/theme';
+import { useTheme, useThemedStyles, type Theme } from '@/hooks/useTheme';
 
 // ---------------------------------------------------------------------------
 // Reporting content or a person.
@@ -38,6 +39,8 @@ interface ReportSheetProps {
 export default function ReportSheet({
   visible, reporterId, reportedUserId, reportedName, challengeId, onBlock, onClose,
 }: ReportSheetProps) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const [reason, setReason] = useState<ReportReason | null>(null);
   const [detail, setDetail] = useState('');
   const [sending, setSending] = useState(false);
@@ -195,7 +198,7 @@ export default function ReportSheet({
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ colors, typography, shadows }: Theme) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.sky },
   flex: { flex: 1 },
   header: {

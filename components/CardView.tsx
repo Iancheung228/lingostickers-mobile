@@ -6,8 +6,9 @@ import { SentenceGloss, SentenceInsight } from '@/components/SentenceGloss';
 import type { EditTarget } from '@/lib/cardEdit';
 import { frenchParts } from '@/lib/hint';
 import type { Sticker, StickerDraft, Language } from '@/lib/types';
-import { colors, fonts, headwordStyle, radii, sentenceFontFor, spacing, stickerShadow, type, MIN_TAP } from '@/constants/theme';
+import { fonts, radii, sentenceFontFor, spacing, MIN_TAP } from '@/constants/theme';
 import { useMotion } from '@/lib/motion';
+import { useTheme, useThemedStyles, type Theme } from '@/hooks/useTheme';
 
 // ONE card, three postures (A-card 0): the study front, the answer (study back,
 // card detail body, new-card reveal), and the helpers they share. The study
@@ -112,6 +113,8 @@ export function CardFront({ card, imageUrl, hints, hasMoreHints, totalHints, onH
   onHint: () => void;
   stillLearning: boolean;
 }) {
+  const { stickerShadow, type, colors } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const { ms } = useMotion();
   const [well, setWell] = useState({ w: 0, h: 0 });
   const onLayout = (e: LayoutChangeEvent) => setWell({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height });
@@ -191,6 +194,8 @@ export function CardFront({ card, imageUrl, hints, hasMoreHints, totalHints, onH
 }
 
 export function PosChip({ text }: { text: string }) {
+  const { type } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   return (
     <View style={styles.pos}>
       <Text style={styles.posText} maxFontSizeMultiplier={type.micro.maxFontSizeMultiplier}>{text}</Text>
@@ -224,6 +229,8 @@ interface CardBackProps {
 function CardBackImpl({
   card, variant, thumbUrl, thumbPath, onSpeak, onEdit, editable, onOpenMemory, moreOpen, fading,
 }: CardBackProps) {
+  const { headwordStyle, type, colors } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const { reduced } = useMotion();
   const [translationShown, setTranslationShown] = useState(variant !== 'study');
   const [more, setMore] = useState(!!moreOpen);
@@ -387,6 +394,8 @@ function CardBackImpl({
 export const CardBack = memo(CardBackImpl);
 
 function Forms({ forms }: { forms?: CardContent['forms'] }) {
+  const { type } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const rows = (forms ?? []).filter(f => f && f.l && f.v);
   if (!rows.length) return null;
   return (
@@ -406,6 +415,8 @@ function Forms({ forms }: { forms?: CardContent['forms'] }) {
 function MemoryLine({ place, note, date, onPress, label }: {
   place: string; note: string; date: string; onPress?: () => void; label: string;
 }) {
+  const { colors, type } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const body = (
     <>
       <MapPin size={16} strokeWidth={1.75} color={colors.inkLight} style={styles.memoryPin} />
@@ -436,6 +447,7 @@ function MemoryLine({ place, note, date, onPress, label }: {
 function Editable({ on, onPress, label, children, style }: {
   on: boolean; onPress: () => void; label: string; children: React.ReactNode; style?: object;
 }) {
+  const styles = useThemedStyles(makeStyles);
   if (!on) return <View style={style}>{children}</View>;
   return (
     <Pressable
@@ -449,7 +461,7 @@ function Editable({ on, onPress, label, children, style }: {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ colors, type }: Theme) => StyleSheet.create({
   fill: { width: '100%', height: '100%' },
 
   // ── front ──

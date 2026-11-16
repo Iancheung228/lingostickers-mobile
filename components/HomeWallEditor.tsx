@@ -25,7 +25,8 @@ import CutoutSticker from '@/components/CutoutSticker';
 import HomeWallTile from '@/components/HomeWallTile';
 import StickerImageFallback from '@/components/StickerImageFallback';
 import { listImagePath } from '@/lib/thumbnails';
-import { colors, radii, fonts, spacing, shadows, wordFontFor } from '@/constants/theme';
+import { radii, fonts, spacing, wordFontFor } from '@/constants/theme';
+import { useTheme, useThemedStyles, type Theme } from '@/hooks/useTheme';
 
 const HOME_BACKGROUND_MAX_SIDE = 1600;
 const TRASH_SIZE = 52;
@@ -59,6 +60,8 @@ export default function HomeWallEditor({
   onAdd, onRemove, onMove, onTidy,
   backgroundPath, backgroundDim, backgroundVersion, onChangeBackground, onBackgroundUploaded,
 }: HomeWallEditorProps) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const { reduced } = useMotion();
   const toast = useToast();
   const { width: screenWidth } = useWindowDimensions();
@@ -364,6 +367,7 @@ function DraggableTile({
   hoverTrash: SharedValue<number>;
   trashBounds: { left: number; top: number; size: number };
 }) {
+  const styles = useThemedStyles(makeStyles);
   const { reduced } = useMotion();
   const side = homeTileFraction(item.sticker_id) * canvas.width;
   const { maxX: maxFx, maxY: maxFy } = maxPlacement(homeTileFraction(item.sticker_id), canvas.aspect);
@@ -456,7 +460,7 @@ function DraggableTile({
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ colors, shadows }: Theme) => StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.sky },
   container: { flex: 1 },
   header: {
@@ -470,7 +474,7 @@ const styles = StyleSheet.create({
   headerText: { flex: 1 },
   title: { fontSize: 20, fontFamily: fonts.display, color: colors.inkDark },
   subtitle: { fontSize: 11, fontFamily: fonts.display, color: colors.inkLight, marginTop: 3 },
-  subtitleFull: { color: colors.terra },
+  subtitleFull: { color: colors.terraInk },
   doneBtn: {
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,

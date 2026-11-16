@@ -1,8 +1,9 @@
 import { View, StyleSheet } from 'react-native';
 import Animated, { interpolate, Extrapolation, useAnimatedStyle, type SharedValue } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { colors, e1, radii, spacing, type } from '@/constants/theme';
+import { radii, spacing } from '@/constants/theme';
 import { useMotion } from '@/lib/motion';
+import { useThemedStyles, type Theme } from '@/hooks/useTheme';
 
 /** The rose band at rest is 140pt tall (SPEC "Home band copy"). */
 export const BAND_HEIGHT = 140;
@@ -21,6 +22,7 @@ interface HomeHeaderProps {
 // ABOVE the list with the title and pill and is always the slim height. At rest
 // they are the same rose, so together they read as one 140pt band.
 export function HomeBandFill({ scrollY }: { scrollY: SharedValue<number> }) {
+  const styles = useThemedStyles(makeStyles);
   const insets = useSafeAreaInsets();
   const { reduced } = useMotion();
   const travel = BAND_HEIGHT - slimBandHeight(insets.top);
@@ -31,6 +33,7 @@ export function HomeBandFill({ scrollY }: { scrollY: SharedValue<number> }) {
 }
 
 export default function HomeHeader({ scrollY }: HomeHeaderProps) {
+  const styles = useThemedStyles(makeStyles);
   const insets = useSafeAreaInsets();
   const { reduced } = useMotion();
   const slim = slimBandHeight(insets.top);
@@ -51,7 +54,7 @@ export default function HomeHeader({ scrollY }: HomeHeaderProps) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = ({ colors, type, e1 }: Theme) => StyleSheet.create({
   fill: {
     position: 'absolute', left: 0, right: 0, top: 0, height: BAND_HEIGHT,
     backgroundColor: colors.blush,

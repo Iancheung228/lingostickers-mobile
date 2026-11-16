@@ -11,7 +11,8 @@ import { dur, pressSpring, useMotion } from '@/lib/motion';
 import { DueCountProvider, useDueCount } from '@/hooks/useDueCount';
 import { SOCIAL_ENABLED } from '@/lib/features';
 import { fonts } from '@/constants/theme';
-import { TAB, tabBarBottom, tabBarWidth } from '@/constants/tabBar';
+import { TAB, tabBarBottom, tabBarWidth, tabColors } from '@/constants/tabBar';
+import { useTheme } from '@/hooks/useTheme';
 import TabBarShape from '@/components/tabbar/TabBarShape';
 import TabBarFade from '@/components/tabbar/TabBarFade';
 import TabDisc, { DISC_OUTER } from '@/components/tabbar/TabDisc';
@@ -46,7 +47,9 @@ function useFocusProgress(focused: boolean) {
 
 function SlotLabel({ text, focused }: { text: string; focused: boolean }) {
   const p = useFocusProgress(focused);
-  const style = useAnimatedStyle(() => ({ color: interpolateColor(p.value, [0, 1], [TAB.inkOff, TAB.inkOn]) }));
+  const { colors, isDark } = useTheme();
+  const { inkOff, inkOn } = tabColors(colors, isDark);
+  const style = useAnimatedStyle(() => ({ color: interpolateColor(p.value, [0, 1], [inkOff, inkOn]) }));
   return (
     <Animated.Text style={[styles.label, style]} numberOfLines={1} maxFontSizeMultiplier={1.15}>
       {text}
@@ -75,6 +78,8 @@ function SlotGlyph({ glyph, focused, reduced }: { glyph: TabGlyph; focused: bool
 }
 
 function Badge({ count, reduced }: { count: number; reduced: boolean }) {
+  const { colors, isDark } = useTheme();
+  const tc = tabColors(colors, isDark);
   const s = useSharedValue(1);
   const prev = useRef(count);
   useEffect(() => {
@@ -85,8 +90,8 @@ function Badge({ count, reduced }: { count: number; reduced: boolean }) {
   }, [count, reduced, s]);
   const style = useAnimatedStyle(() => ({ transform: [{ scale: s.value }] }));
   return (
-    <Animated.View style={[styles.badge, style]} pointerEvents="none">
-      <Text style={styles.badgeText} maxFontSizeMultiplier={1}>{count > 9 ? '9+' : String(count)}</Text>
+    <Animated.View style={[styles.badge, { borderColor: tc.badge.ring, backgroundColor: tc.badge.bg }, style]} pointerEvents="none">
+      <Text style={[styles.badgeText, { color: tc.badge.text }]} maxFontSizeMultiplier={1}>{count > 9 ? '9+' : String(count)}</Text>
     </Animated.View>
   );
 }
@@ -235,10 +240,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 5,
     borderRadius: 10,
     borderWidth: 2,
-    borderColor: TAB.badge.ring,
-    backgroundColor: TAB.badge.bg,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  badgeText: { color: TAB.badge.text, fontSize: 10.5, lineHeight: 13, fontFamily: fonts.monoBold },
+  badgeText: { fontSize: 10.5, lineHeight: 13, fontFamily: fonts.monoBold },
 });

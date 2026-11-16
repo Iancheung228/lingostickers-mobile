@@ -4,8 +4,10 @@ import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-na
 import { ChevronsUp, RotateCcw } from 'lucide-react-native';
 import type { Sticker } from '@/lib/types';
 import { Grade, intervalPreview, spokenDelay } from '@/lib/review';
-import { colors, fonts, radii, spacing, type, PRESS_SCALE } from '@/constants/theme';
+import { fonts, radii, spacing, PRESS_SCALE } from '@/constants/theme';
 import { dur, useMotion } from '@/lib/motion';
+import { useTheme, useThemedStyles, type Theme } from '@/hooks/useTheme';
+import type { Palette } from '@/constants/palettes';
 
 // The grade row (C-look 1 "Grade row", A-card 4). Again is a tint with an icon
 // and Good is the only solid fill, so the four never lean on hue alone: form,
@@ -26,12 +28,12 @@ interface Tone {
   flex: number;
 }
 
-const TONES: Record<Grade, Tone> = {
-  again: { grade: 'again', label: 'Again', bg: colors.againTint, pressed: colors.errorPressed, fg: colors.error, sub: colors.error, icon: 'again', flex: 1.4 },
+const tonesFor = (colors: Palette): Record<Grade, Tone> => ({
+  again: { grade: 'again', label: 'Again', bg: colors.againTint, pressed: colors.errorPressed, fg: colors.errorInk, sub: colors.errorInk, icon: 'again', flex: 1.4 },
   hard:  { grade: 'hard',  label: 'Hard',  bg: colors.goldTint, pressed: colors.goldTintPressed, fg: colors.gold, sub: colors.gold, flex: 1 },
   good:  { grade: 'good',  label: 'Good',  bg: colors.success, pressed: colors.successPressed, fg: colors.white, sub: colors.white, flex: 1.4 },
-  easy:  { grade: 'easy',  label: 'Easy',  bg: colors.successLight, pressed: colors.successTintPressed, fg: colors.success, sub: colors.success, icon: 'easy', flex: 1 },
-};
+  easy:  { grade: 'easy',  label: 'Easy',  bg: colors.successLight, pressed: colors.successTintPressed, fg: colors.successInk, sub: colors.successInk, icon: 'easy', flex: 1 },
+});
 
 const FOUR: Grade[] = ['again', 'hard', 'good', 'easy'];
 const TWO: Grade[] = ['again', 'good'];
@@ -47,6 +49,9 @@ export default function GradeRow({ sticker, simple, disabled, onGrade, practice 
   disabled: boolean;
   onGrade: (grade: Grade) => void;
 }) {
+  const styles = useThemedStyles(makeStyles);
+  const { colors } = useTheme();
+  const TONES = tonesFor(colors);
   const { fontScale } = useWindowDimensions();
   const stacked = !simple && fontScale >= STACK_AT;
   const grades = simple ? TWO : stacked ? (['again', 'good', 'hard', 'easy'] as Grade[]) : FOUR;
@@ -72,6 +77,8 @@ export default function GradeRow({ sticker, simple, disabled, onGrade, practice 
 function GradeButton({ tone, sticker, big, practice, stacked, disabled, onPress }: {
   tone: Tone; sticker: Sticker; big: boolean; practice: boolean; stacked: boolean; disabled: boolean; onPress: () => void;
 }) {
+  const { type } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const { reduced } = useMotion();
   const scale = useSharedValue(1);
   const anim = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
@@ -117,7 +124,7 @@ function GradeButton({ tone, sticker, big, practice, stacked, disabled, onPress 
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (_t: Theme) => StyleSheet.create({
   row: { flexDirection: 'row', gap: spacing.sm },
   rowStacked: { flexWrap: 'wrap' },
   big: { minWidth: 0 },

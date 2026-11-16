@@ -3,7 +3,7 @@ import Svg, {
   Defs, RadialGradient, LinearGradient, Stop,
   Rect, Ellipse, Circle, Path, G, Polygon,
 } from 'react-native-svg';
-import { colors } from '@/constants/theme';
+import { useTheme } from '@/hooks/useTheme';
 
 interface BackgroundSceneProps {
   // 'full'  → entire screen (auth screens)
@@ -13,6 +13,7 @@ interface BackgroundSceneProps {
 }
 
 export default function BackgroundScene({ variant = 'full', height }: BackgroundSceneProps) {
+  const { colors } = useTheme();
   const { width, height: winH } = useWindowDimensions();
   const h = height ?? winH;
 
@@ -155,6 +156,7 @@ function FlatTree({
 }
 
 function Tent({ x, y, size }: { x: number; y: number; size: number }) {
+  const { colors } = useTheme();
   // Simple A-frame tent
   const h = size;
   const w = size * 1.4;
