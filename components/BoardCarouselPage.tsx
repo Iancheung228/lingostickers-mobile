@@ -4,13 +4,15 @@ import {
   Trash2, Plus, ImagePlus, ImageOff, MoreHorizontal, Pencil, Wand2, X, Crop, GraduationCap,
   ChevronLeft, Sticker as StickerIcon,
 } from 'lucide-react-native';
-import * as ImagePicker from 'expo-image-picker';
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import { File, Paths } from 'expo-file-system';
 import { useBoardStickers } from '@/hooks/useBoards';
 import { supabase } from '@/lib/supabase';
 import { useCoachMark } from '@/lib/coachMarks';
-import { alertPermissionDenied } from '@/lib/permissions';
+import { pickBackgroundPhoto } from '@/lib/pickBackgroundPhoto';
+import type { BackgroundChoice, PickedPhoto, SavedBackground, StagedBackground } from '@/lib/backgroundLibrary';
+import { useSavedBackgrounds } from '@/hooks/useSavedBackgrounds';
+import BackgroundPickerSheet from '@/components/BackgroundPickerSheet';
 import {
   BackgroundCrop, Board, BoardStickerWithSticker, CropRect, Sticker,
   WallDisplayStyle, CutoutBorderStyle,
@@ -61,7 +63,7 @@ interface BoardCarouselPageProps {
   onChangeBackground: (boardId: string, path: string | null, crop?: BackgroundCrop | null) => Promise<{ error: Error | null }>;
   onChangeBackgroundDim: (boardId: string, dim: number) => Promise<{ error: Error | null }>;
   onDragStateChange: (dragging: boolean) => void;
-  // Fired whenever this board's sticker set or cover photo changes. The
+  // Fired whenever this board's sticker set or background changes. The
   // bottom rail draws its own thumbnails from a separate read-only query
   // (useBoardPreviews), so without this it would keep showing a stale
   // miniature of a board you just edited — skills.md #1, two copies of the
@@ -73,6 +75,11 @@ interface BoardCarouselPageProps {
   // consumed, so re-focusing this page later never re-triggers it.
   autoOpenPicker: boolean;
   onAutoOpenHandled: () => void;
+  // A background chosen in the New board sheet, to run through the crop flow
+  // as soon as this page has a canvas to crop against (the board didn't exist
+  // when it was chosen). While set, the sticker picker waits its turn.
+  initialBackground?: StagedBackground | null;
+  onInitialBackgroundHandled?: () => void;
 }
 
 const COVER_UNDO_MS = 6500;
@@ -81,7 +88,7 @@ export default function BoardCarouselPage({
   board, currentUserId, displayStyle, borderStyle, isActive,
   onBack, onDeleteBoard, onRenameBoard, onChangeBackground, onChangeBackgroundDim,
   onDragStateChange, onContentChanged,
-  autoOpenPicker, onAutoOpenHandled,
+  autoOpenPicker, onAutoOpenHandled, initialBackground = null, onInitialBackgroundHandled,
 }: BoardCarouselPageProps) {
   const { colors } = useTheme();
   const styles = useThemedStyles(makeStyles);
@@ -89,6 +96,11 @@ export default function BoardCarouselPage({
     items, loading, addSticker, removeSticker, updatePosition, autoArrange, refetch: refetchItems,
   } = useBoardStickers(board.id);
   const toast = useToast();
+  const library = useSavedBackgrounds();
+  const [backgroundSheetOpen, setBackgroundSheetOpen] = useState(false);
+  // True while the cropper is working on a photo that came out of the library,
+  // so confirming it doesn't save the same photo a second time.
+  const fromLibraryRef = useRef(false);
   const [selectedSticker, setSelectedSticker] = useState<Sticker | null>(null);
   const [studyQueue, setStudyQueue] = useState<Sticker[] | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -126,12 +138,12 @@ export default function BoardCarouselPage({
   const [dragged, setDragged] = useState(false);
 
   useEffect(() => {
-    if (autoOpenPicker && !autoPromptedRef.current) {
+    if (autoOpenPicker && !initialBackground && !autoPromptedRef.current) {
       autoPromptedRef.current = true;
       setPickerOpen(true);
       onAutoOpenHandled();
     }
-  }, [autoOpenPicker, onAutoOpenHandled]);
+  }, [autoOpenPicker, initialBackground, onAutoOpenHandled]);
 
   const handlePickSticker = async (sticker: Sticker) => {
     if (!currentUserId) return;
@@ -189,27 +201,61 @@ export default function BoardCarouselPage({
     if (error) toast.show({ kind: 'error', message: friendlyErrorSync(error, "Couldn't rename the board. Try again.") });
   };
 
-  // Picking only stages the photo into the cropper (see BackgroundCropper) —
+  // Choosing only stages the photo into the cropper (see BackgroundCropper) —
   // the actual resize/upload happens once the user confirms a crop in
   // handleCropConfirm, so nobody uploads a photo they haven't previewed.
-  const handlePickBackground = async () => {
-    if (!currentUserId || uploadingBackground) return;
-    const { granted, canAskAgain } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!granted) {
-      alertPermissionDenied(
-        'Photos Access Needed',
-        'Tabi Stickers needs access to your photo library to set a board background.',
-        canAskAgain
-      );
-      return;
-    }
-    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 1 });
-    const asset = !result.canceled ? result.assets[0] : null;
-    if (!asset) return;
+  const stagePhoto = (asset: PickedPhoto, fromLibrary: boolean) => {
     setEditingCrop(null);
     storedSourceUriRef.current = null;
-    setPickedBackgroundAsset({ uri: asset.uri, width: asset.width, height: asset.height });
+    fromLibraryRef.current = fromLibrary;
+    setPickedBackgroundAsset(asset);
   };
+
+  const handlePickBackground = async () => {
+    if (!currentUserId || uploadingBackground) return;
+    const asset = await pickBackgroundPhoto();
+    if (asset) stagePhoto(asset, false);
+  };
+
+  // A saved background is the uncropped source, so it goes through the same
+  // crop + dim flow as a fresh photo and writes this board's own copy. The
+  // board never points at the library file.
+  const handleUseSaved = async (saved: SavedBackground) => {
+    if (!currentUserId || loadingSource) return;
+    setLoadingSource(true);
+    try {
+      const { data, error } = await supabase.storage.from('sticker-images').createSignedUrl(saved.path, 3600);
+      if (error || !data) throw error ?? new Error('Could not read the saved background');
+      const dest = new File(Paths.cache, `board-${board.id}-library.jpg`);
+      if (dest.exists) dest.delete();
+      const downloaded = await File.downloadFileAsync(data.signedUrl, dest);
+      let { width, height } = saved;
+      if (!width || !height) {
+        const probe = await ImageManipulator.manipulate(downloaded.uri).renderAsync();
+        width = probe.width; height = probe.height;
+      }
+      stagePhoto({ uri: downloaded.uri, width, height }, true);
+    } catch (err: any) {
+      toast.show({ kind: 'error', message: friendlyErrorSync(err, "Couldn't open that background. Try again.") });
+    } finally {
+      setLoadingSource(false);
+    }
+  };
+
+  const handleChooseBackground = (choice: BackgroundChoice) => {
+    if (choice.kind === 'none') void handleRemoveBackground();
+    else if (choice.kind === 'photos') void handlePickBackground();
+    else void handleUseSaved(choice.saved);
+  };
+
+  // The New board sheet's choice, once this page can crop against its canvas.
+  useEffect(() => {
+    if (!initialBackground || canvasSize.width === 0 || !currentUserId) return;
+    onInitialBackgroundHandled?.();
+    if (initialBackground.kind === 'photo') stagePhoto(initialBackground.asset, false);
+    else void handleUseSaved(initialBackground.saved);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialBackground, canvasSize.width, currentUserId]);
 
   // Sibling of background_path, derived by convention rather than stored —
   // exactly as background_path itself is (see 032_board_background_crop.sql).
@@ -239,6 +285,7 @@ export default function BoardCarouselPage({
 
       const { sw, sh, ...crop } = board.background_crop;
       storedSourceUriRef.current = downloaded.uri;
+      fromLibraryRef.current = true; // already kept (or predates the library): don't save it again
       setEditingCrop(crop);
       setPickedBackgroundAsset({ uri: downloaded.uri, width: sw, height: sh });
     } catch (err: any) {
@@ -258,6 +305,9 @@ export default function BoardCarouselPage({
     setUploadingBackground(true);
     const storedSourceUri = storedSourceUriRef.current;
     storedSourceUriRef.current = null;
+    const fromLibrary = fromLibraryRef.current;
+    fromLibraryRef.current = false;
+    let toLibrary: PickedPhoto | null = null;
     try {
       const path = `${currentUserId}/board-${board.id}-background.jpg`;
       const bytes = await new File(result.uri).bytes();
@@ -285,12 +335,17 @@ export default function BoardCarouselPage({
         // nothing else — the background itself is already uploaded and
         // correct, so it isn't worth failing the whole operation over.
         crop = sourceError ? null : { ...result.crop, sw: source.width, sh: source.height };
+        if (!fromLibrary) toLibrary = source;
       }
 
       const { error } = await onChangeBackground(board.id, path, crop);
       if (error) throw error;
       setBackgroundVersion(v => v + 1);
       onContentChanged();
+      // Every photo used as a background is kept in the library, uncropped, so
+      // it can be reused. Best effort and after the board is written: a library
+      // failure never costs the board its background.
+      if (toLibrary) void library.save(toLibrary);
     } catch (err: any) {
       toast.show({ kind: 'error', message: friendlyErrorSync(err, "Couldn't set the background. Try again.") });
     } finally {
@@ -298,7 +353,7 @@ export default function BoardCarouselPage({
     }
   };
 
-  // Removing a cover is an undo toast, not a confirm (B-app 8). The row is
+  // Removing a background is an undo toast, not a confirm (B-app 8). The row is
   // cleared at once; the stored files go only after the undo window closes, so
   // Undo can put the very same photo and crop back.
   const handleRemoveBackground = async () => {
@@ -307,7 +362,7 @@ export default function BoardCarouselPage({
     const crop = board.background_crop ?? null;
     const files = sourcePath ? [path, sourcePath] : [path];
     const { error } = await onChangeBackground(board.id, null);
-    if (error) { toast.show({ kind: 'error', message: friendlyErrorSync(error, "Couldn't remove the cover photo. Try again.") }); return; }
+    if (error) { toast.show({ kind: 'error', message: friendlyErrorSync(error, "Couldn't remove the background. Try again.") }); return; }
     onContentChanged();
     let undone = false;
     const timer = setTimeout(() => {
@@ -315,14 +370,14 @@ export default function BoardCarouselPage({
     }, COVER_UNDO_MS);
     toast.show({
       kind: 'undo',
-      message: 'Cover photo removed',
+      message: 'Background removed',
       action: {
         label: 'Undo',
         onPress: () => {
           undone = true;
           clearTimeout(timer);
           void onChangeBackground(board.id, path, crop).then(({ error: e }) => {
-            if (e) toast.show({ kind: 'error', message: friendlyErrorSync(e, "Couldn't bring the cover photo back.") });
+            if (e) toast.show({ kind: 'error', message: friendlyErrorSync(e, "Couldn't bring the background back.") });
             else onContentChanged();
           });
         },
@@ -354,7 +409,7 @@ export default function BoardCarouselPage({
   // Everything a board can have done *to it*, in one place. Previously each
   // of these needed its own top-level control, which is why rename had
   // nowhere to live at all, why autoArrange shipped unreachable, and why
-  // changing the cover photo was an unlabelled 26pt icon floating over the
+  // changing the background was an unlabelled 26pt icon floating over the
   // canvas with "remove" hidden behind a long-press on it.
   const menuItems: BoardMenuItem[] = [
     { key: 'study', label: 'Study this board', icon: GraduationCap, disabled: items.length === 0, onPress: handleStudy },
@@ -368,10 +423,10 @@ export default function BoardCarouselPage({
     },
     {
       key: 'cover',
-      label: board.background_path ? 'Change cover photo' : 'Add a cover photo',
+      label: board.background_path ? 'Change background' : 'Add a background',
       icon: ImagePlus,
-      disabled: uploadingBackground,
-      onPress: handlePickBackground,
+      disabled: uploadingBackground || loadingSource,
+      onPress: () => setBackgroundSheetOpen(true),
     },
     // Only offered when there's a source to re-crop. A background uploaded
     // before 032_board_background_crop.sql has none, so it can be replaced
@@ -379,14 +434,14 @@ export default function BoardCarouselPage({
     // option appears from then on.
     ...(board.background_path && board.background_crop ? [{
       key: 'cover-reposition',
-      label: 'Reposition cover photo',
+      label: 'Reposition background',
       icon: Crop,
       disabled: loadingSource,
       onPress: handleRepositionBackground,
     }] : []),
     ...(board.background_path ? [{
       key: 'cover-remove',
-      label: 'Remove cover photo',
+      label: 'Remove background',
       icon: ImageOff,
       onPress: handleRemoveBackground,
     }] : []),
@@ -494,6 +549,13 @@ export default function BoardCarouselPage({
         </TouchableOpacity>
       )}
 
+      <BackgroundPickerSheet
+        visible={backgroundSheetOpen}
+        allowNone={!!board.background_path}
+        onClose={() => setBackgroundSheetOpen(false)}
+        onChoose={handleChooseBackground}
+      />
+
       <BoardMenu
         visible={menuOpen}
         anchor={menuAnchor}
@@ -545,6 +607,7 @@ export default function BoardCarouselPage({
           setPickedBackgroundAsset(null);
           setEditingCrop(null);
           storedSourceUriRef.current = null;
+          fromLibraryRef.current = false;
         }}
         onConfirm={handleCropConfirm}
       />

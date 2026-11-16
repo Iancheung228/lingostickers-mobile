@@ -25,6 +25,7 @@ import { syncReminders } from '@/lib/reminder';
 import { ProfileProvider } from '@/hooks/useProfile';
 import { FriendsProvider } from '@/hooks/useFriends';
 import { ChallengesProvider } from '@/hooks/useChallenges';
+import { SavedBackgroundsProvider } from '@/hooks/useSavedBackgrounds';
 import { configureNotificationHandler, syncPushToken } from '@/lib/notifications';
 import { handleAuthDeepLink } from '@/lib/deepLinks';
 import { flushPendingAvatar } from '@/lib/pendingAvatar';
@@ -286,7 +287,9 @@ export default function Root() {
           <ChallengesProvider>
             <ToastProvider>
               <PendingDeleteProvider>
-                <RootLayout />
+                <SavedBackgroundsProvider>
+                  <RootLayout />
+                </SavedBackgroundsProvider>
               </PendingDeleteProvider>
             </ToastProvider>
           </ChallengesProvider>

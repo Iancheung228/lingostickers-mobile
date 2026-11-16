@@ -60,7 +60,7 @@ function clampTranslate(value: number, displayedSize: number, frameSize: number)
 }
 
 // Full-screen pinch/pan/rotate editor shown after picking a photo, before it
-// gets uploaded as a cover photo — lets the user see exactly what will be
+// gets uploaded as a background — lets the user see exactly what will be
 // visible in the (small, wide) home panel rather than uploading blind and
 // hoping the auto-crop picked a sensible region.
 export default function BackgroundCropper({
@@ -219,18 +219,18 @@ export default function BackgroundCropper({
             disabled={busy}
             hitSlop={8}
             accessibilityRole="button"
-            accessibilityLabel="Cancel without changing the cover photo"
+            accessibilityLabel="Cancel without changing the background"
           >
             <X size={20} color={colors.white} />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Adjust cover photo</Text>
+          <Text style={styles.headerTitle}>Adjust background</Text>
           <TouchableOpacity
             style={styles.headerBtn}
             onPress={handleConfirm}
             disabled={busy}
             hitSlop={8}
             accessibilityRole="button"
-            accessibilityLabel="Use this crop as the cover photo"
+            accessibilityLabel="Use this crop as the background"
             accessibilityState={{ disabled: busy, busy }}
           >
             {confirming ? <ActivityIndicator size="small" color={colors.white} /> : <Check size={20} color={colors.white} />}
