@@ -17,7 +17,7 @@ interface Props {
 
 export const WELL_HEIGHT = 108;
 
-// The Home grid cell (C-look 4 "Sticker grid cell"): a sand well with the cutout
+// The Home grid cell (C-look 4 "Sticker grid cell"): an off-white well with the cutout
 // at 85% of it and the contact shadow, the word in the learning face, the
 // meaning in caption, a "Due" tag only when due, and a heart with a 44pt hit
 // area. One accessibility element per card ("pomme, apple, due today"); the
@@ -77,7 +77,7 @@ const styles = StyleSheet.create({
   cell: { flex: 1, backgroundColor: colors.card, borderRadius: radii.md, ...e1 },
   pressed: { opacity: 0.92 },
   well: {
-    height: WELL_HEIGHT, backgroundColor: colors.sand, alignItems: 'center', justifyContent: 'center',
+    height: WELL_HEIGHT, backgroundColor: colors.wellWhite, alignItems: 'center', justifyContent: 'center',
     borderTopLeftRadius: radii.md, borderTopRightRadius: radii.md,
   },
   stickerBox: { width: '85%', height: '85%', ...stickerShadow },

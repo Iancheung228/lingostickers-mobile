@@ -1,0 +1,17 @@
+# Collection grid cells: the image well behind each sticker is off-white (#F7F6F4)
+# on a white card, not cream. Read-only: opens Collection and screenshots it.
+appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
+---
+- runFlow: ../sign-in.yaml
+- tapOn:
+    id: "tab-collection"
+- extendedWaitUntil:
+    visible: "Your words.*"
+    timeout: 20000
+- extendedWaitUntil:
+    visible:
+      id: "sticker-cell-pomme"
+    timeout: 20000
+- waitForAnimationToEnd:
+    timeout: 800
+- takeScreenshot: 01-collection-well-white

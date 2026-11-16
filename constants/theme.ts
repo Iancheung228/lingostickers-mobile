@@ -45,7 +45,8 @@ export const colors = {
   blush:      '#E4A0A1', // the rose band / tab bar pill
   blushDeep:  '#9D4D51', // raised camera button, arrow circle
   maroon:     '#662B31', // text on the rose band, where inkDark is too light
-  sand:       '#F6EEDD', // sticker-thumb wells, speaker buttons
+  sand:       '#F6EEDD', // speaker buttons, sand wells
+  wellWhite:  '#F7F6F4', // Collection grid-cell well: off-white, just off the white card body
   cream:      '#FAF4EA', // page background
   creamDeep:  '#EFE4DA', // page background where it deepens toward the bottom
 
