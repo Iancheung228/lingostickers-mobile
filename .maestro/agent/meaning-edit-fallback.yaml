@@ -48,11 +48,14 @@ appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
     visible:
       id: "reveal-add"
     timeout: 90000
-# Confirm this really is the fallback: the banner is shown and the
-# "Not a …?" control is hidden (it needs a real cutout).
+# Confirm this really is the fallback: the banner is shown. Since ff14d0d the
+# "Not a …?" control is also drawn on fallback cards (corrections use the
+# server's .jpg original), so it must be visible here.
 - assertVisible: "We couldn't cleanly cut out your photo.*"
-- assertNotVisible:
-    id: "reveal-wrong-word"
+- extendedWaitUntil:
+    visible:
+      id: "reveal-wrong-word"
+    timeout: 10000
 - assertVisible: "Meaning, .*\\. Edit"
 - takeScreenshot: 01-fallback-reveal-before
 
@@ -82,6 +85,12 @@ appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
 - takeScreenshot: 03-after-meaning-edit
 - assertVisible: "Meaning, .*apple.*Edit"
 - assertNotVisible: "Can't change this one any more.*"
+
+# The whole card was regenerated, not just the meaning: the old headword and
+# its sentence ("la théière") are gone, and the new sentence uses the new word.
+- assertNotVisible: ".*théière.*"
+- assertVisible: ".*pomme.*"
+- takeScreenshot: 04-sentence-regenerated
 
 # Discard the draft: nothing saved to the collection.
 - tapOn:
