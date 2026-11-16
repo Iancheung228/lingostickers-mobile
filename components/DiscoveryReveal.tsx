@@ -16,6 +16,8 @@ import { useCoachMark } from '@/lib/coachMarks';
 import SceneWords from '@/components/SceneWords';
 import { SceneChip } from '@/lib/sceneCards';
 import { useTheme, useThemedStyles, type Theme } from '@/hooks/useTheme';
+import BatchProgress from '@/components/BatchProgress';
+import type { BatchProgress as BatchProgressData } from '@/lib/batchQueue';
 
 interface DiscoveryRevealProps {
   draft: StickerDraft | null;
@@ -32,7 +34,7 @@ interface DiscoveryRevealProps {
   // scrim, a drag, Android back — means "finish later": the sheet closes and the
   // cards stay queued, so a stray gesture never throws away work that already
   // cost an AI call (lesson 10).
-  batch?: { label: string; onSkip: () => void; onDismiss: () => void };
+  batch?: { label: string; progress: BatchProgressData; isLast: boolean; onSkip: () => void; onDismiss: () => void };
   onEditWord: (newWord: string) => Promise<void>;
   onEditSentence: (newSentence: string) => Promise<void>;
   saving: boolean;
@@ -42,10 +44,12 @@ interface DiscoveryRevealProps {
   /// prompts. Null hides them.
   sceneBase64: string | null;
   sceneSelected: SceneChip[];
+  /// Words the scene chips must not offer (batch: sibling cards from one photo).
+  sceneAvoid?: string[];
   onSceneSelected: (chips: SceneChip[]) => void;
 }
 
-export default function DiscoveryReveal({ draft, onAdd, saveError, onDiscard, onRetryExtraction, batch, onEditWord, onEditSentence, saving, retranslating, retranslatingSentence, sceneBase64, sceneSelected, onSceneSelected }: DiscoveryRevealProps) {
+export default function DiscoveryReveal({ draft, onAdd, saveError, onDiscard, onRetryExtraction, batch, onEditWord, onEditSentence, saving, retranslating, retranslatingSentence, sceneBase64, sceneSelected, sceneAvoid, onSceneSelected }: DiscoveryRevealProps) {
   const { colors, type } = useTheme();
   const styles = useThemedStyles(makeStyles);
   const { reduced } = useMotion();
@@ -88,6 +92,8 @@ export default function DiscoveryReveal({ draft, onAdd, saveError, onDiscard, on
   useEffect(() => {
     setEditingWord(false);
     setEditingSentence(false);
+    // Batch: the next card arrives in this same sheet, so start it at the top.
+    scrollRef.current?.scrollTo({ y: 0, animated: false });
   }, [draft?.imagePath]);
 
   // Stop any in-flight pronunciation when the discovery changes or the modal closes.
@@ -147,7 +153,9 @@ export default function DiscoveryReveal({ draft, onAdd, saveError, onDiscard, on
     if (skipRef.current) { skipRef.current = false; batch.onSkip(); } else batch.onDismiss();
   };
   const count = sceneSelected.length + 1;
-  const addLabel = sceneSelected.length ? `Add ${count} cards` : 'Add to Collection';
+  const addLabel = batch
+    ? `${sceneSelected.length ? `Add ${count} cards` : 'Add'} & ${batch.isLast ? 'finish' : 'next'}`
+    : sceneSelected.length ? `Add ${count} cards` : 'Add to Collection';
 
   return (
     <BottomSheet ref={sheetRef} onRequestClose={requestClose} onClosed={handleClosed} maxHeight="92%">
@@ -164,7 +172,10 @@ export default function DiscoveryReveal({ draft, onAdd, saveError, onDiscard, on
         keyboardShouldPersistTaps="handled"
       >
         {!!batch && (
-          <Text style={styles.found} testID="reveal-batch-label" accessibilityRole="header">{`Card ${batch.label}`}</Text>
+          <View style={styles.batchHead}>
+            <BatchProgress progress={batch.progress} phase="review" />
+            <Text style={styles.batchLabel} testID="reveal-batch-label" accessibilityRole="header">{`Card ${batch.label}`}</Text>
+          </View>
         )}
 
         {!!draft.bgIssue && (
@@ -207,9 +218,11 @@ export default function DiscoveryReveal({ draft, onAdd, saveError, onDiscard, on
 
         {!!sceneBase64 && (
           <SceneWords
+            key={draft.imagePath}
             sceneBase64={sceneBase64}
             language={draft.language}
             mainWord={draft.word}
+            avoid={sceneAvoid}
             selected={sceneSelected}
             onChangeSelected={onSceneSelected}
             disabled={saving}
@@ -338,6 +351,8 @@ const makeStyles = ({ colors, type, stickerShadow, shadows }: Theme) => StyleShe
   actions: { paddingTop: spacing.sm, gap: spacing.sm },
   secondaryActions: { flexDirection: 'row', justifyContent: 'center', gap: spacing.sm },
   discard: {},
+  batchHead: { alignItems: 'center', gap: 6, marginBottom: spacing.sm },
+  batchLabel: { ...type.small, textAlign: 'center' },
   editScrim: { ...StyleSheet.absoluteFillObject, backgroundColor: colors.scrim },
   floatingEditWrap: { position: 'absolute', left: 0, right: 0, bottom: 0 },
   floatingEditBar: {

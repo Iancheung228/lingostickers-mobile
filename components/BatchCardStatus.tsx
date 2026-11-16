@@ -2,6 +2,8 @@ import { Modal, View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Saf
 import { X, RotateCcw } from 'lucide-react-native';
 import { fonts } from '@/constants/theme';
 import { useTheme, useThemedStyles, type Theme } from '@/hooks/useTheme';
+import BatchProgress from '@/components/BatchProgress';
+import type { BatchProgress as BatchProgressData } from '@/lib/batchQueue';
 
 // Batch create's review step, for a card that is not ready to show: still being
 // made, or failed. A finished card goes through DiscoveryReveal instead. The
@@ -9,6 +11,7 @@ import { useTheme, useThemedStyles, type Theme } from '@/hooks/useTheme';
 // card" throws anything away.
 interface Props {
   label: string; // "2 of 5"
+  progress: BatchProgressData;
   state: 'pending' | 'failed';
   error: string | null;
   onRetry: () => void;
@@ -16,7 +19,7 @@ interface Props {
   onDismiss: () => void;
 }
 
-export default function BatchCardStatus({ label, state, error, onRetry, onSkip, onDismiss }: Props) {
+export default function BatchCardStatus({ label, progress, state, error, onRetry, onSkip, onDismiss }: Props) {
   const { colors } = useTheme();
   const styles = useThemedStyles(makeStyles);
   return (
@@ -35,6 +38,8 @@ export default function BatchCardStatus({ label, state, error, onRetry, onSkip, 
             <X size={24} color={colors.inkDark} />
           </TouchableOpacity>
         </View>
+
+        <BatchProgress progress={progress} phase="review" />
 
         <View style={styles.body}>
           {state === 'pending' ? (

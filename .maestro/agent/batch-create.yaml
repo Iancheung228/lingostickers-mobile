@@ -1,16 +1,18 @@
-# Batch create: Gallery with 2 photos selected -> choose the object in each ->
-# cards make themselves in the background -> review queue (Add one, Skip one)
-# -> one toast. Then the single-photo path: one photo still opens the plain
-# "Pick the object" extractor.
+# Batch create v2: Gallery with 3 photos -> intro screen -> choose the object in
+# each (progress strip) -> card 1 is SKIPPED while 2 and 3 are still being made
+# (regression: skip used to strand the rest) -> card 2 gets the full single-card
+# review (edit the word, a scene chip, "Add & next") -> card 3 "Add & finish" ->
+# one toast. Then the single-photo path: no intro, no strip.
 #
-# Costs TWO AI calls (one per photo in the batch). The single-photo leg closes
-# the extractor without extracting, so it costs none. Do not add more.
+# Costs about SIX AI calls: 3 create-sticker, 1 translate-word (edit), 1
+# scene-words, 1 create-card (the chip). The single-photo leg spends none.
+# Do not add more. Budget: node scripts/qa-budget.mjs
 #
-# Needs 2+ photos in the Simulator library:
-#   xcrun simctl addmedia booted scripts/fixtures/.cache/bicycle.jpg scripts/fixtures/.cache/mug_desk.jpg
+# Needs 3+ photos in the Simulator library:
+#   xcrun simctl addmedia <udid> scripts/fixtures/.cache/{bicycle,cat_mug,breakfast}.jpg
 # The system photo picker is out-of-process; taps on its tiles use the newest
-# photos at the bottom of the grid. Adjust the two `point:` taps if the
-# Simulator's library layout differs.
+# photos at the top of the grid (newest first; coordinates are for the iPhone 14 Simulator). Adjust the `point:` taps if the Simulator's
+# library layout differs.
 appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
 ---
 - runFlow: ../sign-in.yaml
@@ -28,8 +30,11 @@ appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
 - extendedWaitUntil:
     visible: "Import a photo from your library"
     timeout: 15000
+# The Gallery button says how many it takes.
+# (A screenshot only: the hint is inside the Gallery button, whose accessibility label wins.)
+- takeScreenshot: 00-scan-gallery-hint
 
-# ---- Batch: open the picker and select two photos -------------------------
+# ---- Batch: open the picker and select three photos -----------------------
 - tapOn: "Import a photo from your library"
 # First run only: the Photos permission prompt.
 - runFlow:
@@ -43,65 +48,122 @@ appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
 - takeScreenshot: 01-picker
 # The first tap is lost if it lands while the picker is still animating in.
 - extendedWaitUntil:
-    visible: "Select up to 5 photos."
+    visible: "Select Photos"
     timeout: 15000
 - waitForAnimationToEnd
-# Newest photos sit at the bottom of the grid; select the last two tiles.
+# Newest photos sit at the top of the grid; select the first three tiles.
 - tapOn:
-    point: "17%,69%"
+    point: "17%,21%"
 - tapOn:
-    point: "50%,69%"
-- takeScreenshot: 02-picker-two-selected
+    point: "50%,21%"
+- tapOn:
+    point: "83%,21%"
+- takeScreenshot: 02-picker-three-selected
 # The blue check confirms the multi-select (top right of the system picker).
 - tapOn:
-    point: "91%,15%"
+    point: "92%,10%"
+
+# ---- Intro: shown once when 2+ photos were picked -------------------------
+- extendedWaitUntil:
+    visible:
+      id: "batch-intro-title"
+    timeout: 20000
+- assertVisible: "3 photos"
+- assertVisible: "Cut out the object in each photo"
+- assertVisible: ".*edit the word, add more words.*"
+- takeScreenshot: 03-intro
+- tapOn:
+    id: "batch-intro-start"
 - extendedWaitUntil:
     visible:
       id: "extractor-title"
     timeout: 20000
-- assertVisible: "Photo 1 of 2"
+- assertVisible: "Photo 1 of 3"
 - assertVisible: "Make sticker · next photo"
-- takeScreenshot: 03-choose-photo-1
+- assertVisible: "Cutting photo 1 of 3"
+- takeScreenshot: 04-cut-photo-1
 
-# Choosing photo 1 sends it off and moves straight on to photo 2.
+# Choosing a photo sends it off and moves straight on to the next.
 - tapOn:
     id: "extract-sticker"
 - extendedWaitUntil:
-    visible: "Photo 2 of 2"
+    visible: "Photo 2 of 3"
+    timeout: 30000
+- assertVisible: "Cutting photo 2 of 3"
+- takeScreenshot: 05-cut-photo-2
+- tapOn:
+    id: "extract-sticker"
+- extendedWaitUntil:
+    visible: "Photo 3 of 3"
     timeout: 30000
 - assertVisible: "Make sticker · finish"
-- takeScreenshot: 04-choose-photo-2
+- takeScreenshot: 05b-cut-photo-3
 - tapOn:
     id: "extract-sticker"
 
-# ---- Review: card 1 (Add) -------------------------------------------------
-# Either the card is ready, or the "still making" sheet shows until it is.
+# ---- Review: card 1 is skipped while 2 and 3 are still being made ---------
 - extendedWaitUntil:
     visible:
       id: "reveal-add"
     timeout: 120000
-- assertVisible: "Card 1 of 2"
-- takeScreenshot: 05-review-card-1
-- tapOn:
-    id: "reveal-add"
-
-# ---- Review: card 2 (Skip) ------------------------------------------------
-- extendedWaitUntil:
-    visible: "Card 2 of 2"
-    timeout: 120000
-- takeScreenshot: 06-review-card-2
+- assertVisible: "Card 1 of 3"
+- assertVisible: "Reviewing card 1 of 3"
+- assertVisible: "Add & next"
+- takeScreenshot: 06-review-card-1
 - tapOn:
     id: "reveal-discard"
 
-# One toast for the whole batch: only the added card counts.
+# ---- Review: card 2 gets the full single-card review ----------------------
 - extendedWaitUntil:
-    visible: "Added 1 card"
+    visible:
+      id: "reveal-add"
+    timeout: 120000
+- assertVisible: "Card 2 of 3"
+- assertVisible: "Reviewing card 2 of 3"
+- takeScreenshot: 07-review-card-2-after-skip
+# Edit the word (one translate-word call).
+- tapOn: "Meaning,.*Edit"
+- inputText: "dog"
+- tapOn: "Apply this edit"
+- extendedWaitUntil:
+    visible: "Meaning,.*dog.*"
+    timeout: 30000
+- takeScreenshot: 08-word-edited
+# Scene chips are on (one scene-words call); pick the first word.
+- scrollUntilVisible:
+    element: "What's happening?"
+- tapOn: "What's happening?"
+- extendedWaitUntil:
+    visible: "Tap the words you want as cards."
+    timeout: 60000
+- tapOn:
+    text: ".*, .*"
+    below: "Tap the words you want as cards."
+    index: 0
+- takeScreenshot: 09-chip-selected
+- assertVisible: "Add 2 cards & next"
+- tapOn:
+    id: "reveal-add"
+
+# ---- Review: card 3 is the last one ---------------------------------------
+- extendedWaitUntil:
+    visible: "Card 3 of 3"
+    timeout: 120000
+- assertVisible: "Add & finish"
+- assertVisible: "Reviewing card 3 of 3"
+- takeScreenshot: 10-review-card-3
+- tapOn:
+    id: "reveal-add"
+
+# One toast: card 2 + its scene extra + card 3. The skipped card is not counted.
+- extendedWaitUntil:
+    visible: "Added 3 cards"
     timeout: 15000
 - assertNotVisible:
     id: "reveal-add"
-- takeScreenshot: 07-toast-1-card-added
+- takeScreenshot: 11-toast-3-cards-added
 
-# ---- Single photo path is unchanged ---------------------------------------
+# ---- Single photo path is unchanged: no intro, no progress strip ----------
 - tapOn:
     id: "toast-action"
     optional: true
@@ -115,14 +177,14 @@ appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
     visible: ".*(Photos|Recents|Cancel).*"
     timeout: 15000
 - extendedWaitUntil:
-    visible: "Select up to 5 photos."
+    visible: "Select Photos"
     timeout: 15000
 - waitForAnimationToEnd
 - tapOn:
-    point: "83%,69%"
+    point: "83%,21%"
 # The blue check confirms the multi-select (top right of the system picker).
 - tapOn:
-    point: "91%,15%"
+    point: "92%,10%"
 # (Not matched on the "Pick the object" text: the title carries its own
 # accessibilityLabel, which is what Maestro sees.) The plain button label has
 # no batch suffix.
@@ -130,7 +192,10 @@ appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
     visible: "Make sticker"
     timeout: 20000
 - assertNotVisible: "Photo 1 of"
-- takeScreenshot: 08-single-photo-extractor
+- assertNotVisible:
+    id: "batch-progress"
+- assertNotVisible: "3 photos"
+- takeScreenshot: 12-single-photo-extractor
 # Close without extracting (no AI call spent).
 - tapOn: "Close without extracting a sticker"
 - assertVisible: "Import a photo from your library"

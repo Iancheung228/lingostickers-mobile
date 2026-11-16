@@ -19,12 +19,15 @@ import { useTheme, useThemedStyles, type Theme } from '@/hooks/useTheme';
  * chips into cards then.
  */
 export default function SceneWords({
-  sceneBase64, language, mainWord, selected, onChangeSelected, disabled, onAnswered,
+  sceneBase64, language, mainWord, avoid, selected, onChangeSelected, disabled, onAnswered,
 }: {
   sceneBase64: string;
   language: Language;
   /// The scanned word, so a prompt never offers it back.
   mainWord: string;
+  /// More words not to offer: other cards cut from this same photo, and the
+  /// extras already chosen on them (batch create with several loops).
+  avoid?: string[];
   selected: SceneChip[];
   onChangeSelected: (chips: SceneChip[]) => void;
   disabled?: boolean;
@@ -52,7 +55,7 @@ export default function SceneWords({
     try {
       // Everything already on screen is "had", so prompts don't repeat words.
       const seen = Object.values(answers).flat().map((c) => c!.word);
-      const chips = await fetchSceneWords(sceneBase64, id, language, [mainWord, ...seen]);
+      const chips = await fetchSceneWords(sceneBase64, id, language, [mainWord, ...(avoid ?? []), ...seen]);
       if (seq !== ticket.current) return;
       setAnswers((a) => ({ ...a, [id]: chips }));
       setStatus('done');
@@ -71,7 +74,10 @@ export default function SceneWords({
     onChangeSelected(isSelected(chip) ? selected.filter((c) => c.word !== chip.word) : [...selected, chip]);
   };
 
-  const chips = active ? answers[active] : undefined;
+  // Filtered at render too: a sibling card may have taken a word after this
+  // answer came back.
+  const taken = new Set(avoid ?? []);
+  const chips = active ? answers[active]?.filter((c) => !taken.has(c.word) || isSelected(c)) : undefined;
 
   // Loading copy escalates (B-core 3). Add is never blocked by the extras.
   const [waited, setWaited] = useState(0);
