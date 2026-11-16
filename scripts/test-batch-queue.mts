@@ -95,6 +95,29 @@ test('shutdown aborts in-flight work and keeps finished results', async () => {
   assert.equal(status(q), 'done,failed');
 });
 
+test('skipping one finished card leaves every other card running, queued and reviewable', async () => {
+  const { q, gates, started, disposed } = setup(2);
+  const a = q.enqueue({ name: 'a' }); q.enqueue({ name: 'b' }); q.enqueue({ name: 'c' }); await tick();
+  gates.get('a')!.resolve(); await tick(); // a done, b running, c started in a's slot
+  assert.deepEqual(started, ['a', 'b', 'c']);
+  q.skip(a); await tick();
+  assert.deepEqual(disposed, ['draft-a']); // only a's files go
+  assert.equal(status(q), 'skipped,running,running');
+  gates.get('b')!.resolve(); gates.get('c')!.resolve(); await tick();
+  assert.equal(status(q), 'skipped,done,done');
+  assert.equal(nextToReview(q.getSnapshot())!.result, 'draft-b');
+  assert.deepEqual(disposed, ['draft-a']);
+});
+
+test('skipping a card still running does not abort its neighbours', async () => {
+  const { q, gates, disposed } = setup(2);
+  const a = q.enqueue({ name: 'a' }); q.enqueue({ name: 'b' }); q.enqueue({ name: 'c' }); await tick();
+  q.skip(a); await tick(); // a aborted; its slot goes to c
+  gates.get('b')!.resolve(); gates.get('c')!.resolve(); await tick();
+  assert.equal(status(q), 'skipped,done,done');
+  assert.deepEqual(disposed, []);
+});
+
 test('progress counts photos cut and cards reviewed against the picked total', async () => {
   const { q, gates } = setup();
   assert.deepEqual(batchProgress(q.getSnapshot(), 3), { total: 3, cut: 0, reviewed: 0 });

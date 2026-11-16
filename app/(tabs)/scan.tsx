@@ -833,6 +833,18 @@ export default function ScanScreen() {
     : batch.current.state === 'ready' ? 'card' : 'status';
   const [shownReview, setShownReview] = useState<'card' | 'status' | null>(null);
   const reviewClearedAt = useRef(0);
+  // Skip closes the card sheet (it slides away). If the next card is already
+  // ready the same sheet instance would stay mounted, translated off screen and
+  // unable to close again, so the whole batch looked stopped. Going through
+  // "nothing" for a beat remounts it.
+  const [skipTick, setSkipTick] = useState(0);
+  useEffect(() => {
+    if (skipTick > 0 && shownReview === 'card') {
+      reviewClearedAt.current = Date.now();
+      setShownReview(null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [skipTick]);
   useEffect(() => {
     if (wantedReview === shownReview) return;
     if (shownReview !== null) {
@@ -1429,7 +1441,7 @@ export default function ScanScreen() {
 
       <DiscoveryReveal
         draft={shownReview === 'card' && batch.current?.state === 'ready' ? batch.current.draft : null}
-        batch={batch.current ? { label: batch.current.label, progress: batch.progress, isLast: batch.current.isLast, onSkip: batch.skip, onDismiss: batch.closeReview } : undefined}
+        batch={batch.current ? { label: batch.current.label, progress: batch.progress, isLast: batch.current.isLast, onSkip: () => { batch.skip(); setSkipTick((t) => t + 1); }, onDismiss: batch.closeReview } : undefined}
         onAdd={async () => {
           const res = await batch.add();
           if (res?.error) {
