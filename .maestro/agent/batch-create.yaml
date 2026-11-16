@@ -11,7 +11,7 @@
 # Needs 3+ photos in the Simulator library:
 #   xcrun simctl addmedia <udid> scripts/fixtures/.cache/{bicycle,cat_mug,breakfast}.jpg
 # The system photo picker is out-of-process; taps on its tiles use the newest
-# photos at the bottom of the grid. Adjust the `point:` taps if the Simulator's
+# photos at the top of the grid (newest first; coordinates are for the iPhone 14 Simulator). Adjust the `point:` taps if the Simulator's
 # library layout differs.
 appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
 ---
@@ -48,20 +48,20 @@ appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
 - takeScreenshot: 01-picker
 # The first tap is lost if it lands while the picker is still animating in.
 - extendedWaitUntil:
-    visible: "Select up to 5 photos."
+    visible: "Select Photos"
     timeout: 15000
 - waitForAnimationToEnd
-# Newest photos sit at the bottom of the grid; select the last three tiles.
+# Newest photos sit at the top of the grid; select the first three tiles.
 - tapOn:
-    point: "17%,69%"
+    point: "17%,21%"
 - tapOn:
-    point: "50%,69%"
+    point: "50%,21%"
 - tapOn:
-    point: "83%,69%"
+    point: "83%,21%"
 - takeScreenshot: 02-picker-three-selected
 # The blue check confirms the multi-select (top right of the system picker).
 - tapOn:
-    point: "91%,15%"
+    point: "92%,10%"
 
 # ---- Intro: shown once when 2+ photos were picked -------------------------
 - extendedWaitUntil:
@@ -177,14 +177,14 @@ appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
     visible: ".*(Photos|Recents|Cancel).*"
     timeout: 15000
 - extendedWaitUntil:
-    visible: "Select up to 5 photos."
+    visible: "Select Photos"
     timeout: 15000
 - waitForAnimationToEnd
 - tapOn:
-    point: "83%,69%"
+    point: "83%,21%"
 # The blue check confirms the multi-select (top right of the system picker).
 - tapOn:
-    point: "91%,15%"
+    point: "92%,10%"
 # (Not matched on the "Pick the object" text: the title carries its own
 # accessibilityLabel, which is what Maestro sees.) The plain button label has
 # no batch suffix.

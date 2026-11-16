@@ -2,6 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { BatchQueue, nextToReview, batchProgress } from '../lib/batchQueue.ts';
+import { loopCapacity, sceneAvoidWords } from '../lib/batchLimits.ts';
 
 type Job = { name: string };
 function setup(concurrency = 2) {
@@ -116,6 +117,25 @@ test('skipping a card still running does not abort its neighbours', async () => 
   gates.get('b')!.resolve(); gates.get('c')!.resolve(); await tick();
   assert.equal(status(q), 'skipped,done,done');
   assert.deepEqual(disposed, []);
+});
+
+test('loop capacity reserves one card for every photo still to come', () => {
+  assert.equal(loopCapacity(5, 0, 0), 5);   // one photo: up to 5 loops
+  assert.equal(loopCapacity(5, 0, 2), 3);   // 2 more photos wait
+  assert.equal(loopCapacity(5, 3, 1), 1);   // 3 made, 1 photo left: one card for this one
+  assert.equal(loopCapacity(5, 5, 0), 1);   // never below one: the photo itself
+});
+
+test('scene chips avoid sibling cards from the same photo, and only those', () => {
+  const items = [
+    { id: 1, photoId: 1, status: 'done', word: 'vélo', chipWords: ['roue'] },
+    { id: 2, photoId: 1, status: 'done', word: 'sac', chipWords: [] },
+    { id: 3, photoId: 2, status: 'done', word: 'tasse', chipWords: ['café'] },
+    { id: 4, photoId: 1, status: 'skipped', word: null, chipWords: [] },
+  ];
+  assert.deepEqual(sceneAvoidWords(items, 2).sort(), ['roue', 'vélo']);
+  assert.deepEqual(sceneAvoidWords(items, 1), ['sac']);
+  assert.deepEqual(sceneAvoidWords(items, 3), []);
 });
 
 test('progress counts photos cut and cards reviewed against the picked total', async () => {
