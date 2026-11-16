@@ -10,6 +10,7 @@ import BoardCarouselPage from '@/components/BoardCarouselPage';
 import BoardTiles from '@/components/BoardTiles';
 import { useRequireOnline } from '@/hooks/useRequireOnline';
 import NewBoardSheet from '@/components/NewBoardSheet';
+import type { StagedBackground } from '@/lib/backgroundLibrary';
 import RoseBand from '@/components/RoseBand';
 import EmptyState from '@/components/ui/EmptyState';
 import { usePendingDeletes } from '@/components/PendingDeleteProvider';
@@ -39,6 +40,9 @@ export default function WallScreen() {
   const [sheetOpen, setSheetOpen] = useState(false);
   const createdRef = useRef<string | null>(null);
   const [justCreatedId, setJustCreatedId] = useState<string | null>(null);
+  // Background picked in the New board sheet, applied once the board opens.
+  const createdBackgroundRef = useRef<StagedBackground | null>(null);
+  const [initialBackground, setInitialBackground] = useState<StagedBackground | null>(null);
 
   useFocusEffect(useCallback(() => {
     refetchProfile();
@@ -50,12 +54,12 @@ export default function WallScreen() {
 
   const openCreate = () => { if (gate('Creating a board needs a connection.')) setSheetOpen(true); };
 
-  const handleCreateBoard = async (name: string) => {
+  const handleCreateBoard = async (name: string, background: StagedBackground | null) => {
     const { error, board } = await createBoard(name);
     // Land on the board just named, straight into "pick stickers", but only
     // once the sheet has finished dismissing: iOS drops a second Modal that is
     // presented while the first is still leaving.
-    if (!error && board) createdRef.current = board.id;
+    if (!error && board) { createdRef.current = board.id; createdBackgroundRef.current = background; }
     return { error };
   };
 
@@ -88,6 +92,8 @@ export default function WallScreen() {
           onContentChanged={refetchPreviews}
           autoOpenPicker={openBoard.id === justCreatedId}
           onAutoOpenHandled={() => setJustCreatedId(null)}
+          initialBackground={openBoard.id === justCreatedId ? initialBackground : null}
+          onInitialBackgroundHandled={() => setInitialBackground(null)}
         />
       ) : boards.length === 0 ? (
         <View style={styles.empty}>
@@ -115,7 +121,13 @@ export default function WallScreen() {
         onCancel={() => {
           setSheetOpen(false);
           const id = createdRef.current;
-          if (id) { createdRef.current = null; setJustCreatedId(id); setOpenId(id); }
+          if (id) {
+            createdRef.current = null;
+            setInitialBackground(createdBackgroundRef.current);
+            createdBackgroundRef.current = null;
+            setJustCreatedId(id);
+            setOpenId(id);
+          }
         }}
         onCreate={handleCreateBoard}
       />

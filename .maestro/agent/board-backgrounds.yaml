@@ -1,0 +1,53 @@
+# Board backgrounds: the board "..." menu opens a Background sheet (Choose from
+# Photos / None / saved ones, with one calm line when the library is empty), and
+# the New board sheet has an optional Background row. Staging QA account only.
+# Stops before any photo-library interaction (system picker is not drivable here);
+# run the saved-background steps in docs/handoff/board-backgrounds.md by hand.
+appId: ${APP_ID}
+---
+- runFlow: ../sign-in.yaml
+- tapOn: "Boards"
+- waitForAnimationToEnd
+
+# New board sheet has the optional Background row.
+- tapOn: "New board"
+- waitForAnimationToEnd
+- inputText: "Backdrop test"
+- assertVisible: "Background"
+- takeScreenshot: bg-new-board-row
+- tapOn:
+    id: "new-board-background"
+- waitForAnimationToEnd
+- assertVisible: "Choose from Photos"
+- takeScreenshot: bg-sheet-from-new-board
+- tapOn: "Close"
+- waitForAnimationToEnd
+- tapOn: "Create board"
+- waitForAnimationToEnd:
+    timeout: 4000
+- tapOn: "Close the sticker picker"
+- waitForAnimationToEnd:
+    timeout: 3000
+
+# Board menu: renamed items, and the sheet.
+- tapOn: "Board options"
+- waitForAnimationToEnd:
+    timeout: 2000
+- assertVisible: "Add a background"
+- assertNotVisible: ".*[Cc]over photo.*"
+- takeScreenshot: bg-board-menu
+- tapOn: "Add a background"
+- waitForAnimationToEnd
+- assertVisible: "Choose from Photos"
+- assertNotVisible: "None"   # no background yet, so nothing to clear
+- takeScreenshot: bg-sheet-board
+- tapOn: "Close"
+- waitForAnimationToEnd
+
+# Clean up the board.
+- tapOn: "Board options"
+- waitForAnimationToEnd:
+    timeout: 2000
+- tapOn: "Delete board"
+- waitForAnimationToEnd:
+    timeout: 8000
