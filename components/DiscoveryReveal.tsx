@@ -25,6 +25,13 @@ interface DiscoveryRevealProps {
   // Reopens the box/lasso step on the same source photo, in case the cutout
   // didn't come out right — an alternative to discarding and starting over.
   onRetryExtraction: () => void;
+  // Batch create shows each finished card through this same sheet. Retry makes
+  // no sense there (the photo's selection is gone), Discard becomes "Skip this
+  // card" (final: it removes the card's files), and every other way out — the
+  // scrim, a drag, Android back — means "finish later": the sheet closes and the
+  // cards stay queued, so a stray gesture never throws away work that already
+  // cost an AI call (lesson 10).
+  batch?: { label: string; onSkip: () => void; onDismiss: () => void };
   onEditWord: (newWord: string) => Promise<void>;
   onEditSentence: (newSentence: string) => Promise<void>;
   saving: boolean;
@@ -37,7 +44,7 @@ interface DiscoveryRevealProps {
   onSceneSelected: (chips: SceneChip[]) => void;
 }
 
-export default function DiscoveryReveal({ draft, onAdd, saveError, onDiscard, onRetryExtraction, onEditWord, onEditSentence, saving, retranslating, retranslatingSentence, sceneBase64, sceneSelected, onSceneSelected }: DiscoveryRevealProps) {
+export default function DiscoveryReveal({ draft, onAdd, saveError, onDiscard, onRetryExtraction, batch, onEditWord, onEditSentence, saving, retranslating, retranslatingSentence, sceneBase64, sceneSelected, onSceneSelected }: DiscoveryRevealProps) {
   const { reduced } = useMotion();
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const sheetRef = useRef<BottomSheetHandle>(null);
@@ -47,6 +54,7 @@ export default function DiscoveryReveal({ draft, onAdd, saveError, onDiscard, on
   // having laid out) scrolls them into view instead of leaving them under
   // the footer.
   const revealSceneRef = useRef(false);
+  const skipRef = useRef(false);
   const teach = useCoachMark('reveal-prompt', !!draft);
   const [editingWord, setEditingWord] = useState(false);
   const [wordInput, setWordInput] = useState('');
@@ -61,10 +69,16 @@ export default function DiscoveryReveal({ draft, onAdd, saveError, onDiscard, on
       setImageUrl(draft.localCutoutUri);
       return;
     }
+    // Cards can follow one another through this same instance (batch create), so
+    // the previous card's image must not linger while the next one's signed URL
+    // is fetched, nor win a race against it.
+    setImageUrl(null);
     if (!draft?.imagePath) return;
+    let current = true;
     supabase.storage.from('sticker-images')
       .createSignedUrl(draft.imagePath, 3600)
-      .then(({ data }) => { if (data) setImageUrl(data.signedUrl); });
+      .then(({ data }) => { if (current && data) setImageUrl(data.signedUrl); });
+    return () => { current = false; };
   }, [draft?.imagePath, draft?.localCutoutUri]);
 
   // A fresh discovery — drop any leftover edit state from the previous one.
@@ -122,11 +136,18 @@ export default function DiscoveryReveal({ draft, onAdd, saveError, onDiscard, on
     if (saving) { sheetRef.current?.settle(); return; }
     sheetRef.current?.close();
   };
+  // Batch: the Skip button and every other exit both slide the sheet away;
+  // skipRef (declared with the other hooks, above the early return) says which
+  // of the two it was when onClosed fires.
+  const handleClosed = () => {
+    if (!batch) { onDiscard(); return; }
+    if (skipRef.current) { skipRef.current = false; batch.onSkip(); } else batch.onDismiss();
+  };
   const count = sceneSelected.length + 1;
   const addLabel = sceneSelected.length ? `Add ${count} cards` : 'Add to Collection';
 
   return (
-    <BottomSheet ref={sheetRef} onRequestClose={requestClose} onClosed={onDiscard} maxHeight="92%">
+    <BottomSheet ref={sheetRef} onRequestClose={requestClose} onClosed={handleClosed} maxHeight="92%">
       <ScrollView
         ref={scrollRef}
         onContentSizeChange={() => {
@@ -139,6 +160,10 @@ export default function DiscoveryReveal({ draft, onAdd, saveError, onDiscard, on
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
+        {!!batch && (
+          <Text style={styles.found} testID="reveal-batch-label" accessibilityRole="header">{`Card ${batch.label}`}</Text>
+        )}
+
         {!!draft.bgIssue && (
           <View style={styles.bgIssueBanner}>
             <Info size={14} color={colors.gold} />
@@ -203,20 +228,22 @@ export default function DiscoveryReveal({ draft, onAdd, saveError, onDiscard, on
           onPress={() => { teach.dismiss(); onAdd(); }}
         />
         <View style={styles.secondaryActions}>
+          {!batch && (
+            <Button
+              kind="tertiary"
+              label={sceneBase64 ? 'Retry' : 'Retry Extraction'}
+              testID="reveal-retry"
+              disabled={saving}
+              onPress={onRetryExtraction}
+            />
+          )}
           <Button
             kind="tertiary"
-            label={sceneBase64 ? 'Retry' : 'Retry Extraction'}
-            testID="reveal-retry"
-            disabled={saving}
-            onPress={onRetryExtraction}
-          />
-          <Button
-            kind="tertiary"
-            label="Discard"
+            label={batch ? 'Skip this card' : 'Discard'}
             testID="reveal-discard"
-            accessibilityLabel="Discard this discovery"
+            accessibilityLabel={batch ? 'Skip this card' : 'Discard this discovery'}
             disabled={saving}
-            onPress={requestClose}
+            onPress={() => { if (batch) skipRef.current = true; requestClose(); }}
             style={styles.discard}
           />
         </View>
