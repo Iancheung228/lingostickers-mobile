@@ -26,6 +26,7 @@ export type FieldKey =
   | 'translation'
   | 'part_of_speech'
   | 'reading'
+  | 'alternatives'
   | 'forms'
   | 'sentence'
   | 'sentence_translation'
@@ -48,6 +49,20 @@ export const CARD_FIELDS: FieldKey[] = [
   'category',
 ];
 
+/**
+ * What a first scan asks for: the card, plus a few other things the cut-out
+ * might be called. The alternatives sit in the headword block, before the
+ * sentence — they are about the object, and listing them first makes the model
+ * commit to what the cut-out depicts as a whole before it writes about it.
+ * Regenerations (a hint, or a tapped alternative) use CARD_FIELDS: the learner
+ * has just decided, and offering new alternatives would be noise.
+ */
+export const SCAN_FIELDS: FieldKey[] = [
+  ...HEADWORD_FIELDS,
+  'alternatives',
+  ...CARD_FIELDS.slice(HEADWORD_FIELDS.length),
+];
+
 export const PARTS_OF_SPEECH = ['noun', 'verb', 'adjective', 'adverb', 'phrase', 'idiom'] as const;
 export const CATEGORIES = ['Kitchen', 'Animals', 'Study', 'Nature', 'Other'] as const;
 
@@ -68,6 +83,52 @@ export const ANY_WORD_FIELDS: FieldKey[] = [
   'sentence_insight',
   'category',
 ];
+
+const ALTERNATIVES_SCHEMA_LINE = `"alternatives": [{"word": "another headword the cut-out could be, in the same form as \\"word\\"", "translation": "its English meaning"}]`;
+
+/** How many alternatives the reveal sheet offers. */
+export const MAX_ALTERNATIVES = 3;
+
+export interface Alternative {
+  word: string;
+  translation: string;
+}
+
+/** Lowercased, accent-folded, article-free: what makes two headwords "the same". */
+function alternativeKey(word: string): string {
+  return word
+    .normalize('NFKD').replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[\u2019']/g, "'")
+    .replace(/^(?:l'|le |la |les |un |une |des |the |a |an )/, '')
+    .replace(/[^\p{L}\p{N}]+/gu, '');
+}
+
+/**
+ * The model's `alternatives`, kept only where every entry is a non-empty word
+ * and meaning, short enough to be a headword, and not a repeat of the headword
+ * or of another alternative. Malformed entries are dropped one by one — a bad
+ * chip is not worth losing a good card over — and at most three survive, since
+ * the sheet is a choice, not a list. Anything that is not an array is [].
+ */
+export function normalizeAlternatives(raw: unknown, headword = ''): Alternative[] {
+  if (!Array.isArray(raw)) return [];
+  const seen = new Set<string>();
+  const own = alternativeKey(headword);
+  if (own) seen.add(own);
+  const out: Alternative[] = [];
+  for (const entry of raw) {
+    const word = typeof entry?.word === 'string' ? entry.word.trim() : '';
+    const translation = typeof entry?.translation === 'string' ? entry.translation.trim() : '';
+    if (!word || !translation || word.length > 40 || translation.length > 40) continue;
+    const key = alternativeKey(word);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    out.push({ word, translation });
+    if (out.length === MAX_ALTERNATIVES) break;
+  }
+  return out;
+}
 
 const FORMS_SCHEMA_LINE = `"forms": [{"l": "a short label, e.g. present (je)", "v": "the form itself"}]`;
 
@@ -210,6 +271,22 @@ function specFor(key: FieldKey, opts: RenderOptions): FieldSpec {
       };
     case 'reading':
       return { prose: lang.reading, json: { type: 'string' } };
+    case 'alternatives':
+      return {
+        // A whole "key": value line like gloss and forms — the example has to
+        // show a nested shape. What belongs in it is said in the prompt
+        // (the ALTERNATIVES rule in vocab.ts); this line must stay valid JSON.
+        prose: ALTERNATIVES_SCHEMA_LINE,
+        json: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: { word: { type: 'string' }, translation: { type: 'string' } },
+            required: ['word', 'translation'],
+            propertyOrdering: ['word', 'translation'],
+          },
+        },
+      };
     case 'forms':
       return {
         // A whole "key": value line, like gloss: the example has to show a

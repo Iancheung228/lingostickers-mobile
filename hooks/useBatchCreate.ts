@@ -10,6 +10,8 @@ import {
 import type { ExtractResult } from '@/components/PhotoExtractor';
 import { addSceneCards, newSceneId, type SceneChip } from '@/lib/sceneCards';
 import type { StickerDraft } from '@/lib/types';
+import { canCorrect, regenerateCard } from '@/lib/regenerateCard';
+import type { Correction } from '@/lib/wordFix';
 
 type Item = BatchItem<BatchPayload, BatchResult>;
 
@@ -282,27 +284,22 @@ export function useBatchCreate({ userId, language, onFinished, onSceneFailed }: 
     queueRef.current?.updateResult(c.id, (r) => ({ ...r, chips }));
   }, []);
 
-  const editWord = useCallback(async (newWord: string) => {
+  // "Not a …?" / a typed meaning: re-asks create-sticker about this card's
+  // already-uploaded cutout and replaces the whole card (see regenerateCard).
+  // The close-up it needs is the one the card was made from, still in its
+  // queue payload.
+  const correct = useCallback(async (correction: Correction) => {
     const c = queueRef.current ? nextToReview(queueRef.current.getSnapshot()) : null;
-    if (!c || c.status !== 'done') return;
+    if (!c || c.status !== 'done' || !c.result) return;
     setRetranslating(true);
     try {
-      const { data, error } = await supabase.functions.invoke('translate-word', {
-        body: { englishWord: newWord, language: latest.current.language },
+      const next = await regenerateCard({
+        draft: c.result.draft,
+        cropBase64: c.payload.extract.base64 ?? null,
+        contextBase64: c.result.sceneBase64,
+        correction,
       });
-      // Thrown as-is: DiscoveryReveal runs it through friendlyError (lesson 3).
-      if (error) throw error;
-      if (data?.error) throw new Error(data.error);
-      queueRef.current?.updateResult(c.id, (r) => ({
-        ...r,
-        draft: {
-          ...r.draft,
-          word: String(data.word ?? r.draft.word),
-          translation: String(data.translation ?? newWord),
-          reading: String(data.reading ?? r.draft.reading),
-          category: data.category ?? r.draft.category,
-        },
-      }));
+      queueRef.current?.updateResult(c.id, (r) => ({ ...r, draft: next }));
     } finally {
       setRetranslating(false);
     }
@@ -364,6 +361,7 @@ export function useBatchCreate({ userId, language, onFinished, onSceneFailed }: 
           state: (current.status === 'done' ? 'ready'
             : current.status === 'failed' ? 'failed' : 'pending') as 'ready' | 'failed' | 'pending',
           draft: (current.result?.draft ?? null) as StickerDraft | null,
+          canCorrect: !!current.payload.extract.base64 && !!current.result && canCorrect(current.result.draft),
           error: current.error,
           sceneBase64: current.result?.sceneBase64 ?? null,
           chips: current.result?.chips ?? [],
@@ -377,7 +375,7 @@ export function useBatchCreate({ userId, language, onFinished, onSceneFailed }: 
           })), current.id),
         }
       : null,
-    add, skip, retry, setChips, editWord, editSentence,
+    add, skip, retry, setChips, correct, editSentence,
     saving, retranslating, retranslatingSentence,
   };
 }

@@ -60,7 +60,11 @@ export type LlmErrorKind =
   /** Missing or rejected credentials. Config fault; failing over is worth a try. */
   | 'auth'
   /** 2xx but nothing usable came back. Retryable once — often a truncation. */
-  | 'empty';
+  | 'empty'
+  /** The model answered, twice, with a card whose sentence does not contain
+   *  its own headword. Not a provider fault: another model would be asked the
+   *  same question, so it is neither retried by `callModel` nor failed over. */
+  | 'mismatch';
 
 const RETRYABLE: ReadonlySet<LlmErrorKind> = new Set<LlmErrorKind>([
   'rate_limit',
@@ -120,6 +124,8 @@ export class LlmError extends Error {
         return "We couldn't read that photo just now. Please try again.";
       case 'blocked':
         return "We couldn't make a card from that photo. Try a different object.";
+      case 'mismatch':
+        return "We couldn't make a card that fits that. Try again, or tell us what it is.";
       case 'auth':
       case 'invalid':
         return 'Something went wrong on our side. Please try again shortly.';
@@ -168,7 +174,8 @@ export function httpStatusFor(kind: LlmErrorKind): number {
     case 'unavailable':
     case 'timeout':
     case 'empty': return 503;
-    case 'blocked': return 422;
+    case 'blocked':
+    case 'mismatch': return 422;
     case 'auth':
     case 'invalid': return 500;
   }

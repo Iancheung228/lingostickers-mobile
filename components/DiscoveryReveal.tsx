@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
+import WrongWordSheet from '@/components/WrongWordSheet';
+import { MAX_HINT_CHARS, cleanHintInput, wrongWordLabel, type Correction } from '@/lib/wordFix';
 import { useMotion } from '@/lib/motion';
 import { Modal, View, Text, Image, TouchableOpacity, TextInput, StyleSheet, ScrollView, ActivityIndicator, KeyboardAvoidingView, Platform, Pressable } from 'react-native';
 import { X, Info, Check } from 'lucide-react-native';
@@ -35,7 +37,14 @@ interface DiscoveryRevealProps {
   // cards stay queued, so a stray gesture never throws away work that already
   // cost an AI call (lesson 10).
   batch?: { label: string; progress: BatchProgressData; isLast: boolean; onSkip: () => void; onDismiss: () => void };
-  onEditWord: (newWord: string) => Promise<void>;
+  // Fixes a wrong headword by re-asking about the same cutout: a typed meaning
+  // (tapping the English), a tapped alternative, or "What is it?" text. Always
+  // a whole new card, never just the word swapped (the old sentence would still
+  // be about the old word). Throws on failure.
+  onCorrect: (correction: Correction) => Promise<void>;
+  /// False when this draft can't be re-asked (no stored close-up, or no .png
+  /// cutout); the "Not a …?" control is then not drawn.
+  canCorrect: boolean;
   onEditSentence: (newSentence: string) => Promise<void>;
   saving: boolean;
   retranslating: boolean;
@@ -49,7 +58,7 @@ interface DiscoveryRevealProps {
   onSceneSelected: (chips: SceneChip[]) => void;
 }
 
-export default function DiscoveryReveal({ draft, onAdd, saveError, onDiscard, onRetryExtraction, batch, onEditWord, onEditSentence, saving, retranslating, retranslatingSentence, sceneBase64, sceneSelected, sceneAvoid, onSceneSelected }: DiscoveryRevealProps) {
+export default function DiscoveryReveal({ draft, onAdd, saveError, onDiscard, onRetryExtraction, batch, onCorrect, canCorrect, onEditSentence, saving, retranslating, retranslatingSentence, sceneBase64, sceneSelected, sceneAvoid, onSceneSelected }: DiscoveryRevealProps) {
   const { colors, type } = useTheme();
   const styles = useThemedStyles(makeStyles);
   const { reduced } = useMotion();
@@ -67,6 +76,7 @@ export default function DiscoveryReveal({ draft, onAdd, saveError, onDiscard, on
   const [wordInput, setWordInput] = useState('');
   const [editingSentence, setEditingSentence] = useState(false);
   const [sentenceInput, setSentenceInput] = useState('');
+  const [wrongOpen, setWrongOpen] = useState(false);
 
   useEffect(() => {
     // Dry run: show the cutout the device just made, straight off local disk.
@@ -92,6 +102,7 @@ export default function DiscoveryReveal({ draft, onAdd, saveError, onDiscard, on
   useEffect(() => {
     setEditingWord(false);
     setEditingSentence(false);
+    setWrongOpen(false);
     // Batch: the next card arrives in this same sheet, so start it at the top.
     scrollRef.current?.scrollTo({ y: 0, animated: false });
   }, [draft?.imagePath]);
@@ -113,7 +124,12 @@ export default function DiscoveryReveal({ draft, onAdd, saveError, onDiscard, on
     const trimmed = wordInput.trim();
     setEditingWord(false);
     if (!trimmed || trimmed.toLowerCase() === draft.translation.toLowerCase()) return;
-    onEditWord(trimmed).catch(async (err: any) => {
+    const hint = cleanHintInput(trimmed);
+    if (!hint) {
+      toast.show({ kind: 'error', message: `Keep it under ${MAX_HINT_CHARS} characters.` });
+      return;
+    }
+    onCorrect({ hint }).catch(async (err: any) => {
       toast.show({ kind: 'error', message: await friendlyError(err, "Couldn't update the meaning. Try again.") });
     });
   };
@@ -207,7 +223,21 @@ export default function DiscoveryReveal({ draft, onAdd, saveError, onDiscard, on
           }}
           editable={['meaning', 'sentence']}
           moreOpen={false}
-          fading={{ word: retranslating, sentence: retranslatingSentence }}
+          fading={{ word: retranslating, sentence: retranslating || retranslatingSentence }}
+          underHeadword={canCorrect ? (
+            <Pressable
+              testID="reveal-wrong-word"
+              onPress={() => setWrongOpen(true)}
+              disabled={saving || retranslating}
+              style={({ pressed }) => [styles.wrongWord, pressed && styles.wrongWordPressed]}
+              accessibilityRole="button"
+              accessibilityLabel={`${wrongWordLabel(draft.translation)} Choose a different word`}
+            >
+              <Text style={styles.wrongWordText} maxFontSizeMultiplier={type.small.maxFontSizeMultiplier}>
+                {wrongWordLabel(draft.translation)}
+              </Text>
+            </Pressable>
+          ) : null}
         />
 
         {teach.visible && (
@@ -299,6 +329,7 @@ export default function DiscoveryReveal({ draft, onAdd, saveError, onDiscard, on
                   onChangeText={setWordInput}
                   autoFocus
                   autoCapitalize="words"
+                  maxLength={MAX_HINT_CHARS}
                   autoCorrect={false}
                   returnKeyType="done"
                   onSubmitEditing={confirmEditingWord}
@@ -328,6 +359,14 @@ export default function DiscoveryReveal({ draft, onAdd, saveError, onDiscard, on
           </KeyboardAvoidingView>
         </View>
       </Modal>
+
+      {wrongOpen && (
+        <WrongWordSheet
+          alternatives={draft.alternatives ?? []}
+          onCorrect={onCorrect}
+          onClosed={() => setWrongOpen(false)}
+        />
+      )}
     </BottomSheet>
   );
 }
@@ -347,6 +386,14 @@ const makeStyles = ({ colors, type, stickerShadow, shadows }: Theme) => StyleShe
   },
   image: { width: '100%', height: '100%', ...stickerShadow },
   found: { ...type.overline, marginTop: spacing.md, marginBottom: spacing.xs },
+  // A text button, but drawn as one: 44pt tall, left-aligned under the meaning.
+  // No hitSlop — the sentence below it is itself tappable (lesson 9).
+  wrongWord: {
+    alignSelf: 'flex-start', minHeight: 44, justifyContent: 'center',
+    paddingHorizontal: 6, marginLeft: -6, borderRadius: radii.sm,
+  },
+  wrongWordPressed: { backgroundColor: colors.sand },
+  wrongWordText: { ...type.small, color: colors.terraInk, textDecorationLine: 'underline' },
   teach: { ...type.small, textAlign: 'center', marginTop: spacing.md },
   actions: { paddingTop: spacing.sm, gap: spacing.sm },
   secondaryActions: { flexDirection: 'row', justifyContent: 'center', gap: spacing.sm },

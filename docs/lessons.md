@@ -827,3 +827,35 @@ Metro after changing `.env`); a Tabi Dev install shows your real stickers
 (it's on production: check `.env` and the EAS `development` environment);
 staging requests fail to resolve (the free project paused after a week idle;
 restore it in the dashboard).
+
+---
+
+## 19. "Fix the word" must regenerate the card, not edit the word
+
+**Symptom:** a whole toy-town diorama came back as "Le chien / The dog" (a tiny
+dog inside it). Tapping the English to fix it swapped the headword and left a
+sentence that still described the dog — and nothing on screen said the meaning
+was tappable.
+
+**Root cause, three of them:** (1) the prompt never said *what granularity to
+name* — the most nameable object inside the cutout won; (2) the correction path
+(`translate-word`) saw one English word and no image, so it could only change
+the headword, which is lesson 13's mismatch again; (3) the control was an
+undrawn affordance (lesson 9).
+
+**Fix pattern:**
+- Say the granularity in the prompt (`WHOLE_RULE`): name the cutout as a whole,
+  the context photo is context only.
+- A correction is a **re-ask about the same image**, not an edit: `create-sticker`
+  with `precutImagePath` + `hint` or `chosenWord/chosenTranslation`. Every field
+  of the card is replaced together; image fields stay.
+- Offer the alternatives in the **original** call (`alternatives` in
+  `_shared/cardSchema.ts`) so the chips cost no extra request.
+- Validate the correspondence server-side (`_shared/headword.ts`): the sentence
+  must contain the headword; ask twice, then fail with `LlmError('mismatch')`
+  rather than return a mismatched card.
+- Keep the close-up on the client keyed by the draft's `imagePath`; hide the
+  control when it can't be re-asked.
+
+**Cost to know:** each correction is one `create-sticker` quota unit.
+Write-up: `docs/handoff/wrong-word-fix.md`.
