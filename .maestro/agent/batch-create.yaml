@@ -114,13 +114,20 @@ appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
 - extendedWaitUntil:
     visible: ".*(Photos|Recents|Cancel).*"
     timeout: 15000
+- extendedWaitUntil:
+    visible: "Select up to 5 photos."
+    timeout: 15000
+- waitForAnimationToEnd
 - tapOn:
     point: "83%,69%"
 # The blue check confirms the multi-select (top right of the system picker).
 - tapOn:
     point: "91%,15%"
+# (Not matched on the "Pick the object" text: the title carries its own
+# accessibilityLabel, which is what Maestro sees.) The plain button label has
+# no batch suffix.
 - extendedWaitUntil:
-    visible: "Pick the object"
+    visible: "Make sticker"
     timeout: 20000
 - assertNotVisible: "Photo 1 of"
 - takeScreenshot: 08-single-photo-extractor
