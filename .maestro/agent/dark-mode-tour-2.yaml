@@ -55,13 +55,18 @@ appId: com.iancheung228.lingostickers.dev
     timeout: 3000
 - takeScreenshot: ${PREFIX}-71-review-front
 - tapOn:
-    id: "card-front"
-    optional: true
+    text: "Tap to reveal"
 - waitForAnimationToEnd:
-    timeout: 2000
+    timeout: 2500
 - takeScreenshot: ${PREFIX}-72-review-back
-- scroll
-- takeScreenshot: ${PREFIX}-73-review-grade-row
+- tapOn:
+    point: "11%,9%"
+- waitForAnimationToEnd:
+    timeout: 1500
+- takeScreenshot: ${PREFIX}-73-after-review-close
+- tapOn:
+    point: "50%,8%"
+    optional: true
 
 # New board sheet (from the empty Boards tab)
 - tapOn:
