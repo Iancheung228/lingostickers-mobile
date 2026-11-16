@@ -21,9 +21,13 @@ export async function regenerateCard(args: {
   correction: Correction;
 }): Promise<StickerDraft> {
   const { draft, cropBase64, contextBase64, correction } = args;
-  // Without the close-up the model would be asked about nothing; say so in
-  // words rather than sending a request that cannot work.
   if (!cropBase64 || !canCorrect(draft)) {
+    // No cutout to re-ask about (background removal fell back to the original
+    // photo, or the close-up is gone). A typed meaning still works the way it
+    // did before this feature: translate-word swaps the headword, keeping the
+    // sentence. Worse than a full regeneration, but far better than refusing
+    // the edit outright.
+    if ('hint' in correction) return retranslateWord(draft, correction.hint);
     throw new UserFacingError("Can't change this one any more. Retry the scan instead.");
   }
 
@@ -40,4 +44,20 @@ export async function regenerateCard(args: {
   if (error) throw error;
   if (data?.error) throw new Error(String(data.error));
   return applyCorrection(draft, data);
+}
+
+/** The pre-correction meaning edit: a bare translate-word call, headword only. */
+async function retranslateWord(draft: StickerDraft, english: string): Promise<StickerDraft> {
+  const { data, error } = await supabase.functions.invoke('translate-word', {
+    body: { englishWord: english, language: draft.language },
+  });
+  if (error) throw error;
+  if (data?.error) throw new Error(String(data.error));
+  return {
+    ...draft,
+    word: String(data.word ?? draft.word),
+    translation: String(data.translation ?? english),
+    reading: String(data.reading ?? draft.reading),
+    category: data.category ?? draft.category,
+  };
 }

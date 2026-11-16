@@ -45,7 +45,21 @@ appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
 - tapOn:
     id: "batch-intro-cancel"
 
-# Full picker via See all.
+# Full picker via See all. The See all tile is the FlatList footer of the
+# horizontal strip, so it only exists once the strip is scrolled to its end.
+# Swipe inside the strip row (about 71% down the screen), not the whole screen,
+# which starts on the viewfinder. Extra swipes past the end are harmless.
+- repeat:
+    times: 6
+    commands:
+      - swipe:
+          start: "88%, 71%"
+          end: "6%, 71%"
+          duration: 400
+- extendedWaitUntil:
+    visible:
+      id: "recent-see-all"
+    timeout: 10000
 - tapOn:
     id: "recent-see-all"
 - extendedWaitUntil:
@@ -54,7 +68,9 @@ appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
     timeout: 10000
 - assertVisible: "New"
 - assertVisible: "Albums"
-- assertVisible: "All Photos"
+# Label is "All Photos, open the iOS photo picker", so match the id, not the text.
+- assertVisible:
+    id: "photo-picker-all"
 - takeScreenshot: photo-picker-new
 - tapOn:
     id: "picker-chip-shuffle"

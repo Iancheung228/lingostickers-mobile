@@ -13,7 +13,9 @@ appId: ${APP_ID}
 - tapOn: "New board"
 - waitForAnimationToEnd
 - inputText: "Backdrop test"
-- assertVisible: "Background"
+# Label is "Background, none. Choose one" (or "...chosen..."), so match the id.
+- assertVisible:
+    id: "new-board-background"
 - takeScreenshot: bg-new-board-row
 - tapOn:
     id: "new-board-background"

@@ -33,13 +33,25 @@ appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
     visible: "Import a photo from your library"
     timeout: 15000
 
+# Gallery opens the in-app picker (not the iOS system sheet). Pick the first
+# photo and confirm: one photo goes straight to the scan.
 - tapOn:
     text: "Import a photo from your library"
 - tapOn:
     text: "Allow Full Access|Allow Access to All Photos|OK"
     optional: true
+- extendedWaitUntil:
+    visible:
+      id: "photo-thumb-idle"
+    timeout: 15000
+# Index 1 is the teapot: one object on a plain grey ground, so the cutout (and
+# therefore the "Not a …?" control, which needs a .png cutout) reliably succeeds.
+# Index 0 (croissant on a plate) fell back to the original and hid the control.
 - tapOn:
-    text: "Photo, March 30, 2018.*"
+    index: 1
+    id: "photo-thumb-idle"
+- tapOn:
+    id: "photo-picker-confirm"
 - extendedWaitUntil:
     visible: "Make sticker"
     timeout: 30000
