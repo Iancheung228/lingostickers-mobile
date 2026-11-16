@@ -54,6 +54,7 @@ export default function DiscoveryReveal({ draft, onAdd, saveError, onDiscard, on
   // having laid out) scrolls them into view instead of leaving them under
   // the footer.
   const revealSceneRef = useRef(false);
+  const skipRef = useRef(false);
   const teach = useCoachMark('reveal-prompt', !!draft);
   const [editingWord, setEditingWord] = useState(false);
   const [wordInput, setWordInput] = useState('');
@@ -135,9 +136,9 @@ export default function DiscoveryReveal({ draft, onAdd, saveError, onDiscard, on
     if (saving) { sheetRef.current?.settle(); return; }
     sheetRef.current?.close();
   };
-  // Batch: the Skip button and every other exit both slide the sheet away; this
-  // flag says which of the two it was when onClosed fires.
-  const skipRef = useRef(false);
+  // Batch: the Skip button and every other exit both slide the sheet away;
+  // skipRef (declared with the other hooks, above the early return) says which
+  // of the two it was when onClosed fires.
   const handleClosed = () => {
     if (!batch) { onDiscard(); return; }
     if (skipRef.current) { skipRef.current = false; batch.onSkip(); } else batch.onDismiss();
