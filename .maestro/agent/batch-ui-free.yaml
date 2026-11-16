@@ -1,0 +1,158 @@
+# Batch create UI that costs NO AI calls: nothing here taps "Make sticker".
+#   A. one gallery photo, Lasso mode: draw several loops, see them numbered,
+#      remove one, hit the 5-card cap, button says "Make N stickers".
+#   B. three photos: the intro screen, then the cut phase with its progress
+#      strip; cancel without making anything.
+# Run it in Light and in Dark (Profile > Theme) -- it works in either.
+#
+# Loops are drawn with straight swipes (Maestro has no curved gesture), so each
+# "loop" is a thin diagonal sliver: enough to exercise the UI, not a real
+# selection. Sending real loops costs one create-sticker call each.
+#
+# Needs 3+ photos in the Simulator library (see batch-create.yaml); taps use the
+# top row of the picker grid on the iPhone 14 Simulator.
+appId: ${APP_ID}
+---
+- runFlow: ../sign-in.yaml
+
+- tapOn:
+    text: "Scan a new sticker"
+- extendedWaitUntil:
+    visible: ".*(One quick thing|Agree and start scanning|Import a photo from your library).*"
+    timeout: 15000
+- runFlow:
+    when:
+      visible: "Agree and start scanning"
+    commands:
+      - tapOn: "Agree and start scanning"
+- extendedWaitUntil:
+    visible: "Import a photo from your library"
+    timeout: 15000
+- takeScreenshot: ui-00-scan-gallery-hint
+
+# ---- A. one photo, several lasso loops ------------------------------------
+- tapOn: "Import a photo from your library"
+- runFlow:
+    when:
+      visible: ".*(Allow Full Access|Allow Access to All Photos).*"
+    commands:
+      - tapOn: ".*(Allow Full Access|Allow Access to All Photos).*"
+- extendedWaitUntil:
+    visible: "Select Photos"
+    timeout: 15000
+- waitForAnimationToEnd
+- tapOn:
+    point: "50%,21%"
+- tapOn:
+    point: "92%,10%"
+- extendedWaitUntil:
+    visible: "Make sticker"
+    timeout: 20000
+- tapOn: "Lasso tool.*"
+- assertVisible: "Draw around each object you want as a sticker."
+- swipe:
+    start: "25%,38%"
+    end: "38%,48%"
+    duration: 700
+- assertVisible: "Cutout 1 of 1. Remove"
+- assertVisible: "Make sticker"
+- swipe:
+    start: "58%,38%"
+    end: "72%,48%"
+    duration: 700
+- assertVisible: "Cutout 2 of 2. Remove"
+- assertVisible: "Make 2 stickers"
+- takeScreenshot: ui-01-two-loops
+# Removing a loop renumbers the rest and the button follows.
+- tapOn:
+    id: "lasso-remove-1"
+- assertNotVisible: "Make 2 stickers"
+- assertVisible: "Cutout 1 of 1. Remove"
+- takeScreenshot: ui-02-one-loop-left
+# Fill to the cap of 5.
+- swipe:
+    start: "58%,38%"
+    end: "72%,48%"
+    duration: 700
+- swipe:
+    start: "25%,56%"
+    end: "38%,66%"
+    duration: 700
+- swipe:
+    start: "58%,56%"
+    end: "72%,66%"
+    duration: 700
+- swipe:
+    start: "42%,50%"
+    end: "52%,60%"
+    duration: 700
+- assertVisible: "Make 5 stickers"
+- assertVisible: "5 cards max per batch"
+- takeScreenshot: ui-03-five-loops-cap
+# Close without making anything (no AI call spent).
+- tapOn: "Close without extracting a sticker"
+- assertVisible: "Import a photo from your library"
+
+# ---- B. three photos: intro, then the cut phase with its strip ------------
+- tapOn: "Import a photo from your library"
+- extendedWaitUntil:
+    visible: "Select Photos"
+    timeout: 15000
+- waitForAnimationToEnd
+- tapOn:
+    point: "17%,21%"
+- tapOn:
+    point: "50%,21%"
+- tapOn:
+    point: "83%,21%"
+- tapOn:
+    point: "92%,10%"
+- extendedWaitUntil:
+    visible:
+      id: "batch-intro-title"
+    timeout: 20000
+- assertVisible: "3 photos"
+- takeScreenshot: ui-04-intro
+# Cancel on the intro discards nothing: back to the camera, nothing queued.
+- tapOn:
+    id: "batch-intro-cancel-text"
+- assertVisible: "Import a photo from your library"
+- assertNotVisible:
+    id: "batch-resume"
+- tapOn: "Import a photo from your library"
+- extendedWaitUntil:
+    visible: "Select Photos"
+    timeout: 15000
+- waitForAnimationToEnd
+- tapOn:
+    point: "17%,21%"
+- tapOn:
+    point: "50%,21%"
+- tapOn:
+    point: "92%,10%"
+- extendedWaitUntil:
+    visible:
+      id: "batch-intro-title"
+    timeout: 20000
+- assertVisible: "2 photos"
+- tapOn:
+    id: "batch-intro-start"
+- extendedWaitUntil:
+    visible: "Photo 1 of 2"
+    timeout: 20000
+- assertVisible: "Cutting photo 1 of 2"
+- takeScreenshot: ui-05-cut-strip
+- tapOn: "Lasso tool.*"
+- swipe:
+    start: "25%,38%"
+    end: "38%,48%"
+    duration: 700
+- swipe:
+    start: "58%,38%"
+    end: "72%,48%"
+    duration: 700
+- assertVisible: "Make 2 stickers · next photo"
+- takeScreenshot: ui-06-batch-two-loops
+# Close the extractor with nothing sent: no cards, back on the camera.
+- tapOn: "Close without extracting a sticker"
+- assertVisible: "Import a photo from your library"
