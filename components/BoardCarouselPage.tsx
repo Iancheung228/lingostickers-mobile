@@ -100,6 +100,7 @@ export default function BoardCarouselPage({
   const [selectedSticker, setSelectedSticker] = useState<Sticker | null>(null);
   const [studyQueue, setStudyQueue] = useState<Sticker[] | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [dragging, setDragging] = useState(false);
   const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 });
   const [uploadingBackground, setUploadingBackground] = useState(false);
   const [pickedBackgroundAsset, setPickedBackgroundAsset] = useState<{ uri: string; width: number; height: number } | null>(null);
@@ -483,17 +484,10 @@ export default function BoardCarouselPage({
         }
         right={
           <View style={styles.bandActions}>
-            <TouchableOpacity
-              onPress={() => setPickerOpen(true)}
-              style={styles.addBtn}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 4 }}
-              activeOpacity={0.85}
-              accessibilityRole="button"
-              accessibilityLabel="Add stickers to this board"
-            >
-              <Plus size={15} color={colors.white} strokeWidth={2.75} />
-              <Text style={styles.addText}>Add</Text>
-            </TouchableOpacity>
+            {/* No add control up here: it was a small pill that read as
+                decoration and doubled the empty state's button. Adding lives
+                on the canvas — the centre button when empty, the floating
+                button bottom-right once there are stickers. */}
             <View ref={menuAnchorRef} collapsable={false}>
               <IconButton onPress={openMenu} label="Board options" loading={uploadingBackground || loadingSource}>
                 <MoreHorizontal size={20} strokeWidth={1.75} color={colors.inkDark} />
@@ -518,8 +512,8 @@ export default function BoardCarouselPage({
             onSelectSticker={setSelectedSticker}
             onMove={updatePosition}
             onRemove={handleRemove}
-            onDragStart={() => onDragStateChange(true)}
-            onDragEnd={() => { onDragStateChange(false); if (dragCoach.visible) { setDragged(true); dragCoach.dismiss(); } }}
+            onDragStart={() => { setDragging(true); onDragStateChange(true); }}
+            onDragEnd={() => { setDragging(false); onDragStateChange(false); if (dragCoach.visible) { setDragged(true); dragCoach.dismiss(); } }}
             backgroundPath={board.background_path}
             backgroundDim={previewDimPct ?? board.background_dim}
             backgroundVersion={backgroundVersion}
@@ -538,11 +532,34 @@ export default function BoardCarouselPage({
             {/* The empty state *is* the button. It used to be
                 pointerEvents="none" text pointing at a control elsewhere,
                 which spends the most teachable moment on a caption. */}
-            <TouchableOpacity style={styles.emptyBtn} onPress={() => setPickerOpen(true)} activeOpacity={0.85}>
+            <TouchableOpacity
+              style={styles.emptyBtn}
+              onPress={() => setPickerOpen(true)}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              testID="board-add-empty"
+            >
               <Plus size={16} color={colors.white} strokeWidth={2.5} />
               <Text style={styles.emptyBtnText}>Add stickers</Text>
             </TouchableOpacity>
           </View>
+        )}
+
+        {/* The one add control on a board with stickers. Bottom-right is the
+            free corner: the drop bin is bottom-centre, the dim slider
+            bottom-left. Hidden mid-drag so it never hides a drop spot. */}
+        {!loading && items.length > 0 && !dragging && (
+          <TouchableOpacity
+            style={styles.addFab}
+            onPress={() => setPickerOpen(true)}
+            activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel="Add stickers to this board"
+            testID="board-add"
+          >
+            <Plus size={18} color={colors.white} strokeWidth={2.75} />
+            <Text style={styles.addFabText}>Add stickers</Text>
+          </TouchableOpacity>
         )}
 
         {/* Only meaningful once there's a photo to tint — the default
@@ -639,18 +656,20 @@ export default function BoardCarouselPage({
 const makeStyles = ({ colors, shadows }: Theme) => StyleSheet.create({
   page: { flex: 1 },
   bandActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  addBtn: {
+  addFab: {
+    position: 'absolute',
+    right: spacing.sm,
+    bottom: spacing.sm,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
-    height: 34,
-    paddingHorizontal: spacing.ms,
+    gap: spacing.xs,
+    minHeight: 44,
+    paddingHorizontal: spacing.md,
     borderRadius: radii.full,
     backgroundColor: colors.terra,
     ...shadows.button,
   },
-  addText: { fontSize: 13, fontFamily: fonts.display, color: colors.white },
+  addFabText: { fontSize: 15, fontFamily: fonts.display, color: colors.white },
   canvasWrap: { flex: 1, marginHorizontal: spacing.md, marginTop: spacing.md, marginBottom: spacing.md },
   loader: { flex: 1 },
   empty: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.xl },

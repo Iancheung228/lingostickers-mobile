@@ -1,0 +1,132 @@
+# Open-board add controls: the rose band has only back, name and "…" (no "Add"
+# pill); a board WITH stickers shows one floating "Add stickers" (board-add) that
+# opens the picker titled "Add to <name>"; an EMPTY board shows only the centre
+# "Add stickers" (board-add-empty) and no floating button. Creates and deletes
+# its own boards only. No AI calls (the picker's sticker is an existing one).
+appId: ${APP_ID}
+---
+- runFlow: ../sign-in.yaml
+- tapOn: "Boards"
+- waitForAnimationToEnd
+
+# Clean leftovers from an earlier run of this flow.
+- repeat:
+    while:
+      visible: "Fab .*"
+    commands:
+      - tapOn: "Fab .*"
+      - waitForAnimationToEnd
+      - tapOn: "Board options"
+      - waitForAnimationToEnd:
+          timeout: 2000
+      - tapOn: "Delete board"
+      - waitForAnimationToEnd:
+          timeout: 9000
+
+# --- Case A: board WITH a sticker -------------------------------------------
+- tapOn: "New board"
+- waitForAnimationToEnd
+- inputText: "Fab stocked"
+- tapOn: "Create board"
+- waitForAnimationToEnd:
+    timeout: 4000
+- assertVisible: "Add to Fab stocked"
+- tapOn:
+    point: "25%,22%"
+- waitForAnimationToEnd
+- tapOn: "Close the sticker picker"
+- waitForAnimationToEnd:
+    timeout: 3000
+
+# Point 1: header is back + name + "…" only.
+- assertVisible:
+    id: "board-back"
+- assertVisible: "Board options"
+- assertNotVisible: "Add"
+- assertVisible: "Fab stocked"
+
+# Point 2: exactly one add control, floating bottom-right.
+- assertVisible:
+    id: "board-add"
+- assertNotVisible:
+    id: "board-add-empty"
+- takeScreenshot: 01-stocked-header-canvas
+
+- tapOn:
+    id: "board-add"
+- waitForAnimationToEnd:
+    timeout: 3000
+- assertVisible: "Add to Fab stocked"
+- takeScreenshot: 02-stocked-picker-from-fab
+- tapOn: "Close the sticker picker"
+- waitForAnimationToEnd:
+    timeout: 3000
+- assertVisible:
+    id: "board-add"
+- takeScreenshot: 03-stocked-after-picker-closed
+
+# Back to the list, then delete the stocked board.
+- tapOn:
+    id: "board-back"
+- waitForAnimationToEnd:
+    timeout: 3000
+- tapOn: "Fab stocked.*"
+- waitForAnimationToEnd
+- tapOn: "Board options"
+- waitForAnimationToEnd:
+    timeout: 2000
+- tapOn: "Delete board"
+- waitForAnimationToEnd:
+    timeout: 9000
+
+# --- Case B: EMPTY board ----------------------------------------------------
+- tapOn: "New board"
+- waitForAnimationToEnd
+- inputText: "Fab empty"
+- tapOn: "Create board"
+- waitForAnimationToEnd:
+    timeout: 4000
+- tapOn: "Close the sticker picker"
+- waitForAnimationToEnd:
+    timeout: 3000
+
+# Point 3: only the centre empty-state button; no floating button; no header add.
+- assertVisible: "Nothing here yet"
+- assertVisible:
+    id: "board-add-empty"
+- assertNotVisible:
+    id: "board-add"
+- assertNotVisible: "Add"
+- assertVisible:
+    id: "board-back"
+- takeScreenshot: 04-empty-board
+
+# The centre button still opens the picker for this board.
+- tapOn:
+    id: "board-add-empty"
+- waitForAnimationToEnd:
+    timeout: 3000
+- assertVisible: "Add to Fab empty"
+- tapOn: "Close the sticker picker"
+- waitForAnimationToEnd:
+    timeout: 3000
+- assertVisible:
+    id: "board-add-empty"
+- assertNotVisible:
+    id: "board-add"
+
+# Clean up the empty board.
+- tapOn:
+    id: "board-back"
+- waitForAnimationToEnd:
+    timeout: 3000
+- tapOn: "Fab empty.*"
+- waitForAnimationToEnd
+- tapOn: "Board options"
+- waitForAnimationToEnd:
+    timeout: 2000
+- tapOn: "Delete board"
+- waitForAnimationToEnd:
+    timeout: 9000
+- assertVisible: "New board"
+- assertNotVisible: "Fab .*"
