@@ -30,7 +30,7 @@ export async function regenerateCard(args: {
     // did before this feature: translate-word swaps the headword, keeping the
     // sentence. Worse than a full regeneration, but far better than refusing
     // the edit outright.
-    if ('hint' in correction) return retranslateWord(draft, correction.hint);
+    if ('hint' in correction) return unlessUnchanged(draft, await retranslateWord(draft, correction.hint));
     throw new UserFacingError("Can't change this one any more. Retry the scan instead.");
   }
 
@@ -46,7 +46,25 @@ export async function regenerateCard(args: {
   // Thrown as-is: the caller runs it through friendlyError (lesson 3).
   if (error) throw error;
   if (data?.error) throw new Error(String(data.error));
-  return applyCorrection(draft, data);
+  const next = applyCorrection(draft, data);
+  return 'hint' in correction ? unlessUnchanged(draft, next) : next;
+}
+
+/**
+ * A hint that comes back as the same headword (it described the same thing,
+ * "a kettle for tea" for a teapot) used to close the sheet with nothing
+ * changed, which reads as "it ignored me". Throwing keeps the "What is it?"
+ * sheet open with a reason, so the learner can be more specific.
+ */
+export function unlessUnchanged(draft: StickerDraft, next: StickerDraft): StickerDraft {
+  const norm = (w: string) => w.normalize('NFC').trim().toLowerCase();
+  if (norm(next.word) !== norm(draft.word)) return next;
+  const what = draft.translation?.trim();
+  throw new UserFacingError(
+    what
+      ? `That still comes out as "${what}". Try describing it another way, or type the exact word.`
+      : 'That still comes out as the same word. Try describing it another way, or type the exact word.',
+  );
 }
 
 /** The pre-correction meaning edit: a bare translate-word call, headword only. */

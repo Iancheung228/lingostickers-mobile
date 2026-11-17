@@ -1,0 +1,90 @@
+# QA C3 (pre-prod): the recent-photo strip selection. Select 3 in the strip,
+# See all -> All Photos, pick 1 in the iOS picker. The strip must no longer say
+# "3 selected" (the system pick is a new choice and clears the strip).
+# Costs ONE AI call: the system pick starts a scan of that one photo; the reveal
+# is then discarded (no card is created).
+appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
+---
+- runFlow: ../sign-in.yaml
+
+- tapOn:
+    text: "Scan a new sticker"
+- extendedWaitUntil:
+    visible: ".*(One quick thing|Agree and start scanning|Import a photo from your library).*"
+    timeout: 15000
+- runFlow:
+    when:
+      visible: "Agree and start scanning"
+    commands:
+      - tapOn: "Agree and start scanning"
+- extendedWaitUntil:
+    visible: "Import a photo from your library"
+    timeout: 15000
+
+# Select three photos in the strip.
+- extendedWaitUntil:
+    visible:
+      id: "recent-strip"
+    timeout: 10000
+- tapOn:
+    index: 0
+    id: "photo-thumb-idle"
+- tapOn:
+    index: 1
+    id: "photo-thumb-idle"
+- tapOn:
+    index: 2
+    id: "photo-thumb-idle"
+- assertVisible: "3 selected"
+- takeScreenshot: c3-01-three-selected
+
+# See all sits at the end of the strip (swipe the row to reach it).
+- repeat:
+    times: 6
+    commands:
+      - swipe:
+          start: "88%, 71%"
+          end: "6%, 71%"
+          duration: 400
+- extendedWaitUntil:
+    visible:
+      id: "recent-see-all"
+    timeout: 10000
+- tapOn:
+    id: "recent-see-all"
+- extendedWaitUntil:
+    visible:
+      id: "photo-picker"
+    timeout: 10000
+- tapOn:
+    id: "photo-picker-all"
+
+# iOS picker: pick one photo, then confirm.
+- waitForAnimationToEnd:
+    timeout: 3000
+- tapOn:
+    point: "50%,30%"
+- waitForAnimationToEnd:
+    timeout: 1500
+- takeScreenshot: c3-01b-system-selected
+# Confirm is the round check at the top right of the picker.
+- tapOn:
+    point: "90%,15%"
+- extendedWaitUntil:
+    visible: "What did you find\\?|Make sticker|Use 1 photo|Found"
+    timeout: 30000
+- takeScreenshot: c3-02-after-system-pick
+
+# Back out of the scan without making a card: discard the reveal if it appears.
+- runFlow:
+    when:
+      visible:
+        id: "reveal-discard"
+    commands:
+      - tapOn:
+          id: "reveal-discard"
+- extendedWaitUntil:
+    visible: "Recent photos"
+    timeout: 15000
+- assertNotVisible: "3 selected"
+- takeScreenshot: c3-03-strip-after

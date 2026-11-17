@@ -1,0 +1,121 @@
+# QA C1 (pre-prod): "Not a ...?" correction on the reveal. While the correction
+# regenerates, the sheet holds: its controls are disabled, the input is read-only,
+# swipe-down and the scrim settle instead of closing, and the reveal behind it
+# (Add, Discard, the pill) cannot be used. When the new card lands, Add saves
+# the corrected word. Uses the in-app picker (index 1 = the teapot, which cuts out
+# reliably). Costs TWO AI calls on staging: 1 create-sticker scan + 1 hint
+# correction. Creates one card on Add; the next seed run removes it.
+appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
+---
+- runFlow: ../sign-in.yaml
+
+- tapOn:
+    text: "Scan a new sticker"
+- extendedWaitUntil:
+    visible: ".*(One quick thing|Agree and start scanning|Import a photo from your library).*"
+    timeout: 15000
+- runFlow:
+    when:
+      visible: "Agree and start scanning"
+    commands:
+      - tapOn: "Agree and start scanning"
+- extendedWaitUntil:
+    visible: "Import a photo from your library"
+    timeout: 15000
+- tapOn:
+    text: "Import a photo from your library"
+- tapOn:
+    text: "Allow Full Access|Allow Access to All Photos|OK"
+    optional: true
+- extendedWaitUntil:
+    visible:
+      id: "photo-thumb-idle"
+    timeout: 15000
+- tapOn:
+    index: 1
+    id: "photo-thumb-idle"
+- tapOn:
+    id: "photo-picker-confirm"
+- extendedWaitUntil:
+    visible: "Make sticker"
+    timeout: 30000
+- tapOn: "Make sticker"
+
+# ---- Reveal, before the correction -------------------------------------------
+- extendedWaitUntil:
+    visible:
+      id: "reveal-add"
+    timeout: 90000
+- extendedWaitUntil:
+    visible:
+      id: "reveal-wrong-word"
+    timeout: 10000
+- assertVisible: ".*(Not an? .+\\?|Wrong word\\?).*"
+- takeScreenshot: c1-01-reveal-before
+
+# ---- Ask for a different word (hint) -----------------------------------------
+- tapOn:
+    id: "reveal-wrong-word"
+- extendedWaitUntil:
+    visible: "What is it\\?"
+    timeout: 10000
+- tapOn:
+    id: "wrong-word-input"
+- inputText: "a kettle for tea"
+- tapOn:
+    id: "wrong-word-submit"
+
+# ---- While it regenerates: the sheet is still up, and nothing behind it moves --
+# The sheet stays open with the spinner on "Make this card" until the card lands.
+# The regeneration can take only a few seconds, so each in-flight check runs only
+# while the sheet is still up; the run log records whether any ran.
+- runFlow:
+    when:
+      visible: "What is it\\?"
+    commands:
+      - takeScreenshot: c1-02-pending-a
+      # Swipe down on the sheet: must settle back, not close.
+      - swipe:
+          start: "50%,45%"
+          end: "50%,95%"
+          duration: 400
+      - assertVisible: "What is it\\?"
+      # Cancel and the scrim: both disabled while busy.
+      - tapOn:
+          id: "wrong-word-cancel"
+          optional: true
+      - tapOn:
+          point: "50%,8%"
+          optional: true
+      - assertVisible: "What is it\\?"
+      # Add, Discard and the pill sit behind the sheet's scrim: taps must not reach them.
+      - tapOn:
+          id: "reveal-add"
+          optional: true
+      - tapOn:
+          id: "reveal-discard"
+          optional: true
+      - assertVisible: "What is it\\?"
+      - takeScreenshot: c1-03-pending-b
+      - assertNotVisible: "Added 1 card"
+
+# ---- The new card lands: the sheet closes and the reveal shows it --------------
+- extendedWaitUntil:
+    notVisible: "What is it\\?"
+    timeout: 90000
+- assertVisible:
+    id: "reveal-add"
+- assertVisible:
+    id: "reveal-discard"
+- takeScreenshot: c1-04-after-correction
+- assertVisible: ".*(Not an? .+\\?|Wrong word\\?).*"
+# The correction must change the headword: the old pill ("Not a teapot?") is gone.
+- assertNotVisible: ".*Not a teapot\\?.*"
+
+# ---- Add saves the corrected card -------------------------------------------
+- tapOn:
+    id: "reveal-add"
+- extendedWaitUntil:
+    visible: "Added 1 card"
+    timeout: 20000
+- takeScreenshot: c1-05-after-add
