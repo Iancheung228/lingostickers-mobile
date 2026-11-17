@@ -112,6 +112,18 @@ test('headword: Cantonese — Traditional characters, no spaces', () => {
   assert.ok(!has('嗰隻貓好得意！', '狗', 'yue'));
 });
 
+test('headword: Japanese verbs and adjectives match their conjugated forms', () => {
+  assert.ok(has('昨日、お茶を飲みました。', '飲む', 'ja'));
+  assert.ok(has('この猫はかわいくない。', 'かわいい', 'ja'));
+  assert.ok(!has('犬が公園で走っている。', '猫', 'ja'));
+  assert.ok(!has('テーブルの上にりんご。', 'いぬ', 'ja'));
+});
+
+test('headword: Cantonese verb + object split by an aspect marker still matches', () => {
+  assert.ok(has('佢喺度食緊飯。', '食飯', 'yue'));
+  assert.ok(!has('佢喺度飲緊茶。', '食飯', 'yue'));
+});
+
 test('headword: sameHeadword ignores article, case, accents and punctuation', () => {
   assert.ok(sameHeadword('Le Chien', 'chien', 'fr'));
   assert.ok(sameHeadword("L'Éléphant", 'un elephant', 'fr'));
@@ -182,9 +194,16 @@ test('identify: a mismatched card is asked for again, once, and the second is us
   assert.doesNotMatch(promptOf(p.requests[0]), /rejected/);
 });
 
-test('identify: two mismatches fail with a friendly mismatch error, not a card', async () => {
+test('identify: on a first scan, two mismatches keep the card (no failed scan, no burned quota)', async () => {
   const p = scripted([CARD('Le Chien', 'Regarde cette ville miniature !')]);
-  await assert.rejects(run(p), (err: any) => {
+  const card = await run(p);
+  assert.equal(p.requests.length, 2);
+  assert.equal(card.word, 'Le Chien');
+});
+
+test('identify: on a correction, two mismatches fail with a friendly mismatch error, not a card', async () => {
+  const p = scripted([CARD('Le Chien', 'Regarde cette ville miniature !')]);
+  await assert.rejects(run(p, { hint: 'chien' }), (err: any) => {
     assert.ok(err instanceof LlmError);
     assert.equal(err.kind, 'mismatch');
     assert.equal(httpStatusFor(err.kind), 422);
