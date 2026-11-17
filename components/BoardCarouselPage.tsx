@@ -123,6 +123,16 @@ export default function BoardCarouselPage({
   // so comparing against it is what lets the upload below skip re-sending a
   // multi-megabyte photo that hasn't changed a byte.
   const storedSourceUriRef = useRef<string | null>(null);
+  // The pending file delete after "Background removed". The files have fixed
+  // names that a new background reuses, so it must be cancelled when one is
+  // written, and re-checked against the live board when it fires.
+  const bgDeleteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const backgroundPathRef = useRef(board.background_path);
+  backgroundPathRef.current = board.background_path;
+  const cancelBgDelete = () => {
+    if (bgDeleteTimerRef.current) clearTimeout(bgDeleteTimerRef.current);
+    bgDeleteTimerRef.current = null;
+  };
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuAnchor, setMenuAnchor] = useState<MenuAnchor | null>(null);
   const [renaming, setRenaming] = useState(false);
@@ -141,15 +151,25 @@ export default function BoardCarouselPage({
     }
   }, [autoOpenPicker, initialBackground, onAutoOpenHandled]);
 
+  // One add/remove at a time: a second tap lays out against the stale `items`
+  // (overlapping stickers) and a double tap would insert the same row twice.
+  const pickBusyRef = useRef(false);
   const handlePickSticker = async (sticker: Sticker) => {
-    if (!currentUserId) return;
-    const alreadyOnBoard = items.some(i => i.sticker_id === sticker.id);
-    if (alreadyOnBoard) {
-      await removeSticker(sticker.id, canvasSize);
-    } else {
-      await addSticker(sticker.id, currentUserId, canvasSize);
+    if (!currentUserId || pickBusyRef.current) return;
+    pickBusyRef.current = true;
+    try {
+      const alreadyOnBoard = items.some(i => i.sticker_id === sticker.id);
+      const { error } = alreadyOnBoard
+        ? await removeSticker(sticker.id, canvasSize)
+        : await addSticker(sticker.id, currentUserId, canvasSize);
+      if (error) {
+        toast.show({ kind: 'error', message: friendlyErrorSync(error, "Couldn't update the board. Try again.") });
+        return;
+      }
+      onContentChanged();
+    } finally {
+      pickBusyRef.current = false;
     }
-    onContentChanged();
   };
 
   const handleRemove = async (item: BoardStickerWithSticker) => {
@@ -299,6 +319,7 @@ export default function BoardCarouselPage({
     setPickedBackgroundAsset(null);
     setEditingCrop(null);
     setUploadingBackground(true);
+    cancelBgDelete();
     const storedSourceUri = storedSourceUriRef.current;
     storedSourceUriRef.current = null;
     const fromLibrary = fromLibraryRef.current;
@@ -360,18 +381,21 @@ export default function BoardCarouselPage({
     const { error } = await onChangeBackground(board.id, null);
     if (error) { toast.show({ kind: 'error', message: friendlyErrorSync(error, "Couldn't remove the background. Try again.") }); return; }
     onContentChanged();
-    let undone = false;
+    cancelBgDelete();
     const timer = setTimeout(() => {
-      if (!undone) void supabase.storage.from('sticker-images').remove(files);
+      bgDeleteTimerRef.current = null;
+      if (backgroundPathRef.current) return; // a background was set again meanwhile
+      void supabase.storage.from('sticker-images').remove(files);
     }, COVER_UNDO_MS);
+    bgDeleteTimerRef.current = timer;
     toast.show({
       kind: 'undo',
       message: 'Background removed',
       action: {
         label: 'Undo',
         onPress: () => {
-          undone = true;
           clearTimeout(timer);
+          if (bgDeleteTimerRef.current === timer) bgDeleteTimerRef.current = null;
           void onChangeBackground(board.id, path, crop).then(({ error: e }) => {
             if (e) toast.show({ kind: 'error', message: friendlyErrorSync(e, "Couldn't bring the background back.") });
             else onContentChanged();
@@ -391,8 +415,9 @@ export default function BoardCarouselPage({
     const { error } = await onChangeBackgroundDim(board.id, pct);
     if (error) toast.show({ kind: 'error', message: friendlyErrorSync(error, "Couldn't change the tint. Try again.") });
     // board.background_dim now reflects pct (or reverted back on error) —
-    // safe to stop overriding it with the preview.
-    setPreviewDimPct(null);
+    // safe to stop overriding it with the preview, unless a newer drag has
+    // started since (a late commit must not snap that slider back).
+    setPreviewDimPct(cur => (cur === null || cur === pct ? null : cur));
   }, [board.id, onChangeBackgroundDim, toast]);
 
   const openMenu = () => {

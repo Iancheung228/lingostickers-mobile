@@ -50,14 +50,18 @@ export async function pickBackgroundPhotos(limit = LIBRARY_ADD_LIMIT): Promise<P
   return result.assets.map(a => ({ uri: a.uri, width: a.width, height: a.height }));
 }
 
-/// Cap a photo at SOURCE_MAX_SIDE before it is stored as an uncropped source.
+/// Re-encode a photo as JPEG, capped at SOURCE_MAX_SIDE on its long side,
+/// before it is stored as an uncropped source. Always re-encoded: the file is
+/// uploaded as image/jpeg under a .jpg name, and a PNG/HEIC original would be
+/// mislabelled. Only the long side is passed to resize (the other follows the
+/// real aspect), and the returned size is read off the rendered result, since
+/// picker metadata can be pre-rotation (EXIF) and stretch a rotated image.
 export async function shrinkForStorage(source: PickedPhoto): Promise<PickedPhoto> {
-  const longSide = Math.max(source.width, source.height);
-  if (longSide <= SOURCE_MAX_SIDE) return source;
-  const ratio = SOURCE_MAX_SIDE / longSide;
-  const rendered = await ImageManipulator.manipulate(source.uri)
-    .resize({ width: Math.round(source.width * ratio), height: Math.round(source.height * ratio) })
-    .renderAsync();
+  const ctx = ImageManipulator.manipulate(source.uri);
+  if (Math.max(source.width, source.height) > SOURCE_MAX_SIDE) {
+    ctx.resize(source.width >= source.height ? { width: SOURCE_MAX_SIDE } : { height: SOURCE_MAX_SIDE });
+  }
+  const rendered = await ctx.renderAsync();
   const saved = await rendered.saveAsync({ compress: 0.85, format: SaveFormat.JPEG });
   return { uri: saved.uri, width: rendered.width, height: rendered.height };
 }

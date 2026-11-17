@@ -1,6 +1,7 @@
-import { useRef, useState } from 'react';
-import { Text, StyleSheet, TouchableOpacity, ScrollView, Alert, ActivityIndicator } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { Text, StyleSheet, TouchableOpacity, ScrollView, Alert, ActivityIndicator, useWindowDimensions } from 'react-native';
 import { Image } from 'expo-image';
+import { File } from 'expo-file-system';
 import { ImagePlus, ImageOff, Images } from 'lucide-react-native';
 import BottomSheet, { BottomSheetHandle } from '@/components/BottomSheet';
 import { useToast } from '@/components/ToastProvider';
@@ -25,6 +26,7 @@ interface BackgroundPickerSheetProps {
   title?: string;
 }
 
+const SHEET_GUTTER = 20;
 
 // Choose a background: a saved one, a fresh photo, or none. This only
 // *chooses*; the caller owns what happens next (the crop + dim flow), so the
@@ -42,13 +44,21 @@ export default function BackgroundPickerSheet({
   const [adding, setAdding] = useState<{ done: number; total: number } | null>(null);
   // Shown in the sheet, not as a toast: the sheet is a Modal and the toast
   // host draws under it.
-  // Tiles get an explicit size from the grid's measured width. Percentage
-  // width + aspectRatio inside a wrapping row collapsed every row after the
-  // first to its borders (seen on the Simulator once the library had >1 entry).
-  const [gridWidth, setGridWidth] = useState(0);
-  const tileW = gridWidth > 0 ? Math.floor((gridWidth - 2 * spacing.sm) / 3) : 0;
-  const tileSize = tileW > 0 ? { width: tileW, height: Math.round(tileW / 0.8) } : null;
+  // Tiles get an explicit size. Percentage width + aspectRatio inside a
+  // wrapping row collapsed every row after the first to its borders (seen on
+  // the Simulator once the library had >1 entry). Computed from the window
+  // minus the sheet's gutters (BottomSheet paddingHorizontal 20) rather than
+  // measured, so the first frame is already right and nothing jumps while the
+  // sheet slides in.
+  const { width: windowWidth } = useWindowDimensions();
+  const tileW = Math.floor((windowWidth - 2 * SHEET_GUTTER - 2 * spacing.sm) / 3);
+  const tileSize = { width: tileW, height: Math.round(tileW / 0.8) };
   const [addResult, setAddResult] = useState<{ ok: boolean; message: string } | null>(null);
+  const addingRef = useRef(false);
+  const visibleRef = useRef(visible);
+  visibleRef.current = visible;
+  // A previous run's "Saved 3 backgrounds" must not greet a later reopen.
+  useEffect(() => { if (visible) setAddResult(null); }, [visible]);
   const sheet = useRef<BottomSheetHandle>(null);
   const chosen = useRef<BackgroundChoice | null>(null);
 
@@ -81,7 +91,18 @@ export default function BackgroundPickerSheet({
   };
 
   const addToSaved = async () => {
-    if (adding) return;
+    // A ref, set before the first await: state lags a render, and a double tap
+    // during the permission/picker await would open two pickers.
+    if (addingRef.current) return;
+    addingRef.current = true;
+    try {
+      await runAdd();
+    } finally {
+      addingRef.current = false;
+    }
+  };
+
+  const runAdd = async () => {
     haptic.tap();
     const photos = await pickBackgroundPhotos();
     if (photos.length === 0) return;
@@ -92,8 +113,11 @@ export default function BackgroundPickerSheet({
     // as it lands, so tiles appear in order instead of all at the end.
     for (let i = 0; i < photos.length; i++) {
       try {
-        const saved = await save(await shrinkForStorage(photos[i]));
+        const shrunk = await shrinkForStorage(photos[i]);
+        const saved = await save(shrunk);
         if (!saved) failed++;
+        // shrinkForStorage always writes a temp copy; the picker's original is not ours.
+        try { if (shrunk.uri !== photos[i].uri) new File(shrunk.uri).delete(); } catch { /* best effort */ }
       } catch {
         failed++;
       }
@@ -101,6 +125,18 @@ export default function BackgroundPickerSheet({
     }
     setAdding(null);
     const ok = photos.length - failed;
+    // The sheet may have been closed while this ran; its in-sheet note is then
+    // invisible, so say it with a toast instead.
+    if (!visibleRef.current) {
+      if (failed === 0) {
+        haptic.success();
+        toast.show({ kind: 'info', message: ok === 1 ? 'Saved 1 background.' : `Saved ${ok} backgrounds.` });
+      } else {
+        haptic.error();
+        toast.show({ kind: 'error', message: `Saved ${ok} of ${photos.length} backgrounds. Try the rest again.` });
+      }
+      return;
+    }
     if (failed === 0) {
       haptic.success();
       setAddResult({ ok: true, message: ok === 1 ? 'Saved 1 background. Tap it to use it.' : `Saved ${ok} backgrounds. Tap one to use it.` });
@@ -133,7 +169,6 @@ export default function BackgroundPickerSheet({
       <ScrollView
         contentContainerStyle={styles.grid}
         showsVerticalScrollIndicator={false}
-        onLayout={(e) => setGridWidth(e.nativeEvent.layout.width)}
       >
         <TouchableOpacity
           style={[styles.tile, tileSize, styles.actionTile]}
@@ -144,7 +179,7 @@ export default function BackgroundPickerSheet({
           activeOpacity={0.85}
         >
           <ImagePlus size={22} strokeWidth={1.75} color={colors.terraInk} />
-          <Text style={styles.actionText}>Choose from Photos</Text>
+          <Text style={styles.actionText} maxFontSizeMultiplier={1.2}>Choose from Photos</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -161,12 +196,12 @@ export default function BackgroundPickerSheet({
           {adding ? (
             <>
               <ActivityIndicator color={colors.terraInk} />
-              <Text style={styles.actionText}>Saving {Math.min(adding.done + 1, adding.total)} of {adding.total}</Text>
+              <Text style={styles.actionText} maxFontSizeMultiplier={1.2}>Saving {Math.min(adding.done + 1, adding.total)} of {adding.total}</Text>
             </>
           ) : (
             <>
               <Images size={22} strokeWidth={1.75} color={colors.terraInk} />
-              <Text style={styles.actionText}>Add photos to saved</Text>
+              <Text style={styles.actionText} maxFontSizeMultiplier={1.2}>Add photos to saved</Text>
             </>
           )}
         </TouchableOpacity>
@@ -181,7 +216,7 @@ export default function BackgroundPickerSheet({
             activeOpacity={0.85}
           >
             <ImageOff size={22} strokeWidth={1.75} color={colors.inkMid} />
-            <Text style={styles.actionText}>None</Text>
+            <Text style={styles.actionText} maxFontSizeMultiplier={1.2}>None</Text>
           </TouchableOpacity>
         )}
 
@@ -192,6 +227,8 @@ export default function BackgroundPickerSheet({
               key={item.id}
               style={[styles.tile, tileSize]}
               onPress={() => choose({ kind: 'saved', saved: item })}
+              // New uploads prepend tiles; keep the grid still under the finger.
+              disabled={!!adding}
               onLongPress={() => confirmDelete(item)}
               delayLongPress={350}
               activeOpacity={0.85}
@@ -235,11 +272,8 @@ export default function BackgroundPickerSheet({
 const makeStyles = ({ colors }: Theme) => StyleSheet.create({
   title: { fontSize: 20, fontFamily: fonts.display, color: colors.inkDark },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, paddingTop: spacing.md, paddingBottom: spacing.sm },
-  // Three across: width/height come from tileSize (measured); the % values
-  // are only the first-frame fallback before onLayout.
+  // Three across: width/height come from tileSize (computed from the window).
   tile: {
-    width: '31.5%',
-    aspectRatio: 0.8,
     flexShrink: 0,
     borderRadius: radii.md,
     overflow: 'hidden',

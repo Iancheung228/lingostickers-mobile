@@ -29,6 +29,8 @@ interface Props {
   onSystemPicker: () => void;
   /** Re-read permission and the recent strip (after "Allow more photos"). */
   onRefresh: () => void;
+  /** Changes when the library's visible contents may have changed under a steady access level. */
+  reloadToken?: number;
 }
 
 const COLS = 4;
@@ -39,7 +41,7 @@ const GAP = 3;
 // performs and we can't veto (lesson 10), loses nothing. Every change of
 // source takes a ticket (lesson 11) so a slow reply for "Shuffle" can't land
 // on top of "Favorites".
-export default function PhotoPickerModal({ visible, access, used, selected, capped, busy, onToggle, onConfirm, onClose, onSystemPicker, onRefresh }: Props) {
+export default function PhotoPickerModal({ visible, access, used, selected, capped, busy, onToggle, onConfirm, onClose, onSystemPicker, onRefresh, reloadToken = 0 }: Props) {
   const styles = useThemedStyles(makeStyles);
   const { reduced } = useMotion();
   const { width } = useWindowDimensions();
@@ -56,6 +58,7 @@ export default function PhotoPickerModal({ visible, access, used, selected, capp
   const [error, setError] = useState(false);
   const seq = useRef(0);
   const loadingMore = useRef(false);
+  const emptyPages = useRef(0);
 
   const source = useMemo<PickerSource | null>(() =>
     tab === 'new' ? { kind: 'new' }
@@ -68,6 +71,7 @@ export default function PhotoPickerModal({ visible, access, used, selected, capp
   const load = useCallback(async (src: PickerSource | null) => {
     const ticket = ++seq.current;
     loadingMore.current = false;
+    emptyPages.current = 0;
     setError(false);
     if (!src) { setAssets([]); setCursor(null); setHasMore(false); setLoading(false); return; }
     setLoading(true);
@@ -89,7 +93,7 @@ export default function PhotoPickerModal({ visible, access, used, selected, capp
     let live = true;
     loadAlbums().then((r) => { if (live) { setAlbums(r.albums); setFavoritesId(r.favoritesId); } });
     return () => { live = false; };
-  }, [visible, access]);
+  }, [visible, access, reloadToken]);
 
   // Reload when the source changes or the sheet opens. Not on `used` changes:
   // a photo saved while open shouldn't vanish from under the finger.
@@ -99,7 +103,7 @@ export default function PhotoPickerModal({ visible, access, used, selected, capp
     if (!visible) return;
     void load(source);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visible, sourceKey, favoritesId, access]);
+  }, [visible, sourceKey, favoritesId, access, reloadToken]);
 
   const loadMore = useCallback(async () => {
     if (!source || source.kind === 'shuffle' || !hasMore || loadingMore.current || loading) return;
@@ -115,6 +119,15 @@ export default function PhotoPickerModal({ visible, access, used, selected, capp
       loadingMore.current = false;
     }
   }, [source, hasMore, loading, cursor]);
+
+  // Every scanned page can be all used / screenshots: the grid is then empty, so
+  // nothing scrolls and onEndReached never fires. Keep going, a few times.
+  useEffect(() => {
+    if (!visible || loading || error || assets.length > 0 || !hasMore) return;
+    if (emptyPages.current >= 5) return;
+    emptyPages.current += 1;
+    void loadMore();
+  }, [visible, loading, error, assets.length, hasMore, cursor, loadMore]);
 
   const order = (id: string) => selected.findIndex((s) => s.id === id) + 1;
   const n = selected.length;
@@ -219,7 +232,13 @@ export default function PhotoPickerModal({ visible, access, used, selected, capp
             )}
             ListEmptyComponent={
               loading ? <ActivityIndicator style={styles.spinner} />
-              : <Text style={styles.empty}>{error ? "Couldn't load photos. Pull back and try again." : empty}</Text>
+              : error ? (
+                <View style={styles.errorBox}>
+                  <Text style={styles.empty}>{"Couldn't load photos."}</Text>
+                  <Button kind="tertiary" label="Try again" testID="photo-picker-retry" onPress={() => void load(source)} />
+                </View>
+              )
+              : <Text style={styles.empty}>{empty}</Text>
             }
             ListFooterComponent={hasMore && assets.length ? <ActivityIndicator style={styles.spinner} /> : null}
           />
@@ -256,7 +275,7 @@ const makeStyles = ({ colors }: Theme) => StyleSheet.create({
     backgroundColor: colors.terraLight, flexDirection: 'row', alignItems: 'center', gap: spacing.md,
   },
   limitedText: { flex: 1, fontSize: 13, lineHeight: 18, fontFamily: fonts.text, color: colors.inkDark },
-  limitedBtn: { minHeight: 36, justifyContent: 'center' },
+  limitedBtn: { minHeight: 44, justifyContent: 'center' },
   limitedBtnText: { fontSize: 14, lineHeight: 18, fontFamily: fonts.display, color: colors.terraInk },
   chipsWrap: { paddingBottom: spacing.sm },
   chips: { paddingHorizontal: spacing.md, gap: spacing.sm },
@@ -264,7 +283,7 @@ const makeStyles = ({ colors }: Theme) => StyleSheet.create({
   crumbText: { fontSize: 15, lineHeight: 20, fontFamily: fonts.display, color: colors.inkDark, flexShrink: 1 },
   reshuffleRow: { paddingHorizontal: spacing.md, paddingBottom: spacing.sm, flexDirection: 'row' },
   reshuffle: {
-    minHeight: 36, paddingHorizontal: spacing.md, borderRadius: radii.full, flexDirection: 'row', alignItems: 'center', gap: 6,
+    minHeight: 44, paddingHorizontal: spacing.md, borderRadius: radii.full, flexDirection: 'row', alignItems: 'center', gap: 6,
     backgroundColor: colors.terraLight,
   },
   reshuffleText: { fontSize: 14, lineHeight: 18, fontFamily: fonts.display, color: colors.inkDark },
@@ -276,6 +295,7 @@ const makeStyles = ({ colors }: Theme) => StyleSheet.create({
   },
   albumTitle: { flex: 1, fontSize: 16, lineHeight: 22, fontFamily: fonts.text, color: colors.inkDark },
   albumCount: { fontSize: 14, lineHeight: 18, fontFamily: fonts.text, color: colors.inkLight },
+  errorBox: { alignItems: 'center' },
   spinner: { marginVertical: spacing.lg },
   empty: { textAlign: 'center', padding: spacing.xl, fontSize: 15, lineHeight: 21, fontFamily: fonts.text, color: colors.inkMid },
   footer: {

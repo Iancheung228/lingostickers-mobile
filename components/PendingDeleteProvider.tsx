@@ -52,6 +52,13 @@ function filesOf(sticker: Sticker): string[] {
   return paths;
 }
 
+// Lets sign-out / delete-account (which live above this provider) commit what
+// is still inside the undo window while the session still exists.
+let flushHandler: (() => Promise<void>) | null = null;
+export async function flushPendingDeletes(): Promise<void> {
+  try { await flushHandler?.(); } catch { /* never block sign-out */ }
+}
+
 export function PendingDeleteProvider({ children }: { children: ReactNode }) {
   const toast = useToast();
   const [ids, setIds] = useState<ReadonlySet<string>>(new Set());
@@ -77,11 +84,12 @@ export function PendingDeleteProvider({ children }: { children: ReactNode }) {
   const commit = useCallback(async (sticker: Sticker) => {
     const entry = waiting.current.get(sticker.id);
     if (entry) { clearTimeout(entry.timer); waiting.current.delete(sticker.id); }
-    const paths = filesOf(sticker);
-    const [{ error }] = await Promise.all([
-      supabase.from('stickers').delete().eq('id', sticker.id),
-      paths.length ? supabase.storage.from('sticker-images').remove(paths) : Promise.resolve(null),
-    ]);
+    // Row first: if it fails the card stays, and must keep its images.
+    const { error } = await supabase.from('stickers').delete().eq('id', sticker.id);
+    if (!error) {
+      const paths = filesOf(sticker);
+      if (paths.length) await supabase.storage.from('sticker-images').remove(paths).catch(() => {});
+    }
     if (error) {
       // Not deleted after all: let it back into the lists and say so.
       setIds(prev => { const n = new Set(prev); n.delete(sticker.id); return n; });
@@ -90,14 +98,21 @@ export function PendingDeleteProvider({ children }: { children: ReactNode }) {
     }
   }, [toast]);
 
-  const flushAll = useCallback(() => {
-    for (const { sticker } of [...waiting.current.values()]) void commit(sticker);
-    for (const id of [...waitingBoards.current.keys()]) void commitBoard(id);
+  const flushAll = useCallback((): Promise<void> => {
+    const runs: Promise<void>[] = [];
+    for (const { sticker } of [...waiting.current.values()]) runs.push(commit(sticker));
+    for (const id of [...waitingBoards.current.keys()]) runs.push(commitBoard(id));
+    return Promise.all(runs).then(() => undefined);
   }, [commit, commitBoard]);
 
   useEffect(() => {
-    const sub = AppState.addEventListener('change', state => { if (state !== 'active') flushAll(); });
-    return () => { sub.remove(); flushAll(); };
+    const sub = AppState.addEventListener('change', state => { if (state !== 'active') void flushAll(); });
+    flushHandler = flushAll;
+    return () => {
+      sub.remove();
+      if (flushHandler === flushAll) flushHandler = null;
+      void flushAll();
+    };
   }, [flushAll]);
 
   const deleteWithUndo = useCallback<PendingDeleteApi['deleteWithUndo']>((sticker, opts) => {

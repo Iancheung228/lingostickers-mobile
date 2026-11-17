@@ -1,4 +1,4 @@
-import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { usePendingDeletes } from '@/components/PendingDeleteProvider';
 import { AppState, View, Text, Pressable, ScrollView, StyleSheet, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -28,6 +28,8 @@ import { useTheme, useThemedStyles, type Theme } from '@/hooks/useTheme';
 // Sunday-start week (the rest of the app doesn't otherwise commit to one).
 const WEEKDAY_LABELS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 const MONTH_FORMAT = new Intl.DateTimeFormat('en-US', { month: 'long' });
+const monthIdx = (d: Date) => d.getFullYear() * 12 + d.getMonth();
+
 const A11Y_DAY_FORMAT = new Intl.DateTimeFormat('en-US', { day: 'numeric', month: 'long' });
 const DAY_FORMAT = new Intl.DateTimeFormat('en-US', { weekday: 'short', day: 'numeric', month: 'long' });
 
@@ -82,7 +84,9 @@ export default function CalendarScreen() {
   // later, so a header tied to it read the old month for ~7 frames while the
   // new month's dates were already on screen (seen frame by frame, Nov 16).
   const [titleMonth, setTitleMonth] = useState(viewedMonth);
-  useEffect(() => { setTitleMonth(viewedMonth); }, [viewedMonth]);
+  // Pages sit at fixed x positions by month (see the track below), measured
+  // from the month the screen opened on.
+  const originIdx = useRef(monthIdx(viewedMonth)).current;
   const [mode, setMode] = useState<Mode>('month');
   const [yearShown, setYearShown] = useState(() => new Date().getFullYear());
   // Bumped on every month change; it re-keys the month's stickers so each
@@ -134,7 +138,20 @@ export default function CalendarScreen() {
   // tab (also a re-tap while already on it). Tab press only: coming back from
   // a day page or the app returning to the foreground does not replay it.
   const navigation = useNavigation();
-  useEffect(() => navigation.addListener('tabPress' as never, () => setCascadeId(n => n + 1)), [navigation]);
+  // tabPress fires before the tab switches, so from another tab the replay is
+  // deferred to focus (or its first frames play off-screen). In Year view it
+  // would play hidden, so it is skipped.
+  const replayOnFocus = useRef(false);
+  const modeRef = useRef(mode);
+  modeRef.current = mode;
+  useEffect(() => navigation.addListener('tabPress' as never, () => {
+    if (modeRef.current !== 'month') return;
+    if (navigation.isFocused()) setCascadeId(n => n + 1);
+    else replayOnFocus.current = true;
+  }), [navigation]);
+  useFocusEffect(useCallback(() => {
+    if (replayOnFocus.current) { replayOnFocus.current = false; setCascadeId(n => n + 1); }
+  }, []));
 
   useEffect(() => {
     if (!loaded) return;
@@ -169,13 +186,10 @@ export default function CalendarScreen() {
   // One batched sign request for every thumbnail (the first sticker of each
   // day) instead of one per cell: see hooks/useSignedUrls.ts.
   const dayIconUrls = useSignedUrls(useMemo(() => {
-    // Only cutouts are drawn as day icons; the selected day's summary thumbnail
-    // falls back to its first find when it has no cutout, so sign that too.
-    const paths = Array.from(stickersByDate.values(), list => { const c = firstCutout(list); return c ? listImagePath(c) : null; });
-    const sel = stickersByDate.get(selectedKey);
-    if (sel && !firstCutout(sel)) paths.push(listImagePath(sel[0]));
-    return paths;
-  }, [stickersByDate, selectedKey]));
+    // Only cutouts are drawn anywhere on the Calendar (owner rule), the footer
+    // included, so the set doesn't change (and re-sign) as the selection moves.
+    return Array.from(stickersByDate.values(), list => { const c = firstCutout(list); return c ? listImagePath(c) : null; });
+  }, [stickersByDate]));
 
   // The CTA starts exactly the session Home would: after the new-card limit.
   const due = useMemo(
@@ -190,7 +204,14 @@ export default function CalendarScreen() {
   const nextRows = useMemo(() => buildMonthRows(nextMonth), [nextMonth]);
 
   const dragX = useSharedValue(0);
+  // The settled track offset: -(viewed - origin) pages. A slide moves it on the
+  // UI thread in the same frame the slide ends (dragX back to 0), so the pixels
+  // never move when React later swaps which months are mounted. It used to be
+  // reset in a passive effect after the re-render, which showed the month after
+  // the destination for a frame or more: the day numbers "flashed".
+  const base = useSharedValue(0);
   const isTransitioning = useSharedValue(false);
+  const viewportH = useSharedValue(cellH * currentRows.length);
 
   // The selection follows the visible month: today if it is in that month,
   // else the latest day with a find, else the 1st. Silent (no haptic) and it
@@ -214,6 +235,7 @@ export default function CalendarScreen() {
     const next = new Date(m.getFullYear(), m.getMonth() + direction, 1);
     followMonth(next);
     setViewedMonth(next);
+    setTitleMonth(next);
     setCascadeId(n => n + 1);
   }, [followMonth]);
   const pickMonth = useCallback((month: Date) => {
@@ -221,6 +243,7 @@ export default function CalendarScreen() {
     const next = new Date(month.getFullYear(), month.getMonth(), 1);
     followMonth(next);
     setViewedMonth(next);
+    setTitleMonth(next);
     setMode('month');
     setCascadeId(n => n + 1);
   }, [followMonth]);
@@ -233,13 +256,21 @@ export default function CalendarScreen() {
   const tickHaptic = useCallback(() => haptic.select(), []);
   const announceMonth = useCallback((direction: 1 | -1) => {
     const m = latest.current.viewedMonth;
-    setTitleMonth(new Date(m.getFullYear(), m.getMonth() + direction, 1));
-  }, []);
+    const dest = new Date(m.getFullYear(), m.getMonth() + direction, 1);
+    setTitleMonth(dest);
+    // 4-, 5- and 6-row months: grow or shrink with the slide instead of
+    // popping (and jumping the footer) at the end of it.
+    viewportH.value = withTiming(cellH * buildMonthRows(dest).length, { duration: dur.base, easing: ease });
+  }, [cellH, viewportH]);
 
-  useEffect(() => {
+  // Jumps (Year pick, Today, Reduce Motion) have no slide to land, so the track
+  // is placed here, before paint. After a slide these values are already set.
+  useLayoutEffect(() => {
+    base.value = -(monthIdx(viewedMonth) - originIdx) * pageWidth;
     dragX.value = 0;
+    viewportH.value = cellH * currentRows.length;
     isTransitioning.value = false;
-  }, [viewedMonth, dragX, isTransitioning]);
+  }, [viewedMonth, pageWidth, cellH, currentRows.length, originIdx, base, dragX, viewportH, isTransitioning]);
 
   // Swipe (or the chevrons) changes month: a 200 ms slide, an instant swap under Reduce Motion.
   const slideTo = useCallback((direction: 1 | -1) => {
@@ -249,9 +280,12 @@ export default function CalendarScreen() {
     isTransitioning.value = true;
     announceMonth(direction);
     dragX.value = withTiming(-direction * pageWidth, { duration: dur.base, easing: ease }, finished => {
-      if (finished) runOnJS(commitSwipe)(direction);
+      if (!finished) return;
+      base.value -= direction * pageWidth;
+      dragX.value = 0;
+      runOnJS(commitSwipe)(direction);
     });
-  }, [reduced, pageWidth, commitSwipe, announceMonth, dragX, isTransitioning]);
+  }, [reduced, pageWidth, commitSwipe, announceMonth, base, dragX, isTransitioning]);
 
   const monthSwipeGesture = useMemo(() => {
     const COMMIT_DISTANCE = pageWidth * 0.3;
@@ -263,8 +297,9 @@ export default function CalendarScreen() {
         if (isTransitioning.value || reduced) return;
         dragX.value = e.translationX;
       })
-      .onEnd(e => {
+      .onEnd((e, success) => {
         if (isTransitioning.value) return;
+        if (!success) { dragX.value = withSpring(0, spring); return; }
         const goingNext = e.translationX <= -COMMIT_DISTANCE || e.velocityX <= -COMMIT_VELOCITY;
         const goingPrev = e.translationX >= COMMIT_DISTANCE || e.velocityX >= COMMIT_VELOCITY;
         if (goingNext || goingPrev) {
@@ -274,19 +309,28 @@ export default function CalendarScreen() {
           if (reduced) { runOnJS(commitSwipe)(direction); return; }
           isTransitioning.value = true;
           dragX.value = withTiming(-direction * pageWidth, { duration: dur.base, easing: ease }, finished => {
-            if (finished) runOnJS(commitSwipe)(direction);
+            if (!finished) return;
+            base.value -= direction * pageWidth;
+            dragX.value = 0;
+            runOnJS(commitSwipe)(direction);
           });
         } else {
           dragX.value = withSpring(0, spring);
         }
       });
-  }, [pageWidth, reduced, commitSwipe, announceMonth, dragX, isTransitioning, tickHaptic]);
+  }, [pageWidth, reduced, commitSwipe, announceMonth, base, dragX, isTransitioning, tickHaptic]);
 
-  const trackStyle = useAnimatedStyle(() => ({ transform: [{ translateX: -pageWidth + dragX.value }] }));
+  const trackStyle = useAnimatedStyle(() => ({ transform: [{ translateX: base.value + dragX.value }] }));
+  const viewportStyle = useAnimatedStyle(() => ({ height: viewportH.value }));
+
+  // A sticker that mounts after its month's cascade began (a scan that arrives
+  // with the focus refetch) takes only what is left of its turn, not its full
+  // index delay: today's slot used to sit empty for seconds.
+  const cascadeStart = useRef({ id: -1, at: 0 });
 
   const selectDay = useCallback((key: string) => { haptic.select(); setSelectedKey(key); }, []);
 
-  const renderMonthPage = (rows: MonthCell[][], pageKey: string, live: boolean) => {
+  const renderMonthPage = (rows: MonthCell[][], month: Date, live: boolean) => {
     // Stickers arrive one at a time in date order. They all mount together, once
     // every signed URL is in (or the grace runs out), so a late URL can't jump
     // the queue, and each image loads while its sticker waits for its turn.
@@ -300,8 +344,16 @@ export default function CalendarScreen() {
       if (!dayIconUrls.get(listImagePath(first) ?? '')) monthReady = false;
     }
     monthReady ||= urlGrace;
+    if (live && monthReady && cascadeStart.current.id !== cascadeId) cascadeStart.current = { id: cascadeId, at: Date.now() };
+    const elapsed = live && cascadeStart.current.id === cascadeId ? Date.now() - cascadeStart.current.at : 0;
     return (
-      <View style={{ width: pageWidth }} key={pageKey}>
+      <View
+        key={`${month.getFullYear()}-${month.getMonth()}`}
+        style={[styles.monthPage, { width: pageWidth, left: (monthIdx(month) - originIdx) * pageWidth }]}
+        // Off-screen neighbours are clipped, not removed: keep VoiceOver out.
+        accessibilityElementsHidden={!live}
+        importantForAccessibility={live ? 'auto' : 'no-hide-descendants'}
+      >
         {rows.map((row, rowIdx) => (
           <View key={rowIdx} style={styles.gridRow}>
             <View style={styles.rowRule} pointerEvents="none" />
@@ -312,7 +364,8 @@ export default function CalendarScreen() {
               const url = first ? dayIconUrls.get(listImagePath(first) ?? '') ?? null : null;
               return (
                 <DayCell
-                  key={`${live ? cascadeId : 'x'}-${cell.key}`}
+                  key={cell.key}
+                  cascadeKey={cascadeId}
                   dayKey={cell.key}
                   day={cell.day}
                   date={cell.date}
@@ -327,7 +380,7 @@ export default function CalendarScreen() {
                   isSelected={cell.key === selectedKey}
                   live={live}
                   imageReady={monthReady}
-                  flipDelayMs={calendarFlipDelay(order.get(cell.key) ?? 0, order.size)}
+                  flipDelayMs={Math.max(0, calendarFlipDelay(order.get(cell.key) ?? 0, order.size) - elapsed)}
                   reduced={reduced}
                   onSelect={selectDay}
                 />
@@ -341,7 +394,9 @@ export default function CalendarScreen() {
 
   const selectedDate = useMemo(() => new Date(`${selectedKey}T00:00:00`), [selectedKey]);
   const selFinds = stickersByDate.get(selectedKey) ?? [];
-  const selIcon = firstCutout(selFinds) ?? selFinds[0];
+  // Cutouts only on the Calendar (owner rule): a day with only photo cards
+  // shows no thumbnail here rather than a rectangle.
+  const selIcon = firstCutout(selFinds);
   const selReviewed = reviewsByDate.get(selectedKey) ?? 0;
   const summary = selFinds.length
     ? `${selFinds.length} found${selReviewed ? ` · ${selReviewed} reviewed` : ''}`
@@ -371,7 +426,7 @@ export default function CalendarScreen() {
           testID={`calendar-mode-${m}`}
           onPress={() => setModeTo(m)}
           style={[styles.segmentItem, mode === m && styles.segmentItemOn]}
-          hitSlop={{ top: 6, bottom: 6 }}
+          hitSlop={{ top: 7, bottom: 7 }}
           accessibilityRole="tab"
           accessibilityLabel={m === 'month' ? 'Month view' : 'Year view'}
           accessibilityState={{ selected: mode === m }}
@@ -398,10 +453,10 @@ export default function CalendarScreen() {
           <Text style={styles.todayLinkText} maxFontSizeMultiplier={1.3}>Today</Text>
         </Pressable>
       )}
-      <Pressable onPress={prev} style={styles.chevron} testID={ids[0]} accessibilityRole="button" accessibilityLabel={labels[0]}>
+      <Pressable onPress={prev} style={({ pressed }) => [styles.chevron, pressed && styles.pressed]} testID={ids[0]} accessibilityRole="button" accessibilityLabel={labels[0]}>
         <ChevronLeft size={22} strokeWidth={1.75} color={colors.inkMid} />
       </Pressable>
-      <Pressable onPress={next} style={styles.chevron} testID={ids[1]} accessibilityRole="button" accessibilityLabel={labels[1]}>
+      <Pressable onPress={next} style={({ pressed }) => [styles.chevron, pressed && styles.pressed]} testID={ids[1]} accessibilityRole="button" accessibilityLabel={labels[1]}>
         <ChevronRight size={22} strokeWidth={1.75} color={colors.inkMid} />
       </Pressable>
     </View>
@@ -440,13 +495,13 @@ export default function CalendarScreen() {
             </View>
 
             <GestureDetector gesture={monthSwipeGesture}>
-              <View style={[styles.monthViewport, { width: pageWidth, height: cellH * currentRows.length }]}>
-                <Animated.View style={[styles.monthTrack, { width: pageWidth * 3 }, trackStyle]}>
-                  {renderMonthPage(prevRows, 'prev', false)}
-                  {renderMonthPage(currentRows, 'cur', true)}
-                  {renderMonthPage(nextRows, 'next', false)}
+              <Animated.View style={[styles.monthViewport, { width: pageWidth }, viewportStyle]}>
+                <Animated.View style={[styles.monthTrack, { width: pageWidth }, trackStyle]}>
+                  {renderMonthPage(prevRows, prevMonth, false)}
+                  {renderMonthPage(currentRows, viewedMonth, true)}
+                  {renderMonthPage(nextRows, nextMonth, false)}
                 </Animated.View>
-              </View>
+              </Animated.View>
             </GestureDetector>
             <View style={styles.rule} />
           </View>
@@ -485,7 +540,7 @@ export default function CalendarScreen() {
               accessibilityLabel={`${A11Y_DAY_FORMAT.format(selectedDate)}, ${summary}`}
               accessibilityHint={selFinds.length ? 'Opens this day' : undefined}
             >
-              {selFinds.length > 0 && (
+              {selIcon && (
                 <View style={styles.summaryStk}>
                   <Thumb sticker={selIcon} size={34} url={dayIconUrls.get(listImagePath(selIcon) ?? '') ?? null} />
                 </View>
@@ -536,14 +591,16 @@ const makeStyles = ({ colors, type, stickerShadow }: Theme) => StyleSheet.create
   titleYear: { color: colors.inkQuiet },
   todayLink: { height: MIN_TAP, paddingHorizontal: 10, justifyContent: 'center' },
   todayLinkText: { fontSize: 15, lineHeight: 20, fontFamily: fonts.display, color: colors.terraInk },
-  chevron: { width: 40, height: MIN_TAP, alignItems: 'center', justifyContent: 'center' },
+  chevron: { width: MIN_TAP, height: MIN_TAP, alignItems: 'center', justifyContent: 'center' },
+  pressed: { opacity: 0.55 },
 
   weekdayRow: { flexDirection: 'row', height: 22, alignItems: 'center' },
   weekdayCell: { flex: 1, alignItems: 'center' },
   weekdayText: { fontSize: 10, lineHeight: 14, fontFamily: fonts.mono, color: colors.inkQuiet, letterSpacing: 0.8 },
 
   monthViewport: { overflow: 'hidden', alignSelf: 'center' },
-  monthTrack: { flexDirection: 'row' },
+  monthTrack: { ...StyleSheet.absoluteFillObject },
+  monthPage: { position: 'absolute', top: 0 },
   gridRow: { flexDirection: 'row' },
   rule: { height: StyleSheet.hairlineWidth * 2, backgroundColor: colors.rule },
   rowRule: { position: 'absolute', top: 0, left: 0, right: 0, height: StyleSheet.hairlineWidth * 2, backgroundColor: colors.rule },
@@ -566,7 +623,7 @@ const makeStyles = ({ colors, type, stickerShadow }: Theme) => StyleSheet.create
   summaryTitle: { fontSize: 17, lineHeight: 22, fontFamily: fonts.display, color: colors.charcoal },
   summarySub: { ...type.small, color: colors.inkQuiet },
   review: {
-    flexDirection: 'row', alignItems: 'center', gap: 6, height: 36, paddingHorizontal: 14,
+    flexDirection: 'row', alignItems: 'center', gap: 6, height: MIN_TAP, paddingHorizontal: 14,
     borderRadius: radii.full, borderWidth: 1, borderColor: colors.ctl,
   },
   reviewPressed: { backgroundColor: colors.border },

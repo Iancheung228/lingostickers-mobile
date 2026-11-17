@@ -16,6 +16,11 @@ export async function loadUsedAssets(): Promise<Set<string>> {
   }
 }
 
+/** Account switch: the next user's picker must not hide this user's photos. Never throws. */
+export async function clearUsedAssets(): Promise<void> {
+  try { await chain; await AsyncStorage.removeItem(KEY); } catch { /* ignore */ }
+}
+
 /** Never throws and is safe to fire and forget; writes are serialised so two saves can't clobber each other. */
 export function markAssetsUsed(ids: readonly (string | null | undefined)[]): Promise<void> {
   if (!ids.some(Boolean)) return Promise.resolve();

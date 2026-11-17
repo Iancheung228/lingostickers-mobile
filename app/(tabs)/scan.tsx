@@ -139,7 +139,7 @@ export default function ScanScreen() {
   // (not cleared until the resulting draft is finally Added or Discarded)
   // so "Retry Extraction" can reopen the box/lasso on the same source photo.
   const [importedAsset, setImportedAsset] = useState<CaptureAsset | null>(null);
-  const library = usePhotoLibrary();
+  const library = usePhotoLibrary(user?.id);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [resolvingPhotos, setResolvingPhotos] = useState(false);
   // Set only when importedAsset came from the live shutter (not the
@@ -830,6 +830,7 @@ export default function ScanScreen() {
     userId: user?.id,
     language,
     onFinished: (count) => batchFinishedRef.current(count),
+    onAssetUsed: (assetId) => library.markUsed([assetId]),
     // Same wording as handleAdd's extras: the scanned word was saved either way.
     onSceneFailed: (failed, total) => toast.show({
       kind: 'error',
@@ -907,10 +908,12 @@ export default function ScanScreen() {
       orderedSelection: true,
     });
     if (result.canceled) return;
+    // The strip's selection belongs to the in-app picker; this is a new choice.
+    library.clear();
     acceptPhotos(result.assets.slice(0, BATCH_MAX).map((a) => ({
       uri: a.uri, width: a.width, height: a.height, assetId: a.assetId ?? undefined,
     })));
-  }, [acceptPhotos]);
+  }, [acceptPhotos, library.clear]);
 
   const handleImportPhoto = useCallback(async () => {
     if (processing || batch.active) return;
@@ -949,7 +952,7 @@ export default function ScanScreen() {
     if (!gate('Scanning needs a connection.')) return;
     setResolvingPhotos(true);
     try {
-      const photos = await library.resolveSelected();
+      const { photos, failed } = await library.resolveSelected();
       if (!photos.length) {
         toast.show({ kind: 'error', message: "Couldn't open those photos. Try again.", aboveTabBar: true });
         return;
@@ -957,6 +960,9 @@ export default function ScanScreen() {
       const fromSheet = pickerOpen;
       setPickerOpen(false);
       library.clear();
+      if (failed) {
+        toast.show({ kind: 'error', message: `${failed} ${failed === 1 ? 'photo' : 'photos'} couldn't be opened.`, aboveTabBar: true });
+      }
       if (fromSheet) await new Promise((r) => setTimeout(r, 450));
       acceptPhotos(photos);
     } finally {
@@ -997,13 +1003,15 @@ export default function ScanScreen() {
   batchFinishedRef.current = (count) => announceAdded(count);
 
   const handleAdd = async () => {
-    if (!draft || !user || saving) return;
+    // A correction in flight replaces the draft when it lands: saving now would save the old card.
+    if (!draft || !user || saving || retranslating || retranslatingSentence) return;
     setSaving(true);
     setSaveError(null);
     // origin_author_id is deliberately NOT sent: a BEFORE INSERT trigger
     // (042) stamps it from auth.uid(), so a card can never claim an author
     // it did not have. Read it back rather than assuming it.
-    const extras = sceneBase64 ? sceneChips : [];
+    // Never a second card for the headword itself (a correction can make a chip equal it).
+    const extras = sceneBase64 ? sceneChips.filter((c) => c.word.trim().toLowerCase() !== draft.word.trim().toLowerCase()) : [];
     const sceneId = extras.length ? newSceneId() : null;
     const { data: inserted, error } = await supabase.from('stickers').insert({
       user_id: user.id,
@@ -1040,6 +1048,7 @@ export default function ScanScreen() {
     haptic.success();
     // Per-device "already a sticker" list behind the picker's New filter.
     void markAssetsUsed([importedAsset?.assetId]);
+    library.markUsed([importedAsset?.assetId]);
     setDraft(null);
     setSceneChips([]);
     setSceneBase64(null);
@@ -1465,7 +1474,8 @@ export default function ScanScreen() {
         onConfirm={confirmLibrarySelection}
         onClose={() => setPickerOpen(false)}
         onSystemPicker={pickerToSystem}
-        onRefresh={() => { void library.refresh(); }}
+        onRefresh={() => { void library.reload(); }}
+        reloadToken={library.reloadToken}
       />
 
       <PhotoExtractor

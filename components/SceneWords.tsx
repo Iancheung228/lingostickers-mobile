@@ -76,8 +76,17 @@ export default function SceneWords({
 
   // Filtered at render too: a sibling card may have taken a word after this
   // answer came back.
+  // A correction can turn the main word into a chip already on screen: never
+  // offer the card's own word back (it would save as a duplicate card).
+  const isMain = (c: SceneChip) => c.word.trim().toLowerCase() === mainWord.trim().toLowerCase();
   const taken = new Set(avoid ?? []);
-  const chips = active ? answers[active]?.filter((c) => !taken.has(c.word) || isSelected(c)) : undefined;
+  const chips = active ? answers[active]?.filter((c) => !isMain(c) && (!taken.has(c.word) || isSelected(c))) : undefined;
+
+  // ...and a chip already picked that the headword now equals is dropped.
+  useEffect(() => {
+    if (selected.some(isMain)) onChangeSelected(selected.filter((c) => !isMain(c)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mainWord, selected]);
 
   // Loading copy escalates (B-core 3). Add is never blocked by the extras.
   const [waited, setWaited] = useState(0);
@@ -161,7 +170,7 @@ const makeStyles = ({ type, colors, e1 }: Theme) => StyleSheet.create({
   heading: { ...type.h2, fontSize: 18, lineHeight: 24 },
   prompts: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   prompt: {
-    minHeight: 36, justifyContent: 'center', paddingHorizontal: spacing.md,
+    minHeight: 44, justifyContent: 'center', paddingHorizontal: spacing.md,
     borderRadius: radii.full, borderWidth: 1, borderColor: colors.ctl, backgroundColor: colors.card,
   },
   promptActive: { borderColor: colors.terra, backgroundColor: colors.terra },

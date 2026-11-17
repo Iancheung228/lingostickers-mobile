@@ -45,12 +45,15 @@ type Props = {
   /** When this cell's sticker arrives in the month's one-at-a-time run (calendarFlipDelay). */
   flipDelayMs: number;
   reduced: boolean;
+  /** Bumped per month cascade. Only the sticker is re-keyed by it: the cell and
+   *  its date number stay mounted, so numbers never flicker on a replay. */
+  cascadeKey: number;
   onSelect: (key: string) => void;
 };
 
 function DayCell({
   dayKey, day, date, stk, cellH, findCount, firstFind, url, reviewed,
-  isToday, isFuture, isSelected, live, imageReady, flipDelayMs, reduced, onSelect,
+  isToday, isFuture, isSelected, live, imageReady, flipDelayMs, reduced, cascadeKey, onSelect,
 }: Props) {
   const { colors } = useTheme();
   const styles = useThemedStyles(makeStyles);
@@ -69,7 +72,7 @@ function DayCell({
           child, so it stays a separate accessible control (skills.md #9). */}
       <Pressable
         testID={`calendar-day-${dayKey}`}
-        style={styles.fill}
+        style={({ pressed }) => [styles.fill, pressed && styles.pressed]}
         onPress={() => onSelect(dayKey)}
         accessibilityRole="button"
         accessibilityLabel={parts.join(', ')}
@@ -87,7 +90,7 @@ function DayCell({
         </View>
         {showSticker && imageReady ? (
           <View style={[styles.stickerBox, { width: stk, height: stk }]}>
-            <FlipSticker delayMs={flipDelayMs} reduced={reduced} size={stk}>
+            <FlipSticker key={cascadeKey} delayMs={flipDelayMs} reduced={reduced} size={stk}>
               <View style={styles.shadow}>
                 <Thumb sticker={firstFind} size={stk} url={url} />
               </View>
@@ -100,7 +103,7 @@ function DayCell({
           <Pressable
             testID="calendar-today-add"
             onPress={() => { haptic.tap(); router.push('/scan'); }}
-            hitSlop={{ top: 4, bottom: 4, left: 3, right: 3 }}
+            hitSlop={{ top: 5, bottom: 5, left: 5, right: 5 }}
             style={[styles.add, { width: stk, height: stk, borderRadius: stk / 2 }]}
             accessibilityRole="button"
             accessibilityLabel="Add today's sticker"
@@ -118,6 +121,7 @@ export default memo(DayCell);
 const makeStyles = ({ colors, stickerShadow }: Theme) => StyleSheet.create({
   cell: { flex: 1 },
   fill: { flex: 1, alignItems: 'center', gap: NUM_GAP, paddingTop: NUM_TOP },
+  pressed: { opacity: 0.6 },
   numWrap: { minWidth: NUM_D, height: NUM_D, paddingHorizontal: 4, borderRadius: NUM_D / 2, alignItems: 'center', justifyContent: 'center' },
   numToday: { backgroundColor: colors.terra },
   // Ink ring, not a fill: the selection reads without adding a colour block.

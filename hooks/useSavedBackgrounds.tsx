@@ -49,14 +49,17 @@ function useSavedBackgroundsState() {
     const id = newBackgroundId();
     const path = libraryPathFor(userId, id);
     const thumbPath = libraryThumbPathFor(path);
+    let thumbTemp: File | null = null;
     try {
       const longSide = Math.max(source.width, source.height);
-      let ctx = ImageManipulator.manipulate(source.uri);
+      const ctx = ImageManipulator.manipulate(source.uri);
+      // Long side only: the other follows the real aspect (source dims come
+      // from shrinkForStorage's rendered result, so they are already true).
       if (longSide > LIBRARY_THUMB_SIDE) {
-        const k = LIBRARY_THUMB_SIDE / longSide;
-        ctx = ctx.resize({ width: Math.round(source.width * k), height: Math.round(source.height * k) });
+        ctx.resize(source.width >= source.height ? { width: LIBRARY_THUMB_SIDE } : { height: LIBRARY_THUMB_SIDE });
       }
       const thumb = await (await ctx.renderAsync()).saveAsync({ format: SaveFormat.WEBP, compress: 0.8 });
+      thumbTemp = new File(thumb.uri);
 
       const bucket = supabase.storage.from('sticker-images');
       const { error: e1 } = await bucket.upload(path, await new File(source.uri).bytes(), { contentType: 'image/jpeg' });
@@ -75,6 +78,8 @@ function useSavedBackgroundsState() {
     } catch (err) {
       debugWarn('saved background not kept', err);
       return null;
+    } finally {
+      try { if (thumbTemp?.exists) thumbTemp.delete(); } catch { /* temp cleanup is best effort */ }
     }
   }, [userId]);
 

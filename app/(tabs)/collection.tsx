@@ -97,11 +97,22 @@ export default function CollectionScreen() {
   const fetchStickers = useCallback(async () => {
     if (!user) return;
     const mine = ++ticket.current;
-    const { data, error } = await supabase
-      .from('stickers')
-      .select('*')
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: false });
+    // PostgREST caps a response at 1000 rows: page through (id breaks created_at ties so pages don't overlap).
+    const PAGE = 1000;
+    const data: Sticker[] = [];
+    let error: unknown = null;
+    for (let from = 0; ; from += PAGE) {
+      const res = await supabase
+        .from('stickers')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .order('id')
+        .range(from, from + PAGE - 1);
+      if (res.error || !res.data) { error = res.error ?? new Error('no data'); break; }
+      data.push(...(res.data as Sticker[]));
+      if (res.data.length < PAGE) break;
+    }
     if (mine !== ticket.current) return;
     hadFetch.current = true;
     if (error) {

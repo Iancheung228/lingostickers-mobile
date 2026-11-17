@@ -104,6 +104,12 @@ export function recordNewCardIntroduced(id: string) {
   AsyncStorage.setItem(NEW_TODAY_KEY, JSON.stringify(newToday)).catch(() => {});
 }
 
+/** Account switch: yesterday's user's introduced-today ids mean nothing to the next one. */
+export async function clearNewCardsToday(): Promise<void> {
+  newToday = { day: '', ids: [] };
+  try { await AsyncStorage.removeItem(NEW_TODAY_KEY); } catch { /* ignore */ }
+}
+
 /** Undoing the grade that introduced a card gives its slot back. */
 export function forgetNewCardIntroduced(id: string) {
   const ids = todaysIds();

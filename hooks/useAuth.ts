@@ -1,8 +1,10 @@
-import { createContext, useContext, useState, useEffect, ReactNode, createElement } from 'react';
+import { createContext, useContext, useState, useEffect, useRef, ReactNode, createElement } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
 import type { Language } from '@/lib/types';
 import { getFunctionErrorMessage } from '@/lib/functionError';
+import { clearLocalUserData } from '@/lib/localUserData';
+import { flushPendingDeletes } from '@/components/PendingDeleteProvider';
 
 function useAuthState() {
   const [session, setSession] = useState<Session | null>(null);
@@ -10,8 +12,11 @@ function useAuthState() {
   const [loading, setLoading] = useState(true);
   const [isPasswordRecovery, setIsPasswordRecovery] = useState(false);
 
+  const lastUserId = useRef<string | null>(null);
+
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
+      lastUserId.current = session?.user?.id ?? null;
       setSession(session);
       setUser(session?.user ?? null);
       setLoading(false);
@@ -21,6 +26,12 @@ function useAuthState() {
     // a recovery flow, so the root layout can route to reset-password instead
     // of treating it like a normal login.
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (session?.user) lastUserId.current = session.user.id;
+      // Also covers an expired/revoked session, which never goes through signOut().
+      if (event === 'SIGNED_OUT') {
+        void clearLocalUserData(lastUserId.current);
+        lastUserId.current = null;
+      }
       setSession(session);
       setUser(session?.user ?? null);
       if (event === 'PASSWORD_RECOVERY') setIsPasswordRecovery(true);
@@ -56,7 +67,11 @@ function useAuthState() {
   };
 
   const signOut = async () => {
+    // Commit cards still in their undo window while the session exists.
+    await flushPendingDeletes();
+    const uid = lastUserId.current;
     await supabase.auth.signOut();
+    await clearLocalUserData(uid);
   };
 
   // Permanently deletes the account (Apple Guideline 5.1.1(v) requires this
@@ -65,9 +80,12 @@ function useAuthState() {
   // can never delete an auth.users row directly — then this clears the
   // local session so the root layout routes straight to sign-in.
   const deleteAccount = async () => {
+    await flushPendingDeletes(); // before the account (and its session) is gone
     const { error } = await supabase.functions.invoke('delete-account');
     if (error) return { error: new Error(await getFunctionErrorMessage(error)) };
+    const uid = lastUserId.current;
     await supabase.auth.signOut();
+    await clearLocalUserData(uid);
     return { error: null };
   };
 

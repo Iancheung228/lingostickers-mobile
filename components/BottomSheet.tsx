@@ -1,8 +1,8 @@
-import { forwardRef, useCallback, useImperativeHandle, useMemo, useRef } from 'react';
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef } from 'react';
 import { useMotion } from '@/lib/motion';
 import {
   Modal, View, StyleSheet, Pressable, Keyboard,
-  KeyboardAvoidingView, Platform, LayoutChangeEvent, DimensionValue,
+  KeyboardAvoidingView, Platform, LayoutChangeEvent, DimensionValue, useWindowDimensions,
 } from 'react-native';
 import { GestureHandlerRootView, Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
@@ -23,6 +23,7 @@ const DISMISS_VELOCITY = 800;
 const UPWARD_RESISTANCE = 0.18;
 const SPRING = { damping: 22, stiffness: 260 };
 const EXIT_MS = 210;
+const ENTER_MS = 260;
 
 export interface BottomSheetHandle {
   /// Slide off screen, then call `onClosed`. The caller's decision, not the
@@ -57,7 +58,10 @@ const BottomSheet = forwardRef<BottomSheetHandle, BottomSheetProps>(function Bot
 ) {
   const styles = useThemedStyles(makeStyles);
   const { reduced } = useMotion();
-  const y = useSharedValue(0);
+  const { height: windowH } = useWindowDimensions();
+  // Starts off screen and slides in itself: the Modal's own 'slide' would carry
+  // the scrim up with the sheet instead of letting it fade (scrim = f(y)).
+  const y = useSharedValue(reduced ? 0 : windowH);
   // Measured, not assumed: the exit has to clear the sheet's real height or
   // its bottom edge stays visible above the home indicator. Seeded large so a
   // close fired before first layout still travels far enough.
@@ -77,7 +81,17 @@ const BottomSheet = forwardRef<BottomSheetHandle, BottomSheetProps>(function Bot
     });
   };
 
-  const settle = () => { y.value = reduced ? 0 : withSpring(0, SPRING); };
+  // Ignored mid-exit: a spring here would replace the exit timing and onClosed
+  // would never fire, leaving the sheet wedged open.
+  const settle = () => {
+    if (closing.value) return;
+    y.value = reduced ? 0 : withSpring(0, SPRING);
+  };
+
+  useEffect(() => {
+    if (y.value > 0) y.value = withTiming(0, { duration: reduced ? 0 : ENTER_MS });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useImperativeHandle(ref, () => ({ close, settle }));
 
@@ -87,7 +101,11 @@ const BottomSheet = forwardRef<BottomSheetHandle, BottomSheetProps>(function Bot
   // handler for each character typed.
   const latest = useRef(onRequestClose);
   latest.current = onRequestClose;
-  const askToClose = useCallback(() => { latest.current(); }, []);
+  // Requests during an exit are dropped (scrim tap, back, escape, drag).
+  const askToClose = useCallback(() => {
+    if (closing.value) return;
+    latest.current();
+  }, [closing]);
 
   const pan = useMemo(() => Gesture.Pan()
     // Only claims the gesture once it's clearly vertical, so a sideways swipe
@@ -121,13 +139,13 @@ const BottomSheet = forwardRef<BottomSheetHandle, BottomSheetProps>(function Bot
   };
 
   return (
-    <Modal visible transparent animationType={reduced ? 'none' : 'slide'} statusBarTranslucent onRequestClose={onRequestClose}>
+    <Modal visible transparent animationType="none" statusBarTranslucent onRequestClose={askToClose}>
       {/* Gestures inside an RN Modal need their own root — the one in
           app/_layout.tsx sits outside the modal's view hierarchy. */}
       <GestureHandlerRootView style={styles.root}>
         <AnimatedPressable
           style={[StyleSheet.absoluteFill, styles.scrim, scrimStyle]}
-          onPress={onRequestClose}
+          onPress={askToClose}
           accessibilityRole="button"
           accessibilityLabel="Close"
         />
@@ -139,7 +157,7 @@ const BottomSheet = forwardRef<BottomSheetHandle, BottomSheetProps>(function Bot
           <Animated.View
             style={[styles.sheet, !!maxHeight && { maxHeight }, sheetStyle]}
             onLayout={onSheetLayout}
-            onAccessibilityEscape={onRequestClose}
+            onAccessibilityEscape={askToClose}
           >
             <GestureDetector gesture={pan}>
               {/* The drag zone. Wide enough to grab without aiming, and the

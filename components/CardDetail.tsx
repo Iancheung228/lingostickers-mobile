@@ -162,10 +162,11 @@ export default function CardDetail({
           style: 'destructive',
           onPress: async () => {
             const before = Object.fromEntries(SCHEDULE_COLUMNS.map(k => [k, sticker[k]])) as Partial<Sticker>;
-            const ok = await writeSchedule({
+            const reset: Partial<Sticker> = {
               ease_factor: START_EASE, interval_days: 0, learning_step: null, due_at: null,
               review_count: 0, lapses: 0, last_reviewed_at: null,
-            });
+            };
+            const ok = await writeSchedule(reset);
             if (!ok) {
               onUpdate?.(sticker.id, before);
               toast.show({ kind: 'error', message: "Couldn't reset that card. Try again." });
@@ -174,7 +175,13 @@ export default function CardDetail({
             toast.show({
               kind: 'undo',
               message: 'Progress reset',
-              action: { label: 'Undo', onPress: () => { void writeSchedule(before); } },
+              action: { label: 'Undo', onPress: async () => {
+                  // writeSchedule updates the UI first; if the DB refused, put the UI back to match it.
+                  if (!(await writeSchedule(before))) {
+                    onUpdate?.(sticker.id, reset);
+                    toast.show({ kind: 'error', message: "Couldn't undo that. The card is still reset." });
+                  }
+                } },
             });
           },
         },

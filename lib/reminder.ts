@@ -114,6 +114,14 @@ async function cancelAllReminders() {
   } catch { /* nothing scheduled */ }
 }
 
+/** Sign-out / account deletion: cancel everything scheduled and forget the settings. Never throws. */
+export async function clearReminders(): Promise<void> {
+  try {
+    await cancelAllReminders();
+    await AsyncStorage.multiRemove([KEY, KEY_V1, ID_KEY]);
+  } catch { /* best effort */ }
+}
+
 const PAGE = 1000; // PostgREST's default row cap: page through, or big collections are truncated
 
 async function fetchPlannableCards(): Promise<PlannableCard[] | null> {

@@ -13,6 +13,7 @@ import type { StickerDraft } from '@/lib/types';
 import { canCorrect, regenerateCard } from '@/lib/regenerateCard';
 import type { Correction } from '@/lib/wordFix';
 import { markAssetsUsed } from '@/lib/usedAssetsStore';
+import { friendlyErrorSync } from '@/lib/friendlyError';
 
 type Item = BatchItem<BatchPayload, BatchResult>;
 
@@ -23,6 +24,8 @@ interface Options {
   onFinished: (added: number) => void;
   /** Extra words from a card's scene failed to save (the card itself was). */
   onSceneFailed: (failed: number, total: number) => void;
+  /** A card made from this library photo was saved: mark it used right away. */
+  onAssetUsed?: (assetId: string | undefined) => void;
 }
 
 // Batch create: pick up to BATCH_MAX photos, choose the object in each one
@@ -33,9 +36,9 @@ interface Options {
 //   choosing  — the extractor is showing photo N of M
 //   making    — (overlaps choosing) queue runs create-sticker, 2 at a time
 //   reviewing — a sheet per card; closing it leaves the rest queued
-export function useBatchCreate({ userId, language, onFinished, onSceneFailed }: Options) {
-  const latest = useRef({ userId, language, onFinished, onSceneFailed });
-  latest.current = { userId, language, onFinished, onSceneFailed };
+export function useBatchCreate({ userId, language, onFinished, onSceneFailed, onAssetUsed }: Options) {
+  const latest = useRef({ userId, language, onFinished, onSceneFailed, onAssetUsed });
+  latest.current = { userId, language, onFinished, onSceneFailed, onAssetUsed };
 
   const [queue, setQueue] = useState<BatchQueue<BatchPayload, BatchResult> | null>(null);
   const [photos, setPhotos] = useState<BatchPhoto[]>([]);
@@ -47,8 +50,18 @@ export function useBatchCreate({ userId, language, onFinished, onSceneFailed }: 
   const [choosingIndex, setChoosingIndex] = useState<number | null>(null);
   const [reviewOpen, setReviewOpen] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [retranslating, setRetranslating] = useState(false);
-  const [retranslatingSentence, setRetranslatingSentence] = useState(false);
+  // Per card: a correction pending on card N must not fade or lock card N+1.
+  // The ref is the synchronous guard (Add / Skip read it at tap time); the
+  // state is only what re-renders.
+  const correcting = useRef(new Map<number, number>());
+  const [correctingIds, setCorrectingIds] = useState<ReadonlySet<number>>(new Set());
+  const [sentenceIds, setSentenceIds] = useState<ReadonlySet<number>>(new Set());
+  const markCorrecting = useCallback((id: number, on: boolean, kind: 'word' | 'sentence') => {
+    const n = (correcting.current.get(id) ?? 0) + (on ? 1 : -1);
+    if (n > 0) correcting.current.set(id, n); else correcting.current.delete(id);
+    const set = (cur: ReadonlySet<number>) => { const next = new Set(cur); if (on) next.add(id); else next.delete(id); return next; };
+    if (kind === 'word') setCorrectingIds(set); else setSentenceIds(set);
+  }, []);
   const addedCount = useRef(0);
   // Ids being saved right now: a second tap on Add (or Add racing Skip) must
   // not insert the card twice.
@@ -206,7 +219,7 @@ export function useBatchCreate({ userId, language, onFinished, onSceneFailed }: 
   const skip = useCallback(() => {
     const q = queueRef.current;
     const c = q ? nextToReview(q.getSnapshot()) : null;
-    if (!q || !c || busyIds.current.has(c.id)) return;
+    if (!q || !c || busyIds.current.has(c.id) || correcting.current.has(c.id)) return;
     q.skip(c.id);
     finishIfDone(q, false);
   }, [finishIfDone]);
@@ -222,14 +235,17 @@ export function useBatchCreate({ userId, language, onFinished, onSceneFailed }: 
     const c = q ? nextToReview(q.getSnapshot()) : null;
     const uid = latest.current.userId;
     if (!q || !c || c.status !== 'done' || !c.result || !uid) return;
-    if (busyIds.current.has(c.id)) return;
+    // A correction in flight would replace the draft after we saved the old one.
+    if (busyIds.current.has(c.id) || correcting.current.has(c.id)) return;
     busyIds.current.add(c.id);
     setSaving(true);
     const draft = c.result.draft;
     // Same as handleAdd in scan.tsx: the extra words share a scene_id with the
     // scanned card and are written in the background after it is saved.
     const sceneBase64 = c.result.sceneBase64;
-    const extras = sceneBase64 ? c.result.chips : [];
+    const extras = sceneBase64
+      ? c.result.chips.filter((x) => x.word.trim().toLowerCase() !== draft.word.trim().toLowerCase())
+      : [];
     const sceneId = extras.length ? newSceneId() : null;
     try {
       // origin_author_id is deliberately not sent — see handleAdd in scan.tsx.
@@ -256,11 +272,12 @@ export function useBatchCreate({ userId, language, onFinished, onSceneFailed }: 
         longitude: draft.longitude,
         location_label: draft.locationLabel,
       });
-      if (error) return { error: error.message as string };
+      if (error) return { error: friendlyErrorSync(new Error(error.message), "Couldn't save. Try again.") };
       // Counted like announceAdded does for a single card: the scanned word plus
       // the extras the learner chose, whether or not the extras later succeed.
       if (q.markAdded(c.id)) addedCount.current += 1 + extras.length;
       void markAssetsUsed([c.payload.photo.assetId]);
+      latest.current.onAssetUsed?.(c.payload.photo.assetId);
       finishIfDone(q, false);
       if (extras.length && sceneId && sceneBase64) {
         addSceneCards({
@@ -293,7 +310,7 @@ export function useBatchCreate({ userId, language, onFinished, onSceneFailed }: 
   const correct = useCallback(async (correction: Correction) => {
     const c = queueRef.current ? nextToReview(queueRef.current.getSnapshot()) : null;
     if (!c || c.status !== 'done' || !c.result) return;
-    setRetranslating(true);
+    markCorrecting(c.id, true, 'word');
     try {
       const next = await regenerateCard({
         draft: c.result.draft,
@@ -303,14 +320,14 @@ export function useBatchCreate({ userId, language, onFinished, onSceneFailed }: 
       });
       queueRef.current?.updateResult(c.id, (r) => ({ ...r, draft: next }));
     } finally {
-      setRetranslating(false);
+      markCorrecting(c.id, false, 'word');
     }
-  }, []);
+  }, [markCorrecting]);
 
   const editSentence = useCallback(async (newSentence: string) => {
     const c = queueRef.current ? nextToReview(queueRef.current.getSnapshot()) : null;
     if (!c || c.status !== 'done') return;
-    setRetranslatingSentence(true);
+    markCorrecting(c.id, true, 'sentence');
     try {
       const { data, error } = await supabase.functions.invoke('translate-sentence', {
         body: { englishSentence: newSentence, language: latest.current.language },
@@ -329,9 +346,9 @@ export function useBatchCreate({ userId, language, onFinished, onSceneFailed }: 
         },
       }));
     } finally {
-      setRetranslatingSentence(false);
+      markCorrecting(c.id, false, 'sentence');
     }
-  }, []);
+  }, [markCorrecting]);
 
   return {
     /** A batch exists and has unfinished cards (or photos still to choose). */
@@ -378,6 +395,8 @@ export function useBatchCreate({ userId, language, onFinished, onSceneFailed }: 
         }
       : null,
     add, skip, retry, setChips, correct, editSentence,
-    saving, retranslating, retranslatingSentence,
+    saving,
+    retranslating: !!current && correctingIds.has(current.id),
+    retranslatingSentence: !!current && sentenceIds.has(current.id),
   };
 }

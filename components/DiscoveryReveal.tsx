@@ -42,8 +42,8 @@ interface DiscoveryRevealProps {
   // a whole new card, never just the word swapped (the old sentence would still
   // be about the old word). Throws on failure.
   onCorrect: (correction: Correction) => Promise<void>;
-  /// False when this draft can't be re-asked (no stored close-up, or no .png
-  /// cutout); the "Not a …?" control is then not drawn.
+  /// False when this draft can't be re-asked (no stored close-up, or an
+  /// original the server can't re-read); the "Not a …?" control is then not drawn.
   canCorrect: boolean;
   onEditSentence: (newSentence: string) => Promise<void>;
   saving: boolean;
@@ -153,12 +153,16 @@ export default function DiscoveryReveal({ draft, onAdd, saveError, onDiscard, on
   // "finish this edit" means one thing no matter which of them you reach for.
   const confirmEdit = () => { confirmEditingWord(); confirmEditingSentence(); };
   const cancelEdit = () => { setEditingWord(false); setEditingSentence(false); };
+  // A correction or sentence rewrite in flight replaces the draft when it lands:
+  // Add / Skip / Discard in the meantime would save or drop the OLD card.
+  const correcting = retranslating || retranslatingSentence;
+  const busy = saving || correcting;
 
   // Every way out (scrim, drag, Android back, VoiceOver escape, the Discard
   // button) is "Discard". There is no confirm (B-core 3): the parent holds the
   // draft in memory and offers an Undo toast. A save in flight can't be left.
   const requestClose = () => {
-    if (saving) { sheetRef.current?.settle(); return; }
+    if (busy) { sheetRef.current?.settle(); return; }
     sheetRef.current?.close();
   };
   // Batch: the Skip button and every other exit both slide the sheet away;
@@ -228,13 +232,13 @@ export default function DiscoveryReveal({ draft, onAdd, saveError, onDiscard, on
             <Pressable
               testID="reveal-wrong-word"
               onPress={() => setWrongOpen(true)}
-              disabled={saving || retranslating}
-              style={({ pressed }) => [styles.wrongWord, pressed && styles.wrongWordPressed]}
+              disabled={busy}
+              style={({ pressed }) => [styles.wrongWord, pressed && styles.wrongWordPressed, busy && styles.wrongWordDisabled]}
               accessibilityRole="button"
               accessibilityLabel={`${wrongWordLabel(draft.translation)} Choose a different word`}
             >
               <RefreshCw size={16} strokeWidth={2.25} color={colors.terraInk} />
-              <Text style={styles.wrongWordText} maxFontSizeMultiplier={type.body.maxFontSizeMultiplier}>
+              <Text style={styles.wrongWordText} maxFontSizeMultiplier={1.4}>
                 {wrongWordLabel(draft.translation)}
               </Text>
             </Pressable>
@@ -256,7 +260,7 @@ export default function DiscoveryReveal({ draft, onAdd, saveError, onDiscard, on
             avoid={sceneAvoid}
             selected={sceneSelected}
             onChangeSelected={onSceneSelected}
-            disabled={saving}
+            disabled={busy}
             onAnswered={() => {
               revealSceneRef.current = true;
               setTimeout(() => scrollRef.current?.scrollToEnd({ animated: !reduced }), 60);
@@ -272,6 +276,7 @@ export default function DiscoveryReveal({ draft, onAdd, saveError, onDiscard, on
           accessibilityLabel={addLabel}
           testID="reveal-add"
           loading={saving}
+          disabled={correcting}
           onPress={() => { teach.dismiss(); onAdd(); }}
         />
         <View style={styles.secondaryActions}>
@@ -280,7 +285,7 @@ export default function DiscoveryReveal({ draft, onAdd, saveError, onDiscard, on
               kind="tertiary"
               label={sceneBase64 ? 'Retry' : 'Retry Extraction'}
               testID="reveal-retry"
-              disabled={saving}
+              disabled={busy}
               onPress={onRetryExtraction}
             />
           )}
@@ -289,7 +294,7 @@ export default function DiscoveryReveal({ draft, onAdd, saveError, onDiscard, on
             label={batch ? 'Skip this card' : 'Discard'}
             testID="reveal-discard"
             accessibilityLabel={batch ? 'Skip this card' : 'Discard this discovery'}
-            disabled={saving}
+            disabled={busy}
             onPress={() => { if (batch) skipRef.current = true; requestClose(); }}
             style={styles.discard}
           />
@@ -391,12 +396,13 @@ const makeStyles = ({ colors, type, stickerShadow, shadows }: Theme) => StyleShe
   // tall, tinted fill + terra border + icon, left-aligned under the meaning.
   // No hitSlop — the sentence below it is itself tappable (lesson 9).
   wrongWord: {
-    alignSelf: 'flex-start', minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 8,
-    paddingHorizontal: 16, marginTop: spacing.sm, borderRadius: radii.full,
+    alignSelf: 'flex-start', maxWidth: '100%', minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 8,
+    paddingHorizontal: 16, paddingVertical: 8, marginTop: spacing.sm, borderRadius: radii.full,
     backgroundColor: colors.terraLight, borderWidth: 1.5, borderColor: colors.terra,
   },
   wrongWordPressed: { opacity: 0.7 },
-  wrongWordText: { ...type.body, fontFamily: fonts.display, color: colors.terraInk },
+  wrongWordDisabled: { opacity: 0.45 },
+  wrongWordText: { flexShrink: 1, ...type.body, fontFamily: fonts.display, color: colors.terraInk },
   teach: { ...type.small, textAlign: 'center', marginTop: spacing.md },
   actions: { paddingTop: spacing.sm, gap: spacing.sm },
   secondaryActions: { flexDirection: 'row', justifyContent: 'center', gap: spacing.sm },

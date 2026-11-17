@@ -105,6 +105,7 @@ export const lightColors = {
   trackOffRing: '#8A5A60', // 1.5px ring around an OFF switch (>= 3:1 on card and cream)
   divider:    '#F0E6DC', // row dividers inside cards
   scrim:      'rgba(51, 41, 42, 0.42)', // sheet and modal backdrop
+  photoBadge: 'rgba(51, 41, 42, 0.62)', // small badge over a photo thumbnail (white glyph)
   glass:      'rgba(255, 253, 244, 0.92)', // translucent panel over photos / the wall
   glassSolid: 'rgba(255, 255, 255, 0.92)',
   shadow:     '#833F46', // drop-shadow tints (plain black in dark, where a tint reads as a glow)
@@ -192,6 +193,7 @@ export const darkColors: Palette = {
   trackOffRing: '#A89293',
   divider:    '#352A2D',
   scrim:      'rgba(0, 0, 0, 0.5)',
+  photoBadge: 'rgba(0, 0, 0, 0.62)',
   glass:      'rgba(42, 33, 35, 0.92)',
   glassSolid: 'rgba(42, 33, 35, 0.92)',
   shadow:     '#000000',

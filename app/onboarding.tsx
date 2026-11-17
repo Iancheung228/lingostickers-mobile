@@ -131,8 +131,16 @@ export default function OnboardingScreen() {
   };
 
 
+  const finishing = useRef(false);
   const finish = async (to: '/(tabs)/scan' | '/(tabs)/collection') => {
-    if (user) await markOnboardingDone(user.id);
+    if (finishing.current) return; // a double tap must not run this twice
+    finishing.current = true;
+    try {
+      if (user) await markOnboardingDone(user.id);
+    } catch (e) {
+      finishing.current = false;
+      throw e;
+    }
     router.replace(to);
   };
 

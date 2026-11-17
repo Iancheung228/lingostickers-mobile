@@ -500,9 +500,16 @@ function StudyFace({
   }, [sticker, onGraded]);
 
   const commit = useCallback((grade: Grade, swipe = false) => {
-    if (!review || !flippedRef.current || gradingRef.current || flippingRef.current) return;
+    const declined = () => {
+      // A declined swipe leaves the card dragged off-centre: bring it home.
+      if (swipe && !gradingRef.current) {
+        tx.value = withSpring(0, { damping: 20, stiffness: 300 });
+        crossed.value = false;
+      }
+    };
+    if (!review || !flippedRef.current || gradingRef.current || flippingRef.current) return declined();
     // A double-tap on "Tap to reveal" must never also grade.
-    if (Date.now() - revealedAt.current < GRADE_GUARD_MS) return;
+    if (Date.now() - revealedAt.current < GRADE_GUARD_MS) return declined();
     gradingRef.current = true;
     setGrading(true);
     stopSpeaking();

@@ -71,12 +71,15 @@ export default function SignUpScreen() {
     if (picked) setAvatarUri(picked.uri);
   };
 
+  const submitting = useRef(false); // state is async: the Go key can fire twice before `loading` renders
   const handleSignUp = async () => {
-    if (!isFormValid) return;
+    if (!isFormValid || loading || submitting.current) return;
+    submitting.current = true;
     setIssue(null);
     setLoading(true);
     const { data, error } = await signUp(email.trim(), password, username.trim(), language);
     if (error) {
+      submitting.current = false;
       setLoading(false);
       haptic.error();
       setIssue(signUpIssue(error));
@@ -99,6 +102,7 @@ export default function SignUpScreen() {
     } else if (avatarUri) {
       await stashPendingAvatar(avatarUri);
     }
+    submitting.current = false;
     setLoading(false);
 
     // With a session the root layout takes it from here (first run goes to

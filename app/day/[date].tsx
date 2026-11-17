@@ -53,6 +53,10 @@ export default function DayScreen() {
     // date is a local-time "YYYY-MM-DD" key — bound the query to that local
     // day's start/end so it matches how the calendar bucketed stickers.
     const dayStart = new Date(`${date}T00:00:00`);
+    // A malformed link would make toISOString() throw below: show the error state.
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(dayStart.getTime())) {
+      setLoadError(true); setLoading(false); setRefreshing(false); return;
+    }
     const dayEnd = new Date(dayStart);
     dayEnd.setDate(dayEnd.getDate() + 1);
     const { data, error } = await supabase

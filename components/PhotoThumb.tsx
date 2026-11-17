@@ -29,7 +29,7 @@ function PhotoThumb({ asset, size, radius, order, used, onPress }: Props) {
       testID={`photo-thumb-${selected ? 'selected' : 'idle'}`}
       onPress={() => onPress(asset)}
       accessibilityRole="button"
-      accessibilityLabel={selected ? `Photo, selected ${order}` : 'Photo'}
+      accessibilityLabel={selected ? `Photo, selected ${order}` : used ? 'Photo, already a sticker' : 'Photo'}
       accessibilityState={{ selected }}
       style={[{ width: size, height: size, borderRadius: radius }, styles.cell]}
     >
@@ -64,6 +64,6 @@ const makeStyles = ({ colors }: Theme) => StyleSheet.create({
   badgeText: { color: colors.white, fontSize: 12, lineHeight: 15, fontFamily: fonts.display },
   usedBadge: {
     position: 'absolute', left: 4, bottom: 4, width: 18, height: 18, borderRadius: 9,
-    backgroundColor: 'rgba(51,41,42,0.62)', alignItems: 'center', justifyContent: 'center',
+    backgroundColor: colors.photoBadge, alignItems: 'center', justifyContent: 'center',
   },
 });

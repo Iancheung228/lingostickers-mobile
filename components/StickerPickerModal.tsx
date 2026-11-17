@@ -35,20 +35,31 @@ export default function StickerPickerModal({
   const { reduced } = useMotion();
   const [stickers, setStickers] = useState<Sticker[]>([]);
   const [loading, setLoading] = useState(true);
+  const [failed, setFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     if (!visible || !currentUserId) return;
+    let cancelled = false;
     setLoading(true);
+    setFailed(false);
     supabase
       .from('stickers')
       .select('*')
       .eq('user_id', currentUserId)
       .order('discovered_at', { ascending: false })
-      .then(({ data }) => {
-        setStickers((data ?? []) as Sticker[]);
+      .then(({ data, error }) => {
+        if (cancelled) return;
+        if (error) setFailed(true);
+        else setStickers((data ?? []) as Sticker[]);
+        setLoading(false);
+      }, () => {
+        if (cancelled) return;
+        setFailed(true);
         setLoading(false);
       });
-  }, [visible, currentUserId]);
+    return () => { cancelled = true; };
+  }, [visible, currentUserId, attempt]);
 
   // One batched sign request for the whole picker grid — see
   // hooks/useSignedUrls.ts.
@@ -82,6 +93,18 @@ export default function StickerPickerModal({
 
         {loading ? (
           <ActivityIndicator style={{ marginTop: 48 }} color={colors.terraInk} size="large" />
+        ) : failed ? (
+          <View style={styles.errorBox}>
+            <Text style={styles.empty}>{"Couldn't load your collection. Check your connection and try again."}</Text>
+            <TouchableOpacity
+              onPress={() => setAttempt(n => n + 1)}
+              accessibilityRole="button"
+              accessibilityLabel="Retry loading your collection"
+              style={styles.retry}
+            >
+              <Text style={styles.retryText}>Retry</Text>
+            </TouchableOpacity>
+          </View>
         ) : stickers.length === 0 ? (
           <Text style={styles.empty}>Nothing in your collection yet — scan something first!</Text>
         ) : (
@@ -122,6 +145,9 @@ const makeStyles = ({ colors }: Theme) => StyleSheet.create({
   title: { fontSize: 20, fontFamily: fonts.display, color: colors.inkDark },
   subtitle: { fontSize: 12, fontFamily: fonts.display, color: colors.inkLight, marginTop: 2 },
   empty: { color: colors.inkFaint, textAlign: 'center', marginTop: 48, fontSize: 14, fontFamily: fonts.text, paddingHorizontal: 32 },
+  errorBox: { alignItems: 'center' },
+  retry: { marginTop: spacing.md, paddingVertical: spacing.sm, paddingHorizontal: spacing.lg },
+  retryText: { fontSize: 15, fontFamily: fonts.display, color: colors.terraInk },
   grid: { paddingHorizontal: 16, paddingBottom: 32 },
   row: { gap: 12, marginBottom: 12 },
   cardWrapper: { flex: 1 },

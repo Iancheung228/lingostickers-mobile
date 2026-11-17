@@ -117,7 +117,16 @@ export default function ProfileScreen() {
 
   const fetchStickers = useCallback(async () => {
     if (!user) return;
-    const { data, error } = await supabase.from('stickers').select('*').eq('user_id', user.id);
+    // PostgREST caps a response at 1000 rows: page through.
+    const PAGE = 1000;
+    const data: Sticker[] = [];
+    let error: unknown = null;
+    for (let from = 0; ; from += PAGE) {
+      const res = await supabase.from('stickers').select('*').eq('user_id', user.id).order('id').range(from, from + PAGE - 1);
+      if (res.error || !res.data) { error = res.error ?? new Error('no data'); break; }
+      data.push(...(res.data as Sticker[]));
+      if (res.data.length < PAGE) break;
+    }
     if (error) {
       setLoadError(true);
     } else if (data) {
@@ -330,7 +339,9 @@ export default function ProfileScreen() {
   const handleDeleteAccount = () => {
     Alert.alert(
       'Delete Account',
-      `This permanently deletes your account, all ${stickers.length} sticker${stickers.length === 1 ? '' : 's'}, and everything else tied to it. This can't be undone.`,
+      loading || loadError
+        ? "This permanently deletes your account, all your stickers, and everything else tied to it. This can't be undone."
+        : `This permanently deletes your account, all ${stickers.length} sticker${stickers.length === 1 ? '' : 's'}, and everything else tied to it. This can't be undone.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
