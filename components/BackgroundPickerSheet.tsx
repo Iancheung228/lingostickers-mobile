@@ -239,15 +239,17 @@ export default function BackgroundPickerSheet({
               onAccessibilityAction={(e) => { if (e.nativeEvent.actionName === 'delete') confirmDelete(item); }}
               testID={`saved-background-${i}`}
             >
-              {url ? (
+              {/* Under the image, not instead of it: between the signed URL
+                  arriving and the bytes landing, a fresh tile was blank. */}
+              <ActivityIndicator style={StyleSheet.absoluteFill} color={colors.inkLight} />
+              {url && (
                 <Image
                   source={{ uri: url, cacheKey: libraryThumbPathFor(item.path) }}
                   cachePolicy="memory-disk"
                   style={StyleSheet.absoluteFill}
                   contentFit="cover"
+                  transition={150}
                 />
-              ) : (
-                <ActivityIndicator style={StyleSheet.absoluteFill} color={colors.inkLight} />
               )}
             </TouchableOpacity>
           );

@@ -1,0 +1,64 @@
+# Final pre-prod QA, check 2: delete the one card, Log Out within ~6 s, sign back
+# in as the same QA account: the card must stay deleted. No AI calls.
+# Ends with the card gone; run .maestro/seed.mjs (run.sh does this before each flow).
+appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
+---
+- runFlow: ../sign-in.yaml
+
+# Delete the card from its detail sheet (the action sheet's Delete row is the confirm).
+- tapOn:
+    id: "tab-collection"
+- extendedWaitUntil:
+    visible: "pomme.*"
+    timeout: 15000
+- tapOn: "pomme.*"
+- extendedWaitUntil:
+    visible: "More actions"
+    timeout: 10000
+- tapOn: "More actions"
+- tapOn: "Delete card"
+- takeScreenshot: fd-01-after-delete-tap
+
+# Log Out right away (inside the 6 s window): profile tab, scroll to Log Out, confirm.
+- tapOn:
+    id: "tab-profile"
+- scrollUntilVisible:
+    element:
+      id: "profile-version"
+    direction: DOWN
+    timeout: 30000
+    speed: 40
+- tapOn: "Log Out"
+- tapOn:
+    text: "Log Out"
+    index: 1
+- extendedWaitUntil:
+    visible: "WELCOME BACK"
+    timeout: 30000
+- takeScreenshot: fd-02-signed-out
+
+# Sign back in (inline: sign-in.yaml would clear the app's local state first).
+- tapOn: "Email"
+- waitForAnimationToEnd:
+    timeout: 1500
+- tapOn: "Email"
+- inputText: ${MAESTRO_EMAIL}
+- tapOn: "Password"
+- waitForAnimationToEnd:
+    timeout: 1500
+- tapOn: "Password"
+- inputText: ${MAESTRO_PASSWORD}
+- tapOn: "WELCOME BACK"
+- tapOn: "Sign In"
+- tapOn:
+    text: "Not Now"
+    optional: true
+- extendedWaitUntil:
+    visible: "Collection.*"
+    timeout: 30000
+- tapOn:
+    id: "tab-collection"
+- waitForAnimationToEnd:
+    timeout: 3000
+- takeScreenshot: fd-03-collection-after-relogin
+- assertNotVisible: "pomme.*"

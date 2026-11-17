@@ -1,0 +1,78 @@
+# Final pre-prod QA, check 3: turn the daily reminder ON, Log Out, sign back in
+# as the same QA account: the reminder toggle must be OFF. No AI calls.
+appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
+---
+- runFlow: ../sign-in.yaml
+
+- tapOn: "Profile"
+- extendedWaitUntil:
+    visible: "Reminders"
+    timeout: 20000
+- scrollUntilVisible:
+    element:
+      id: "toggle-reminder"
+    direction: DOWN
+    timeout: 15000
+    centerElement: true
+- tapOn:
+    id: "toggle-reminder"
+- tapOn:
+    text: "Allow"
+    optional: true
+- waitForAnimationToEnd:
+    timeout: 1500
+- extendedWaitUntil:
+    visible:
+      id: "reminder-time"
+    timeout: 10000
+- takeScreenshot: fr-01-reminder-on
+
+# Log Out (scroll to the bottom row, confirm the native alert).
+- scrollUntilVisible:
+    element:
+      id: "profile-version"
+    direction: DOWN
+    timeout: 30000
+    speed: 40
+- tapOn: "Log Out"
+- tapOn:
+    text: "Log Out"
+    index: 1
+- extendedWaitUntil:
+    visible: "WELCOME BACK"
+    timeout: 30000
+
+# Sign back in (inline, no clearState).
+- tapOn: "Email"
+- waitForAnimationToEnd:
+    timeout: 1500
+- tapOn: "Email"
+- inputText: ${MAESTRO_EMAIL}
+- tapOn: "Password"
+- waitForAnimationToEnd:
+    timeout: 1500
+- tapOn: "Password"
+- inputText: ${MAESTRO_PASSWORD}
+- tapOn: "WELCOME BACK"
+- tapOn: "Sign In"
+- tapOn:
+    text: "Not Now"
+    optional: true
+- extendedWaitUntil:
+    visible: "Collection.*"
+    timeout: 30000
+
+- tapOn: "Profile"
+- extendedWaitUntil:
+    visible: "Reminders"
+    timeout: 20000
+- scrollUntilVisible:
+    element:
+      id: "toggle-reminder"
+    direction: DOWN
+    timeout: 15000
+    centerElement: true
+- takeScreenshot: fr-02-reminder-after-relogin
+# reminder-time rows exist only while the reminder is on: none = toggle OFF.
+- assertNotVisible:
+    id: "reminder-time"

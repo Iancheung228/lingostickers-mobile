@@ -1,0 +1,99 @@
+# Final pre-prod QA, check 1: a "Not a teapot?" hint that comes back as the same
+# word ("Teapot") must keep the "What is it?" sheet open with the reason inline,
+# and the reveal behind it must be untouched. Costs TWO AI calls on staging:
+# 1 create-sticker scan + 1 hint correction. Discards the card at the end.
+appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
+---
+- runFlow: ../sign-in.yaml
+
+- tapOn:
+    text: "Scan a new sticker"
+- extendedWaitUntil:
+    visible: ".*(One quick thing|Agree and start scanning|Import a photo from your library).*"
+    timeout: 15000
+- runFlow:
+    when:
+      visible: "Agree and start scanning"
+    commands:
+      - tapOn: "Agree and start scanning"
+- extendedWaitUntil:
+    visible: "Import a photo from your library"
+    timeout: 15000
+- tapOn:
+    text: "Import a photo from your library"
+- tapOn:
+    text: "Allow Full Access|Allow Access to All Photos|OK"
+    optional: true
+- extendedWaitUntil:
+    visible:
+      id: "photo-thumb-idle"
+    timeout: 15000
+- tapOn:
+    index: 1
+    id: "photo-thumb-idle"
+- tapOn:
+    id: "photo-picker-confirm"
+- extendedWaitUntil:
+    visible: "Make sticker"
+    timeout: 30000
+- tapOn: "Make sticker"
+
+# ---- Reveal, before the correction -------------------------------------------
+- extendedWaitUntil:
+    visible:
+      id: "reveal-add"
+    timeout: 90000
+- extendedWaitUntil:
+    visible:
+      id: "reveal-wrong-word"
+    timeout: 10000
+- assertVisible: ".*(Not an? .+\\?|Wrong word\\?).*"
+- takeScreenshot: fw-01-reveal-before
+
+# ---- Ask for a different word, one that comes back as the same headword -------
+- tapOn:
+    id: "reveal-wrong-word"
+- extendedWaitUntil:
+    visible: "What is it\\?"
+    timeout: 10000
+- tapOn:
+    id: "wrong-word-input"
+- inputText: "a pot for making tea"
+- tapOn:
+    id: "wrong-word-submit"
+# No wait: try to catch the pending state (spinner on "Make this card", dimmed Add/Discard).
+- takeScreenshot: fw-02-pending-no-wait
+- runFlow:
+    when:
+      visible: "What is it\\?"
+    commands:
+      - assertVisible:
+          id: "wrong-word-submit"
+      - takeScreenshot: fw-03-pending-a
+
+# ---- Same word came back: the sheet must stay open with the reason -------------
+- extendedWaitUntil:
+    visible:
+      id: "wrong-word-error"
+    timeout: 90000
+- assertVisible: "What is it\\?"
+- assertVisible: ".*That still comes out as .*Try describing it another way.*"
+- takeScreenshot: fw-04-same-word-error
+# The reveal behind must not have been replaced by a card that was not asked for.
+- assertNotVisible: "Added 1 card"
+
+# ---- Cancel the sheet, then Discard: the reveal is still usable -----------------
+- tapOn:
+    id: "wrong-word-cancel"
+- extendedWaitUntil:
+    notVisible: "What is it\\?"
+    timeout: 10000
+- assertVisible:
+    id: "reveal-add"
+- takeScreenshot: fw-05-back-on-reveal
+- tapOn:
+    id: "reveal-discard"
+- extendedWaitUntil:
+    visible: "Scan a new sticker"
+    timeout: 15000
+- takeScreenshot: fw-06-after-discard
