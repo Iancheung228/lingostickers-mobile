@@ -1,0 +1,276 @@
+# QA batch A7-A9 (pre-prod): sheet open/close motion and gestures, back chevron right
+# after a sheet closes, New board then scrim tap within ~200 ms. QA account via qa.sh,
+# video recorded by the caller. Creates and deletes its own "QA ab ..." boards. No AI calls.
+appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
+---
+- runFlow: ../sign-in.yaml
+- tapOn: "Boards"
+- waitForAnimationToEnd
+
+# Clean leftovers from an earlier run (a failed run keeps its boards).
+- repeat:
+    while:
+      visible: "QA ab.*"
+    commands:
+      - tapOn: "QA ab.*"
+      - waitForAnimationToEnd
+      - tapOn: "Board options"
+      - waitForAnimationToEnd:
+          timeout: 2000
+      - tapOn: "Delete board"
+      - waitForAnimationToEnd:
+          timeout: 9000
+
+# Board for A7 (background sheet): create, close the sticker picker.
+- tapOn: "New board"
+- waitForAnimationToEnd
+- inputText: "QA ab sheet"
+- tapOn: "Create board"
+- waitForAnimationToEnd:
+    timeout: 4000
+- tapOn: "Close the sticker picker"
+- waitForAnimationToEnd:
+    timeout: 3000
+
+# --- A7.1 open by Board menu, close by scrim tap ------------------------------
+- tapOn: "Board options"
+- waitForAnimationToEnd:
+    timeout: 1500
+- tapOn: "Add a background"
+- waitForAnimationToEnd:
+    timeout: 1500
+- assertVisible: "Choose from Photos"
+- takeScreenshot: a7-01-bg-open-settled
+- tapOn:
+    point: "50%,15%"
+- waitForAnimationToEnd:
+    timeout: 1500
+- assertNotVisible: "Choose from Photos"
+- takeScreenshot: a7-02-bg-scrim-closed
+
+# --- A7.2 slow drag down (1.5 s, past the dismiss distance) ------------------
+- tapOn: "Board options"
+- waitForAnimationToEnd:
+    timeout: 1500
+- tapOn: "Add a background"
+- waitForAnimationToEnd:
+    timeout: 1500
+- swipe:
+    start: "50%,69%"
+    end: "50%,97%"
+    duration: 1500
+- waitForAnimationToEnd:
+    timeout: 1500
+- assertNotVisible: "Choose from Photos"
+- takeScreenshot: a7-03-bg-slow-drag-closed
+
+# --- A7.3 fast flick down (120 ms) -------------------------------------------
+- tapOn: "Board options"
+- waitForAnimationToEnd:
+    timeout: 1500
+- tapOn: "Add a background"
+- waitForAnimationToEnd:
+    timeout: 1500
+- swipe:
+    start: "50%,69%"
+    end: "50%,95%"
+    duration: 120
+- waitForAnimationToEnd:
+    timeout: 1500
+- assertNotVisible: "Choose from Photos"
+- takeScreenshot: a7-04-bg-flick-closed
+
+# --- A7.4 partial drag then release: must snap back and stay open -------------
+- tapOn: "Board options"
+- waitForAnimationToEnd:
+    timeout: 1500
+- tapOn: "Add a background"
+- waitForAnimationToEnd:
+    timeout: 1500
+- swipe:
+    start: "50%,69%"
+    end: "50%,76%"
+    duration: 500
+- waitForAnimationToEnd:
+    timeout: 1500
+- assertVisible: "Choose from Photos"
+- takeScreenshot: a7-05-bg-snapped-back
+- tapOn:
+    point: "50%,15%"
+- waitForAnimationToEnd:
+    timeout: 1500
+
+# --- A7.5 New board: open, Cancel --------------------------------------------
+- tapOn:
+    id: "board-back"
+- waitForAnimationToEnd:
+    timeout: 2000
+- tapOn: "New board"
+- waitForAnimationToEnd:
+    timeout: 1500
+- takeScreenshot: a7-06-newboard-open
+- tapOn: "Cancel"
+- waitForAnimationToEnd:
+    timeout: 1500
+- assertVisible: "New board"
+- assertNotVisible: "Discard this board.*"
+
+# --- A7.6 New board: open, scrim close -----------------------------------------
+- tapOn: "New board"
+- waitForAnimationToEnd:
+    timeout: 1500
+- tapOn:
+    point: "50%,15%"
+- waitForAnimationToEnd:
+    timeout: 1500
+- assertVisible: "New board"
+- takeScreenshot: a7-07-newboard-scrim-closed
+
+# --- A7.7 Home filter: open, Done; reopen, scrim; reopen, slow drag -----------
+- tapOn: "Collection.*"
+- extendedWaitUntil:
+    visible: "Your words.*"
+    timeout: 20000
+- tapOn:
+    id: "home-filter"
+- waitForAnimationToEnd:
+    timeout: 1500
+- takeScreenshot: a7-08-filter-open
+- tapOn:
+    id: "home-filter-done"
+- waitForAnimationToEnd:
+    timeout: 1500
+- tapOn:
+    id: "home-filter"
+- waitForAnimationToEnd:
+    timeout: 1500
+- tapOn:
+    point: "50%,15%"
+- waitForAnimationToEnd:
+    timeout: 1500
+- assertNotVisible: "Favourites only"
+- tapOn:
+    id: "home-filter"
+- waitForAnimationToEnd:
+    timeout: 1500
+# The filter sheet's top edge is near 39% of the height (it is shorter than the
+# background sheet), so the drag must start at its grabber/title, not at 62%.
+- swipe:
+    start: "50%,42%"
+    end: "50%,97%"
+    duration: 1500
+- waitForAnimationToEnd:
+    timeout: 1500
+- assertNotVisible: "Favourites only"
+- takeScreenshot: a7-09-filter-slow-drag-closed
+
+# --- A8: back chevron right after a sheet closes (first tap) -------------------
+- tapOn: "Boards"
+- waitForAnimationToEnd
+- tapOn: "QA ab sheet.*"
+- waitForAnimationToEnd
+# A8.1 after the background sheet closes by scrim tap
+- tapOn: "Board options"
+- waitForAnimationToEnd:
+    timeout: 1500
+- tapOn: "Add a background"
+- waitForAnimationToEnd:
+    timeout: 1500
+- tapOn:
+    point: "50%,15%"
+    waitToSettleTimeoutMs: 0
+- tapOn:
+    id: "board-back"
+    waitToSettleTimeoutMs: 0
+- waitForAnimationToEnd:
+    timeout: 2000
+- takeScreenshot: a8-01-after-bg-sheet
+- assertVisible: "New board"
+- assertNotVisible: "Back to boards"
+
+# A8.2 after the board "..." menu closes by an outside tap. The menu is a popover
+# under the top-right button (about 10-28% of the height, x 40-98%), so the outside
+# tap goes to the empty board area on the left (the header title does not dismiss it).
+- tapOn: "QA ab sheet.*"
+- waitForAnimationToEnd
+- tapOn: "Board options"
+- waitForAnimationToEnd:
+    timeout: 1500
+- assertVisible: "Rename board"
+- tapOn:
+    point: "10%,60%"
+    waitToSettleTimeoutMs: 0
+- tapOn:
+    id: "board-back"
+    waitToSettleTimeoutMs: 0
+- waitForAnimationToEnd:
+    timeout: 2000
+- takeScreenshot: a8-02-after-menu
+- assertVisible: "New board"
+
+# A8.3 after the sticker picker X (board is created, picker opens)
+- tapOn: "New board"
+- waitForAnimationToEnd
+- inputText: "QA ab back"
+- tapOn: "Create board"
+- waitForAnimationToEnd:
+    timeout: 4000
+- tapOn:
+    text: "Close the sticker picker"
+    waitToSettleTimeoutMs: 0
+- tapOn:
+    id: "board-back"
+    waitToSettleTimeoutMs: 0
+- waitForAnimationToEnd:
+    timeout: 2000
+- takeScreenshot: a8-03-after-picker-x
+- assertVisible: "New board"
+
+# --- A9: New board, type a name, Create, scrim tap at once --------------------
+- tapOn: "New board"
+- waitForAnimationToEnd
+- inputText: "QA ab nine"
+- tapOn:
+    text: "Create board"
+    waitToSettleTimeoutMs: 0
+- tapOn:
+    point: "50%,15%"
+    waitToSettleTimeoutMs: 0
+- waitForAnimationToEnd:
+    timeout: 4000
+- takeScreenshot: a9-01-after-create-scrim
+- assertNotVisible: "Discard this board.*"
+- runFlow:
+    when:
+      visible: "Close the sticker picker"
+    commands:
+      - tapOn: "Close the sticker picker"
+- waitForAnimationToEnd:
+    timeout: 2000
+- takeScreenshot: a9-02-settled
+- assertVisible: "New board"
+- assertNotVisible: "Discard this board.*"
+
+# Cleanup: delete every "QA ab" board this flow made (from the Boards list).
+- runFlow:
+    when:
+      visible:
+        id: "board-back"
+    commands:
+      - tapOn:
+          id: "board-back"
+      - waitForAnimationToEnd:
+          timeout: 2000
+- repeat:
+    while:
+      visible: "QA ab.*"
+    commands:
+      - tapOn: "QA ab.*"
+      - waitForAnimationToEnd
+      - tapOn: "Board options"
+      - waitForAnimationToEnd:
+          timeout: 2000
+      - tapOn: "Delete board"
+      - waitForAnimationToEnd:
+          timeout: 9000
+- takeScreenshot: a9-03-cleaned

@@ -1,0 +1,68 @@
+# QA batch B2 (pre-prod): sticker picker double tap adds a sticker once. The QA account
+# has one sticker ("pomme"), so the two-different-stickers case is not testable here.
+# Creates and deletes its own "QA ab pick" board. No AI calls.
+appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
+---
+- runFlow: ../sign-in.yaml
+- tapOn: "Boards"
+- waitForAnimationToEnd
+- repeat:
+    while:
+      visible: "QA ab.*"
+    commands:
+      - tapOn: "QA ab.*"
+      - waitForAnimationToEnd
+      - tapOn: "Board options"
+      - waitForAnimationToEnd:
+          timeout: 2000
+      - tapOn: "Delete board"
+      - waitForAnimationToEnd:
+          timeout: 9000
+- tapOn: "New board"
+- waitForAnimationToEnd
+- inputText: "QA ab pick"
+- tapOn: "Create board"
+- waitForAnimationToEnd:
+    timeout: 4000
+# The picker is open right after create. Two quick taps on the one sticker.
+- takeScreenshot: b2-01-picker-open
+- waitForAnimationToEnd:
+    timeout: 1500
+- takeScreenshot: b2-01b-before-tap
+# A single point tap on the card centre first (did a text-matched tap register at all?).
+- tapOn:
+    point: "50%,40%"
+- waitForAnimationToEnd:
+    timeout: 1500
+- takeScreenshot: b2-01c-after-single-tap
+- assertVisible: "1 on this board.*"
+# Then a quick double tap at the same point on the next sticker state.
+- tapOn:
+    point: "50%,40%"
+    waitToSettleTimeoutMs: 0
+- tapOn:
+    point: "50%,40%"
+    waitToSettleTimeoutMs: 0
+- waitForAnimationToEnd:
+    timeout: 2000
+- takeScreenshot: b2-02-after-double-tap
+- tapOn: "Close the sticker picker"
+- waitForAnimationToEnd:
+    timeout: 3000
+- takeScreenshot: b2-03-board
+- tapOn:
+    id: "board-back"
+- waitForAnimationToEnd:
+    timeout: 2000
+- repeat:
+    while:
+      visible: "QA ab.*"
+    commands:
+      - tapOn: "QA ab.*"
+      - waitForAnimationToEnd
+      - tapOn: "Board options"
+      - waitForAnimationToEnd:
+          timeout: 2000
+      - tapOn: "Delete board"
+      - waitForAnimationToEnd:
+          timeout: 9000

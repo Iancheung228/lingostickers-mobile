@@ -1,0 +1,88 @@
+# QA batch A4 + A5 (pre-prod): calendar tab-press cascade, re-tap replay, no replay
+# from a day page, Year view then Month. Demo account via run-glitch.sh (-e creds).
+# LOOK ONLY: no scan, grade, edit or delete. No AI calls.
+# Judged from the video (30fps tiles), not from these screenshots.
+appId: ${APP_ID}
+---
+- runFlow: ../sign-in.yaml
+
+# A4a: from another tab (Collection is Home after sign-in), press Calendar.
+- tapOn:
+    id: "tab-calendar"
+    waitToSettleTimeoutMs: 0
+- takeScreenshot: ab4-01-from-home-first
+- extendedWaitUntil:
+    visible: "Previous month"
+    timeout: 20000
+- waitForAnimationToEnd:
+    timeout: 6000
+- takeScreenshot: ab4-02-settled
+
+# A4b: leave for Collection, come back: cascade must replay from the first sticker.
+- tapOn:
+    id: "tab-collection"
+- waitForAnimationToEnd:
+    timeout: 2000
+- tapOn:
+    id: "tab-calendar"
+    waitToSettleTimeoutMs: 0
+- takeScreenshot: ab4-03-back-from-home-0
+- takeScreenshot: ab4-04-back-from-home-1
+- waitForAnimationToEnd:
+    timeout: 6000
+- takeScreenshot: ab4-05-back-from-home-settled
+
+# A4c: re-tap Calendar while already on it: must replay.
+- tapOn:
+    id: "tab-calendar"
+    waitToSettleTimeoutMs: 0
+- takeScreenshot: ab4-06-retap-0
+- takeScreenshot: ab4-07-retap-1
+- waitForAnimationToEnd:
+    timeout: 6000
+- takeScreenshot: ab4-08-retap-settled
+
+# A4d: open a day with stickers (Nov 3), then go back with the header back button.
+- tapOn:
+    id: "calendar-day-2026-11-03"
+- waitForAnimationToEnd:
+    timeout: 800
+- tapOn:
+    id: "calendar-selected-day"
+- waitForAnimationToEnd:
+    timeout: 1500
+- takeScreenshot: ab4-09-day-open
+- tapOn:
+    text: ".*[Bb]ack.*"
+    optional: true
+- takeScreenshot: ab4-10-after-back-0
+- takeScreenshot: ab4-11-after-back-1
+- waitForAnimationToEnd:
+    timeout: 4000
+- takeScreenshot: ab4-12-after-back-settled
+
+# A4e: Year view, then leave and come back to the tab, then toggle to Month.
+- tapOn:
+    id: "calendar-mode-year"
+- waitForAnimationToEnd:
+    timeout: 2000
+- takeScreenshot: ab4-13-year
+- tapOn:
+    id: "tab-collection"
+- waitForAnimationToEnd:
+    timeout: 2000
+- tapOn:
+    id: "tab-calendar"
+    waitToSettleTimeoutMs: 0
+- takeScreenshot: ab4-14-year-retab-0
+- takeScreenshot: ab4-15-year-retab-1
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: ab4-16-year-retab-settled
+- tapOn:
+    id: "calendar-mode-month"
+- waitForAnimationToEnd:
+    timeout: 2000
+- assertVisible:
+    id: "calendar-prev-month"
+- takeScreenshot: ab4-17-month-after-year
