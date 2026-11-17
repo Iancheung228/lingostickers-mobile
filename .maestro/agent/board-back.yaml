@@ -1,0 +1,100 @@
+# Throwaway repro: the board back chevron (testID board-back) must return to the
+# Boards list, both on an empty board and on one with a sticker. Creates and
+# deletes its own boards only. No AI calls.
+appId: ${APP_ID}
+---
+- runFlow: ../sign-in.yaml
+- tapOn: "Boards"
+- waitForAnimationToEnd
+# Clean leftovers from an earlier run of this flow.
+- repeat:
+    while:
+      visible: "Back empty.*"
+    commands:
+      - tapOn: "Back empty.*"
+      - waitForAnimationToEnd
+      - tapOn: "Board options"
+      - waitForAnimationToEnd:
+          timeout: 2000
+      - tapOn: "Delete board"
+      - waitForAnimationToEnd:
+          timeout: 9000
+
+# --- Case 1: empty board -----------------------------------------------------
+- tapOn: "New board"
+- waitForAnimationToEnd
+- inputText: "Back empty"
+- tapOn: "Create board"
+- waitForAnimationToEnd:
+    timeout: 4000
+- tapOn: "Close the sticker picker"
+- waitForAnimationToEnd:
+    timeout: 3000
+- assertVisible:
+    id: "board-back"
+- takeScreenshot: 01-empty-board-open
+- tapOn:
+    id: "board-back"
+- waitForAnimationToEnd:
+    timeout: 3000
+- takeScreenshot: 02-empty-after-id-tap
+- assertVisible: "Boards"
+- assertVisible: "New board"
+- assertNotVisible: "Back to boards"
+
+# Reopen and delete the empty board.
+- tapOn: "Back empty.*"
+- waitForAnimationToEnd
+- tapOn: "Board options"
+- waitForAnimationToEnd:
+    timeout: 2000
+- tapOn: "Delete board"
+- waitForAnimationToEnd:
+    timeout: 9000
+
+# --- Case 2: board with a sticker -------------------------------------------
+- tapOn: "New board"
+- waitForAnimationToEnd
+- inputText: "Back stocked"
+- tapOn: "Create board"
+- waitForAnimationToEnd:
+    timeout: 4000
+- assertVisible: "Add to Back stocked"
+- tapOn:
+    point: "25%,22%"
+- waitForAnimationToEnd
+- tapOn: "Close the sticker picker"
+- waitForAnimationToEnd:
+    timeout: 3000
+- takeScreenshot: 03-stocked-board-open
+- tapOn:
+    id: "board-back"
+- waitForAnimationToEnd:
+    timeout: 3000
+- takeScreenshot: 04-stocked-after-id-tap
+- assertVisible: "Boards"
+- assertVisible: "New board"
+- assertNotVisible: "Back to boards"
+
+# --- Case 3: real finger on the chevron (point tap) -------------------------
+- tapOn: "Back stocked.*"
+- waitForAnimationToEnd
+- assertVisible:
+    id: "board-back"
+- tapOn:
+    point: "7%,11%"
+- waitForAnimationToEnd:
+    timeout: 3000
+- takeScreenshot: 05-stocked-after-point-tap
+- assertVisible: "New board"
+
+# Clean up.
+- tapOn: "Back stocked.*"
+- waitForAnimationToEnd
+- tapOn: "Board options"
+- waitForAnimationToEnd:
+    timeout: 2000
+- tapOn: "Delete board"
+- waitForAnimationToEnd:
+    timeout: 9000
+- assertVisible: "New board"

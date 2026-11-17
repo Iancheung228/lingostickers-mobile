@@ -1,0 +1,151 @@
+# Board background sheet: "Add photos to saved" (multi-select, limit 20) adds
+# several saved backgrounds without applying any of them to the board.
+# Creates and deletes its own board. Staging QA account. No AI calls.
+# Needs >= 5 photos in the Simulator library (xcrun simctl addmedia booted ...).
+appId: ${APP_ID}
+---
+- runFlow: ../sign-in.yaml
+- tapOn: "Boards"
+- waitForAnimationToEnd
+# Clean leftovers from an earlier run (a failed run keeps its board).
+- repeat:
+    while:
+      visible: "Multi add.*"
+    commands:
+      - tapOn: "Multi add.*"
+      - waitForAnimationToEnd
+      - tapOn: "Board options"
+      - waitForAnimationToEnd:
+          timeout: 2000
+      - tapOn: "Delete board"
+      - waitForAnimationToEnd:
+          timeout: 9000
+- tapOn: "New board"
+- waitForAnimationToEnd
+- inputText: "Multi add"
+- tapOn: "Create board"
+- waitForAnimationToEnd:
+    timeout: 4000
+- tapOn: "Close the sticker picker"
+- waitForAnimationToEnd:
+    timeout: 3000
+- tapOn: "Board options"
+- waitForAnimationToEnd:
+    timeout: 2000
+- tapOn: "Add a background"
+- waitForAnimationToEnd
+- assertVisible:
+    id: "background-add-several"
+- takeScreenshot: 01-sheet-before
+- tapOn:
+    id: "background-add-several"
+- waitForAnimationToEnd:
+    timeout: 3000
+
+# System picker (multi-select). Pick five photos by grid position, then Done.
+- assertVisible: "Select up to 20 photos."
+- tapOn:
+    point: "50%,27%"
+- waitForAnimationToEnd:
+    timeout: 800
+- tapOn:
+    point: "83%,27%"
+- waitForAnimationToEnd:
+    timeout: 800
+- tapOn:
+    point: "15%,42%"
+- waitForAnimationToEnd:
+    timeout: 800
+- tapOn:
+    point: "15%,27%"
+- waitForAnimationToEnd:
+    timeout: 800
+- tapOn:
+    point: "50%,42%"
+- waitForAnimationToEnd:
+    timeout: 800
+- takeScreenshot: 02-picker-selected
+- tapOn: "Done|Add.*"
+- waitForAnimationToEnd:
+    timeout: 3000
+
+# Sheet stays open; the result line appears once every photo has uploaded.
+- takeScreenshot: 03-sheet-uploading
+- assertVisible: "Choose from Photos"
+- extendedWaitUntil:
+    visible: "Saved 5 backgrounds\\. Tap one to use it\\."
+    timeout: 120000
+- assertVisible:
+    id: "saved-background-2"
+- takeScreenshot: 04-sheet-after-add
+- assertVisible:
+    id: "background-add-several"
+# Exactly five saved tiles (indices 0-4), no sixth.
+- assertVisible:
+    id: "saved-background-4"
+- assertNotVisible:
+    id: "saved-background-5"
+# Grid overflows: scroll inside it to the last tile.
+- swipe:
+    start: "50%,70%"
+    end: "50%,30%"
+    duration: 400
+- waitForAnimationToEnd:
+    timeout: 1000
+- takeScreenshot: 04b-after-scroll
+- assertVisible:
+    id: "background-add-several"
+
+# Board background must be unchanged: close the sheet (tap the scrim) and check the menu.
+- tapOn:
+    point: "50%,15%"
+- waitForAnimationToEnd:
+    timeout: 2000
+- tapOn: "Board options"
+- waitForAnimationToEnd:
+    timeout: 2000
+- assertVisible: "Add a background"
+- takeScreenshot: 05-menu-unchanged
+- tapOn: "Add a background"
+- waitForAnimationToEnd
+- assertVisible:
+    id: "saved-background-0"
+- tapOn:
+    id: "saved-background-0"
+- waitForAnimationToEnd:
+    timeout: 3000
+- takeScreenshot: 06-crop-editor
+- assertVisible: "Cancel without changing the background"
+- tapOn: "Cancel without changing the background"
+- waitForAnimationToEnd
+
+# Cleanup: delete the saved backgrounds this run added, then the board.
+# Cancelling the crop editor also closes the sheet, so reopen it first.
+- tapOn: "Board options"
+- waitForAnimationToEnd:
+    timeout: 2000
+- tapOn: "Add a background"
+- waitForAnimationToEnd:
+    timeout: 6000
+- repeat:
+    while:
+      visible:
+        id: "saved-background-0"
+    commands:
+      - longPressOn:
+          id: "saved-background-0"
+      - waitForAnimationToEnd:
+          timeout: 1500
+      - tapOn: "Delete"
+      - waitForAnimationToEnd:
+          timeout: 4000
+- tapOn:
+    point: "50%,15%"
+- waitForAnimationToEnd:
+    timeout: 2000
+- tapOn: "Board options"
+- waitForAnimationToEnd:
+    timeout: 2000
+- tapOn: "Delete board"
+- waitForAnimationToEnd:
+    timeout: 9000

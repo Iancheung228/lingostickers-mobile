@@ -1,0 +1,67 @@
+# Verify: the sticker flip-in cascade replays on every Calendar tab press (from another
+# tab, and a re-tap while already on Calendar), and does NOT replay when returning from a
+# day page. Demo account (calendar-demo@tabi.test, staging). LOOK ONLY: no scan, grade,
+# edit or delete. Run via scratchpad/glitch/run-glitch.sh (qa.sh cannot pass demo creds).
+# sign-in.yaml does launchApp clearState, so every run starts a fresh JS load of this tree.
+appId: ${APP_ID}
+---
+- runFlow: ../sign-in.yaml
+
+# 1. Land on Calendar and let the first cascade finish.
+- tapOn:
+    id: "tab-calendar"
+- extendedWaitUntil:
+    visible: "Previous month"
+    timeout: 20000
+- waitForAnimationToEnd:
+    timeout: 6000
+- takeScreenshot: k01-cal-settled
+
+# 2. Go to another tab (Collection is the Home screen), let it sit.
+- tapOn:
+    id: "tab-collection"
+- waitForAnimationToEnd:
+    timeout: 2000
+- takeScreenshot: k02-home
+
+# 3. Back to Calendar from another tab: cascade must replay.
+- tapOn:
+    id: "tab-calendar"
+- takeScreenshot: k03-from-home-0-no-wait
+- takeScreenshot: k04-from-home-1-no-wait
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: k05-from-home-settled
+
+# 4. Re-tap Calendar while already on it: cascade must replay again.
+- waitForAnimationToEnd:
+    timeout: 1500
+- tapOn:
+    id: "tab-calendar"
+- takeScreenshot: k06-retap-0-no-wait
+- takeScreenshot: k07-retap-1-no-wait
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: k08-retap-settled
+
+# 5. Open a day that has a sticker (day page is pushed; not a tab press).
+- tapOn:
+    text: "November [0-9]+, [1-9][0-9]* stickers?"
+- waitForAnimationToEnd:
+    timeout: 800
+- tapOn:
+    id: "calendar-selected-day"
+- waitForAnimationToEnd:
+    timeout: 1500
+- takeScreenshot: k09-day-open
+
+# 6. Back to the calendar with the header back button: must NOT replay the cascade.
+#    The no-wait frames right after the tap must already show landed stickers.
+- tapOn:
+    text: ".*[Bb]ack.*"
+    optional: true
+- takeScreenshot: k10-after-back-0-no-wait
+- takeScreenshot: k11-after-back-1-no-wait
+- waitForAnimationToEnd:
+    timeout: 4000
+- takeScreenshot: k12-after-back-settled

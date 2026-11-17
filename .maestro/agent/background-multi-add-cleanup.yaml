@@ -1,0 +1,57 @@
+# Cleanup for background-multi-add: deletes leftover "Multi add"/"Multi look"
+# boards, then every saved background via long-press -> Delete. Staging QA only.
+appId: ${APP_ID}
+---
+- runFlow: ../sign-in.yaml
+- tapOn: "Boards"
+- waitForAnimationToEnd
+- repeat:
+    while:
+      visible: "Multi (add|look).*"
+    commands:
+      - tapOn: "Multi (add|look).*"
+      - waitForAnimationToEnd
+      - tapOn: "Board options"
+      - waitForAnimationToEnd:
+          timeout: 2000
+      - tapOn: "Delete board"
+      - waitForAnimationToEnd:
+          timeout: 9000
+- tapOn: "New board"
+- waitForAnimationToEnd
+- inputText: "Multi clean"
+- tapOn: "Create board"
+- waitForAnimationToEnd:
+    timeout: 4000
+- tapOn: "Close the sticker picker"
+- waitForAnimationToEnd:
+    timeout: 3000
+- tapOn: "Board options"
+- waitForAnimationToEnd:
+    timeout: 2000
+- tapOn: "Add a background"
+- waitForAnimationToEnd:
+    timeout: 6000
+- repeat:
+    while:
+      visible:
+        id: "saved-background-0"
+    commands:
+      - longPressOn:
+          id: "saved-background-0"
+      - waitForAnimationToEnd:
+          timeout: 1500
+      - tapOn: "Delete"
+      - waitForAnimationToEnd:
+          timeout: 4000
+- takeScreenshot: 01-cleaned-sheet
+- tapOn:
+    point: "50%,15%"
+- waitForAnimationToEnd:
+    timeout: 2000
+- tapOn: "Board options"
+- waitForAnimationToEnd:
+    timeout: 2000
+- tapOn: "Delete board"
+- waitForAnimationToEnd:
+    timeout: 9000

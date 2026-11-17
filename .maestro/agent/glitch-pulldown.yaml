@@ -1,0 +1,104 @@
+# Glitch hunt, LOOK ONLY: surfaces that close with a downward swipe.
+# Demo account (calendar-demo@tabi.test, staging). No scan, grade, edit or delete.
+# The demo account has no boards and creating one is an edit, so the Boards sheets
+# are NOT covered here. Each surface gets three gestures: SLOW (1.2 s, through the
+# distance threshold), QUICK (120 ms flick) and PARTIAL (a short drag, released:
+# should snap back). Screenshots follow each gesture with NO wait, on purpose.
+appId: ${APP_ID}
+---
+- runFlow: ../sign-in.yaml
+
+# ---- A. Day page (pushed from the calendar; a native card) -----------------
+- tapOn:
+    id: "tab-calendar"
+- extendedWaitUntil:
+    visible: "Previous month"
+    timeout: 20000
+- tapOn:
+    text: "November [0-9]+, [1-9][0-9]* stickers?"
+- waitForAnimationToEnd:
+    timeout: 800
+- tapOn:
+    id: "calendar-selected-day"
+- waitForAnimationToEnd:
+    timeout: 1500
+- takeScreenshot: p01-day-open
+- swipe:
+    start: "50%,15%"
+    end: "50%,90%"
+    duration: 1200
+- takeScreenshot: p02-day-slow-0-no-wait
+- waitForAnimationToEnd:
+    timeout: 1500
+- takeScreenshot: p03-day-slow-settled
+# The day page did NOT close on a downward swipe (p03 still shows it). Leave it
+# with the header back button, which is the only exit the page has.
+- tapOn:
+    text: ".*[Bb]ack.*"
+    optional: true
+- waitForAnimationToEnd:
+    timeout: 1500
+- takeScreenshot: p04-after-back
+
+# ---- C. Collection: a card, flipped, then its Details sheet ----------------
+- tapOn:
+    id: "tab-collection"
+- waitForAnimationToEnd:
+    timeout: 2000
+- tapOn:
+    id: "sticker-cell-.*"
+- extendedWaitUntil:
+    visible:
+      id: "card-flip"
+    timeout: 15000
+- tapOn:
+    id: "card-flip"
+- extendedWaitUntil:
+    visible: "Meaning, .*Edit"
+    timeout: 15000
+- tapOn:
+    id: "card-details"
+- extendedWaitUntil:
+    visible: "Say it yourself"
+    timeout: 10000
+- waitForAnimationToEnd:
+    timeout: 800
+- takeScreenshot: c01-details-open
+- swipe:
+    start: "50%,52%"
+    end: "50%,95%"
+    duration: 1200
+- takeScreenshot: c02-details-slow-0-no-wait
+- waitForAnimationToEnd:
+    timeout: 1500
+- takeScreenshot: c03-details-slow-settled
+- tapOn:
+    id: "card-details"
+- extendedWaitUntil:
+    visible: "Say it yourself"
+    timeout: 10000
+- waitForAnimationToEnd:
+    timeout: 800
+- swipe:
+    start: "50%,52%"
+    end: "50%,95%"
+    duration: 120
+- takeScreenshot: c04-details-quick-0-no-wait
+- waitForAnimationToEnd:
+    timeout: 1500
+- takeScreenshot: c05-details-quick-settled
+- tapOn:
+    id: "card-details"
+- extendedWaitUntil:
+    visible: "Say it yourself"
+    timeout: 10000
+- waitForAnimationToEnd:
+    timeout: 800
+- swipe:
+    start: "50%,52%"
+    end: "50%,59%"
+    duration: 400
+- takeScreenshot: c06-details-partial-0-no-wait
+- waitForAnimationToEnd:
+    timeout: 1500
+- takeScreenshot: c07-details-partial-settled

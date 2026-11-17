@@ -1,0 +1,88 @@
+# Verify: the Calendar header month switches as a slide STARTS (not one commit later),
+# for the chevrons, a finger swipe, and a short drag that springs back.
+# Demo account (calendar-demo@tabi.test, staging). LOOK ONLY: no scan, grade, edit or delete.
+# Run with the demo credentials via scratchpad/glitch/run-glitch.sh (qa.sh cannot pass them).
+# Screenshots taken with NO wait right after each action keep the half-finished frames;
+# the screen recording is the main evidence (frames extracted at 30fps).
+appId: ${APP_ID}
+---
+- runFlow: ../sign-in.yaml
+
+# 0. Open the Calendar tab and let it settle. Header = this month, no Today pill.
+- tapOn:
+    id: "tab-calendar"
+- extendedWaitUntil:
+    visible: "Previous month"
+    timeout: 20000
+- waitForAnimationToEnd:
+    timeout: 6000
+- takeScreenshot: h00-open-settled
+- assertVisible: "November 2026"
+- assertNotVisible:
+    id: "calendar-today"
+
+# 1. Next-month chevron. Header must read December as the slide starts.
+- tapOn:
+    id: "calendar-next-month"
+- takeScreenshot: h01-next-0-no-wait
+- takeScreenshot: h02-next-1-no-wait
+- waitForAnimationToEnd:
+    timeout: 3000
+- takeScreenshot: h03-next-settled
+- assertVisible: "December 2026"
+- assertVisible:
+    id: "calendar-today"
+
+# 2. Previous-month chevron back to November: Today pill goes away with the header.
+- tapOn:
+    id: "calendar-prev-month"
+- takeScreenshot: h04-prev-0-no-wait
+- takeScreenshot: h05-prev-1-no-wait
+- waitForAnimationToEnd:
+    timeout: 3000
+- takeScreenshot: h06-prev-settled
+- assertVisible: "November 2026"
+- assertNotVisible:
+    id: "calendar-today"
+
+# 3. Finger swipe to the left (next month).
+- swipe:
+    start: "85%,50%"
+    end: "15%,50%"
+    duration: 250
+- takeScreenshot: h07-swipe-next-0-no-wait
+- takeScreenshot: h08-swipe-next-1-no-wait
+- waitForAnimationToEnd:
+    timeout: 3000
+- takeScreenshot: h09-swipe-next-settled
+- assertVisible: "December 2026"
+- assertVisible:
+    id: "calendar-today"
+
+# 4. Short drag (about 15% of the width, under the 30% commit distance), released slowly:
+#    it must spring back. Header must still read December, Today pill unchanged.
+- swipe:
+    start: "50%,50%"
+    end: "35%,50%"
+    duration: 600
+- takeScreenshot: h10-short-drag-0-no-wait
+- waitForAnimationToEnd:
+    timeout: 3000
+- takeScreenshot: h11-short-drag-settled
+- assertVisible: "December 2026"
+- assertVisible:
+    id: "calendar-today"
+
+# 5. Finger swipe to the right (previous month) back to November.
+- swipe:
+    start: "15%,50%"
+    end: "85%,50%"
+    duration: 250
+- takeScreenshot: h12-swipe-prev-0-no-wait
+- takeScreenshot: h13-swipe-prev-1-no-wait
+- waitForAnimationToEnd:
+    timeout: 3000
+- takeScreenshot: h14-swipe-prev-settled
+- assertVisible: "November 2026"
+- assertNotVisible:
+    id: "calendar-today"

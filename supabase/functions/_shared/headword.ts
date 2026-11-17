@@ -65,9 +65,52 @@ function escapeRegExp(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+const HIRAGANA_TAIL = /[ぁ-ゖー]+$/;
+const KANJI = /\p{Script=Han}/u;
+
+/**
+ * Japanese verbs and adjectives conjugate at the end (飲む → 飲みました,
+ * かわいい → かわいくない). The part that never changes: a word with kanji,
+ * minus its trailing kana (飲む → 飲); an all-kana word, minus its last kana
+ * (かわいい → かわい). Nouns rarely end in kana, so they lose nothing.
+ */
+function jaStem(stem: string): string | null {
+  if (KANJI.test(stem)) {
+    const cut = stem.replace(HIRAGANA_TAIL, '');
+    return cut && cut !== stem ? cut : null;
+  }
+  return stem.length >= 3 ? stem.slice(0, -1) : null;
+}
+
+/**
+ * The stem's characters in order, with at most `slack` others between them in
+ * all: Cantonese splits verb + object around aspect markers (食飯 → 食緊飯).
+ */
+function nearSubsequence(sentence: string, stem: string, slack: number): boolean {
+  const chars = [...stem];
+  const hay = [...sentence];
+  for (let start = 0; start < hay.length; start++) {
+    if (hay[start] !== chars[0]) continue;
+    let i = start + 1, j = 1, gaps = 0;
+    while (j < chars.length && i < hay.length && gaps <= slack) {
+      if (hay[i] === chars[j]) j++; else gaps++;
+      i++;
+    }
+    if (j === chars.length && gaps <= slack) return true;
+  }
+  return false;
+}
+
 function matches(sentence: string, stem: string, language: Language): boolean {
   if (!stem) return false;
   if (sentence.includes(stem)) return true;
+  if (language === 'ja') {
+    const s = jaStem(stem);
+    if (s && sentence.includes(s)) return true;
+  }
+  if ((language === 'ja' || language === 'yue') && [...stem].length >= 2) {
+    if (nearSubsequence(sentence, stem, 2)) return true;
+  }
   // French nouns change their ending (cheval → chevaux, animal → animaux).
   // For a single long-enough word, the stem minus its last two letters, at the
   // start of a word, is still a decisive match.

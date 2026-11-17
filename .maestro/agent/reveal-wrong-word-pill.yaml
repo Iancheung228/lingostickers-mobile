@@ -1,0 +1,70 @@
+appId: ${APP_ID}
+---
+# Trimmed copy of wrong-word-fix.yaml: scan once (1 AI call), check the
+# "Not a ___?" pill on the reveal, open the sheet, cancel, discard. No
+# corrections, so no further AI calls.
+- runFlow: ../sign-in.yaml
+
+- tapOn:
+    text: "Scan a new sticker"
+- extendedWaitUntil:
+    visible: ".*(One quick thing|Agree and start scanning|Import a photo from your library).*"
+    timeout: 15000
+- runFlow:
+    when:
+      visible: "Agree and start scanning"
+    commands:
+      - tapOn: "Agree and start scanning"
+- extendedWaitUntil:
+    visible: "Import a photo from your library"
+    timeout: 15000
+- tapOn:
+    text: "Import a photo from your library"
+- tapOn:
+    text: "Allow Full Access|Allow Access to All Photos|OK"
+    optional: true
+- extendedWaitUntil:
+    visible:
+      id: "photo-thumb-idle"
+    timeout: 15000
+- tapOn:
+    index: 1
+    id: "photo-thumb-idle"
+- tapOn:
+    id: "photo-picker-confirm"
+- extendedWaitUntil:
+    visible: "Make sticker"
+    timeout: 30000
+- tapOn: "Make sticker"
+
+# ---- Reveal -----------------------------------------------------------------
+- extendedWaitUntil:
+    visible:
+      id: "reveal-add"
+    timeout: 90000
+- extendedWaitUntil:
+    visible:
+      id: "reveal-wrong-word"
+    timeout: 10000
+- assertVisible: ".*(Not an? .+\\?|Wrong word\\?).*"
+- takeScreenshot: 01-reveal-pill
+
+# ---- Open the sheet, then cancel ---------------------------------------------
+- tapOn:
+    id: "reveal-wrong-word"
+- extendedWaitUntil:
+    visible: "What is it\\?"
+    timeout: 10000
+- assertVisible:
+    id: "wrong-word-input"
+- assertVisible: "Make this card"
+- takeScreenshot: 02-sheet-open
+- tapOn:
+    id: "wrong-word-cancel"
+- extendedWaitUntil:
+    notVisible: "What is it\\?"
+    timeout: 10000
+
+# Leave nothing behind on the staging account.
+- tapOn:
+    id: "reveal-discard"

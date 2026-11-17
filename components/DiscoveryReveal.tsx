@@ -3,7 +3,7 @@ import WrongWordSheet from '@/components/WrongWordSheet';
 import { MAX_HINT_CHARS, cleanHintInput, wrongWordLabel, type Correction } from '@/lib/wordFix';
 import { useMotion } from '@/lib/motion';
 import { Modal, View, Text, Image, TouchableOpacity, TextInput, StyleSheet, ScrollView, ActivityIndicator, KeyboardAvoidingView, Platform, Pressable } from 'react-native';
-import { X, Info, Check } from 'lucide-react-native';
+import { X, Info, Check, RefreshCw } from 'lucide-react-native';
 import { StickerDraft } from '@/lib/types';
 import { supabase } from '@/lib/supabase';
 import { speak, stopSpeaking } from '@/lib/speech';
@@ -233,7 +233,8 @@ export default function DiscoveryReveal({ draft, onAdd, saveError, onDiscard, on
               accessibilityRole="button"
               accessibilityLabel={`${wrongWordLabel(draft.translation)} Choose a different word`}
             >
-              <Text style={styles.wrongWordText} maxFontSizeMultiplier={type.small.maxFontSizeMultiplier}>
+              <RefreshCw size={16} strokeWidth={2.25} color={colors.terraInk} />
+              <Text style={styles.wrongWordText} maxFontSizeMultiplier={type.body.maxFontSizeMultiplier}>
                 {wrongWordLabel(draft.translation)}
               </Text>
             </Pressable>
@@ -386,14 +387,16 @@ const makeStyles = ({ colors, type, stickerShadow, shadows }: Theme) => StyleShe
   },
   image: { width: '100%', height: '100%', ...stickerShadow },
   found: { ...type.overline, marginTop: spacing.md, marginBottom: spacing.xs },
-  // A text button, but drawn as one: 44pt tall, left-aligned under the meaning.
+  // A drawn pill, not a link: owners missed the underlined caption. 44pt
+  // tall, tinted fill + terra border + icon, left-aligned under the meaning.
   // No hitSlop — the sentence below it is itself tappable (lesson 9).
   wrongWord: {
-    alignSelf: 'flex-start', minHeight: 44, justifyContent: 'center',
-    paddingHorizontal: 6, marginLeft: -6, borderRadius: radii.sm,
+    alignSelf: 'flex-start', minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 8,
+    paddingHorizontal: 16, marginTop: spacing.sm, borderRadius: radii.full,
+    backgroundColor: colors.terraLight, borderWidth: 1.5, borderColor: colors.terra,
   },
-  wrongWordPressed: { backgroundColor: colors.sand },
-  wrongWordText: { ...type.small, color: colors.terraInk, textDecorationLine: 'underline' },
+  wrongWordPressed: { opacity: 0.7 },
+  wrongWordText: { ...type.body, fontFamily: fonts.display, color: colors.terraInk },
   teach: { ...type.small, textAlign: 'center', marginTop: spacing.md },
   actions: { paddingTop: spacing.sm, gap: spacing.sm },
   secondaryActions: { flexDirection: 'row', justifyContent: 'center', gap: spacing.sm },

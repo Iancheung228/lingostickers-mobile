@@ -4,12 +4,12 @@ import {
   Trash2, Plus, ImagePlus, ImageOff, MoreHorizontal, Pencil, Wand2, X, Crop, GraduationCap,
   ChevronLeft, Sticker as StickerIcon,
 } from 'lucide-react-native';
-import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
+import { ImageManipulator } from 'expo-image-manipulator';
 import { File, Paths } from 'expo-file-system';
 import { useBoardStickers } from '@/hooks/useBoards';
 import { supabase } from '@/lib/supabase';
 import { useCoachMark } from '@/lib/coachMarks';
-import { pickBackgroundPhoto } from '@/lib/pickBackgroundPhoto';
+import { pickBackgroundPhoto, shrinkForStorage } from '@/lib/pickBackgroundPhoto';
 import type { BackgroundChoice, PickedPhoto, SavedBackground, StagedBackground } from '@/lib/backgroundLibrary';
 import { useSavedBackgrounds } from '@/hooks/useSavedBackgrounds';
 import BackgroundPickerSheet from '@/components/BackgroundPickerSheet';
@@ -38,12 +38,8 @@ import { useTheme, useThemedStyles, type Theme } from '@/hooks/useTheme';
 // storage/bandwidth — matches the old global wall-background cap.
 const BACKGROUND_MAX_SIDE = 1600;
 
-// The uncropped source is kept only so the framing can be changed later, and
-// it's never drawn at full size — so it's capped too, a little above the
-// visible cap to leave real room to zoom into. Uncapped it would be the
-// entire original photo, several MB per board, uploaded to be looked at
-// approximately never.
-const SOURCE_MAX_SIDE = 2048;
+// SOURCE_MAX_SIDE / shrinkForStorage: lib/pickBackgroundPhoto.ts (shared with
+// the background library's multi-add).
 
 interface BoardCarouselPageProps {
   board: Board;
@@ -613,21 +609,6 @@ export default function BoardCarouselPage({
       />
     </View>
   );
-}
-
-// The source is kept for re-cropping, never drawn, so it's stored at
-// SOURCE_MAX_SIDE rather than whatever the camera produced. Fractions are
-// what get persisted alongside it (see CropResult), so shrinking here leaves
-// the recorded framing exactly as valid as it was.
-async function shrinkForStorage(source: { uri: string; width: number; height: number }) {
-  const longSide = Math.max(source.width, source.height);
-  if (longSide <= SOURCE_MAX_SIDE) return source;
-  const ratio = SOURCE_MAX_SIDE / longSide;
-  const rendered = await ImageManipulator.manipulate(source.uri)
-    .resize({ width: Math.round(source.width * ratio), height: Math.round(source.height * ratio) })
-    .renderAsync();
-  const saved = await rendered.saveAsync({ compress: 0.85, format: SaveFormat.JPEG });
-  return { uri: saved.uri, width: rendered.width, height: rendered.height };
 }
 
 const makeStyles = ({ colors, shadows }: Theme) => StyleSheet.create({

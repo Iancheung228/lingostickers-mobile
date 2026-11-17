@@ -2,7 +2,7 @@ import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } fro
 import { usePendingDeletes } from '@/components/PendingDeleteProvider';
 import { AppState, View, Text, Pressable, ScrollView, StyleSheet, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { router, useFocusEffect } from 'expo-router';
+import { router, useFocusEffect, useNavigation } from 'expo-router';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { useSharedValue, useAnimatedStyle, withTiming, withSpring, runOnJS } from 'react-native-reanimated';
 import { ChevronLeft, ChevronRight, RotateCcw } from 'lucide-react-native';
@@ -77,11 +77,18 @@ export default function CalendarScreen() {
   const [loaded, setLoaded] = useState(false);
   const [loadError, setLoadError] = useState(false);
   const [viewedMonth, setViewedMonth] = useState(() => new Date());
+  // The header's month. It flips to the destination as a slide STARTS; the
+  // grid's month (viewedMonth) only commits after the slide, one JS round trip
+  // later, so a header tied to it read the old month for ~7 frames while the
+  // new month's dates were already on screen (seen frame by frame, Nov 16).
+  const [titleMonth, setTitleMonth] = useState(viewedMonth);
+  useEffect(() => { setTitleMonth(viewedMonth); }, [viewedMonth]);
   const [mode, setMode] = useState<Mode>('month');
   const [yearShown, setYearShown] = useState(() => new Date().getFullYear());
   // Bumped on every month change; it re-keys the month's stickers so each
   // change starts a fresh flip cascade and cancels the old one by unmounting.
-  // Selecting a day or a refetch never touches it.
+  // Also bumped on every press of the Calendar tab. Selecting a day or a
+  // refetch never touches it.
   const [cascadeId, setCascadeId] = useState(0);
   // If a day's signed URL never arrives its sticker still shows (fallback)
   // after this grace; until then it waits, so it flips in with its image.
@@ -122,6 +129,12 @@ export default function CalendarScreen() {
   }, [user]);
 
   useFocusEffect(useCallback(() => { fetchStickers(); refreshToday(); }, [fetchStickers, refreshToday]));
+
+  // Owner: the arrival should greet you every time you tap into the Calendar
+  // tab (also a re-tap while already on it). Tab press only: coming back from
+  // a day page or the app returning to the foreground does not replay it.
+  const navigation = useNavigation();
+  useEffect(() => navigation.addListener('tabPress' as never, () => setCascadeId(n => n + 1)), [navigation]);
 
   useEffect(() => {
     if (!loaded) return;
@@ -218,6 +231,10 @@ export default function CalendarScreen() {
     setMode(next);
   }, [mode, viewedMonth]);
   const tickHaptic = useCallback(() => haptic.select(), []);
+  const announceMonth = useCallback((direction: 1 | -1) => {
+    const m = latest.current.viewedMonth;
+    setTitleMonth(new Date(m.getFullYear(), m.getMonth() + direction, 1));
+  }, []);
 
   useEffect(() => {
     dragX.value = 0;
@@ -230,10 +247,11 @@ export default function CalendarScreen() {
     haptic.select();
     if (reduced) { commitSwipe(direction); return; }
     isTransitioning.value = true;
+    announceMonth(direction);
     dragX.value = withTiming(-direction * pageWidth, { duration: dur.base, easing: ease }, finished => {
       if (finished) runOnJS(commitSwipe)(direction);
     });
-  }, [reduced, pageWidth, commitSwipe, dragX, isTransitioning]);
+  }, [reduced, pageWidth, commitSwipe, announceMonth, dragX, isTransitioning]);
 
   const monthSwipeGesture = useMemo(() => {
     const COMMIT_DISTANCE = pageWidth * 0.3;
@@ -252,6 +270,7 @@ export default function CalendarScreen() {
         if (goingNext || goingPrev) {
           const direction = goingNext ? 1 : -1;
           runOnJS(tickHaptic)();
+          runOnJS(announceMonth)(direction);
           if (reduced) { runOnJS(commitSwipe)(direction); return; }
           isTransitioning.value = true;
           dragX.value = withTiming(-direction * pageWidth, { duration: dur.base, easing: ease }, finished => {
@@ -261,7 +280,7 @@ export default function CalendarScreen() {
           dragX.value = withSpring(0, spring);
         }
       });
-  }, [pageWidth, reduced, commitSwipe, dragX, isTransitioning, tickHaptic]);
+  }, [pageWidth, reduced, commitSwipe, announceMonth, dragX, isTransitioning, tickHaptic]);
 
   const trackStyle = useAnimatedStyle(() => ({ transform: [{ translateX: -pageWidth + dragX.value }] }));
 
@@ -335,7 +354,7 @@ export default function CalendarScreen() {
 
   const now = new Date(`${todayKey}T00:00:00`);
   const awayFromToday = mode === 'month'
-    ? viewedMonth.getFullYear() !== now.getFullYear() || viewedMonth.getMonth() !== now.getMonth()
+    ? titleMonth.getFullYear() !== now.getFullYear() || titleMonth.getMonth() !== now.getMonth()
     : yearShown !== now.getFullYear();
   const goToday = () => {
     if (mode === 'year') { haptic.select(); setYearShown(now.getFullYear()); return; }
@@ -407,7 +426,7 @@ export default function CalendarScreen() {
               toggle doesn't replay the cascade; only a real month change re-keys the cells. */}
           <View style={mode === 'month' ? undefined : styles.hidden}>
             {titleRow(
-              <>{MONTH_FORMAT.format(viewedMonth)} <Text style={styles.titleYear}>{viewedMonth.getFullYear()}</Text></>,
+              <>{MONTH_FORMAT.format(titleMonth)} <Text style={styles.titleYear}>{titleMonth.getFullYear()}</Text></>,
               () => slideTo(-1), () => slideTo(1),
               ['calendar-prev-month', 'calendar-next-month'], ['Previous month', 'Next month'],
             )}

@@ -295,7 +295,14 @@ ${schemaBlock(keys, opts)}`;
     if (keptChoice && sentenceContainsHeadword(sentence, word, language)) break;
     console.warn(`card mismatch (attempt ${attempt + 1}): word=${JSON.stringify(word)} sentence=${JSON.stringify(sentence)}`);
     if (attempt === 1) {
-      throw new LlmError('mismatch', 'vocab', 'the sentence does not contain the headword');
+      // A correction (hint or tapped word) that still misses is the original
+      // bug: refuse it. A first scan is the model's own pick, and the check is
+      // lexical — irregular forms (boire → a bu) and kanji written as kana
+      // (猫 → ねこ) slip past it — so keep that card rather than fail the
+      // scan and burn the learner's daily quota on a likely-good card.
+      if (hint || chosen) throw new LlmError('mismatch', 'vocab', 'the sentence does not contain the headword');
+      console.warn('card mismatch on a first scan: kept (lexical check is lenient-by-design here)');
+      break;
     }
     retryNote = `\n\nYour previous answer was rejected: ${keptChoice ? `its sentence did not contain the headword "${word}"` : `its "word" was "${word}", not the headword the learner picked`}. ${chosen ? `Use exactly "${chosen.word}" as "word". ` : ''}The "sentence" MUST contain the "word" you give.`;
   }

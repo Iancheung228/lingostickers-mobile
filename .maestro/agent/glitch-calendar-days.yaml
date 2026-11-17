@@ -1,0 +1,99 @@
+# Glitch hunt, LOOK ONLY: the calendar day numbers during every transition.
+# Demo account (calendar-demo@tabi.test, staging). No scan, grade, edit or delete.
+# Screenshots are deliberately taken with NO wait right after each action, so the
+# half-finished frames are kept; the screen recording is the main evidence.
+# Run it with the demo credentials passed by the caller (see the scratch runner).
+appId: ${APP_ID}
+---
+- runFlow: ../sign-in.yaml
+
+# 1. First open of the tab (cold start, numbers and cascade both starting).
+- tapOn:
+    id: "tab-calendar"
+- takeScreenshot: g01-open-0-no-wait
+- extendedWaitUntil:
+    visible: "Previous month"
+    timeout: 20000
+- takeScreenshot: g02-open-1-after-visible
+- waitForAnimationToEnd:
+    timeout: 6000
+- takeScreenshot: g03-open-2-settled
+
+# 2. Next month (clear-then-cascade): shots with no wait.
+- tapOn:
+    id: "calendar-next-month"
+- takeScreenshot: g04-next-0-no-wait
+- takeScreenshot: g05-next-1-no-wait
+- waitForAnimationToEnd:
+    timeout: 3000
+- takeScreenshot: g06-next-2-settled
+
+# 3. Previous month twice (back past the current month, then one back again).
+- tapOn:
+    id: "calendar-prev-month"
+- takeScreenshot: g07-prev-0-no-wait
+- waitForAnimationToEnd:
+    timeout: 3000
+- takeScreenshot: g08-prev-1-settled
+- tapOn:
+    id: "calendar-prev-month"
+- takeScreenshot: g09-prev-2-no-wait
+- waitForAnimationToEnd:
+    timeout: 3000
+- takeScreenshot: g10-prev-3-settled
+
+# 4. Swipe the grid left and right (the drag path, not the chevrons).
+- swipe:
+    start: "85%,50%"
+    end: "15%,50%"
+    duration: 250
+- takeScreenshot: g11-swipe-left-0-no-wait
+- waitForAnimationToEnd:
+    timeout: 3000
+- takeScreenshot: g12-swipe-left-1-settled
+- swipe:
+    start: "15%,50%"
+    end: "85%,50%"
+    duration: 250
+- takeScreenshot: g13-swipe-right-0-no-wait
+- waitForAnimationToEnd:
+    timeout: 3000
+- takeScreenshot: g14-swipe-right-1-settled
+
+# 5. Month to Year and back (Month stays mounted, hidden, while Year is up).
+- tapOn:
+    id: "calendar-mode-year"
+- takeScreenshot: g15-year-0-no-wait
+- extendedWaitUntil:
+    visible: "Previous year"
+    timeout: 10000
+- waitForAnimationToEnd:
+    timeout: 3000
+- takeScreenshot: g16-year-1-settled
+- tapOn:
+    id: "calendar-mode-month"
+- takeScreenshot: g17-month-back-0-no-wait
+- waitForAnimationToEnd:
+    timeout: 3000
+- takeScreenshot: g18-month-back-1-settled
+
+# 6. Tap a day that has a sticker: the selection ring on the number.
+- tapOn:
+    text: "September [0-9]+, [1-9][0-9]* stickers?"
+- takeScreenshot: g19-select-0-no-wait
+- waitForAnimationToEnd:
+    timeout: 1500
+- takeScreenshot: g20-select-1-settled
+
+# 7. Leave for another tab, come back: numbers and stickers must be right at once.
+- tapOn:
+    id: "tab-profile"
+- waitForAnimationToEnd:
+    timeout: 1500
+- tapOn:
+    id: "tab-calendar"
+- takeScreenshot: g21-return-0-no-wait
+- takeScreenshot: g22-return-1-no-wait
+- waitForAnimationToEnd:
+    timeout: 4000
+- takeScreenshot: g23-return-2-settled

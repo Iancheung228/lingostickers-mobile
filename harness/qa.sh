@@ -77,6 +77,12 @@ for f in flows:
         continue
     cmds = json.load(open(cmds_path))
     failed = [c for c in cmds if c.get("metadata", {}).get("status") == "FAILED"]
+    # A driver crash ("Device became unreachable", "iOS driver not ready") leaves
+    # steps RUNNING/PENDING with nothing FAILED; that is not a pass.
+    if not failed:
+        failed = [c for c in cmds if c.get("metadata", {}).get("status") not in ("COMPLETED", "SKIPPED", "WARNED")]
+        for c in failed[:1]:
+            c.setdefault("metadata", {}).setdefault("error", {"message": "run stopped here (status %s): driver crash or abort, see harness/logs/qa-raw.txt" % c.get("metadata", {}).get("status")})
     shots = sorted(glob.glob(f"{d}/takeScreenshot/*.png")) + sorted(glob.glob(f"{d}/screenshots/*.png"))
     rec = {"passed": not failed, "screenshots": shots}
     if failed:
@@ -98,5 +104,9 @@ print("QA " + ("FAILED" if any_fail else "PASSED") + f"  (details: {status_path}
 sys.exit(1 if any_fail else 0)
 EOF
 summary=$?
-[ $summary -ne 0 ] || [ $code -eq 0 ] || echo "note: maestro exited $code; see harness/logs/qa-raw.txt"
+# Maestro exiting non-zero is a failure even if every recorded step looked fine.
+if [ $summary -eq 0 ] && [ $code -ne 0 ]; then
+  echo "QA FAILED: maestro exited $code although no step failed (crashed driver?); see harness/logs/qa-raw.txt"
+  exit 1
+fi
 exit $summary

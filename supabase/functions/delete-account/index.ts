@@ -47,18 +47,28 @@ Deno.serve(async (req) => {
     // removal would orphan files we can no longer attribute to anyone. A
     // throw here lands in the catch below, the account is left intact, and
     // the user can simply try again.
-    async function emptyUserFolder(bucket: string) {
-      let page = await admin.storage.from(bucket).list(userId, { limit: 1000 });
-      if (page.error) throw new Error(`list ${bucket}: ${page.error.message}`);
-      while (page.data && page.data.length > 0) {
-        const paths = page.data.map(f => `${userId}/${f.name}`);
-        const { error: removeError } = await admin.storage.from(bucket).remove(paths);
-        if (removeError) throw new Error(`remove ${bucket}: ${removeError.message}`);
-        if (page.data.length < 1000) break;
-        page = await admin.storage.from(bucket).list(userId, { limit: 1000 });
+    // list() is one level deep: a subfolder (e.g. `{uid}/backgrounds/`, the
+    // saved-background library) comes back as an entry with id === null, and
+    // remove() on that name deletes nothing. So walk folders and remove files.
+    async function emptyFolder(bucket: string, prefix: string, depth = 0): Promise<void> {
+      if (depth > 4) throw new Error(`emptyFolder ${bucket}: nesting too deep at ${prefix}`);
+      for (;;) {
+        const page = await admin.storage.from(bucket).list(prefix, { limit: 1000 });
         if (page.error) throw new Error(`list ${bucket}: ${page.error.message}`);
+        const entries = page.data ?? [];
+        const files = entries.filter(f => f.id !== null).map(f => `${prefix}/${f.name}`);
+        for (const folder of entries.filter(f => f.id === null)) {
+          await emptyFolder(bucket, `${prefix}/${folder.name}`, depth + 1);
+        }
+        if (files.length > 0) {
+          const { error: removeError } = await admin.storage.from(bucket).remove(files);
+          if (removeError) throw new Error(`remove ${bucket}: ${removeError.message}`);
+        }
+        // A full page may hide more; anything shorter was everything.
+        if (entries.length < 1000 || files.length === 0) return;
       }
     }
+    const emptyUserFolder = (bucket: string) => emptyFolder(bucket, userId);
 
     await emptyUserFolder('sticker-images');
     // Avatars live in their own bucket, and that one is public — an orphaned
