@@ -1,0 +1,66 @@
+# Post-deploy AI smoke on staging: scan ONE photo (create-sticker, 1 AI call),
+# save the card (no AI call), then delete the saved card from the Collection
+# (no AI call). Corrections are NOT run here: the budget was spent on the scan.
+# Do not add AI steps to this flow.
+appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
+---
+- runFlow: ../sign-in.yaml
+
+- tapOn:
+    text: "Scan a new sticker"
+- extendedWaitUntil:
+    visible: ".*(One quick thing|Agree and start scanning|Import a photo from your library).*"
+    timeout: 15000
+- runFlow:
+    when:
+      visible: "Agree and start scanning"
+    commands:
+      - tapOn: "Agree and start scanning"
+- extendedWaitUntil:
+    visible: "Import a photo from your library"
+    timeout: 15000
+
+- tapOn:
+    text: "Import a photo from your library"
+- tapOn:
+    text: "Allow Full Access|Allow Access to All Photos|OK"
+    optional: true
+- extendedWaitUntil:
+    visible:
+      id: "photo-thumb-idle"
+    timeout: 15000
+- tapOn:
+    index: 1
+    id: "photo-thumb-idle"
+- tapOn:
+    id: "photo-picker-confirm"
+- extendedWaitUntil:
+    visible: "Make sticker"
+    timeout: 30000
+- tapOn: "Make sticker"
+
+# The one AI call: the reveal shows the scanned word.
+- extendedWaitUntil:
+    visible:
+      id: "reveal-add"
+    timeout: 90000
+- takeScreenshot: smoke-scan-01-reveal
+
+# Save it (no AI call) and leave the reveal.
+- tapOn:
+    id: "reveal-add"
+- extendedWaitUntil:
+    notVisible:
+      id: "reveal-add"
+    timeout: 30000
+- takeScreenshot: smoke-scan-02-after-save
+
+# Open the Collection and check the new card is there.
+- tapOn:
+    id: "tab-collection"
+- extendedWaitUntil:
+    visible: "Your words.*"
+    timeout: 20000
+- waitForAnimationToEnd:
+    timeout: 1500
+- takeScreenshot: smoke-scan-03-collection-with-new-card

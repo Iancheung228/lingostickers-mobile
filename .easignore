@@ -1,0 +1,76 @@
+# Learn more https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files
+
+# dependencies
+node_modules/
+
+# Expo
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+
+# Native
+.kotlin/
+*.orig.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+
+# Metro
+.metro-health-check*
+
+# debug
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+
+# macOS
+.DS_Store
+*.pem
+
+# local env files
+.env
+.env*.local
+# Local-only API keys for scripts/ validation harnesses — never committed.
+.env.groq
+# any other env variant (.env.production, .env.test, ...)
+.env.*
+
+# Claude Code harness state
+.claude/scheduled_tasks.lock
+
+# typescript
+*.tsbuildinfo
+
+# generated native folders
+/ios
+/android
+
+# Supabase local tooling state
+supabase/.temp/
+
+# Test fixture photos, downloaded on demand by scripts/test-gemini-live.mts
+scripts/fixtures/.cache/
+
+# Created by `deno check` (local typecheck gate only; Supabase bundles its own deps)
+deno.lock
+
+# Maestro (Simulator UI tests): run output, and the QA account's password
+.maestro/output/
+.maestro/*.env
+
+# Local run logs (Metro, xcodebuild)
+.run/
+
+# --- EAS upload only (this file REPLACES .gitignore for EAS, so everything
+# above must stay a copy of .gitignore; keep them in sync) ---
+# Nothing below is read by the app build.
+research_notes/
+.claude/
+.maestro/
+harness/
+docs/
+scripts/fixtures/
+.github/

@@ -1,0 +1,32 @@
+# Post-deploy smoke, no AI calls: sign in with the QA account, then open each
+# of the four main tabs (Collection, Calendar, Boards, Profile) and check each
+# renders its own title. Read-only.
+appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
+---
+- runFlow: ../sign-in.yaml
+- takeScreenshot: smoke-01-collection
+- tapOn:
+    id: "tab-collection"
+- extendedWaitUntil:
+    visible: "Your words.*"
+    timeout: 20000
+- assertNotVisible: ".*(Something went wrong|Error|Red Box|Unhandled).*"
+
+- tapOn: "Calendar"
+- extendedWaitUntil:
+    visible: "Previous month"
+    timeout: 15000
+- takeScreenshot: smoke-02-calendar
+
+- tapOn: "Boards"
+- extendedWaitUntil:
+    visible: "No boards yet|.*board.*"
+    timeout: 15000
+- takeScreenshot: smoke-03-boards
+
+- tapOn:
+    id: "tab-profile"
+- extendedWaitUntil:
+    visible: "Due tomorrow.*"
+    timeout: 15000
+- takeScreenshot: smoke-04-profile

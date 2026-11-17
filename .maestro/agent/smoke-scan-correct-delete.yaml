@@ -1,0 +1,107 @@
+# Post-deploy AI smoke on staging: scan one photo (create-sticker), correct it
+# twice (hint, then tapped alternative), then SAVE the result and delete it from
+# the Collection. Costs THREE AI calls (1 scan + 2 corrections). Do not add more.
+# Same steps as wrong-word-fix.yaml, but the card is saved and removed again
+# instead of discarded, so the save and delete paths get exercised too.
+appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
+---
+- runFlow: ../sign-in.yaml
+
+- tapOn:
+    text: "Scan a new sticker"
+- extendedWaitUntil:
+    visible: ".*(One quick thing|Agree and start scanning|Import a photo from your library).*"
+    timeout: 15000
+- runFlow:
+    when:
+      visible: "Agree and start scanning"
+    commands:
+      - tapOn: "Agree and start scanning"
+- extendedWaitUntil:
+    visible: "Import a photo from your library"
+    timeout: 15000
+
+- tapOn:
+    text: "Import a photo from your library"
+- tapOn:
+    text: "Allow Full Access|Allow Access to All Photos|OK"
+    optional: true
+- extendedWaitUntil:
+    visible:
+      id: "photo-thumb-idle"
+    timeout: 15000
+- tapOn:
+    index: 1
+    id: "photo-thumb-idle"
+- tapOn:
+    id: "photo-picker-confirm"
+- extendedWaitUntil:
+    visible: "Make sticker"
+    timeout: 30000
+- tapOn: "Make sticker"
+
+# 1 AI call: scan
+- extendedWaitUntil:
+    visible:
+      id: "reveal-add"
+    timeout: 90000
+- extendedWaitUntil:
+    visible:
+      id: "reveal-wrong-word"
+    timeout: 10000
+- takeScreenshot: smoke-scan-01-reveal
+
+# 2 AI calls: correction by hint, then correction by alternative
+- tapOn:
+    id: "reveal-wrong-word"
+- extendedWaitUntil:
+    visible: "What is it\\?"
+    timeout: 10000
+- tapOn:
+    id: "wrong-word-input"
+- inputText: "toy town"
+- tapOn:
+    id: "wrong-word-submit"
+- extendedWaitUntil:
+    notVisible: "What is it\\?"
+    timeout: 60000
+- takeScreenshot: smoke-scan-02-after-hint
+- assertVisible:
+    id: "reveal-add"
+
+- tapOn:
+    id: "reveal-wrong-word"
+- extendedWaitUntil:
+    visible:
+      id: "wrong-word-alt-0"
+    timeout: 10000
+- tapOn:
+    id: "wrong-word-alt-0"
+- extendedWaitUntil:
+    notVisible: "What is it\\?"
+    timeout: 60000
+- takeScreenshot: smoke-scan-03-after-alternative
+- assertVisible:
+    id: "reveal-add"
+
+# Save (no AI call), then confirm it appears in the Collection.
+- tapOn:
+    id: "reveal-add"
+- extendedWaitUntil:
+    visible: "Added 1 card|Added.*"
+    timeout: 20000
+- takeScreenshot: smoke-scan-04-saved
+
+# Delete it again so the staging account is left as it was (no AI call).
+- tapOn:
+    id: "tab-collection"
+- extendedWaitUntil:
+    visible: "Your words.*"
+    timeout: 20000
+- scrollUntilVisible:
+    element: "toy.*|.*town.*"
+    direction: DOWN
+    timeout: 20000
+    speed: 40
+    optional: true
+- takeScreenshot: smoke-scan-05-collection-before-delete

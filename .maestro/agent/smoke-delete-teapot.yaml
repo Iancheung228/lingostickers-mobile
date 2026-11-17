@@ -1,0 +1,18 @@
+# Cleanup check for the post-deploy AI smoke. run.sh runs seed.mjs before every
+# flow, which deletes every sticker except the seeded "pomme", so the
+# "La théière" card saved by smoke-scan-save-delete.yaml should already be gone.
+# This flow only verifies that: sign in, Collection shows "pomme" and no
+# "La th..." card. No AI calls, nothing is deleted here.
+appId: ${APP_ID}   # set by .maestro/run.sh: the installed dev build
+---
+- runFlow: ../sign-in.yaml
+- tapOn:
+    id: "tab-collection"
+- extendedWaitUntil:
+    visible: "Your words.*"
+    timeout: 20000
+- waitForAnimationToEnd:
+    timeout: 1500
+- assertVisible: "pomme.*"
+- assertNotVisible: "La th.*"
+- takeScreenshot: smoke-delete-02-collection-clean
