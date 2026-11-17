@@ -1,0 +1,144 @@
+# QA batch A1-A3 (calendar slides, rows, year/today). LOOK ONLY on the calendar-demo
+# account (staging): no scan, grade, edit or delete. Run via scratchpad/glitch/run-glitch.sh.
+# Screenshots are taken with NO wait after the action, so half-finished frames are kept;
+# the screen recording is the main evidence (judged at 30fps).
+appId: ${APP_ID}
+---
+- runFlow: ../sign-in.yaml
+
+# 0. Open the Calendar tab, settle on November 2026 (5 rows).
+- tapOn:
+    id: "tab-calendar"
+- extendedWaitUntil:
+    visible: "Previous month"
+    timeout: 20000
+- waitForAnimationToEnd:
+    timeout: 4000
+- assertVisible: "November 2026"
+- takeScreenshot: a00-nov-settled
+
+# A1. Five next-chevron taps in a row, no wait between them (Nov -> Apr 2027).
+- tapOn:
+    id: "calendar-next-month"
+- tapOn:
+    id: "calendar-next-month"
+- tapOn:
+    id: "calendar-next-month"
+- tapOn:
+    id: "calendar-next-month"
+- tapOn:
+    id: "calendar-next-month"
+- takeScreenshot: a01-five-next-0-no-wait
+- waitForAnimationToEnd:
+    timeout: 4000
+- takeScreenshot: a02-five-next-settled
+- assertVisible: "April 2027"
+
+# A1. Five prev-chevron taps in a row back to November 2026.
+- tapOn:
+    id: "calendar-prev-month"
+- tapOn:
+    id: "calendar-prev-month"
+- tapOn:
+    id: "calendar-prev-month"
+- tapOn:
+    id: "calendar-prev-month"
+- tapOn:
+    id: "calendar-prev-month"
+- takeScreenshot: a03-five-prev-0-no-wait
+- waitForAnimationToEnd:
+    timeout: 4000
+- takeScreenshot: a04-five-prev-settled
+- assertVisible: "November 2026"
+
+# A1. Finger swipes, one at a time with a settle each: next, next, prev.
+- swipe:
+    start: "85%,50%"
+    end: "15%,50%"
+    duration: 250
+- takeScreenshot: a05-swipe-next-0-no-wait
+- waitForAnimationToEnd:
+    timeout: 3000
+- takeScreenshot: a06-swipe-next-settled
+- assertVisible: "December 2026"
+- swipe:
+    start: "85%,50%"
+    end: "15%,50%"
+    duration: 250
+- takeScreenshot: a07-swipe-next2-0-no-wait
+- waitForAnimationToEnd:
+    timeout: 3000
+- assertVisible: "January 2027"
+- swipe:
+    start: "15%,50%"
+    end: "85%,50%"
+    duration: 250
+- takeScreenshot: a08-swipe-prev-0-no-wait
+- waitForAnimationToEnd:
+    timeout: 3000
+- takeScreenshot: a09-swipe-prev-settled
+- assertVisible: "December 2026"
+
+# A2. Back to November, then prev to August 2026 (6 rows). Settle, then the
+#     5-row/6-row pair: August (6) <-> July (5), with the slide recorded.
+- tapOn:
+    id: "calendar-prev-month"
+- waitForAnimationToEnd:
+    timeout: 3000
+- assertVisible: "November 2026"
+- tapOn:
+    id: "calendar-prev-month"
+- waitForAnimationToEnd:
+    timeout: 3000
+- tapOn:
+    id: "calendar-prev-month"
+- waitForAnimationToEnd:
+    timeout: 3000
+- tapOn:
+    id: "calendar-prev-month"
+- waitForAnimationToEnd:
+    timeout: 3000
+- assertVisible: "August 2026"
+- takeScreenshot: a10-aug-6rows-settled
+- tapOn:
+    id: "calendar-prev-month"
+- takeScreenshot: a11-jul-slide-0-no-wait
+- waitForAnimationToEnd:
+    timeout: 3000
+- takeScreenshot: a12-jul-5rows-settled
+- assertVisible: "July 2026"
+- tapOn:
+    id: "calendar-next-month"
+- takeScreenshot: a13-aug-slide-0-no-wait
+- waitForAnimationToEnd:
+    timeout: 3000
+- takeScreenshot: a14-aug-6rows-again-settled
+- assertVisible: "August 2026"
+
+# A3. Year view, then pick August from the mini grid.
+- tapOn:
+    id: "calendar-mode-year"
+- extendedWaitUntil:
+    visible: "Previous year"
+    timeout: 10000
+- waitForAnimationToEnd:
+    timeout: 2000
+- takeScreenshot: a15-year-settled
+- tapOn:
+    id: "calendar-year-month-2026-03"
+- takeScreenshot: a16-pick-mar-0-no-wait
+- waitForAnimationToEnd:
+    timeout: 3000
+- assertVisible: "March 2026"
+- takeScreenshot: a17-pick-mar-settled
+
+# A3. Today button from another month: go to Today, header and grid together.
+- tapOn:
+    id: "calendar-today"
+- takeScreenshot: a18-today-0-no-wait
+- waitForAnimationToEnd:
+    timeout: 3000
+- takeScreenshot: a19-today-settled
+- assertVisible: "November 2026"
+- assertNotVisible:
+    id: "calendar-today"

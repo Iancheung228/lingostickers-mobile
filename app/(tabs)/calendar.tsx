@@ -258,10 +258,13 @@ export default function CalendarScreen() {
     const m = latest.current.viewedMonth;
     const dest = new Date(m.getFullYear(), m.getMonth() + direction, 1);
     setTitleMonth(dest);
+    // The selection ring moves with the header, on the incoming page, instead
+    // of appearing ~6 frames after the slide lands.
+    followMonth(dest);
     // 4-, 5- and 6-row months: grow or shrink with the slide instead of
     // popping (and jumping the footer) at the end of it.
     viewportH.value = withTiming(cellH * buildMonthRows(dest).length, { duration: dur.base, easing: ease });
-  }, [cellH, viewportH]);
+  }, [cellH, viewportH, followMonth]);
 
   // Jumps (Year pick, Today, Reduce Motion) have no slide to land, so the track
   // is placed here, before paint. After a slide these values are already set.
