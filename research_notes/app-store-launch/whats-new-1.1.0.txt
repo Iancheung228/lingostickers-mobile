@@ -1,0 +1,10 @@
+A big update to how you collect, arrange and review your words.
+
+• Calendar, reimagined: every day becomes a page of the stickers you made, with a whole year at a glance.
+• Board backgrounds: put your own photo behind any board, and keep a saved library to reuse.
+• Wrong word? Tap "Not a …?" on a new card to pick a better match or describe it, and the whole card is remade.
+• Make up to 5 stickers at once, or loop several objects in one photo.
+• A new photo picker with Recents, Favorites and Albums.
+• Study, refreshed: flip cards, a Today card with a Quick 5, practice mode and more than one daily reminder.
+• Dark mode, under Profile → Appearance.
+• Plus many fixes and polish throughout, including a sign-up fix where a taken username could look available.
